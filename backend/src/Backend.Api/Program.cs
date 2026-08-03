@@ -4,7 +4,8 @@ using Backend.Infrastructure;
 var builder = WebApplication.CreateBuilder(args);
 
 const string frontendCorsPolicy = "FrontendCorsPolicy";
-var frontendUrl = builder.Configuration["Frontend:BaseUrl"] ?? "https://localhost:7101";
+var frontendUrl = builder.Configuration["Frontend:BaseUrl"] ?? "https://localhost:7102";
+const string frontendHttpUrl = "http://localhost:5102";
 
 builder.Services.AddInfrastructure();
 builder.Services.AddEndpointsApiExplorer();
@@ -13,7 +14,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy(frontendCorsPolicy, policy =>
     {
-        policy.WithOrigins(frontendUrl)
+        policy.WithOrigins(frontendUrl, frontendHttpUrl)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -36,7 +37,6 @@ app.MapGet("/api/todos", async (ITodoRepository repository, CancellationToken ca
     var items = await repository.GetAllAsync(cancellationToken);
     return Results.Ok(items);
 })
-.WithName("GetTodoItems")
-.WithOpenApi();
+.WithName("GetTodoItems");
 
 app.Run();
