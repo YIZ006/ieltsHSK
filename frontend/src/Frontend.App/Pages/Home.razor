@@ -1,0 +1,46 @@
+﻿@page "/"
+@inject Frontend.App.Services.BackendApiClient BackendApiClient
+
+<PageTitle>Home</PageTitle>
+
+<h1>IELTS + HSK Dashboard</h1>
+
+<p>Connected to backend REST API.</p>
+
+@if (todoItems is null)
+{
+    <p><em>@statusMessage</em></p>
+}
+else if (todoItems.Count == 0)
+{
+    <p>No todo items returned by the backend.</p>
+}
+else
+{
+    <ul>
+        @foreach (var item in todoItems)
+        {
+            <li>
+                <strong>@item.Title</strong> - @(item.IsCompleted ? "Done" : "Pending")
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private IReadOnlyList<Frontend.App.Services.TodoItemDto>? todoItems;
+    private string statusMessage = "Loading backend data...";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            todoItems = await BackendApiClient.GetTodoItemsAsync();
+        }
+        catch
+        {
+            statusMessage = "Backend API is unavailable. Start backend at https://localhost:7101.";
+            todoItems = [];
+        }
+    }
+}
