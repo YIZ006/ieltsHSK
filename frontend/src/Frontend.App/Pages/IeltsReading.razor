@@ -1,0 +1,286 @@
+@page "/ielts/reading/{ExamUrl}"
+@page "/ielts/reading"
+@page "/ielts/reading/preview"
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject ExamService ExamService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>@(exam?.Title ?? "IELTS Reading") - IeltsHSK</PageTitle>
+
+@if (isLoading)
+{
+    <div class="reading-loading">
+        <div class="loading-ring"></div>
+        <p>Đang tải đề thi...</p>
+    </div>
+}
+else if (exam == null)
+{
+    <div class="reading-error">
+        <div class="error-icon">📭</div>
+        <h3>Không tải được đề thi</h3>
+        <p>Vui lòng thử lại hoặc chọn đề khác.</p>
+    </div>
+}
+else
+{
+    var activePart = exam.Parts[activePartIndex];
+    int qStart = exam.Parts.Take(activePartIndex).Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count)) + 1;
+    int qEnd   = qStart + activePart.QuestionGroups.Sum(g => g.Questions.Count) - 1;
+
+    @* ── TOP BAR ── *@
+    <div class="reading-topbar">
+        <div class="topbar-left">
+            <span class="exam-title-short">@exam.Title</span>
+        </div>
+        <div class="topbar-center">
+            <div class="timer-box @(secondsLeft < 600 ? "timer-warning" : "")">
+                <span class="timer-icon">⏱</span>
+                <span class="timer-text">@TimerDisplay remaining</span>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <button class="btn-submit-exam" @onclick="SubmitExam">Submit ➤</button>
+        </div>
+    </div>
+
+    @* ── PART TABS ── *@
+    <div class="part-tabs-bar">
+        @for (int i = 0; i < exam.Parts.Count; i++)
+        {
+            var idx  = i;
+            var part = exam.Parts[i];
+            int answered = AnsweredCount(part);
+            <button class="part-tab-btn @(activePartIndex == idx ? "active" : "")"
+                    @onclick="() => { activePartIndex = idx; activeQuestionId = exam.Parts[idx].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0; }">
+                Part @part.PartNumber
+                <span class="part-tab-score">@answered/@part.QuestionGroups.Sum(g => g.Questions.Count)</span>
+            </button>
+        }
+        <div class="part-tabs-spacer"></div>
+        <span class="total-progress">
+            Tổng: @exam.Parts.Sum(p => AnsweredCount(p))/@exam.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count)) câu
+        </span>
+    </div>
+
+    @* ── MAIN SPLIT LAYOUT ── *@
+    <div class="reading-split">
+
+        @* ── LEFT: PASSAGE ── *@
+        <div class="passage-col" id="passage-scroll">
+            <div class="part-header-label">PART @activePart.PartNumber</div>
+            <p class="part-time-note">
+                You should spend about 20 minutes on Questions <strong>@qStart–@qEnd</strong>,
+                which are based on Reading Passage @activePart.PartNumber below.
+            </p>
+            @if (!string.IsNullOrWhiteSpace(activePart.PassageTitle))
+            {
+                <h2 class="passage-main-title">@activePart.PassageTitle</h2>
+            }
+            <div class="passage-text">
+                @((MarkupString)activePart.PassageHtml)
+            </div>
+        </div>
+
+        @* ── RIGHT: QUESTIONS ── *@
+        <div class="questions-col" id="questions-scroll">
+            @foreach (var group in activePart.QuestionGroups)
+            {
+                <div class="q-group-container">
+                    @if (!string.IsNullOrWhiteSpace(group.Instruction))
+                    {
+                        <div class="q-group-instruction">
+                            @((MarkupString)group.Instruction)
+                        </div>
+                    }
+                    
+                    @foreach (var q in group.Questions)
+                    {
+                        bool isActive = q.Id == activeQuestionId;
+                        <div class="question-block @(IsAnswered(q) ? "answered" : "") @(isActive ? "q-focused" : "")"
+                             id="q-@q.Id"
+                             @onclick="() => activeQuestionId = q.Id">
+
+                            <div class="q-text">@((MarkupString)q.Text)</div>
+
+                            @if (q.Options.Count > 0)
+                            {
+                                @* Nhận diện True/False/Not Given hoặc Letter Only *@
+                                bool isTrueFalse = q.Options.Any(o => o.Label.Equals("TRUE", StringComparison.OrdinalIgnoreCase) || o.Label.Equals("YES", StringComparison.OrdinalIgnoreCase));
+                                bool isLetterOnly = q.Options.All(o => o.Label == o.Text && o.Label.Length <= 15);
+                                
+                                @if (isLetterOnly || isTrueFalse)
+                                {
+                                    <div class="q-inline-dropdown">
+                                        <select class="q-select @(q.SelectedOptionId.HasValue ? "q-select--answered" : "")"
+                                                value="@(q.SelectedOptionId?.ToString() ?? "")"
+                                                @onchange="(e) => OnSelectChange(q, e)">
+                                            <option value="">— Chọn đáp án —</option>
+                                            @foreach (var opt in q.Options)
+                                            {
+                                                <option value="@opt.Id">@opt.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                }
+                                else
+                                {
+                                    @* Radio list cho MCQ dạng có nội dung *@
+                                    <ul class="q-option-list">
+                                        @foreach (var opt in q.Options)
+                                        {
+                                            <li class="q-option @(q.SelectedOptionId == opt.Id ? "selected" : "")"
+                                                @onclick="() => SelectOption(q, opt.Id)">
+                                                <span class="opt-badge">@opt.Label</span>
+                                                <span class="opt-body">@opt.Text</span>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            }
+                            else
+                            {
+                                @* Fill-in-blank *@
+                                <input class="q-fill-input"
+                                       type="text"
+                                       placeholder="Write your answer..."
+                                       value="@q.FillAnswer"
+                                       @oninput="(e) => q.FillAnswer = e.Value?.ToString() ?? string.Empty" />
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            @* ── NAVIGATION BUTTONS ── *@
+            <div class="part-nav-buttons">
+                @if (activePartIndex > 0)
+                {
+                    <button class="nav-part-btn prev"
+                            @onclick="() => { activePartIndex--; activeQuestionId = exam.Parts[activePartIndex].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0; }">
+                        ← Part @(exam.Parts[activePartIndex - 1].PartNumber)
+                    </button>
+                }
+                @if (activePartIndex < exam.Parts.Count - 1)
+                {
+                    <button class="nav-part-btn next"
+                            @onclick="() => { activePartIndex++; activeQuestionId = exam.Parts[activePartIndex].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0; }">
+                        Part @(exam.Parts[activePartIndex + 1].PartNumber) →
+                    </button>
+                }
+                else
+                {
+                    <button class="nav-part-btn submit" @onclick="SubmitExam">Nộp bài ✓</button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── BOTTOM: QUESTION NAVIGATOR ── *@
+    <div class="q-navigator-bar">
+        <div class="q-navigator-label">Part @activePart.PartNumber</div>
+        <div class="q-navigator-nums">
+            @foreach (var group in activePart.QuestionGroups)
+            {
+                @foreach (var q in group.Questions)
+                {
+                    <button class="q-nav-num @(IsAnswered(q) ? "nav-answered" : "") @(q.Id == activeQuestionId ? "nav-active" : "")"
+                            @onclick="async () => { activeQuestionId = q.Id; await ScrollToQuestion(q.Id); }">
+                        @q.Id
+                    </button>
+                }
+            }
+        </div>
+        @if (activePartIndex < exam.Parts.Count - 1)
+        {
+            var nextPart = exam.Parts[activePartIndex + 1];
+            <div class="q-navigator-next-part"
+                 @onclick="() => { activePartIndex++; activeQuestionId = nextPart.QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0; }">
+                Part @nextPart.PartNumber: @AnsweredCount(nextPart) of @nextPart.QuestionGroups.Sum(g => g.Questions.Count) questions
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string? ExamUrl { get; set; }
+
+    private ExamData? exam;
+    private bool isLoading = true;
+    private int activePartIndex = 0;
+    private int activeQuestionId = 0;
+
+    // Timer: 60 phút
+    private int secondsLeft = 60 * 60;
+    private System.Threading.Timer? _timer;
+
+    private const string DefaultExamUrl = "sample-data/reading-test-v2.json";
+
+    private string TimerDisplay
+    {
+        get
+        {
+            int m = secondsLeft / 60, s = secondsLeft % 60;
+            return $"{m:D2}:{s:D2}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        string url = string.IsNullOrWhiteSpace(ExamUrl) ? DefaultExamUrl : Uri.UnescapeDataString(ExamUrl);
+        exam = await ExamService.LoadExamAsync(url);
+        if (exam?.Parts?.Count > 0)
+            activeQuestionId = exam.Parts[0].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
+        isLoading = false;
+
+        // Bắt đầu đếm ngược
+        _timer = new System.Threading.Timer(_ =>
+        {
+            if (secondsLeft > 0) { secondsLeft--; InvokeAsync(StateHasChanged); }
+            else { _timer?.Dispose(); }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void SelectOption(QuestionData q, int optionId)
+        => q.SelectedOptionId = q.SelectedOptionId == optionId ? null : optionId;
+
+    private void OnSelectChange(QuestionData q, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int id) && id > 0)
+            q.SelectedOptionId = id;
+        else
+            q.SelectedOptionId = null;
+    }
+
+    private bool IsAnswered(QuestionData q)
+        => q.SelectedOptionId.HasValue || !string.IsNullOrEmpty(q.FillAnswer);
+
+    private int AnsweredCount(ExamPart part)
+        => part.QuestionGroups.Sum(g => g.Questions.Count(IsAnswered));
+
+    private async Task ScrollToQuestion(int qId) 
+    { 
+        await Task.Delay(50);
+        try 
+        {
+            await JS.InvokeVoidAsync("scrollToElementId", $"q-{qId}"); 
+        } 
+        catch (Exception ex) 
+        {
+            Console.WriteLine($"Lỗi JS Interop: {ex.Message}");
+        }
+    }
+
+    private void SubmitExam()
+    {
+        int total    = exam!.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count));
+        int answered = exam.Parts.Sum(p => AnsweredCount(p));
+        Console.WriteLine($"Nộp bài: {answered}/{total} câu đã trả lời.");
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

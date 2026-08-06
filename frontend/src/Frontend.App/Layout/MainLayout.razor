@@ -1,0 +1,19 @@
+@inherits LayoutComponentBase
+
+<div class="page">
+    <header class="top-navbar">
+        <NavMenu OnShowLogin="() => authModal?.Show(true)" OnShowRegister="() => authModal?.Show(false)" />
+    </header>
+
+    <main>
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<AuthModal @ref="authModal" />
+
+@code {
+    private AuthModal? authModal;
+}

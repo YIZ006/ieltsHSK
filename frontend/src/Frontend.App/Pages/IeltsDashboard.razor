@@ -1,0 +1,102 @@
+@page "/ielts/dashboard"
+@layout Frontend.App.Layout.IeltsLayout
+@using Microsoft.AspNetCore.Authorization
+@using Frontend.App.Models
+@using Frontend.App.Services
+@attribute [Authorize]
+@inject IeltsService IeltsService
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<PageTitle>IELTS Dashboard</PageTitle>
+
+<div class="dashboard-header">
+    <h1 class="page-title">Hôm nay</h1>
+    <div style="display: flex; gap: 15px; align-items: center;">
+        <p class="date-subtitle">@DateTime.Now.ToString("dddd, d MMMM, yyyy", new System.Globalization.CultureInfo("vi-VN"))</p>
+        @if (!string.IsNullOrEmpty(currentLevel))
+        {
+            <span class="level-badge" style="background-color: #e8f0fe; color: #1a73e8; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">
+                Trình độ: @currentLevel
+            </span>
+        }
+    </div>
+</div>
+
+<!-- Banner Block -->
+<div class="hero-banner">
+    <div class="banner-content">
+        <span class="banner-badge">VIỆC HÔM NAY — 20 PHÚT</span>
+        <h2>Đề của bạn đang được soạn</h2>
+        <p>Để đang được soạn — mở xem tiến độ, làm ngay khi máy soạn xong</p>
+    </div>
+    <button class="btn-banner">Bắt đầu &rarr;</button>
+</div>
+
+<div class="dashboard-grid-layout">
+    <!-- Goal Section -->
+    <section class="goal-section">
+        <h3>Lộ trình tới đích</h3>
+        <p class="section-desc">Đặt đích và thời hạn — hệ thống tự lên nhịp học mỗi tuần.</p>
+        <p class="section-desc">Chưa cần đặt đích cũng học tốt — cứ giữ nhịp mỗi ngày. Muốn có lộ trình theo kỳ thi thì đặt đích + hạn:</p>
+        
+        <div class="goal-form">
+            <div class="form-group">
+                <label>Đích hướng tới</label>
+                <input type="text" placeholder="vd: IELTS 6.5 / Thi vào 10 / Giao tiếp" class="form-input" />
+            </div>
+            <div class="form-group">
+                <label>Hạn</label>
+                <input type="date" class="form-input" />
+            </div>
+            <button class="btn-primary">Đặt mục tiêu</button>
+        </div>
+    </section>
+
+    <!-- Latest Result Section -->
+    <section class="latest-result">
+        <span class="subtitle-small">BÀI CHẤM GẦN NHẤT</span>
+        <p class="result-text">Chưa có kết quả — làm việc hôm nay để bắt đầu nhé.</p>
+    </section>
+</div>
+
+<!-- Learning Modules Grid -->
+<div class="learning-modules-section">
+    <h3>Góc học tập của bạn</h3>
+    <p class="section-desc">Mỗi góc một kiểu học — ghé qua khi có hứng.</p>
+    
+    @if (sections == null)
+    {
+        <div class="loading-spinner">Đang tải góc học tập...</div>
+    }
+    else
+    {
+        <div class="modules-grid">
+            @foreach (var section in sections)
+            {
+                <a href="@section.Route" class="module-card">
+                    <div class="module-icon">
+                        <i class="bi @section.Icon"></i>
+                    </div>
+                    <div class="module-info">
+                        <h4>@section.Name</h4>
+                        <p>@section.Description</p>
+                    </div>
+                    <div class="module-action">
+                        <i class="bi bi-arrow-right"></i>
+                    </div>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<LearningSectionDto>? sections;
+    private string? currentLevel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        sections = await IeltsService.GetSectionsAsync();
+        currentLevel = await LocalStorage.GetItemAsync<string>("ielts_level");
+    }
+}

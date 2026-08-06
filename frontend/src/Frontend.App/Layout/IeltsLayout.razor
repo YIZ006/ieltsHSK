@@ -1,0 +1,103 @@
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject NavigationManager NavigationManager
+@inject AuthService AuthService
+@inject IeltsService IeltsService
+
+<div class="dashboard-wrapper">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <a href="/" class="brand-logo" style="text-decoration: none; color: inherit;">
+                <i class="bi bi-box-fill"></i> ieltsHSK
+            </a>
+        </div>
+        <nav class="sidebar-nav">
+            <NavLink class="nav-item" href="/ielts/dashboard" Match="NavLinkMatch.All">
+                <i class="bi bi-house-door"></i> Hôm nay
+            </NavLink>
+            
+            @if (sections == null)
+            {
+                <div style="padding: 15px; color: #888;">Loading...</div>
+            }
+            else
+            {
+                @foreach (var section in sections)
+                {
+                    <NavLink class="nav-item" href="@section.Route">
+                        <i class="bi @section.Icon"></i> @section.Name
+                    </NavLink>
+                }
+            }
+        </nav>
+        
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <AuthorizeView>
+                    <Authorized>
+                        @{
+                            var userName = context.User.FindFirst(c => c.Type == "unique_name")?.Value ?? context.User.Identity?.Name ?? "User";
+                            var avatarChar = string.IsNullOrEmpty(userName) ? "U" : userName.Substring(0, 1).ToUpper();
+                        }
+                        <div class="user-avatar">@avatarChar</div>
+                        <div class="user-details">
+                            <span class="user-email">@userName</span>
+                            <span class="user-role">Học viên</span>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
+            <button class="btn-logout" @onclick="Logout" title="Đăng xuất">
+                <i class="bi bi-box-arrow-right"></i>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Section -->
+    <div class="main-wrapper">
+        <!-- Topbar -->
+        <header class="topbar">
+            <div class="search-bar">
+                <i class="bi bi-search"></i>
+                <input type="text" placeholder="Tìm kiếm..." />
+            </div>
+            <div class="topbar-actions">
+                <AuthorizeView>
+                    <Authorized>
+                        @{
+                            var topUserName = context.User.FindFirst(c => c.Type == "unique_name")?.Value ?? context.User.Identity?.Name ?? "User";
+                            var topAvatarChar = string.IsNullOrEmpty(topUserName) ? "U" : topUserName.Substring(0, 1).ToUpper();
+                        }
+                        <span class="topbar-username">@topUserName</span>
+                        <div class="topbar-avatar">
+                            @topAvatarChar
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <main class="content-area">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    private List<LearningSectionDto>? sections;
+
+    protected override async Task OnInitializedAsync()
+    {
+        sections = await IeltsService.GetSectionsAsync();
+    }
+
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+        NavigationManager.NavigateTo("/", forceLoad: true);
+    }
+}

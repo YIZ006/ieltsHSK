@@ -1,0 +1,362 @@
+@page "/ielts/listening/preview"
+@page "/ielts/listening/{ExamUrl}"
+@page "/ielts/listening"
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Microsoft.JSInterop
+@inject ExamService ExamService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>@(exam?.Title ?? "IELTS Listening") - IeltsHSK</PageTitle>
+
+@if (isLoading)
+{
+    <div class="reading-loading">
+        <div class="loading-ring"></div>
+        <p>Đang tải đề thi...</p>
+    </div>
+}
+else if (exam == null)
+{
+    <div class="reading-error">
+        <div class="error-icon">📭</div>
+        <h3>Không tải được đề thi</h3>
+        <p>Vui lòng thử lại hoặc chọn đề khác.</p>
+    </div>
+}
+else
+{
+    var activePart = exam.Parts[activePartIndex];
+    int qStart = exam.Parts.Take(activePartIndex).Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count)) + 1;
+    int qEnd   = qStart + activePart.QuestionGroups.Sum(g => g.Questions.Count) - 1;
+
+    @* ── TOP BAR ── *@
+    <div class="reading-topbar">
+        <div class="topbar-left">
+            <span class="exam-title-short">@exam.Title</span>
+        </div>
+        <div class="topbar-center">
+            <div class="timer-box @(secondsLeft < 600 ? "timer-warning" : "")">
+                <span class="timer-icon">⏱</span>
+                <span class="timer-text">@TimerDisplay remaining</span>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <button class="btn-submit-exam" @onclick="SubmitExam">Submit ➤</button>
+        </div>
+    </div>
+
+    @* ── PART TABS ── *@
+    <div class="part-tabs-bar">
+        @for (int i = 0; i < exam.Parts.Count; i++)
+        {
+            var idx  = i;
+            var part = exam.Parts[i];
+            int answered = AnsweredCount(part);
+            <button class="part-tab-btn @(activePartIndex == idx ? "active" : "")"
+                    @onclick="() => ChangePart(idx)">
+                Part @part.PartNumber
+                <span class="part-tab-score">@answered/@part.QuestionGroups.Sum(g => g.Questions.Count)</span>
+            </button>
+        }
+        <div class="part-tabs-spacer"></div>
+        <span class="total-progress">
+            Tổng: @exam.Parts.Sum(p => AnsweredCount(p))/@exam.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count)) câu
+        </span>
+    </div>
+
+    @* ── AUDIO PLAYER AND QUESTIONS LAYOUT ── *@
+    <div class="listening-layout">
+        
+        <div class="custom-audio-player">
+            @if (!string.IsNullOrEmpty(exam.AudioUrl))
+            {
+                <div id="yt-hidden-player" style="position:absolute; width:1px; height:1px; top:-9999px;"></div>
+                
+                <button class="player-btn" @onclick="TogglePlay">
+                    @if(isPlaying)
+                    {
+                        <i class="bi bi-pause-fill"></i>
+                    }
+                    else
+                    {
+                        <i class="bi bi-play-fill"></i>
+                    }
+                </button>
+                
+                <div class="progress-container" @onclick="SeekAudio">
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" style="width: @(ProgressPercent)%"></div>
+                    </div>
+                </div>
+                
+                <div class="time-display">
+                    @FormatTime(currentTime) / @FormatTime(totalDuration)
+                </div>
+            }
+            else
+            {
+                <div class="audio-placeholder">Không tìm thấy file nghe cho đề này.</div>
+            }
+        </div>
+
+        <div class="questions-col listening-questions" id="questions-scroll">
+            <div class="part-header-label">PART @activePart.PartNumber</div>
+            <p class="part-time-note">
+                Questions <strong>@qStart–@qEnd</strong>.
+            </p>
+
+            @foreach (var group in activePart.QuestionGroups)
+            {
+                <div class="q-group-container">
+                    @if (!string.IsNullOrWhiteSpace(group.Instruction))
+                    {
+                        <div class="q-group-instruction">
+                            @((MarkupString)group.Instruction.Replace("\n", "<br/>"))
+                        </div>
+                    }
+                    
+                    @if (group.GroupType == "HtmlBlock")
+                    {
+                        <div class="q-html-block">
+                            @((MarkupString)group.GroupHtml)
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var q in group.Questions)
+                        {
+                            bool isActive = q.Id == activeQuestionId;
+                            <div class="question-block @(IsAnswered(q) ? "answered" : "") @(isActive ? "q-focused" : "")"
+                                 id="q-block-@q.Id"
+                                 @onclick="() => activeQuestionId = q.Id">
+
+                                <div class="q-text">@((MarkupString)q.Text)</div>
+
+                                @if (q.Options.Count > 0)
+                                {
+                                    <ul class="q-option-list">
+                                        @foreach (var opt in q.Options)
+                                        {
+                                            <li class="q-option @(q.SelectedOptionId == opt.Id ? "selected" : "")"
+                                                @onclick="() => SelectOption(q, opt.Id)">
+                                                <span class="opt-badge">@opt.Label</span>
+                                                <span class="opt-body">@opt.Text</span>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            }
+
+            @* ── NAVIGATION BUTTONS ── *@
+            <div class="part-nav-buttons">
+                @if (activePartIndex > 0)
+                {
+                    <button class="nav-part-btn prev" @onclick="() => ChangePart(activePartIndex - 1)">
+                        ← Part @(exam.Parts[activePartIndex - 1].PartNumber)
+                    </button>
+                }
+                @if (activePartIndex < exam.Parts.Count - 1)
+                {
+                    <button class="nav-part-btn next" @onclick="() => ChangePart(activePartIndex + 1)">
+                        Part @(exam.Parts[activePartIndex + 1].PartNumber) →
+                    </button>
+                }
+                else
+                {
+                    <button class="nav-part-btn submit" @onclick="SubmitExam">Nộp bài ✓</button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── BOTTOM: QUESTION NAVIGATOR ── *@
+    <div class="q-navigator-bar">
+        <div class="q-navigator-label">Part @activePart.PartNumber</div>
+        <div class="q-navigator-nums">
+            @foreach (var group in activePart.QuestionGroups)
+            {
+                @foreach (var q in group.Questions)
+                {
+                    <button class="q-nav-num @(IsAnswered(q) ? "nav-answered" : "") @(q.Id == activeQuestionId ? "nav-active" : "")"
+                            @onclick="async () => { activeQuestionId = q.Id; await ScrollToQuestion(q.Id); }">
+                        @q.Id
+                    </button>
+                }
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] 
+    [SupplyParameterFromQuery(Name = "ExamUrl")]
+    public string? QueryExamUrl { get; set; }
+
+    [Parameter] 
+    public string? ExamUrl { get; set; }
+
+    private ExamData? exam;
+    private bool isLoading = true;
+    private int activePartIndex = 0;
+    private int activeQuestionId = 0;
+
+    // Timer: 40 minutes for listening
+    private int secondsLeft = 40 * 60;
+    private System.Threading.Timer? _timer;
+    private DotNetObjectReference<IeltsListening>? _dotNetRef;
+
+    // Player state
+    private bool isPlaying = false;
+    private double currentTime = 0;
+    private double totalDuration = 1;
+
+    private double ProgressPercent => totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0;
+
+    private const string DefaultExamUrl = "sample-data/listening-test-1.json";
+
+    private string TimerDisplay
+    {
+        get
+        {
+            int m = secondsLeft / 60, s = secondsLeft % 60;
+            return $"{m:D2}:{s:D2}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        
+        string actualUrl = ExamUrl;
+        if (string.IsNullOrWhiteSpace(actualUrl)) actualUrl = QueryExamUrl;
+        
+        string url = string.IsNullOrWhiteSpace(actualUrl) ? DefaultExamUrl : Uri.UnescapeDataString(actualUrl);
+        exam = await ExamService.LoadExamAsync(url);
+        if (exam?.Parts?.Count > 0)
+            activeQuestionId = exam.Parts[0].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
+        isLoading = false;
+
+        _timer = new System.Threading.Timer(_ =>
+        {
+            if (secondsLeft > 0) { secondsLeft--; InvokeAsync(StateHasChanged); }
+            else { _timer?.Dispose(); }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (exam != null && !isLoading && !string.IsNullOrEmpty(exam.AudioUrl) && _dotNetRef == null)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            // Extract Video ID
+            string videoId = exam.AudioUrl.Split('/').Last().Split('?').First();
+            await JS.InvokeVoidAsync("initYouTubePlayer", videoId, _dotNetRef);
+            await JS.InvokeVoidAsync("bindListeningInputs", _dotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public void OnPlayerReady(double duration)
+    {
+        totalDuration = duration;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnPlayerStateChanged(bool playing)
+    {
+        isPlaying = playing;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnPlayerProgress(double time)
+    {
+        currentTime = time;
+        StateHasChanged();
+    }
+
+    private async Task TogglePlay()
+    {
+        if (isPlaying)
+            await JS.InvokeVoidAsync("pauseYouTube");
+        else
+            await JS.InvokeVoidAsync("playYouTube");
+    }
+
+    private async Task SeekAudio(MouseEventArgs e)
+    {
+        // For a real seek, we need the exact X coordinate and width of the progress bar.
+        // We'll calculate it using JS interop. Let's create a JS function to handle seeking directly.
+        // For now, we will add a script block below or in JS to handle click on progress bar.
+    }
+
+    private string FormatTime(double seconds)
+    {
+        int m = (int)(seconds / 60);
+        int s = (int)(seconds % 60);
+        return $"{m:D2}:{s:D2}";
+    }
+
+    [JSInvokable]
+    public void OnHtmlInputChange(int questionId, string value)
+    {
+        if (exam == null) return;
+        var q = exam.Parts.SelectMany(p => p.QuestionGroups).SelectMany(g => g.Questions).FirstOrDefault(x => x.Id == questionId);
+        if (q != null)
+        {
+            q.FillAnswer = value;
+            StateHasChanged();
+        }
+    }
+
+    private void ChangePart(int index)
+    {
+        activePartIndex = index;
+        activeQuestionId = exam!.Parts[index].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
+    }
+
+    private void SelectOption(QuestionData q, int optionId)
+    {
+        q.SelectedOptionId = q.SelectedOptionId == optionId ? null : optionId;
+    }
+
+    private bool IsAnswered(QuestionData q)
+        => q.SelectedOptionId.HasValue || !string.IsNullOrEmpty(q.FillAnswer);
+
+    private int AnsweredCount(ExamPart part)
+        => part.QuestionGroups.Sum(g => g.Questions.Count(IsAnswered));
+
+    private async Task ScrollToQuestion(int qId) 
+    { 
+        await Task.Delay(50);
+        try 
+        {
+            // For HtmlBlock, the ID is q-{id}, for normal it is q-block-{id}
+            await JS.InvokeVoidAsync("scrollToElementId", $"q-{qId}"); 
+        } 
+        catch (Exception ex) 
+        {
+            Console.WriteLine($"Lỗi JS Interop: {ex.Message}");
+        }
+    }
+
+    private void SubmitExam()
+    {
+        int total    = exam!.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count));
+        int answered = exam.Parts.Sum(p => AnsweredCount(p));
+        Console.WriteLine($"Nộp bài: {answered}/{total} câu đã trả lời.");
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _dotNetRef?.Dispose();
+    }
+}

@@ -1,0 +1,22 @@
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    <div style="text-align: center; padding: 100px 20px; color: white;">
+                        <h2 style="color: #ff3333; margin-bottom: 15px;">Yêu cầu đăng nhập</h2>
+                        <p style="margin-bottom: 25px;">Bạn cần đăng nhập để truy cập trang.</p>
+                        <a href="/" class="btn-action" style="display: inline-block; padding: 10px 20px; background-color: #ff3333; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">Về trang chủ để đăng nhập</a>
+                    </div>
+                </NotAuthorized>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <PageTitle>Not found</PageTitle>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <p role="alert">Sorry, there's nothing at this address.</p>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>
