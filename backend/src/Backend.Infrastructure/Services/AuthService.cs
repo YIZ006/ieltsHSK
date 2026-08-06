@@ -1,0 +1,105 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using Google.Apis.Auth;
+using System.Text;
+using Backend.Application.Abstractions;
+using Backend.Application.DTOs;
+using Backend.Domain.Entities;
+using Backend.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
+
+namespace Backend.Infrastructure.Services;
+
+public class AuthService(AppDbContext dbContext, IConfiguration configuration) : IAuthService
+{
+    public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
+    {
+        if (await dbContext.Users.AnyAsync(u => u.Username == request.Username || u.Email == request.Email, cancellationToken))
+        {
+            throw new Exception("Username or Email already exists.");
+        }
+
+        var user = new User
+        {
+            Username = request.Username,
+            Email = request.Email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password)
+        };
+
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var token = GenerateJwtToken(user);
+        return new AuthResponse(token, user.Username, user.Email);
+    }
+
+    public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
+    {
+        var user = await dbContext.Users.SingleOrDefaultAsync(u => u.Username == request.Username, cancellationToken);
+        
+        if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        {
+            throw new Exception("Invalid username or password.");
+        }
+
+        var token = GenerateJwtToken(user);
+        return new AuthResponse(token, user.Username, user.Email);
+    }
+
+    public async Task<AuthResponse> LoginWithGoogleAsync(GoogleLoginRequest request, CancellationToken cancellationToken = default)
+    {
+        var settings = new GoogleJsonWebSignature.ValidationSettings
+        {
+            Audience = new[] { configuration["Google:ClientId"] }
+        };
+
+        GoogleJsonWebSignature.Payload payload;
+        try
+        {
+            payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings);
+        }
+        catch (InvalidJwtException)
+        {
+            throw new Exception("Invalid Google token.");
+        }
+
+        var user = await dbContext.Users.SingleOrDefaultAsync(u => u.Email == payload.Email, cancellationToken);
+        
+        if (user == null)
+        {
+            // Do not auto-register. Throw a specific error so frontend can redirect to registration.
+            throw new Exception($"UserNotRegistered|{payload.Email}");
+        }
+
+        var token = GenerateJwtToken(user);
+        return new AuthResponse(token, user.Username, user.Email);
+    }
+
+    private string GenerateJwtToken(User user)
+    {
+        var jwtSettings = configuration.GetSection("Jwt");
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]!));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.UniqueName, user.Username),
+            new Claim(JwtRegisteredClaimNames.Email, user.Email),
+            new Claim("level", user.Level ?? "A1")
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: jwtSettings["Issuer"],
+            audience: jwtSettings["Audience"],
+            claims: claims,
+            expires: DateTime.Now.AddDays(1),
+            signingCredentials: creds
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+}

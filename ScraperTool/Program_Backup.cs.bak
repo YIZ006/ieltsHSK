@@ -1,0 +1,332 @@
+using System;
+using System.Text.Json;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Linq;
+using HtmlAgilityPack;
+using PuppeteerSharp;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        string url = "https://ieltsonlinetests.com/ielts-mock-test-2025-december-reading-practise-test-1?mode=simulation_test";
+
+        Console.WriteLine("Khởi động Chromium...");
+        using var browser = await Puppeteer.LaunchAsync(new LaunchOptions
+        {
+            Headless = true,
+            Args = new[] { "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage" }
+        });
+
+        using var page = await browser.NewPageAsync();
+        await page.SetUserAgentAsync("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36");
+        await page.EvaluateExpressionOnNewDocumentAsync("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
+
+        // === COOKIE ĐĂNG NHẬP (cập nhật) ===
+        await page.SetCookieAsync(
+            new PuppeteerSharp.CookieParam
+            {
+                Name = "SSESS83cb9fb6134217f47c01ac2285e9d4ff",
+                Value = "QRQbKiaHXqRBfb0M1Sf87s2vrR6JskUaS7yII-tp8BI",
+                Domain = "ieltsonlinetests.com",
+                Path = "/",
+                HttpOnly = true,
+                Secure = true
+            }
+        );
+
+        Console.WriteLine("Đã inject Cookie. Điều hướng tới trang...");
+        await page.GoToAsync(url, new NavigationOptions
+        {
+            WaitUntil = new[] { WaitUntilNavigation.Networkidle0 },
+            Timeout = 60000
+        });
+        await Task.Delay(4000);
+
+        // === LẤY TIÊU ĐỀ ĐỀ THI ===
+        string html = await page.EvaluateFunctionAsync<string>("() => document.documentElement.outerHTML");
+        var doc = new HtmlDocument();
+        doc.LoadHtml(html);
+        var titleNode = doc.DocumentNode.SelectSingleNode("//title");
+        var examData = new ExamData { Title = titleNode?.InnerText.Trim() ?? "IELTS Reading" };
+
+        // === ĐẾM SỐ PART (dựa vào header) ===
+        var questionPanel = doc.DocumentNode.SelectSingleNode("//div[contains(@class,'take-test__split-item') and .//div[contains(@class,'test-panel__header')]]")
+                         ?? doc.DocumentNode.SelectSingleNode("//div[contains(@class,'take-test__board')]");
+
+        if (questionPanel == null) { Console.WriteLine("Không tìm thấy panel câu hỏi!"); return; }
+
+        var headers = questionPanel.SelectNodes(".//div[contains(@class,'test-panel__header')]");
+        var panels  = questionPanel.SelectNodes(".//div[contains(@class,'test-panel__item')]");
+        Console.WriteLine($"Headers: {headers?.Count ?? 0} | Panels: {panels?.Count ?? 0}");
+        if (headers == null || panels == null) { Console.WriteLine("Không tìm thấy headers/panels!"); return; }
+
+        // === LẤY PASSAGE CHO TỪNG PART trực tiếp từ HTML ===
+        // Site chứa tất cả 3 passage trong DOM (field--name-field-passage, không có "desc")
+        var passageMap = new Dictionary<int, string>();
+        var titleMap   = new Dictionary<int, string>();
+
+        var allPassageNodes = doc.DocumentNode.SelectNodes(
+            "//div[contains(@class,'field--name-field-passage') and not(contains(@class,'field--name-field-passage-desc'))]");
+
+        Console.WriteLine($"Tìm được {allPassageNodes?.Count ?? 0} passage node trong DOM");
+
+        // Lấy tiêu đề từ field--name-field-subtitle-section
+        var subtitleNodes = doc.DocumentNode.SelectNodes(
+            "//div[contains(@class,'field--name-field-subtitle-section')]");
+        var subtitles = subtitleNodes?.Select(n => n.InnerText.Trim()).ToList() ?? new List<string>();
+        Console.WriteLine($"Tiêu đề tìm được: {string.Join(" | ", subtitles)}");
+
+        if (allPassageNodes != null)
+        {
+            for (int i = 0; i < allPassageNodes.Count && i < 3; i++)
+            {
+                int pn = i + 1;
+                string rawHtml = allPassageNodes[i].InnerHtml.Trim();
+                string passTitle = i < subtitles.Count ? subtitles[i] : "";
+
+                passageMap[pn] = rawHtml;
+                titleMap[pn]   = passTitle;
+                Console.WriteLine($"  Part {pn} passage: {rawHtml.Length} ký tự | Tiêu đề: \"{passTitle}\"");
+            }
+        }
+
+        // Nếu không đủ passage, dùng passage-content làm fallback
+        if (passageMap.Count == 0)
+        {
+            var fallbackNode = doc.DocumentNode.SelectSingleNode("//div[contains(@class,'passage-content')]");
+            string fallback  = fallbackNode?.InnerHtml.Trim() ?? "<p>Chưa có bài đọc.</p>";
+            for (int i = 1; i <= (headers?.Count ?? 3); i++) passageMap[i] = fallback;
+            Console.WriteLine("⚠️  Dùng fallback passage-content cho tất cả Part");
+        }
+
+        // === PHÂN CHIA CÂU HỎI THEO PART ===
+        var headerPositions = headers.Select(h => h.StreamPosition).ToList();
+        int globalQId = 1;
+        var partQuestionsMap = new Dictionary<int, List<QuestionGroup>>();
+        for (int i = 1; i <= (headers?.Count ?? 3); i++) partQuestionsMap[i] = new List<QuestionGroup>();
+
+        foreach (var panel in panels)
+        {
+            long panelPos = panel.StreamPosition;
+            int assignedPart = 1;
+            for (int i = 0; i < headerPositions.Count; i++)
+                if (headerPositions[i] < panelPos) assignedPart = i + 1;
+
+            // Lấy instruction của group
+            var instructionNode = panel.SelectSingleNode(".//div[contains(@class,'test-panel__instruction')]") 
+                               ?? panel.SelectSingleNode(".//div[contains(@class,'test-panel__direction')]");
+            string instruction = instructionNode?.InnerText.Trim() ?? "";
+            
+            var qGroup = new QuestionGroup { Instruction = instruction };
+
+            var subQuestions = panel.SelectNodes(".//div[contains(@class,'test-panel__question-sm-group')]");
+            if (subQuestions != null && subQuestions.Count > 0)
+            {
+                var sharedAnswers = panel.SelectNodes(".//div[contains(@class,'test-panel__answer-item')]");
+                foreach (var sq in subQuestions)
+                {
+                    var sqTitle = sq.SelectSingleNode(".//div[contains(@class,'test-panel__question-sm-title')]");
+                    string sqText = sqTitle?.InnerText.Trim() ?? "";
+                    if (string.IsNullOrWhiteSpace(sqText)) continue;
+                    var localAnswers = sq.SelectNodes(".//div[contains(@class,'test-panel__answer-item')]") ?? sharedAnswers;
+                    qGroup.Questions.Add(new QuestionData { Id = globalQId++, Text = sqText, Options = ExtractOptions(localAnswers) });
+                }
+            }
+            else
+            {
+                var selectNodes = panel.SelectNodes(".//select[@data-num]");
+                if (selectNodes != null && selectNodes.Count > 0)
+                {
+                    var firstSelect = selectNodes[0];
+                    var sharedOpts  = firstSelect.SelectNodes(".//option[@value != '']");
+                    var commonOptions = new List<OptionData>();
+                    if (sharedOpts != null)
+                    {
+                        int oi = 1;
+                        foreach (var opt in sharedOpts)
+                        {
+                            string val = opt.GetAttributeValue("value", "");
+                            if (!string.IsNullOrEmpty(val))
+                                commonOptions.Add(new OptionData { Id = oi++, Label = val, Text = val });
+                        }
+                    }
+
+                    foreach (var sel in selectNodes)
+                    {
+                        string qNum = sel.GetAttributeValue("data-num", "?");
+                        var parentP = sel.ParentNode;
+                        string rawText = parentP?.InnerText.Trim() ?? "";
+                        rawText = System.Text.RegularExpressions.Regex.Replace(rawText, @"^\d+\.", "").Trim();
+                        foreach (var opt in commonOptions) rawText = rawText.Replace(opt.Text, "").Trim();
+                        rawText = rawText.Trim();
+                        if (string.IsNullOrWhiteSpace(rawText)) continue;
+                        qGroup.Questions.Add(new QuestionData { Id = globalQId++, Text = $"Q{qNum}. {rawText}", Options = commonOptions });
+                    }
+                }
+                else
+                {
+                    var inputNodes = panel.SelectNodes(".//input[@data-num]");
+                    if (inputNodes != null && inputNodes.Count > 0)
+                    {
+                        foreach (var inp in inputNodes)
+                        {
+                            string qNum  = inp.GetAttributeValue("data-num", "?");
+                            var iotSpan  = inp.ParentNode;
+                            var parentP  = iotSpan?.ParentNode;
+                            var prevP    = parentP?.PreviousSibling;
+                            while (prevP != null && prevP.Name != "p") prevP = prevP.PreviousSibling;
+                            string qText = prevP?.InnerText.Trim() ?? $"Question {qNum}";
+                            qGroup.Questions.Add(new QuestionData { Id = globalQId++, Text = $"Q{qNum}. {qText}", Options = new List<OptionData>() });
+                        }
+                    }
+                    else
+                    {
+                        var qTitle = panel.SelectSingleNode(".//div[contains(@class,'test-panel__question')]")?.InnerText.Trim() ?? "";
+                        if (!string.IsNullOrWhiteSpace(qTitle))
+                            qGroup.Questions.Add(new QuestionData { Id = globalQId++, Text = qTitle, Options = new List<OptionData>() });
+                    }
+                }
+            }
+            
+            if (qGroup.Questions.Count > 0) {
+                partQuestionsMap[assignedPart].Add(qGroup);
+            }
+        }
+
+        // === GOM LẠI THÀNH ExamData ===
+        foreach (var kv in partQuestionsMap.OrderBy(k => k.Key))
+        {
+            examData.Parts.Add(new ExamPart
+            {
+                PartNumber   = kv.Key,
+                PassageTitle = titleMap.GetValueOrDefault(kv.Key, ""),
+                PassageHtml  = passageMap.GetValueOrDefault(kv.Key, "<p>Chưa có bài đọc.</p>"),
+                QuestionGroups = kv.Value
+            });
+        }
+
+        // === XUẤT JSON ===
+        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        string finalJson = JsonSerializer.Serialize(examData, jsonOptions);
+        string safeTitle = System.Text.RegularExpressions.Regex.Replace(examData.Title.ToLower(), @"[^a-z0-9]+", "-").Trim('-');
+        string fileName  = $"{safeTitle}.json";
+
+        await System.IO.File.WriteAllTextAsync("output.json", finalJson);
+
+        int total = examData.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count));
+        Console.WriteLine($"\n{'='*40}");
+        Console.WriteLine($"✅ HOÀN TẤT! Tổng: {examData.Parts.Count} Part | {total} câu hỏi");
+        foreach (var part in examData.Parts)
+            Console.WriteLine($"   Part {part.PartNumber} [{part.PassageTitle}]: {part.QuestionGroups.Sum(g => g.Questions.Count)} câu");
+
+        // === UPLOAD LÊN CLOUDFLARE R2 ===
+        Console.WriteLine("\nĐang upload lên Cloudflare R2...");
+        try
+        {
+            string accountId  = "0a3da3f1052ab03fdd2013ddf4b463df";
+            string accessKey  = "26004d10dfeedac9db06383d8e24c891";
+            string secretKey  = "90896c14877b478523d83c842d29c0ceb1ee3923bcfee1c20d40407d12639f12";
+            string bucketName = "ielts-hsk-data";
+
+            var config = new Amazon.S3.AmazonS3Config
+            {
+                ServiceURL = $"https://{accountId}.r2.cloudflarestorage.com",
+                ForcePathStyle = true,
+                Timeout = TimeSpan.FromSeconds(60)
+            };
+            var creds = new Amazon.Runtime.BasicAWSCredentials(accessKey, secretKey);
+            using var s3 = new Amazon.S3.AmazonS3Client(creds, config);
+
+            var presignReq = new Amazon.S3.Model.GetPreSignedUrlRequest
+            {
+                BucketName  = bucketName,
+                Key         = $"exams/{fileName}",
+                Verb        = Amazon.S3.HttpVerb.PUT,
+                Expires     = DateTime.UtcNow.AddHours(1),
+                ContentType = "application/json"
+            };
+            string presignedUrl = s3.GetPreSignedURL(presignReq);
+
+            using var httpClient = new System.Net.Http.HttpClient();
+            var content  = new System.Net.Http.StringContent(finalJson, System.Text.Encoding.UTF8, "application/json");
+            var response = await httpClient.PutAsync(presignedUrl, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                string publicUrl = $"https://pub-91655bd1442d498b9788d1f8f8575587.r2.dev/exams/{fileName}";
+                Console.WriteLine($"✅ Upload R2 thành công!");
+                Console.WriteLine($"🔗 Public URL: {publicUrl}");
+
+                Console.WriteLine("\n" + new string('═', 60));
+                Console.WriteLine("📋  PREVIEW — DỮ LIỆU SẮP LƯU VÀO DATABASE");
+                Console.WriteLine(new string('═', 60));
+                Console.WriteLine($"  Tiêu đề : {examData.Title}");
+                Console.WriteLine($"  Category : IELTS");
+                Console.WriteLine($"  DataUrl  : {publicUrl}");
+                Console.WriteLine($"  Số Part  : {examData.Parts.Count}");
+                foreach (var p in examData.Parts)
+                    Console.WriteLine($"    └─ Part {p.PartNumber} [{p.PassageTitle}]: {p.QuestionGroups.Sum(g => g.Questions.Count)} câu hỏi");
+                Console.WriteLine(new string('═', 60));
+                Console.Write("\n❓ Bạn có muốn lưu vào Database không? (y/N): ");
+
+                string? confirm = Console.ReadLine()?.Trim().ToLower();
+                if (confirm == "y" || confirm == "yes")
+                {
+                    string backendUrl = "https://localhost:7101";
+                    var handler = new System.Net.Http.HttpClientHandler
+                    {
+                        ServerCertificateCustomValidationCallback = (_, _, _, _) => true
+                    };
+                    using var devApiClient = new System.Net.Http.HttpClient(handler) { BaseAddress = new Uri(backendUrl) };
+                    var payload     = new { Title = examData.Title, DataUrl = publicUrl, Category = "IELTS" };
+                    var jsonPayload = System.Text.Json.JsonSerializer.Serialize(payload);
+                    var apiContent  = new System.Net.Http.StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
+
+                    Console.WriteLine("\n⏳ Đang gọi API lưu vào Database...");
+                    var apiResponse = await devApiClient.PostAsync("/api/ielts/exams", apiContent);
+                    if (apiResponse.IsSuccessStatusCode)
+                        Console.WriteLine($"✅ Lưu Database thành công! {await apiResponse.Content.ReadAsStringAsync()}");
+                    else
+                        Console.WriteLine($"❌ Lưu DB thất bại: {apiResponse.StatusCode}\n{await apiResponse.Content.ReadAsStringAsync()}");
+                }
+                else
+                {
+                    Console.WriteLine($"\n⏭️  Bỏ qua lưu DB. DataUrl = \"{publicUrl}\"");
+                }
+            }
+            else
+            {
+                string err = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"❌ Upload thất bại: {response.StatusCode}\n{err}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Upload lỗi: {ex.Message}");
+            Console.WriteLine($"   File đã lưu cục bộ: {System.IO.Path.GetFullPath("output.json")}");
+        }
+    }
+
+    static List<OptionData> ExtractOptions(HtmlAgilityPack.HtmlNodeCollection? nodes)
+    {
+        var options = new List<OptionData>();
+        if (nodes == null) return options;
+        int optId = 1;
+        foreach (var ans in nodes)
+        {
+            string optText = ans.InnerText.Trim().TrimStart("ABCDEFGHIJKLabcdefghijkl.".ToCharArray()).Trim();
+            if (string.IsNullOrWhiteSpace(optText)) continue;
+            options.Add(new OptionData { Id = optId, Label = ((char)('A' + optId - 1)).ToString(), Text = optText });
+            optId++;
+        }
+        return options;
+    }
+}
+
+public class ExamData  { public string Title { get; set; } = ""; public List<ExamPart> Parts { get; set; } = new(); }
+public class ExamPart  { public int PartNumber { get; set; } public string PassageTitle { get; set; } = ""; public string PassageHtml { get; set; } = ""; public List<QuestionGroup> QuestionGroups { get; set; } = new(); }
+public class QuestionGroup { public string Instruction { get; set; } = ""; public List<QuestionData> Questions { get; set; } = new(); }
+public class QuestionData { public int Id { get; set; } public string Text { get; set; } = ""; public List<OptionData> Options { get; set; } = new(); public int CorrectOptionId { get; set; } public int? SelectedOptionId { get; set; } public string FillAnswer { get; set; } = ""; }
+public class OptionData { public int Id { get; set; } public string Label { get; set; } = ""; public string Text { get; set; } = ""; }

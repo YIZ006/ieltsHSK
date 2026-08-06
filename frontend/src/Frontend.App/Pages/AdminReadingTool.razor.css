@@ -1,0 +1,192 @@
+.admin-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    font-family: var(--ig-font, 'Inter', sans-serif);
+}
+
+.header {
+    margin-bottom: 30px;
+}
+.header h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 5px;
+    color: var(--ig-text);
+}
+.header p {
+    color: #888;
+}
+
+.two-col-layout {
+    display: flex;
+    gap: 30px;
+    align-items: flex-start;
+}
+.editor-panel {
+    flex: 2;
+}
+.preview-panel {
+    flex: 1;
+}
+
+.card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    margin-bottom: 25px;
+    border: 1px solid #eaeaea;
+}
+.card h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: var(--ig-text);
+    border-bottom: 2px solid #f0f0f0;
+    padding-bottom: 10px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #555;
+}
+.form-control {
+    width: 100%;
+    padding: 10px 15px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+.form-control:focus {
+    border-color: var(--ig-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 149, 246, 0.1);
+}
+
+.html-editor {
+    height: 200px;
+    font-family: monospace;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+.question-box {
+    background: #fcfcfc;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+.q-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+.btn-remove {
+    background: #ffebee;
+    color: #e53935;
+    border: none;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.options-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.option-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.opt-label {
+    font-weight: bold;
+    color: #555;
+}
+
+.btn-add {
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    border: 2px dashed #ccc;
+    color: #666;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-add:hover {
+    border-color: var(--ig-primary);
+    color: var(--ig-primary);
+    background: rgba(0, 149, 246, 0.05);
+}
+
+.btn-generate {
+    width: 100%;
+    padding: 15px;
+    background: var(--ig-primary, #0095f6);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    margin-bottom: 30px;
+}
+.btn-generate:hover {
+    background: #0077c5;
+}
+
+.sticky-card {
+    position: sticky;
+    top: 20px;
+}
+.json-output {
+    width: 100%;
+    height: 500px;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    font-family: 'Consolas', monospace;
+    font-size: 0.85rem;
+    padding: 15px;
+    border-radius: 8px;
+    border: none;
+    resize: none;
+    margin-bottom: 10px;
+}
+.btn-copy {
+    width: 100%;
+    padding: 10px;
+    background: #e0e0e0;
+    color: #333;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-copy:hover {
+    background: #ccc;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+    .card, .question-box {
+        background: #1a1a1a;
+        border-color: #333;
+    }
+    .form-control {
+        background: #2a2a2a;
+        border-color: #444;
+        color: white;
+    }
+}

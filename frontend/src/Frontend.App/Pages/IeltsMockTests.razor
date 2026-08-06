@@ -1,0 +1,141 @@
+@page "/ielts/luyen-de"
+@layout Frontend.App.Layout.IeltsLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject MockTestService MockTestService
+@inject NavigationManager NavigationManager
+
+<PageTitle>IELTS Mock Tests</PageTitle>
+
+<div class="mocktests-container">
+    <div class="main-content">
+        <!-- Mock Test Collection Header -->
+        <div class="collection-header">
+            <div class="collection-image">
+                <img src="/sample-data/mocktest-cover.png" alt="IELTS Mock Test" onerror="this.src='https://placehold.co/400x400/1e1e1e/FFF?text=IELTS+MOCK+TEST'" />
+            </div>
+            <div class="collection-info">
+                <h1>IELTS Mock Test 2025 December</h1>
+                <div class="rating">
+                    <span class="score">3.7</span>
+                    <span class="stars">
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-half"></i>
+                        <i class="bi bi-star"></i>
+                    </span>
+                    <span class="votes">(408 votes)</span>
+                </div>
+                <div class="meta">
+                    <p><i class="bi bi-calendar"></i> Published on: <strong>13 Jan 2026</strong></p>
+                    <p><i class="bi bi-lightning-charge"></i> Tests taken: <strong>130,816</strong></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tests List -->
+        @if (isLoading)
+        {
+            <div class="loading-spinner">Đang tải danh sách đề thi...</div>
+        }
+        else if (mockTests.Count == 0)
+        {
+            <div class="empty-state">Chưa có đề thi nào trong hệ thống.</div>
+        }
+        else
+        {
+            <div class="tests-grid">
+                @foreach (var test in mockTests)
+                {
+                    <div class="test-block">
+                        <h2>@test.Title</h2>
+                        <div class="skills-grid">
+                            <!-- Listening -->
+                            <div class="skill-card listening">
+                                <div class="skill-header">
+                                    <i class="bi bi-headphones"></i>
+                                    <span>Listening</span>
+                                </div>
+                                <button class="btn-take-test" 
+                                        disabled="@string.IsNullOrEmpty(test.ListeningUrl)"
+                                        @onclick="() => TakeListeningTest(test.ListeningUrl)">
+                                    <i class="bi bi-lightning-charge-fill"></i> Take Test
+                                </button>
+                            </div>
+                            
+                            <!-- Reading -->
+                            <div class="skill-card reading">
+                                <div class="skill-header">
+                                    <i class="bi bi-file-text"></i>
+                                    <span>Reading</span>
+                                </div>
+                                <button class="btn-take-test" 
+                                        disabled="@string.IsNullOrEmpty(test.ReadingUrl)"
+                                        @onclick="() => TakeReadingTest(test.ReadingUrl)">
+                                    <i class="bi bi-lightning-charge-fill"></i> Take Test
+                                </button>
+                            </div>
+
+                            <!-- Writing -->
+                            <div class="skill-card writing">
+                                <div class="skill-header">
+                                    <i class="bi bi-pen"></i>
+                                    <span>Writing</span>
+                                </div>
+                                <button class="btn-take-test" disabled="@string.IsNullOrEmpty(test.WritingUrl)">
+                                    <i class="bi bi-lightning-charge-fill"></i> Take Test
+                                </button>
+                            </div>
+
+                            <!-- Speaking -->
+                            <div class="skill-card speaking">
+                                <div class="skill-header">
+                                    <i class="bi bi-mic"></i>
+                                    <span>Speaking</span>
+                                </div>
+                                <button class="btn-take-test" disabled="@string.IsNullOrEmpty(test.SpeakingUrl)">
+                                    <i class="bi bi-lightning-charge-fill"></i> Take Test
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Sidebar Banner (Optional) -->
+    <div class="sidebar">
+        <div class="ad-banner">
+            <h3>Tuyển dụng<br/><span class="highlight">Giảng viên IELTS</span></h3>
+            <p>Thu nhập 40-50 triệu/tháng</p>
+            <button class="btn-learn-more">Tìm hiểu thêm</button>
+            <img src="https://placehold.co/300x200/1e1e1e/FFF?text=Join+Our+Team" alt="Join Team" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<MockTestDto> mockTests = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        mockTests = await MockTestService.GetMockTestsAsync();
+        isLoading = false;
+    }
+
+    private void TakeReadingTest(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+        NavigationManager.NavigateTo($"/ielts/reading/preview?ExamUrl={Uri.EscapeDataString(url)}");
+    }
+
+    private void TakeListeningTest(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+        NavigationManager.NavigateTo($"/ielts/listening/preview?ExamUrl={Uri.EscapeDataString(url)}");
+    }
+}
