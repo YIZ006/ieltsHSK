@@ -13,6 +13,50 @@ public class ExamData
     public string AudioUrl { get; set; } = "";
     public List<ExamPart> Parts { get; set; } = new();
 }
+
+public class WritingExamData
+{
+    public string Title { get; set; } = "";
+    public int TotalMinutes { get; set; } = 60;
+    public List<WritingTask> Tasks { get; set; } = new();
+}
+
+public class WritingTask
+{
+    public int TaskNumber { get; set; }
+    public string TaskTitle { get; set; } = "";
+    public int TimeRecommended { get; set; }
+    public int MinWords { get; set; }
+    public string Instruction { get; set; } = "";
+    public string Prompt { get; set; } = "";
+    public string RequireWords { get; set; } = "";
+    public string? ImageUrl { get; set; }
+    public string? ImageAlt { get; set; }
+}
+
+public class SpeakingExamData
+{
+    public string Title { get; set; } = "";
+    public List<SpeakingPart> Parts { get; set; } = new();
+}
+
+public class SpeakingPart
+{
+    public string Title { get; set; } = "";
+    public string Caption { get; set; } = "";
+    public int Time { get; set; }
+    public int TimeToThink { get; set; }
+    public string? CueCardHtml { get; set; }
+    public List<SpeakingQuestion> Questions { get; set; } = new();
+}
+
+public class SpeakingQuestion
+{
+    public string Id { get; set; } = "";
+    public string Text { get; set; } = "";
+    public string VideoUrl { get; set; } = "";
+}
+
 public class ExamPart
 {
     public int PartNumber { get; set; }
@@ -45,6 +89,169 @@ public class OptionData
 class Program
 {
     static void Main(string[] args)
+    {
+        string mode = "speaking"; // "listening", "reading", "writing", "speaking"
+
+        if (mode == "listening") ParseListeningTest();
+        else if (mode == "writing") ParseWritingTest();
+        else if (mode == "speaking") ParseSpeakingTest();
+    }
+
+    static void ParseSpeakingTest()
+    {
+        string filePath = "IELTS Mock Test 2025 December Speaking Practise Test 1 _ IELTS Online Tests.html";
+        if (!File.Exists(filePath))
+        {
+            // Fallback search for any speaking html file
+            var files = Directory.GetFiles(".", "*Speaking*.html");
+            if (files.Length > 0) filePath = files[0];
+            else
+            {
+                Console.WriteLine("Khong tim thay file Speaking HTML!");
+                return;
+            }
+        }
+
+        string html = File.ReadAllText(filePath);
+        var doc = new HtmlDocument();
+        doc.LoadHtml(html);
+
+        var exam = new SpeakingExamData
+        {
+            Title = doc.DocumentNode.SelectSingleNode("//title")?.InnerText.Replace(" | IELTS Online Tests", "").Trim() ?? "Speaking Mock Test"
+        };
+
+        // Extract drupal-settings-json
+        var scriptNode = doc.DocumentNode.SelectSingleNode("//script[@data-drupal-selector='drupal-settings-json']");
+        if (scriptNode != null)
+        {
+            try
+            {
+                using var jsonDoc = JsonDocument.Parse(scriptNode.InnerText);
+                var root = jsonDoc.RootElement;
+                if (root.TryGetProperty("sot", out var sot) && sot.TryGetProperty("speakingObjectData", out var speakingData))
+                {
+                    foreach (var partElem in speakingData.EnumerateArray())
+                    {
+                        var part = new SpeakingPart
+                        {
+                            Title = partElem.GetProperty("title").GetString() ?? "",
+                            Caption = partElem.TryGetProperty("caption", out var cap) ? cap.GetString() ?? "" : "",
+                            Time = partElem.TryGetProperty("time", out var t) ? t.GetInt32() : 0,
+                            TimeToThink = partElem.TryGetProperty("timeToThink", out var ttt) ? ttt.GetInt32() : 0,
+                            CueCardHtml = partElem.TryGetProperty("videoDesc", out var vd) ? vd.GetString() : null
+                        };
+
+                        if (partElem.TryGetProperty("videoUrl", out var videoList))
+                        {
+                            foreach (var v in videoList.EnumerateArray())
+                            {
+                                var q = new SpeakingQuestion
+                                {
+                                    Id = v.TryGetProperty("id", out var id) ? id.GetString() ?? "" : "",
+                                    VideoUrl = v.TryGetProperty("src", out var src) ? src.GetString() ?? "" : ""
+                                };
+
+                                if (v.TryGetProperty("question", out var qText) && !string.IsNullOrWhiteSpace(qText.GetString()))
+                                {
+                                    q.Text = qText.GetString()!.Trim();
+                                }
+                                else if (v.TryGetProperty("text_question", out var tqText))
+                                {
+                                    q.Text = Regex.Replace(tqText.GetString() ?? "", "<.*?>", "").Trim();
+                                }
+
+                                part.Questions.Add(q);
+                            }
+                        }
+
+                        exam.Parts.Add(part);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Loi doc JSON Speaking: {ex.Message}");
+            }
+        }
+
+        var json = JsonSerializer.Serialize(exam, new JsonSerializerOptions { WriteIndented = true });
+        string outputPath = "IELTS_Mock_Test_2025_December_Speaking_Practise_Test_1.json";
+        File.WriteAllText(outputPath, json);
+        Console.WriteLine($"Parse hoan tat! Da luu vao {outputPath}");
+    }
+
+    static void ParseWritingTest()
+    {
+        string filePath = "IELTS_Mock_Test_2025_December_Writing_Practise_Test_1.html";
+        if (!File.Exists(filePath))
+        {
+            Console.WriteLine($"Khong tim thay {filePath}");
+            return;
+        }
+
+        string html = File.ReadAllText(filePath);
+        var doc = new HtmlDocument();
+        doc.LoadHtml(html);
+
+        var exam = new WritingExamData
+        {
+            Title = doc.DocumentNode.SelectSingleNode("//title")?.InnerText.Replace("Take test | ", "").Trim() ?? "Writing Mock Test",
+        };
+
+        var sections = doc.DocumentNode.SelectNodes("//section[contains(@class, 'test-contents')]");
+        if (sections != null)
+        {
+            int taskNum = 1;
+            foreach (var section in sections)
+            {
+                var task = new WritingTask { TaskNumber = taskNum };
+                
+                task.TaskTitle = section.SelectSingleNode(".//h1[contains(@class, 'test-contents__title')]")?.InnerText.Trim() ?? $"Writing Task {taskNum}";
+                
+                var pNodes = section.SelectNodes(".//p");
+                if (pNodes != null)
+                {
+                    foreach (var p in pNodes)
+                    {
+                        var text = p.InnerText.Trim();
+                        if (text.Contains("You should spend about"))
+                        {
+                            task.Instruction = p.OuterHtml;
+                            var minMatch = Regex.Match(text, @"(\d+)\s*minutes");
+                            if (minMatch.Success) task.TimeRecommended = int.Parse(minMatch.Groups[1].Value);
+                        }
+                        else if (text.Contains("You should write") && text.Contains("at least"))
+                        {
+                            task.RequireWords = text.Replace("You should write", "").Trim().TrimEnd('.');
+                            var wordMatch = Regex.Match(text, @"(\d+)\s*words");
+                            if (wordMatch.Success) task.MinWords = int.Parse(wordMatch.Groups[1].Value);
+                        }
+                        else if (!string.IsNullOrWhiteSpace(text))
+                        {
+                            task.Prompt += p.OuterHtml;
+                        }
+                    }
+                }
+
+                var img = section.SelectSingleNode(".//img[not(contains(@class, 'lazyload'))]");
+                if (img != null)
+                {
+                    task.ImageUrl = img.GetAttributeValue("src", "");
+                    task.ImageAlt = img.GetAttributeValue("alt", "");
+                }
+
+                exam.Tasks.Add(task);
+                taskNum++;
+            }
+        }
+
+        var json = JsonSerializer.Serialize(exam, new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(filePath.Replace(".html", ".json"), json);
+        Console.WriteLine($"Parse hoan tat! Da luu vao {filePath.Replace(".html", ".json")}");
+    }
+
+    static void ParseListeningTest()
     {
         string filePath = "listening_source.html";
         if (!File.Exists(filePath))
