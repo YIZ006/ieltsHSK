@@ -1,0 +1,176 @@
+@page "/ielts/writing/preview"
+@page "/ielts/writing/{ExamUrl}"
+@page "/ielts/writing"
+@layout Frontend.App.Layout.ExamLayout
+@using Frontend.App.Models
+@using System.Net.Http.Json
+@inject HttpClient Http
+@implements IDisposable
+
+<PageTitle>@(exam?.Title ?? "IELTS Writing") - IeltsHSK</PageTitle>
+
+@if (isLoading)
+{
+    <div class="writing-loading">
+        <div class="loading-ring"></div>
+        <p>Đang tải đề thi...</p>
+    </div>
+}
+else if (exam == null)
+{
+    <div class="writing-error">
+        <div class="error-icon">📭</div>
+        <h3>Không tải được đề thi</h3>
+        <p>Vui lòng thử lại hoặc chọn đề khác.</p>
+    </div>
+}
+else
+{
+    var activeTask = exam.Tasks[activeTaskIndex];
+
+    @* ── TOP BAR ── *@
+    <div class="writing-topbar">
+        <div class="topbar-left">
+            <span class="exam-title-short">@exam.Title</span>
+        </div>
+        <div class="topbar-center">
+            <div class="timer-box @(secondsLeft < 600 ? "timer-warning" : "")">
+                <span class="timer-icon">⏱</span>
+                <span>@TimerDisplay remaining</span>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <button class="btn-submit-exam" @onclick="SubmitExam">Submit ➤</button>
+        </div>
+    </div>
+
+    @* ── TASK TABS ── *@
+    <div class="writing-task-tabs">
+        @for (int i = 0; i < exam.Tasks.Count; i++)
+        {
+            var idx = i;
+            var task = exam.Tasks[i];
+            <button class="task-tab-btn @(activeTaskIndex == idx ? "active" : "")"
+                    @onclick="() => SwitchTask(idx)">
+                @task.TaskTitle
+                <span class="word-count-badge">@task.WordCount / @task.MinWords words</span>
+            </button>
+        }
+    </div>
+
+    @* ── SPLIT LAYOUT ── *@
+    <div class="writing-split">
+        @* LEFT: Prompt + Image *@
+        <div class="prompt-col" id="prompt-scroll">
+            <div class="task-instruction">
+                <h2 class="task-title">@activeTask.TaskTitle</h2>
+                <p class="task-meta">@((MarkupString)activeTask.Instruction)</p>
+                <div class="task-prompt">@((MarkupString)activeTask.Prompt)</div>
+                <p class="task-word-req">You should write <strong>@activeTask.RequireWords.</strong></p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(activeTask.ImageUrl))
+            {
+                <div class="task-image-wrap">
+                    <img src="@activeTask.ImageUrl" alt="@activeTask.ImageAlt" class="task-image" />
+                </div>
+            }
+        </div>
+
+        @* DIVIDER *@
+        <div class="split-divider"></div>
+
+        @* RIGHT: Essay Editor *@
+        <div class="editor-col">
+            <textarea class="essay-textarea"
+                      placeholder="Type your essay here..."
+                      @bind="activeTask.Answer"
+                      @bind:event="oninput"
+                      spellcheck="false"></textarea>
+            <div class="editor-footer">
+                <span class="word-count @(activeTask.WordCount >= activeTask.MinWords ? "count-ok" : "count-low")">
+                    Words: <strong>@activeTask.WordCount</strong> / @activeTask.MinWords required
+                </span>
+                @if (activeTask.WordCount >= activeTask.MinWords)
+                {
+                    <span class="count-check">✓ Minimum reached</span>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "ExamUrl")]
+    public string? QueryExamUrl { get; set; }
+
+    [Parameter]
+    public string? ExamUrl { get; set; }
+
+    private WritingExamData? exam;
+    private bool isLoading = true;
+    private int activeTaskIndex = 0;
+
+    // Timer: 60 minutes
+    private int secondsLeft = 60 * 60;
+    private System.Threading.Timer? _timer;
+
+    private const string DefaultExamUrl = "sample-data/writing-test-1.json";
+
+    private string TimerDisplay
+    {
+        get
+        {
+            int m = secondsLeft / 60, s = secondsLeft % 60;
+            return $"{m:D2}:{s:D2}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+
+        string? actualUrl = ExamUrl;
+        if (string.IsNullOrWhiteSpace(actualUrl)) actualUrl = QueryExamUrl;
+        string url = string.IsNullOrWhiteSpace(actualUrl) ? DefaultExamUrl : Uri.UnescapeDataString(actualUrl);
+
+        try
+        {
+            exam = await Http.GetFromJsonAsync<WritingExamData>(url);
+        }
+        catch
+        {
+            exam = null;
+        }
+
+        isLoading = false;
+
+        _timer = new System.Threading.Timer(_ =>
+        {
+            if (secondsLeft > 0) { secondsLeft--; InvokeAsync(StateHasChanged); }
+            else { _timer?.Dispose(); }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void SwitchTask(int index)
+    {
+        activeTaskIndex = index;
+    }
+
+    private void OnInput()
+    {
+        // triggers StateHasChanged via @bind:event="oninput"
+        StateHasChanged();
+    }
+
+    private void SubmitExam()
+    {
+        Console.WriteLine("Nộp bài Writing.");
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}

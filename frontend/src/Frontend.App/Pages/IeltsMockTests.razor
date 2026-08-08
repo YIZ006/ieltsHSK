@@ -83,7 +83,9 @@
                                     <i class="bi bi-pen"></i>
                                     <span>Writing</span>
                                 </div>
-                                <button class="btn-take-test" disabled="@string.IsNullOrEmpty(test.WritingUrl)">
+                                <button class="btn-take-test" 
+                                        disabled="@string.IsNullOrEmpty(test.WritingUrl)"
+                                        @onclick="() => TakeWritingTest(test.WritingUrl)">
                                     <i class="bi bi-lightning-charge-fill"></i> Take Test
                                 </button>
                             </div>
@@ -94,7 +96,9 @@
                                     <i class="bi bi-mic"></i>
                                     <span>Speaking</span>
                                 </div>
-                                <button class="btn-take-test" disabled="@string.IsNullOrEmpty(test.SpeakingUrl)">
+                                <button class="btn-take-test"
+                                        disabled="@string.IsNullOrEmpty(test.SpeakingUrl)"
+                                        @onclick="() => TakeSpeakingTest(test.SpeakingUrl)">
                                     <i class="bi bi-lightning-charge-fill"></i> Take Test
                                 </button>
                             </div>
@@ -137,5 +141,17 @@
     {
         if (string.IsNullOrEmpty(url)) return;
         NavigationManager.NavigateTo($"/ielts/listening/preview?ExamUrl={Uri.EscapeDataString(url)}");
+    }
+
+    private void TakeWritingTest(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+        NavigationManager.NavigateTo($"/ielts/writing/preview?ExamUrl={Uri.EscapeDataString(url)}");
+    }
+
+    private void TakeSpeakingTest(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+        NavigationManager.NavigateTo($"/ielts/speaking/preview?ExamUrl={Uri.EscapeDataString(url)}");
     }
 }
