@@ -437,9 +437,8 @@
     {
         speakerPlayed = true;
         StateHasChanged();
-        // Use a short beep tone encoded as data URI so no file needed
-        await JS.InvokeAsync<bool>("SpeakingInterop.playTestAudio",
-            "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=");
+        // Web Audio API oscillator generates tone directly — no file needed
+        await JS.InvokeAsync<bool>("SpeakingInterop.playTestAudio");
     }
 
     private async Task StartExam()
