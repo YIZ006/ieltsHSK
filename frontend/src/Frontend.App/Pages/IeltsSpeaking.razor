@@ -185,11 +185,17 @@
 
                     @* Video *@
                     <div class="sp-video-wrap">
+                        @if (state == SpeakingState.VideoCountdown)
+                        {
+                            <div class="sp-video-countdown-overlay">
+                                <span class="sp-cd-num">@videoCountdown</span>
+                                <p>Get ready to listen...</p>
+                            </div>
+                        }
                         <video id="sp-video" class="sp-video"
                                src="@question.VideoUrl"
                                @key="question.Id"
-                               autoplay
-                               controls>
+                               playsinline>
                         </video>
                         @if (state == SpeakingState.Idle || state == SpeakingState.VideoPlaying)
                         {
@@ -223,7 +229,13 @@
                                 <span class="sp-transcript-label">📝 Live transcript:</span>
                                 <p>@(string.IsNullOrEmpty(liveTranscript) ? "Speak now..." : liveTranscript)</p>
                             </div>
-                            <button class="sp-btn-stop" @onclick="StopRecording">⏹ Done speaking</button>
+                            <div class="sp-rec-actions">
+                                <button class="sp-btn-stop" @onclick="StopRecording">⏹ Done speaking</button>
+                                @if (replaysLeft > 0)
+                                {
+                                    <button class="sp-btn-secondary sp-btn-sm" @onclick="ReplayVideo">🔄 Repeat Question (@replaysLeft left)</button>
+                                }
+                            </div>
                         </div>
                     }
 
@@ -320,14 +332,13 @@
                     }
 
                     @* Question dots *@
-                    @if (state != SpeakingState.Recording)
+                    @if (state != SpeakingState.Recording && state != SpeakingState.VideoCountdown)
                     {
                         <div class="sp-q-dots">
                             @for (int qi = 0; qi < part.Questions.Count; qi++)
                             {
                                 var qidx = qi;
-                                <span class="sp-dot @(qidx == currentQuestionIndex ? "active" : qidx < currentQuestionIndex ? "done" : "")"
-                                      @onclick="() => JumpQuestion(qidx)">@(qi + 1)</span>
+                                <span class="sp-dot @(qidx == currentQuestionIndex ? "active" : qidx < currentQuestionIndex ? "done" : "locked")">@(qi + 1)</span>
                             }
                         </div>
                     }
@@ -356,13 +367,15 @@
     private bool speakerOk = false;
 
     // Exam state
-    private enum SpeakingState { Setup, ThinkTime, Idle, VideoPlaying, Recording, Evaluating, Result }
+    private enum SpeakingState { Setup, ThinkTime, Idle, VideoCountdown, VideoPlaying, Recording, Evaluating, Result }
     private SpeakingState state = SpeakingState.Setup;
     private int activePartIndex = 0;
     private int currentQuestionIndex = 0;
     private int partSecondsLeft = 0;
     private int thinkSecondsLeft = 0;
     private int recordingSecondsElapsed = 0;
+    private int videoCountdown = 3;
+    private int replaysLeft = 3;
     private string liveTranscript = "";
     private SpeakingResult? lastResult = null;
     private System.Threading.Timer? _timer;
@@ -471,9 +484,9 @@
         }
         else
         {
-            state = SpeakingState.Idle;
             partSecondsLeft = part.TimerSeconds;
             StartPartTimer();
+            StartVideoCountdown();
         }
     }
 
@@ -489,10 +502,34 @@
     private async Task BeginPartNow()
     {
         _timer?.Dispose();
-        state = SpeakingState.Idle;
         partSecondsLeft = exam!.Parts[activePartIndex].TimerSeconds;
         StartPartTimer();
+        StartVideoCountdown();
         await InvokeAsync(StateHasChanged);
+    }
+
+    private void StartVideoCountdown()
+    {
+        state = SpeakingState.VideoCountdown;
+        videoCountdown = 3;
+        
+        // Don't dispose _timer entirely if partTimer is running on it! 
+        // Wait, _timer is shared for everything (think time, recording, part time).
+        // Let's create a local task for the countdown instead of using the global _timer to avoid killing the PartTimer.
+        Task.Run(async () =>
+        {
+            while (videoCountdown > 1)
+            {
+                await Task.Delay(1000);
+                videoCountdown--;
+                await InvokeAsync(StateHasChanged);
+            }
+            await Task.Delay(1000);
+            state = SpeakingState.VideoPlaying;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(50);
+            try { await JS.InvokeVoidAsync("SpeakingInterop.playVideo", "sp-video"); } catch { }
+        });
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -588,16 +625,20 @@
         currentQuestionIndex++;
         lastResult = null;
         liveTranscript = "";
-        state = SpeakingState.Idle;
+        replaysLeft = 3;
+        StartVideoCountdown();
     }
 
-    private void JumpQuestion(int idx)
+    private async Task ReplayVideo()
     {
-        if (state == SpeakingState.Recording) return;
-        currentQuestionIndex = idx;
-        lastResult = null;
-        liveTranscript = "";
-        state = SpeakingState.Idle;
+        if (replaysLeft <= 0) return;
+        replaysLeft--;
+        _timer?.Dispose(); // Stops recording timer
+        try { _ = JS.InvokeVoidAsync("SpeakingInterop.stopRecording"); } catch { }
+        
+        // Resume part timer since we stopped it
+        StartPartTimer();
+        StartVideoCountdown();
     }
 
     private void NextPart()
