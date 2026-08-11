@@ -197,11 +197,21 @@
                         }
                     </div>
 
-                    @* Question text *@
-                    <div class="sp-q-text">
-                        <span class="sp-q-meta">Q@(currentQuestionIndex + 1) / @part.Questions.Count · @part.PartTitle</span>
-                        <h3>"@question.Question"</h3>
-                    </div>
+                    @* Question text — hidden during exam, revealed after answering *@
+                    @if (state == SpeakingState.Result || state == SpeakingState.Evaluating)
+                    {
+                        <div class="sp-q-text sp-q-revealed">
+                            <span class="sp-q-reveal-label">💬 Question was:</span>
+                            <h3>"@question.Question"</h3>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="sp-q-text sp-q-hidden-hint">
+                            <span class="sp-q-meta">Q@(currentQuestionIndex + 1) / @part.Questions.Count · @part.PartTitle</span>
+                            <p>👂 Listen carefully to the examiner's question in the video above.</p>
+                        </div>
+                    }
 
                     @* Recording state *@
                     @if (state == SpeakingState.Recording)
