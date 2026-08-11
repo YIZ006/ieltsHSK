@@ -39,6 +39,22 @@
                     }
                     else if (micOk)
                     {
+                        @if (microphones.Count > 0)
+                        {
+                            <div class="sp-mic-device-picker">
+                                <label for="microphone-device">Microphone to test</label>
+                                <div class="sp-mic-device-actions">
+                                    <select id="microphone-device" value="@selectedMicrophoneId" @onchange="ChangeMicrophone">
+                                        @foreach (var microphone in microphones)
+                                        {
+                                            <option value="@microphone.DeviceId">@microphone.Label</option>
+                                        }
+                                    </select>
+                                    <button type="button" class="sp-btn-secondary sp-btn-sm" @onclick="RefreshMicrophones">Refresh devices</button>
+                                </div>
+                                <p class="sp-mic-device-hint">Connect a headset or USB mic, refresh this list, then select it before recording.</p>
+                            </div>
+                        }
                         @if (!micTested && micTestUrl == null && micCountdown == 5)
                         {
                             <div class="sp-mic-status">
@@ -195,6 +211,7 @@
                         <video id="sp-video" class="sp-video"
                                src="@question.VideoUrl"
                                @key="question.Id"
+                               @onended="OnVideoEnded"
                                playsinline>
                         </video>
                         @if (state == SpeakingState.Idle || state == SpeakingState.VideoPlaying)
@@ -363,6 +380,8 @@
     private bool micTestDone = false;
     private string? micTestUrl = null;
     private int micCountdown = 5;
+    private List<MicrophoneDevice> microphones = new();
+    private string? selectedMicrophoneId;
     private bool speakerPlayed = false;
     private bool speakerOk = false;
 
@@ -409,10 +428,37 @@
         micError = !micOk;
         if (micOk)
         {
+            selectedMicrophoneId = result.GetProperty("deviceId").GetString();
+            await RefreshMicrophones();
             // Flag to start visualizer AFTER Blazor renders canvas
             _needsVisualizerStart = true;
         }
         StateHasChanged();
+    }
+
+    private async Task RefreshMicrophones()
+    {
+        microphones = await JS.InvokeAsync<List<MicrophoneDevice>>("SpeakingInterop.getMicrophones");
+    }
+
+    private async Task ChangeMicrophone(ChangeEventArgs args)
+    {
+        var deviceId = args.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(deviceId) || deviceId == selectedMicrophoneId) return;
+
+        await JS.InvokeVoidAsync("SpeakingInterop.stopVisualizer");
+        var result = await JS.InvokeAsync<System.Text.Json.JsonElement>("SpeakingInterop.selectMicrophone", deviceId);
+        micOk = result.GetProperty("success").GetBoolean();
+        micError = !micOk;
+        if (!micOk) return;
+
+        selectedMicrophoneId = result.GetProperty("deviceId").GetString();
+        micTested = false;
+        micTestUrl = null;
+        micTestDone = false;
+        micCountdown = 5;
+        _needsVisualizerStart = true;
+        await RefreshMicrophones();
     }
 
     private async Task StartMicTest()
@@ -539,10 +585,6 @@
         {
             _needsVisualizerStart = false;
             try { await JS.InvokeVoidAsync("SpeakingInterop.startMicVisualizer", "setup-waveform"); } catch { }
-        }
-        if (state == SpeakingState.Idle)
-        {
-            try { await JS.InvokeVoidAsync("SpeakingInterop.bindVideoEnded", "sp-video", _dotNetRef); } catch { }
         }
     }
 
@@ -675,5 +717,11 @@
         public int FillerCount { get; set; }
         public List<string> FillerWords { get; set; } = new();
         public List<string> Markers { get; set; } = new();
+    }
+
+    private class MicrophoneDevice
+    {
+        public string DeviceId { get; set; } = "";
+        public string Label { get; set; } = "";
     }
 }
