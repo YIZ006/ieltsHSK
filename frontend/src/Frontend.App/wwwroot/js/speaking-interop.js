@@ -70,12 +70,56 @@ window.SpeakingInterop = (() => {
         }
     }
 
-    async function playTestAudio(src) {
-        return new Promise(resolve => {
-            const audio = new Audio(src);
-            audio.onended = () => resolve(true);
-            audio.onerror = () => resolve(false);
-            audio.play().catch(() => resolve(false));
+    // Tạo âm thanh test loa bằng Web Audio API Oscillator (không cần file)
+    async function playTestAudio() {
+        return new Promise(async (resolve) => {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Chuỗi nốt: Do Mi Sol Mi Do (dễ nhận biết)
+                const notes = [
+                    { freq: 523.25, dur: 0.18 }, // C5
+                    { freq: 659.25, dur: 0.18 }, // E5
+                    { freq: 783.99, dur: 0.22 }, // G5
+                    { freq: 659.25, dur: 0.18 }, // E5
+                    { freq: 523.25, dur: 0.30 }, // C5 (dài hơn)
+                ];
+
+                let time = ctx.currentTime + 0.05; // nhỏ delay để tránh click
+
+                for (const note of notes) {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(note.freq, time);
+
+                    // Envelope: attack 10ms, sustain, release 50ms
+                    gain.gain.setValueAtTime(0, time);
+                    gain.gain.linearRampToValueAtTime(0.6, time + 0.01);
+                    gain.gain.setValueAtTime(0.6, time + note.dur - 0.05);
+                    gain.gain.linearRampToValueAtTime(0, time + note.dur);
+
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+
+                    osc.start(time);
+                    osc.stop(time + note.dur);
+
+                    time += note.dur + 0.04; // gap giữa các nốt
+                }
+
+                // Đợi chuỗi nốt phát xong
+                const totalDuration = notes.reduce((s, n) => s + n.dur + 0.04, 0.1) * 1000;
+                setTimeout(() => {
+                    ctx.close();
+                    resolve(true);
+                }, totalDuration);
+
+            } catch (err) {
+                console.error('Speaker test error:', err);
+                resolve(false);
+            }
         });
     }
 
