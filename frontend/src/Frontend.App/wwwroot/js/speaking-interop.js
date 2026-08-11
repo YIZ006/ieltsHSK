@@ -16,13 +16,55 @@ window.SpeakingInterop = (() => {
     // DEVICE SETUP
     // ══════════════════════════════════════════
 
-    async function requestMicPermission() {
-        try {
-            mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            return { success: true };
-        } catch (err) {
-            return { success: false, error: err.name };
+    function stopMediaStream() {
+        if (mediaStream) {
+            mediaStream.getTracks().forEach(track => track.stop());
+            mediaStream = null;
         }
+    }
+
+    function microphoneConstraints(deviceId) {
+        const constraints = {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+        };
+        if (deviceId) constraints.deviceId = { exact: deviceId };
+        return constraints;
+    }
+
+    async function openMicrophone(deviceId) {
+        try {
+            stopVisualizer();
+            stopMediaStream();
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+                audio: microphoneConstraints(deviceId),
+                video: false
+            });
+            const track = mediaStream.getAudioTracks()[0];
+            return { success: true, deviceId: track?.getSettings().deviceId || deviceId || '' };
+        } catch (err) {
+            return { success: false, error: err.name || 'NotReadableError' };
+        }
+    }
+
+    async function requestMicPermission() {
+        return openMicrophone();
+    }
+
+    async function selectMicrophone(deviceId) {
+        return openMicrophone(deviceId);
+    }
+
+    async function getMicrophones() {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        let index = 0;
+        return devices
+            .filter(device => device.kind === 'audioinput')
+            .map(device => ({
+                deviceId: device.deviceId,
+                label: device.label || `Microphone ${++index}`
+            }));
     }
 
     function startMicVisualizer(canvasId) {
@@ -369,15 +411,14 @@ window.SpeakingInterop = (() => {
     }
 
     function stopMicStream() {
-        if (mediaStream) {
-            mediaStream.getTracks().forEach(t => t.stop());
-            mediaStream = null;
-        }
         stopVisualizer();
+        stopMediaStream();
     }
 
     return {
         requestMicPermission,
+        selectMicrophone,
+        getMicrophones,
         startMicVisualizer,
         stopVisualizer,
         playTestAudio,
