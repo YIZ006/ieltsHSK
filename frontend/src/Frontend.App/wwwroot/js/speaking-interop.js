@@ -256,7 +256,15 @@ window.SpeakingInterop = (() => {
         const wordCount = words.length;
 
         if (wordCount < 3) {
-            return { fluency: 0, lexical: 0, grammar: 0, coherence: 0, overall: 0, wpm: 0, details: {} };
+            return {
+                fluency: 0, lexical: 0, grammar: 0, coherence: 0, overall: 0,
+                wpm: 0, wordCount: 0,
+                details: {
+                    fillerCount: 0, ttr: 0, advancedCount: 0,
+                    complexCount: 0, markerCount: 0, sentenceCount: 0,
+                    markers: [], fillerWords: []
+                }
+            };
         }
 
         const wpm = Math.round((wordCount / durationSec) * 60);
@@ -352,6 +360,14 @@ window.SpeakingInterop = (() => {
         vid.onended = () => netRef.invokeMethodAsync('OnVideoEnded');
     }
 
+    function playVideo(videoId) {
+        const vid = document.getElementById(videoId);
+        if (vid) {
+            vid.currentTime = 0;
+            vid.play().catch(e => console.warn('Video play error:', e));
+        }
+    }
+
     function stopMicStream() {
         if (mediaStream) {
             mediaStream.getTracks().forEach(t => t.stop());
@@ -370,6 +386,7 @@ window.SpeakingInterop = (() => {
         stopRecording,
         evaluate,
         bindVideoEnded,
+        playVideo,
         stopMicStream
     };
 })();
