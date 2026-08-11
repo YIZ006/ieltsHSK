@@ -29,51 +29,65 @@
                     <h3>Step 1 — Microphone Check</h3>
                     @if (!micChecked)
                     {
-                        <p>Click the button to allow microphone access.</p>
-                        <button class="sp-btn-primary" @onclick="RequestMic">Allow Microphone</button>
+                        <p>We need access to your microphone to record your answers.</p>
+                        <button class="sp-btn-primary" @onclick="RequestMic">🎙️ Allow Microphone</button>
                     }
                     else if (micError)
                     {
-                        <p class="sp-error-msg">⚠️ Microphone access denied. Please allow it in your browser settings and reload the page.</p>
+                        <p class="sp-error-msg">⚠️ Microphone access was denied. Please click the camera icon in your browser address bar, allow microphone, then reload.</p>
+                        <button class="sp-btn-secondary" @onclick="RequestMic">🔄 Try again</button>
                     }
                     else if (micOk)
                     {
-                        <p>Microphone detected! Speak now to test your mic:</p>
-                        <canvas id="setup-waveform" class="sp-waveform" width="400" height="60"></canvas>
-                        @if (!micTested)
+                        @if (!micTested && micTestUrl == null && micCountdown == 5)
                         {
-                            <button class="sp-btn-secondary" @onclick="StartMicTest">🔴 Record 5 seconds</button>
-                        }
-                        else if (micTestUrl != null)
-                        {
-                            <p>Listen to your recording:</p>
-                            <audio src="@micTestUrl" controls class="sp-playback"></audio>
-                            <div class="sp-step-actions">
-                                <button class="sp-btn-ok" @onclick="MicTestOk">✅ Sounds good!</button>
-                                <button class="sp-btn-secondary" @onclick="RetryMicTest">🔄 Try again</button>
+                            <div class="sp-mic-status">
+                                <span class="sp-mic-dot"></span>
+                                <span>Microphone active — we can hear you!</span>
                             </div>
+                            <canvas id="setup-waveform" class="sp-waveform" width="560" height="72"></canvas>
+                            <p class="sp-waveform-hint">Speak to see your voice waveform above</p>
+                            <button class="sp-btn-primary" @onclick="StartMicTest">🔴 Record a sample (5 sec)</button>
                         }
-                        else
+                        else if (micTestUrl == null)
                         {
-                            <p>⏺ Recording… @micCountdown seconds</p>
+                            <div class="sp-mic-status">
+                                <span class="sp-mic-dot"></span>
+                                <span>Recording... @micCountdown seconds left</span>
+                            </div>
+                            <canvas id="setup-waveform" class="sp-waveform" width="560" height="72"></canvas>
+                        }
+                        else if (!micTestDone)
+                        {
+                            <p style="margin-bottom:8px">Listen to your recording — does it sound clear?</p>
+                            <audio src="@micTestUrl" controls class="sp-playback"></audio>
+                            <div class="sp-step-actions" style="margin-top:8px">
+                                <button class="sp-btn-ok" @onclick="MicTestOk">✅ Yes, clear!</button>
+                                <button class="sp-btn-secondary" @onclick="RetryMicTest">🔄 Record again</button>
+                            </div>
                         }
                     }
                 </div>
             </div>
 
             @* Step 2: Speaker *@
-            @if (micOk && micTested && micTestDone)
+            @if (micOk && micTestDone)
             {
                 <div class="sp-setup-step @(speakerOk ? "step-ok" : "")">
                     <div class="sp-step-icon">@(speakerOk ? "✅" : "🔊")</div>
                     <div class="sp-step-content">
-                        <h3>Step 2 — Speaker Check</h3>
-                        <p>Click below to play a test sound. Do you hear it?</p>
-                        <button class="sp-btn-secondary" @onclick="TestSpeaker">▶ Play test sound</button>
-                        @if (speakerPlayed)
+                        <h3>Step 2 — Speaker / Headphone Check</h3>
+                        <div class="sp-speaker-test">
+                            <span class="sp-speaker-icon">🎧</span>
+                            <div class="sp-speaker-info">
+                                <p>Click play to hear a test tone. Make sure your volume is turned up.</p>
+                            </div>
+                            <button class="sp-btn-secondary" @onclick="TestSpeaker">▶ Play</button>
+                        </div>
+                        @if (speakerPlayed && !speakerOk)
                         {
-                            <div class="sp-step-actions">
-                                <button class="sp-btn-ok" @onclick="() => { speakerOk = true; StateHasChanged(); }">✅ Yes, I can hear it</button>
+                            <div class="sp-step-actions" style="margin-top:12px">
+                                <button class="sp-btn-ok" @onclick="ConfirmSpeaker">✅ I can hear it</button>
                                 <button class="sp-btn-secondary" @onclick="TestSpeaker">🔄 Play again</button>
                             </div>
                         }
@@ -360,18 +374,22 @@
 
     // ── SETUP ──────────────────────────────────────────
 
+    private bool _needsVisualizerStart = false;
+
     private async Task RequestMic()
     {
         micChecked = true;
+        micError = false;
+        StateHasChanged();
         var result = await JS.InvokeAsync<System.Text.Json.JsonElement>("SpeakingInterop.requestMicPermission");
         micOk = result.GetProperty("success").GetBoolean();
         micError = !micOk;
         if (micOk)
         {
-            StateHasChanged();
-            await Task.Delay(100);
-            await JS.InvokeVoidAsync("SpeakingInterop.startMicVisualizer", "setup-waveform");
+            // Flag to start visualizer AFTER Blazor renders canvas
+            _needsVisualizerStart = true;
         }
+        StateHasChanged();
     }
 
     private async Task StartMicTest()
@@ -379,13 +397,13 @@
         micTested = true;
         micTestUrl = null;
         micCountdown = 5;
+        // Keep waveform showing during recording
         StateHasChanged();
 
-        // Countdown
         _timer?.Dispose();
         _timer = new System.Threading.Timer(async _ =>
         {
-            micCountdown--;
+            if (micCountdown > 0) micCountdown--;
             await InvokeAsync(StateHasChanged);
         }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
@@ -394,13 +412,24 @@
         StateHasChanged();
     }
 
-    private void RetryMicTest() { micTested = false; micTestUrl = null; micTestDone = false; }
+    private void RetryMicTest()
+    {
+        micTested = false;
+        micTestUrl = null;
+        micTestDone = false;
+        micCountdown = 5;
+        _needsVisualizerStart = true;
+    }
     private void MicTestOk() { micTestDone = true; }
+    private void ConfirmSpeaker() { speakerOk = true; }
 
     private async Task TestSpeaker()
     {
         speakerPlayed = true;
-        await JS.InvokeAsync<bool>("SpeakingInterop.playTestAudio", "/audio/headphone-check.mp3");
+        StateHasChanged();
+        // Use a short beep tone encoded as data URI so no file needed
+        await JS.InvokeAsync<bool>("SpeakingInterop.playTestAudio",
+            "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=");
     }
 
     private async Task StartExam()
@@ -459,6 +488,12 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // Start mic visualizer AFTER canvas is rendered in DOM
+        if (_needsVisualizerStart)
+        {
+            _needsVisualizerStart = false;
+            try { await JS.InvokeVoidAsync("SpeakingInterop.startMicVisualizer", "setup-waveform"); } catch { }
+        }
         if (state == SpeakingState.Idle)
         {
             try { await JS.InvokeVoidAsync("SpeakingInterop.bindVideoEnded", "sp-video", _dotNetRef); } catch { }
