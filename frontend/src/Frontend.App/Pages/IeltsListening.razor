@@ -7,6 +7,8 @@
 @using Microsoft.JSInterop
 @inject ExamService ExamService
 @inject IJSRuntime JS
+@inject ExamSessionService ExamSession
+@inject NavigationManager Navigation
 @implements IDisposable
 
 <PageTitle>@(exam?.Title ?? "IELTS Listening") - IeltsHSK</PageTitle>
@@ -44,6 +46,11 @@ else
             </div>
         </div>
         <div class="topbar-right">
+            <button class="btn-exit-exam" @onclick="ExitExam">Exit test</button>
+            @if (isFinished)
+            {
+                <span class="test-session-status">@(timedOut ? "Time is up" : "Submitted")</span>
+            }
             <button class="btn-submit-exam" @onclick="SubmitExam">Submit ➤</button>
         </div>
     </div>
@@ -202,6 +209,10 @@ else
     [Parameter] 
     public string? ExamUrl { get; set; }
 
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "Session")]
+    public string? TestSessionId { get; set; }
+
     private ExamData? exam;
     private bool isLoading = true;
     private int activePartIndex = 0;
@@ -211,6 +222,10 @@ else
     private int secondsLeft = 40 * 60;
     private System.Threading.Timer? _timer;
     private DotNetObjectReference<IeltsListening>? _dotNetRef;
+    private IDisposable? _navigationRegistration;
+    private string? _sessionKey;
+    private bool isFinished;
+    private bool timedOut;
 
     // Player state
     private bool isPlaying = false;
@@ -243,15 +258,23 @@ else
             activeQuestionId = exam.Parts[0].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
         isLoading = false;
 
-        _timer = new System.Threading.Timer(_ =>
-        {
-            if (secondsLeft > 0) { secondsLeft--; InvokeAsync(StateHasChanged); }
-            else { _timer?.Dispose(); }
-        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        _sessionKey = ExamSessionService.CreateStorageKey("listening", TestSessionId, url);
+        var session = await ExamSession.StartAsync(_sessionKey, 40 * 60);
+        secondsLeft = session.SecondsRemaining;
+        isFinished = session.IsCompleted || session.IsExpired;
+        timedOut = session.IsTimedOut || session.IsExpired;
+        if (isFinished) return;
+
+        _navigationRegistration = Navigation.RegisterLocationChangingHandler(ConfirmLeave);
+        await ExamSession.SetUnloadWarningAsync(true);
+        _timer = new System.Threading.Timer(_ => _ = UpdateTimerAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender && isFinished)
+            await ExamSession.LockTestContentAsync(".listening-layout");
+
         if (exam != null && !isLoading && !string.IsNullOrEmpty(exam.AudioUrl) && _dotNetRef == null)
         {
             _dotNetRef = DotNetObjectReference.Create(this);
@@ -308,7 +331,7 @@ else
     [JSInvokable]
     public void OnHtmlInputChange(int questionId, string value)
     {
-        if (exam == null) return;
+        if (exam == null || isFinished) return;
         var q = exam.Parts.SelectMany(p => p.QuestionGroups).SelectMany(g => g.Questions).FirstOrDefault(x => x.Id == questionId);
         if (q != null)
         {
@@ -325,7 +348,7 @@ else
 
     private void SelectOption(QuestionData q, int optionId)
     {
-        q.SelectedOptionId = q.SelectedOptionId == optionId ? null : optionId;
+        if (!isFinished) q.SelectedOptionId = q.SelectedOptionId == optionId ? null : optionId;
     }
 
     private bool IsAnswered(QuestionData q)
@@ -348,16 +371,49 @@ else
         }
     }
 
-    private void SubmitExam()
+    private Task SubmitExam() => FinishExamAsync(false);
+
+    private void LogSubmit()
     {
         int total    = exam!.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count));
         int answered = exam.Parts.Sum(p => AnsweredCount(p));
         Console.WriteLine($"Nộp bài: {answered}/{total} câu đã trả lời.");
     }
 
+    private async Task UpdateTimerAsync()
+    {
+        if (isFinished || string.IsNullOrEmpty(_sessionKey)) return;
+        var session = await ExamSession.GetAsync(_sessionKey);
+        if (session == null) return;
+        secondsLeft = session.SecondsRemaining;
+        if (session.IsExpired) await InvokeAsync(() => FinishExamAsync(true));
+        else await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task FinishExamAsync(bool timeExpired)
+    {
+        if (isFinished) return;
+        isFinished = true;
+        timedOut = timeExpired;
+        _timer?.Dispose();
+        if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
+        await ExamSession.LockTestContentAsync(".listening-layout");
+        await ExamSession.SetUnloadWarningAsync(false);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async ValueTask ConfirmLeave(LocationChangingContext context)
+    {
+        if (!isFinished && !await ExamSession.ConfirmLeaveAsync()) context.PreventNavigation();
+    }
+
+    private void ExitExam() => Navigation.NavigateTo("/ielts/luyen-de");
+
     public void Dispose()
     {
         _timer?.Dispose();
         _dotNetRef?.Dispose();
+        _navigationRegistration?.Dispose();
+        _ = ExamSession.SetUnloadWarningAsync(false);
     }
 }

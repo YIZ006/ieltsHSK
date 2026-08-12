@@ -5,6 +5,9 @@
 @using Frontend.App.Models
 @using System.Net.Http.Json
 @inject HttpClient Http
+@inject IJSRuntime JS
+@inject ExamSessionService ExamSession
+@inject NavigationManager Navigation
 @implements IDisposable
 
 <PageTitle>@(exam?.Title ?? "IELTS Writing") - IeltsHSK</PageTitle>
@@ -40,6 +43,11 @@ else
             </div>
         </div>
         <div class="topbar-right">
+            <button class="btn-exit-exam" @onclick="ExitExam">Exit test</button>
+            @if (isFinished)
+            {
+                <span class="test-session-status">@(timedOut ? "Time is up" : "Submitted")</span>
+            }
             <button class="btn-submit-exam" @onclick="SubmitExam">Submit ➤</button>
         </div>
     </div>
@@ -84,6 +92,7 @@ else
         <div class="editor-col">
             <textarea class="essay-textarea"
                       placeholder="Type your essay here..."
+                      disabled="@isFinished"
                       @bind="activeTask.Answer"
                       @bind:event="oninput"
                       spellcheck="false"></textarea>
@@ -108,6 +117,10 @@ else
     [Parameter]
     public string? ExamUrl { get; set; }
 
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "Session")]
+    public string? TestSessionId { get; set; }
+
     private WritingExamData? exam;
     private bool isLoading = true;
     private int activeTaskIndex = 0;
@@ -115,6 +128,10 @@ else
     // Timer: 60 minutes
     private int secondsLeft = 60 * 60;
     private System.Threading.Timer? _timer;
+    private IDisposable? _navigationRegistration;
+    private string? _sessionKey;
+    private bool isFinished;
+    private bool timedOut;
 
     private const string DefaultExamUrl = "sample-data/writing-test-1.json";
 
@@ -146,16 +163,26 @@ else
 
         isLoading = false;
 
-        _timer = new System.Threading.Timer(_ =>
-        {
-            if (secondsLeft > 0) { secondsLeft--; InvokeAsync(StateHasChanged); }
-            else { _timer?.Dispose(); }
-        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        _sessionKey = ExamSessionService.CreateStorageKey("writing", TestSessionId, url);
+        var session = await ExamSession.StartAsync(_sessionKey, 60 * 60);
+        secondsLeft = session.SecondsRemaining;
+        isFinished = session.IsCompleted || session.IsExpired;
+        timedOut = session.IsTimedOut || session.IsExpired;
+        if (isFinished) return;
+
+        _navigationRegistration = Navigation.RegisterLocationChangingHandler(ConfirmLeave);
+        await ExamSession.SetUnloadWarningAsync(true);
+        _timer = new System.Threading.Timer(_ => _ = UpdateTimerAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
 
     private void SwitchTask(int index)
     {
-        activeTaskIndex = index;
+        if (!isFinished) activeTaskIndex = index;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && isFinished) await ExamSession.LockTestContentAsync(".writing-split");
     }
 
     private void OnInput()
@@ -164,13 +191,46 @@ else
         StateHasChanged();
     }
 
-    private void SubmitExam()
+    private Task SubmitExam() => FinishExamAsync(false);
+
+    private void LogSubmit()
     {
         Console.WriteLine("Nộp bài Writing.");
     }
 
+    private async Task UpdateTimerAsync()
+    {
+        if (isFinished || string.IsNullOrEmpty(_sessionKey)) return;
+        var session = await ExamSession.GetAsync(_sessionKey);
+        if (session == null) return;
+        secondsLeft = session.SecondsRemaining;
+        if (session.IsExpired) await InvokeAsync(() => FinishExamAsync(true));
+        else await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task FinishExamAsync(bool timeExpired)
+    {
+        if (isFinished) return;
+        isFinished = true;
+        timedOut = timeExpired;
+        _timer?.Dispose();
+        if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
+        await ExamSession.LockTestContentAsync(".writing-split");
+        await ExamSession.SetUnloadWarningAsync(false);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async ValueTask ConfirmLeave(LocationChangingContext context)
+    {
+        if (!isFinished && !await ExamSession.ConfirmLeaveAsync()) context.PreventNavigation();
+    }
+
+    private void ExitExam() => Navigation.NavigateTo("/ielts/luyen-de");
+
     public void Dispose()
     {
         _timer?.Dispose();
+        _navigationRegistration?.Dispose();
+        _ = ExamSession.SetUnloadWarningAsync(false);
     }
 }

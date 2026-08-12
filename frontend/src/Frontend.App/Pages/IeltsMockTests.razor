@@ -131,27 +131,29 @@
         isLoading = false;
     }
 
+    private static string NewSessionQuery() => $"Session={Guid.NewGuid():N}";
+
     private void TakeReadingTest(string? url)
     {
         if (string.IsNullOrEmpty(url)) return;
-        NavigationManager.NavigateTo($"/ielts/reading/preview?ExamUrl={Uri.EscapeDataString(url)}");
+        NavigationManager.NavigateTo($"/ielts/reading/preview?ExamUrl={Uri.EscapeDataString(url)}&{NewSessionQuery()}");
     }
 
     private void TakeListeningTest(string? url)
     {
         if (string.IsNullOrEmpty(url)) return;
-        NavigationManager.NavigateTo($"/ielts/listening/preview?ExamUrl={Uri.EscapeDataString(url)}");
+        NavigationManager.NavigateTo($"/ielts/listening/preview?ExamUrl={Uri.EscapeDataString(url)}&{NewSessionQuery()}");
     }
 
     private void TakeWritingTest(string? url)
     {
         if (string.IsNullOrEmpty(url)) return;
-        NavigationManager.NavigateTo($"/ielts/writing/preview?ExamUrl={Uri.EscapeDataString(url)}");
+        NavigationManager.NavigateTo($"/ielts/writing/preview?ExamUrl={Uri.EscapeDataString(url)}&{NewSessionQuery()}");
     }
 
     private void TakeSpeakingTest(string? url)
     {
         if (string.IsNullOrEmpty(url)) return;
-        NavigationManager.NavigateTo($"/ielts/speaking/preview?ExamUrl={Uri.EscapeDataString(url)}");
+        NavigationManager.NavigateTo($"/ielts/speaking/preview?ExamUrl={Uri.EscapeDataString(url)}&{NewSessionQuery()}");
     }
 }

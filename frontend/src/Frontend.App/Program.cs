@@ -18,6 +18,7 @@ builder.Services.AddScoped(_ =>
 });
 
 builder.Services.AddBlazoredLocalStorage();
+builder.Services.AddScoped<ExamSessionService>();
 builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddScoped(sp => 

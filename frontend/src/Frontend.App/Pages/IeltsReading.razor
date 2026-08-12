@@ -7,6 +7,8 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject ExamService ExamService
 @inject IJSRuntime JS
+@inject ExamSessionService ExamSession
+@inject NavigationManager Navigation
 @implements IDisposable
 
 <PageTitle>@(exam?.Title ?? "IELTS Reading") - IeltsHSK</PageTitle>
@@ -44,6 +46,11 @@ else
             </div>
         </div>
         <div class="topbar-right">
+            <button class="btn-exit-exam" @onclick="ExitExam">Exit test</button>
+            @if (isFinished)
+            {
+                <span class="test-session-status">@(timedOut ? "Time is up" : "Submitted")</span>
+            }
             <button class="btn-submit-exam" @onclick="SubmitExam">Submit ➤</button>
         </div>
     </div>
@@ -149,7 +156,8 @@ else
                                        type="text"
                                        placeholder="Write your answer..."
                                        value="@q.FillAnswer"
-                                       @oninput="(e) => q.FillAnswer = e.Value?.ToString() ?? string.Empty" />
+                                       disabled="@isFinished"
+                                       @oninput="(e) => SetFillAnswer(q, e)" />
                             }
                         </div>
                     }
@@ -208,6 +216,8 @@ else
 
 @code {
     [Parameter] public string? ExamUrl { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "ExamUrl")] public string? QueryExamUrl { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "Session")] public string? TestSessionId { get; set; }
 
     private ExamData? exam;
     private bool isLoading = true;
@@ -217,6 +227,10 @@ else
     // Timer: 60 phút
     private int secondsLeft = 60 * 60;
     private System.Threading.Timer? _timer;
+    private IDisposable? _navigationRegistration;
+    private string? _sessionKey;
+    private bool isFinished;
+    private bool timedOut;
 
     private const string DefaultExamUrl = "sample-data/reading-test-v2.json";
 
@@ -232,29 +246,48 @@ else
     protected override async Task OnInitializedAsync()
     {
         isLoading = true;
-        string url = string.IsNullOrWhiteSpace(ExamUrl) ? DefaultExamUrl : Uri.UnescapeDataString(ExamUrl);
+        string actualUrl = string.IsNullOrWhiteSpace(ExamUrl) ? QueryExamUrl ?? DefaultExamUrl : ExamUrl;
+        string url = Uri.UnescapeDataString(actualUrl);
         exam = await ExamService.LoadExamAsync(url);
         if (exam?.Parts?.Count > 0)
             activeQuestionId = exam.Parts[0].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
         isLoading = false;
 
         // Bắt đầu đếm ngược
-        _timer = new System.Threading.Timer(_ =>
-        {
-            if (secondsLeft > 0) { secondsLeft--; InvokeAsync(StateHasChanged); }
-            else { _timer?.Dispose(); }
-        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        _sessionKey = ExamSessionService.CreateStorageKey("reading", TestSessionId, url);
+        var session = await ExamSession.StartAsync(_sessionKey, 60 * 60);
+        secondsLeft = session.SecondsRemaining;
+        isFinished = session.IsCompleted || session.IsExpired;
+        timedOut = session.IsTimedOut || session.IsExpired;
+        if (isFinished) return;
+
+        _navigationRegistration = Navigation.RegisterLocationChangingHandler(ConfirmLeave);
+        await ExamSession.SetUnloadWarningAsync(true);
+        _timer = new System.Threading.Timer(_ => _ = UpdateTimerAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
 
     private void SelectOption(QuestionData q, int optionId)
-        => q.SelectedOptionId = q.SelectedOptionId == optionId ? null : optionId;
+    {
+        if (!isFinished) q.SelectedOptionId = q.SelectedOptionId == optionId ? null : optionId;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && isFinished) await ExamSession.LockTestContentAsync(".reading-split");
+    }
 
     private void OnSelectChange(QuestionData q, ChangeEventArgs e)
     {
+        if (isFinished) return;
         if (int.TryParse(e.Value?.ToString(), out int id) && id > 0)
             q.SelectedOptionId = id;
         else
             q.SelectedOptionId = null;
+    }
+
+    private void SetFillAnswer(QuestionData q, ChangeEventArgs e)
+    {
+        if (!isFinished) q.FillAnswer = e.Value?.ToString() ?? string.Empty;
     }
 
     private bool IsAnswered(QuestionData q)
@@ -276,12 +309,48 @@ else
         }
     }
 
-    private void SubmitExam()
+    private Task SubmitExam() => FinishExamAsync(false);
+
+    private void LogSubmit()
     {
         int total    = exam!.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count));
         int answered = exam.Parts.Sum(p => AnsweredCount(p));
         Console.WriteLine($"Nộp bài: {answered}/{total} câu đã trả lời.");
     }
 
-    public void Dispose() => _timer?.Dispose();
+    private async Task UpdateTimerAsync()
+    {
+        if (isFinished || string.IsNullOrEmpty(_sessionKey)) return;
+        var session = await ExamSession.GetAsync(_sessionKey);
+        if (session == null) return;
+        secondsLeft = session.SecondsRemaining;
+        if (session.IsExpired) await InvokeAsync(() => FinishExamAsync(true));
+        else await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task FinishExamAsync(bool timeExpired)
+    {
+        if (isFinished) return;
+        isFinished = true;
+        timedOut = timeExpired;
+        _timer?.Dispose();
+        if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
+        await ExamSession.LockTestContentAsync(".reading-split");
+        await ExamSession.SetUnloadWarningAsync(false);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async ValueTask ConfirmLeave(LocationChangingContext context)
+    {
+        if (!isFinished && !await ExamSession.ConfirmLeaveAsync()) context.PreventNavigation();
+    }
+
+    private void ExitExam() => Navigation.NavigateTo("/ielts/luyen-de");
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _navigationRegistration?.Dispose();
+        _ = ExamSession.SetUnloadWarningAsync(false);
+    }
 }
