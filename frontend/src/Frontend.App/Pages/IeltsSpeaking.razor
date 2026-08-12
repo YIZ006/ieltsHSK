@@ -7,6 +7,8 @@
 @using Microsoft.JSInterop
 @inject HttpClient Http
 @inject IJSRuntime JS
+@inject ExamSessionService ExamSession
+@inject NavigationManager Navigation
 @implements IDisposable
 
 <PageTitle>@(exam?.Title ?? "IELTS Speaking") - IeltsHSK</PageTitle>
@@ -133,8 +135,14 @@
     @* TOP BAR *@
     <div class="sp-topbar">
         <span class="sp-exam-title">IELTS Speaking Test</span>
+        <span class="sp-session-time">@FormatTimer(sessionSecondsLeft) total</span>
         <div class="sp-timer @GetTimerClass()">⏱ @part.PartTitle: @FormatTimer(partSecondsLeft)</div>
         <div class="sp-topbar-actions">
+            <button class="sp-btn-next-part" @onclick="ExitExam">Exit test</button>
+            @if (isFinished)
+            {
+                <span class="sp-session-time">Time is up</span>
+            }
             @if (activePartIndex < exam.Parts.Count - 1 && (state == SpeakingState.Result || state == SpeakingState.Idle))
             {
                 <button class="sp-btn-next-part" @onclick="NextPart">Next Part ➤</button>
@@ -368,6 +376,7 @@
 @code {
     [Parameter][SupplyParameterFromQuery(Name = "ExamUrl")] public string? QueryExamUrl { get; set; }
     [Parameter] public string? ExamUrl { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "Session")] public string? TestSessionId { get; set; }
 
     private SpeakingExamData? exam;
     private bool isLoading = true;
@@ -398,7 +407,12 @@
     private string liveTranscript = "";
     private SpeakingResult? lastResult = null;
     private System.Threading.Timer? _timer;
+    private System.Threading.Timer? _sessionTimer;
     private DotNetObjectReference<IeltsSpeaking>? _dotNetRef;
+    private IDisposable? _navigationRegistration;
+    private string? _sessionKey;
+    private int sessionSecondsLeft;
+    private bool isFinished;
 
     private string FormatTimer(int s) => $"{s / 60:D2}:{s % 60:D2}";
     private string GetTimerClass() => partSecondsLeft < 30 ? "sp-timer-warn" : "";
@@ -502,12 +516,31 @@
 
     private async Task StartExam()
     {
+        await StartExamSessionAsync();
+        if (isFinished) return;
         await JS.InvokeVoidAsync("SpeakingInterop.stopVisualizer");
         state = SpeakingState.Idle;
         InitPart();
     }
 
     // ── EXAM FLOW ──────────────────────────────────────
+
+    private async Task StartExamSessionAsync()
+    {
+        if (!string.IsNullOrEmpty(_sessionKey)) return;
+
+        var durationSeconds = Math.Max(exam?.TotalMinutes ?? 14, 1) * 60;
+        var examIdentity = QueryExamUrl ?? ExamUrl ?? "sample-data/speaking-test-1.json";
+        _sessionKey = ExamSessionService.CreateStorageKey("speaking", TestSessionId, examIdentity);
+        var session = await ExamSession.StartAsync(_sessionKey, durationSeconds);
+        sessionSecondsLeft = session.SecondsRemaining;
+        isFinished = session.IsCompleted || session.IsExpired;
+        if (isFinished) return;
+
+        _navigationRegistration = Navigation.RegisterLocationChangingHandler(ConfirmLeave);
+        await ExamSession.SetUnloadWarningAsync(true);
+        _sessionTimer = new System.Threading.Timer(_ => _ = UpdateSessionTimerAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
 
     private void InitPart()
     {
@@ -591,12 +624,13 @@
     [JSInvokable]
     public async Task OnVideoEnded()
     {
-        if (state == SpeakingState.Idle || state == SpeakingState.VideoPlaying)
+        if (!isFinished && (state == SpeakingState.Idle || state == SpeakingState.VideoPlaying))
             await StartRecordingManual();
     }
 
     private async Task StartRecordingManual()
     {
+        if (isFinished) return;
         state = SpeakingState.Recording;
         recordingSecondsElapsed = 0;
         liveTranscript = "";
@@ -689,17 +723,54 @@
         InitPart();
     }
 
-    private void FinishExam()
+    private Task FinishExam() => FinishExamAsync(false);
+
+    private void LogFinishExam()
     {
         JS.InvokeVoidAsync("SpeakingInterop.stopMicStream");
         Console.WriteLine("Speaking test finished!");
     }
 
+    private async Task UpdateSessionTimerAsync()
+    {
+        if (isFinished || string.IsNullOrEmpty(_sessionKey)) return;
+        var session = await ExamSession.GetAsync(_sessionKey);
+        if (session == null) return;
+        sessionSecondsLeft = session.SecondsRemaining;
+        if (session.IsExpired) await InvokeAsync(() => FinishExamAsync(true));
+        else await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task FinishExamAsync(bool timeExpired)
+    {
+        if (isFinished) return;
+        isFinished = true;
+        sessionSecondsLeft = 0;
+        _timer?.Dispose();
+        _sessionTimer?.Dispose();
+        try { await JS.InvokeVoidAsync("SpeakingInterop.stopRecording"); } catch { }
+        if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
+        await ExamSession.LockTestContentAsync(".sp-body");
+        await ExamSession.SetUnloadWarningAsync(false);
+        await JS.InvokeVoidAsync("SpeakingInterop.stopMicStream");
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async ValueTask ConfirmLeave(LocationChangingContext context)
+    {
+        if (!isFinished && !await ExamSession.ConfirmLeaveAsync()) context.PreventNavigation();
+    }
+
+    private void ExitExam() => Navigation.NavigateTo("/ielts/luyen-de");
+
     public void Dispose()
     {
         _timer?.Dispose();
+        _sessionTimer?.Dispose();
         _dotNetRef?.Dispose();
+        _navigationRegistration?.Dispose();
         JS.InvokeVoidAsync("SpeakingInterop.stopMicStream");
+        _ = ExamSession.SetUnloadWarningAsync(false);
     }
 
     // Result model (local)
