@@ -59,7 +59,7 @@
                                 </div>
                                 <button class="btn-take-test" 
                                         disabled="@string.IsNullOrEmpty(test.ListeningUrl)"
-                                        @onclick="() => TakeListeningTest(test.ListeningUrl)">
+                                        @onclick="() => TakeListeningTest(test.ListeningUrl, test.ListeningAnswerUrl)">
                                     <i class="bi bi-lightning-charge-fill"></i> Take Test
                                 </button>
                             </div>
@@ -72,7 +72,7 @@
                                 </div>
                                 <button class="btn-take-test" 
                                         disabled="@string.IsNullOrEmpty(test.ReadingUrl)"
-                                        @onclick="() => TakeReadingTest(test.ReadingUrl)">
+                                        @onclick="() => TakeReadingTest(test.ReadingUrl, test.ReadingAnswerUrl)">
                                     <i class="bi bi-lightning-charge-fill"></i> Take Test
                                 </button>
                             </div>
@@ -133,16 +133,18 @@
 
     private static string NewSessionQuery() => $"Session={Guid.NewGuid():N}";
 
-    private void TakeReadingTest(string? url)
+    private void TakeReadingTest(string? url, string? answerUrl)
     {
         if (string.IsNullOrEmpty(url)) return;
-        NavigationManager.NavigateTo($"/ielts/reading/preview?ExamUrl={Uri.EscapeDataString(url)}&{NewSessionQuery()}");
+        var extra = string.IsNullOrWhiteSpace(answerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(answerUrl)}";
+        NavigationManager.NavigateTo($"/ielts/reading/preview?ExamUrl={Uri.EscapeDataString(url)}{extra}&{NewSessionQuery()}");
     }
 
-    private void TakeListeningTest(string? url)
+    private void TakeListeningTest(string? url, string? answerUrl)
     {
         if (string.IsNullOrEmpty(url)) return;
-        NavigationManager.NavigateTo($"/ielts/listening/preview?ExamUrl={Uri.EscapeDataString(url)}&{NewSessionQuery()}");
+        var extra = string.IsNullOrWhiteSpace(answerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(answerUrl)}";
+        NavigationManager.NavigateTo($"/ielts/listening/preview?ExamUrl={Uri.EscapeDataString(url)}{extra}&{NewSessionQuery()}");
     }
 
     private void TakeWritingTest(string? url)

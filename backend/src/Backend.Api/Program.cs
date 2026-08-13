@@ -217,7 +217,11 @@ app.MapGet("/api/mock-tests", async (Backend.Infrastructure.Persistence.AppDbCon
         ListeningUrl = m.ListeningUrl,
         ReadingUrl = m.ReadingUrl,
         WritingUrl = m.WritingUrl,
-        SpeakingUrl = m.SpeakingUrl
+        SpeakingUrl = m.SpeakingUrl,
+        ListeningAnswerUrl = m.ListeningAnswerUrl,
+        ReadingAnswerUrl = m.ReadingAnswerUrl,
+        WritingAnswerUrl = m.WritingAnswerUrl,
+        SpeakingAnswerUrl = m.SpeakingAnswerUrl
     }).ToList();
     
     return Results.Ok(dtos);
@@ -232,7 +236,11 @@ app.MapPost("/api/mock-tests", async (Backend.Application.DTOs.CreateMockTestReq
         ListeningUrl = request.ListeningUrl,
         ReadingUrl = request.ReadingUrl,
         WritingUrl = request.WritingUrl,
-        SpeakingUrl = request.SpeakingUrl
+        SpeakingUrl = request.SpeakingUrl,
+        ListeningAnswerUrl = request.ListeningAnswerUrl,
+        ReadingAnswerUrl = request.ReadingAnswerUrl,
+        WritingAnswerUrl = request.WritingAnswerUrl,
+        SpeakingAnswerUrl = request.SpeakingAnswerUrl
     };
     
     dbContext.MockTests.Add(newTest);
@@ -252,6 +260,10 @@ app.MapPut("/api/mock-tests/{id}", async (int id, Backend.Application.DTOs.Creat
     test.ReadingUrl = request.ReadingUrl;
     test.WritingUrl = request.WritingUrl;
     test.SpeakingUrl = request.SpeakingUrl;
+    test.ListeningAnswerUrl = request.ListeningAnswerUrl;
+    test.ReadingAnswerUrl = request.ReadingAnswerUrl;
+    test.WritingAnswerUrl = request.WritingAnswerUrl;
+    test.SpeakingAnswerUrl = request.SpeakingAnswerUrl;
 
     await dbContext.SaveChangesAsync(cancellationToken);
     return Results.Ok();
@@ -275,6 +287,27 @@ app.MapPost("/api/mock-tests/upload", async (Microsoft.AspNetCore.Http.IFormFile
         return Results.BadRequest(ex.Message);
     }
 }).DisableAntiforgery(); // Disable Anti-forgery for API upload if needed
+
+app.MapPost("/api/test-submissions", async (Backend.Application.DTOs.CreateTestSubmissionRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var submission = new Backend.Domain.Entities.TestSubmission
+    {
+        UserId = request.UserId,
+        SessionId = request.SessionId,
+        Skill = request.Skill,
+        ExamUrl = request.ExamUrl,
+        BandScore = request.BandScore,
+        CorrectCount = request.CorrectCount,
+        TotalCount = request.TotalCount,
+        DetailsJson = request.DetailsJson,
+        SubmittedAt = DateTimeOffset.UtcNow
+    };
+
+    dbContext.TestSubmissions.Add(submission);
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new { Id = submission.Id });
+});
 
 app.Run();
 

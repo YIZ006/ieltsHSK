@@ -18,6 +18,7 @@ public class ExamPart
     public string PassageTitle { get; set; } = "";
     public string PassageHtml { get; set; } = "";
     public List<QuestionGroup> QuestionGroups { get; set; } = new();
+    public List<QuestionData> Questions { get; set; } = new();
 }
 
 public class QuestionGroup

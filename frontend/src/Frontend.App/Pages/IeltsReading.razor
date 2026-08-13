@@ -9,6 +9,7 @@
 @inject AnswerKeyService answerKeyService
 @inject IJSRuntime JS
 @inject ExamSessionService ExamSession
+@inject ExamSubmissionService SubmissionService
 @inject NavigationManager Navigation
 @implements IDisposable
 
@@ -29,14 +30,34 @@ else if (exam == null)
         <p>Vui lòng thử lại hoặc chọn đề khác.</p>
     </div>
 }
+<PageTitle>@(exam?.Title ?? "IELTS Reading") - IeltsHSK</PageTitle>
+
+@if (isLoading)
+{
+    <div class="reading-loading">
+        <div class="loading-ring"></div>
+        <p>Đang tải đề thi...</p>
+    </div>
+}
+else if (exam == null)
+{
+    <div class="reading-error">
+        <div class="error-icon">📭</div>
+        <h3>Không tải được đề thi</h3>
+        <p>Vui lòng thử lại hoặc chọn đề khác.</p>
+    </div>
+}
 else
 {
     var activePart = exam.Parts[activePartIndex];
-    int qStart = exam.Parts.Take(activePartIndex).Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count)) + 1;
-    int qEnd   = qStart + activePart.QuestionGroups.Sum(g => g.Questions.Count) - 1;
+    var activeGroups = GetQuestionGroups(activePart);
+    int qStart = exam.Parts.Take(activePartIndex).Sum(p => GetQuestionGroups(p).Sum(g => g.Questions.Count)) + 1;
+    int qEnd   = qStart + activeGroups.Sum(g => g.Questions.Count) - 1;
 
     @* ── TOP BAR ── *@
-    <div class="reading-topbar">
+    @if (!isFinished || showReview)
+    {
+        <div class="reading-topbar">
         <div class="topbar-left">
             <span class="exam-title-short">@exam.Title</span>
         </div>
@@ -52,9 +73,10 @@ else
             {
                 <span class="test-session-status">@(timedOut ? "Time is up" : "Submitted")</span>
             }
-            <button class="btn-submit-exam" @onclick="SubmitExam">Submit ➤</button>
+            <button class="btn-submit-exam" disabled="@isSubmitting" @onclick="SubmitExam">@(isSubmitting ? "Submitting..." : "Submit ➤")</button>
         </div>
     </div>
+    }
 
     @* ── PART TABS ── *@
     <div class="part-tabs-bar">
@@ -64,14 +86,14 @@ else
             var part = exam.Parts[i];
             int answered = AnsweredCount(part);
             <button class="part-tab-btn @(activePartIndex == idx ? "active" : "")"
-                    @onclick="() => { activePartIndex = idx; activeQuestionId = exam.Parts[idx].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0; }">
+                    @onclick="() => { activePartIndex = idx; activeQuestionId = FirstQuestionId(exam.Parts[idx]); }">
                 Part @part.PartNumber
-                <span class="part-tab-score">@answered/@part.QuestionGroups.Sum(g => g.Questions.Count)</span>
+                <span class="part-tab-score">@answered/@GetQuestionGroups(part).Sum(g => g.Questions.Count)</span>
             </button>
         }
         <div class="part-tabs-spacer"></div>
         <span class="total-progress">
-            Tổng: @exam.Parts.Sum(p => AnsweredCount(p))/@exam.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count)) câu
+            Tổng: @exam.Parts.Sum(p => AnsweredCount(p))/@exam.Parts.Sum(p => GetQuestionGroups(p).Sum(g => g.Questions.Count)) câu
         </span>
     </div>
 
@@ -96,7 +118,7 @@ else
 
         @* ── RIGHT: QUESTIONS ── *@
         <div class="questions-col" id="questions-scroll">
-            @foreach (var group in activePart.QuestionGroups)
+            @foreach (var group in activeGroups)
             {
                 <div class="q-group-container">
                     @if (!string.IsNullOrWhiteSpace(group.Instruction))
@@ -170,20 +192,20 @@ else
                 @if (activePartIndex > 0)
                 {
                     <button class="nav-part-btn prev"
-                            @onclick="() => { activePartIndex--; activeQuestionId = exam.Parts[activePartIndex].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0; }">
+                            @onclick="() => { activePartIndex--; activeQuestionId = FirstQuestionId(exam.Parts[activePartIndex]); }">
                         ← Part @(exam.Parts[activePartIndex - 1].PartNumber)
                     </button>
                 }
                 @if (activePartIndex < exam.Parts.Count - 1)
                 {
                     <button class="nav-part-btn next"
-                            @onclick="() => { activePartIndex++; activeQuestionId = exam.Parts[activePartIndex].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0; }">
+                            @onclick="() => { activePartIndex++; activeQuestionId = FirstQuestionId(exam.Parts[activePartIndex]); }">
                         Part @(exam.Parts[activePartIndex + 1].PartNumber) →
                     </button>
                 }
                 else
                 {
-                    <button class="nav-part-btn submit" @onclick="SubmitExam">Nộp bài ✓</button>
+                    <button class="nav-part-btn submit" disabled="@isSubmitting" @onclick="SubmitExam">@(isSubmitting ? "Submitting..." : "Nộp bài ✓")</button>
                 }
             </div>
         </div>
@@ -193,7 +215,7 @@ else
     <div class="q-navigator-bar">
         <div class="q-navigator-label">Part @activePart.PartNumber</div>
         <div class="q-navigator-nums">
-            @foreach (var group in activePart.QuestionGroups)
+            @foreach (var group in activeGroups)
             {
                 @foreach (var q in group.Questions)
                 {
@@ -208,8 +230,8 @@ else
         {
             var nextPart = exam.Parts[activePartIndex + 1];
             <div class="q-navigator-next-part"
-                 @onclick="() => { activePartIndex++; activeQuestionId = nextPart.QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0; }">
-                Part @nextPart.PartNumber: @AnsweredCount(nextPart) of @nextPart.QuestionGroups.Sum(g => g.Questions.Count) questions
+                 @onclick="() => { activePartIndex++; activeQuestionId = FirstQuestionId(nextPart); }">
+                Part @nextPart.PartNumber: @AnsweredCount(nextPart) of @GetQuestionGroups(nextPart).Sum(g => g.Questions.Count) questions
             </div>
         }
     </div>
@@ -248,22 +270,53 @@ else
                 <div class="result-answer-item @(qr.IsCorrect ? "correct" : qr.IsBlank ? "blank" : "wrong")">
                     <span class="ra-num">@qr.QuestionNumber</span>
                     <span class="ra-student">@(string.IsNullOrEmpty(qr.StudentAnswer) ? "—" : qr.StudentAnswer)</span>
-                    @if (!qr.IsCorrect)
+                    @if (!qr.IsCorrect && !qr.IsBlank)
                     {
                         <span class="ra-correct">✓ @qr.CorrectAnswer</span>
                     }
-                    else
+                    else if (qr.IsCorrect)
                     {
                         <span class="ra-tick">✓</span>
                     }
                 </div>
             }
         </div>
+        @if (gradingResult.DebugLines.Count > 0)
+        {
+            <div class="result-debug-log" style="margin-top: 20px; padding: 16px; background: #0f172a; color: #e2e8f0; border-radius: 14px; font-size: 0.82rem; line-height: 1.5;">
+                <div style="font-weight: 700; margin-bottom: 10px;">Debug log</div>
+                @foreach (var line in gradingResult.DebugLines)
+                {
+                    <div>@line</div>
+                }
+            </div>
+        }
+        @if (!showReview)
+        {
+            <div style="text-align: center; margin-top: 24px;">
+                <button class="nav-part-btn submit" @onclick="() => showReview = true">🔍 Xem lại bài làm</button>
+            </div>
+        }
     </div>
 }
+else if (isFinished && !string.IsNullOrWhiteSpace(_statusMessage))
+{
+    <div class="reading-error">
+        <div class="error-icon">!</div>
+        <h3>Không thể chấm bài Reading</h3>
+        <p>@_statusMessage</p>
+        @if (!string.IsNullOrWhiteSpace(_answerUrlLoaded))
+        {
+            <p style="font-size: 0.85rem; color: #666; word-break: break-all;">AnswerUrl: @_answerUrlLoaded</p>
+        }
+        <button class="nav-part-btn submit" @onclick="() => { isFinished = false; _statusMessage = null; }">Quay lại bài làm</button>
+    </div>
+}
+
 @code {
     [Parameter] public string? ExamUrl { get; set; }
     [Parameter][SupplyParameterFromQuery(Name = "ExamUrl")] public string? QueryExamUrl { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "AnswerUrl")] public string? QueryAnswerUrl { get; set; }
     [Parameter][SupplyParameterFromQuery(Name = "Session")] public string? TestSessionId { get; set; }
 
     private ExamData? exam;
@@ -277,12 +330,15 @@ else
     private IDisposable? _navigationRegistration;
     private string? _sessionKey;
     private bool isFinished;
+    private bool showReview = false;
+    private bool isSubmitting;
     private GradingResult? gradingResult;
     private string? _examUrlLoaded;
+    private string? _answerUrlLoaded;
+    private string? _statusMessage;
     private bool timedOut;
 
     private const string DefaultExamUrl = "sample-data/reading-test-v2.json";
-
     private string TimerDisplay
     {
         get
@@ -298,9 +354,10 @@ else
         string actualUrl = string.IsNullOrWhiteSpace(ExamUrl) ? QueryExamUrl ?? DefaultExamUrl : ExamUrl;
         string url = Uri.UnescapeDataString(actualUrl);
         _examUrlLoaded = url;
+        _answerUrlLoaded = string.IsNullOrWhiteSpace(QueryAnswerUrl) ? null : Uri.UnescapeDataString(QueryAnswerUrl);
         exam = await ExamService.LoadExamAsync(url);
         if (exam?.Parts?.Count > 0)
-            activeQuestionId = exam.Parts[0].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
+            activeQuestionId = FirstQuestionId(exam.Parts[0]);
         isLoading = false;
 
         // Bắt đầu đếm ngược
@@ -344,7 +401,7 @@ else
         => q.SelectedOptionId.HasValue || !string.IsNullOrEmpty(q.FillAnswer);
 
     private int AnsweredCount(ExamPart part)
-        => part.QuestionGroups.Sum(g => g.Questions.Count(IsAnswered));
+        => GetQuestionGroups(part).Sum(g => g.Questions.Count(IsAnswered));
 
     private async Task ScrollToQuestion(int qId) 
     { 
@@ -363,7 +420,7 @@ else
 
     private void LogSubmit()
     {
-        int total    = exam!.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count));
+        int total    = exam!.Parts.Sum(p => GetQuestionGroups(p).Sum(g => g.Questions.Count));
         int answered = exam.Parts.Sum(p => AnsweredCount(p));
         Console.WriteLine($"Nộp bài: {answered}/{total} câu đã trả lời.");
     }
@@ -380,26 +437,65 @@ else
 
     private async Task FinishExamAsync(bool timeExpired)
     {
-        if (isFinished) return;
-        isFinished = true;
-        timedOut = timeExpired;
-        _timer?.Dispose();
-        if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
-        await ExamSession.LockTestContentAsync(".reading-split");
-        await ExamSession.SetUnloadWarningAsync(false);
+        if (isFinished || isSubmitting) return;
+        isSubmitting = true;
+        _statusMessage = null;
+        await InvokeAsync(StateHasChanged);
 
-        // Grade the exam
-        if (!string.IsNullOrEmpty(_examUrlLoaded))
+        try
         {
-            var answerKey = await answerKeyService.LoadFromExamUrlAsync(_examUrlLoaded);
-            if (answerKey != null)
+            timedOut = timeExpired;
+            _timer?.Dispose();
+
+            if (string.IsNullOrEmpty(_examUrlLoaded))
             {
-                var studentAnswers = CollectStudentAnswers();
-                gradingResult = AnswerKeyService.Grade(answerKey, studentAnswers);
+                _statusMessage = "Không tìm thấy ExamUrl của bài Reading.";
+                isFinished = true;
+                return;
+            }
+
+            Console.WriteLine($"[Reading] ExamUrl={_examUrlLoaded}");
+            Console.WriteLine($"[Reading] AnswerUrl={_answerUrlLoaded ?? "(fallback from exam url)"}");
+
+            var answerKey = !string.IsNullOrWhiteSpace(_answerUrlLoaded)
+                ? await answerKeyService.LoadAsync(_answerUrlLoaded)
+                : await answerKeyService.LoadFromExamUrlAsync(_examUrlLoaded);
+
+            if (answerKey == null)
+            {
+                _statusMessage = "Không tải được file đáp án Reading. Hãy kiểm tra link AnswerUrl trong admin.";
+                isFinished = true;
+                return;
+            }
+
+            var studentAnswers = CollectStudentAnswers();
+            gradingResult = AnswerKeyService.Grade(answerKey, studentAnswers);
+            isFinished = true;
+
+            if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
+            await ExamSession.LockTestContentAsync(".reading-split");
+            await ExamSession.SetUnloadWarningAsync(false);
+
+            try
+            {
+                await SubmissionService.SaveToDbAsync("Reading", _examUrlLoaded, _sessionKey ?? "", gradingResult.BandScore, gradingResult.CorrectCount, gradingResult.TotalCount);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Reading] Không lưu được kết quả vào DB: {ex.Message}");
             }
         }
-
-        await InvokeAsync(StateHasChanged);
+        catch (Exception ex)
+        {
+            isFinished = true;
+            _statusMessage = $"Lỗi khi nộp bài Reading: {ex.Message}";
+            Console.WriteLine($"[Reading] Submit failed: {ex}");
+        }
+        finally
+        {
+            isSubmitting = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private Dictionary<int, string> CollectStudentAnswers()
@@ -408,7 +504,7 @@ else
         if (exam == null) return result;
         int qNum = 1;
         foreach (var part in exam.Parts)
-            foreach (var group in part.QuestionGroups)
+            foreach (var group in GetQuestionGroups(part))
                 foreach (var q in group.Questions)
                 {
                     var answer = q.FillAnswer?.Trim();
@@ -421,6 +517,24 @@ else
                 }
         return result;
     }
+
+    private static List<QuestionGroup> GetQuestionGroups(ExamPart part)
+    {
+        if (part.QuestionGroups.Count > 0) return part.QuestionGroups;
+        if (part.Questions.Count == 0) return [];
+
+        return
+        [
+            new QuestionGroup
+            {
+                GroupType = "Normal",
+                Questions = part.Questions
+            }
+        ];
+    }
+
+    private static int FirstQuestionId(ExamPart part)
+        => GetQuestionGroups(part).FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
 
     private async ValueTask ConfirmLeave(LocationChangingContext context)
     {

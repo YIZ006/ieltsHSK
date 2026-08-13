@@ -1,9 +1,11 @@
 using Blazored.LocalStorage;
 using Frontend.App.Models;
 
+using System.Net.Http.Json;
+
 namespace Frontend.App.Services;
 
-public sealed class ExamSubmissionService(ILocalStorageService localStorage)
+public sealed class ExamSubmissionService(ILocalStorageService localStorage, HttpClient httpClient)
 {
     private const string StorageKey = "ielts-exam-submissions";
 
@@ -19,6 +21,27 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage)
 
         await localStorage.SetItemAsync(StorageKey, submissions);
         return submission;
+    }
+
+    public async Task SaveToDbAsync(string skill, string examUrl, string sessionId, double bandScore, int correctCount, int totalCount)
+    {
+        var request = new 
+        {
+            Skill = skill,
+            ExamUrl = examUrl,
+            SessionId = sessionId,
+            BandScore = bandScore,
+            CorrectCount = correctCount,
+            TotalCount = totalCount
+        };
+        try
+        {
+            await httpClient.PostAsJsonAsync("/api/test-submissions", request);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving submission to DB: {ex.Message}");
+        }
     }
 
     public async Task<List<IeltsSubmissionRecord>> GetAllAsync()

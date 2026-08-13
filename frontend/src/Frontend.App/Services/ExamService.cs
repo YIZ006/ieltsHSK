@@ -30,6 +30,7 @@ public class ExamService
         try
         {
             var exam = await _http.GetFromJsonAsync<ExamData>(dataUrl);
+            NormalizeExam(exam);
             if (exam != null) _cache[dataUrl] = exam;
             return exam;
         }
@@ -37,6 +38,24 @@ public class ExamService
         {
             Console.WriteLine($"[ExamService] Lỗi load đề: {ex.Message}");
             return null;
+        }
+    }
+
+    private static void NormalizeExam(ExamData? exam)
+    {
+        if (exam?.Parts == null) return;
+
+        foreach (var part in exam.Parts)
+        {
+            if (part.QuestionGroups.Count == 0 && part.Questions.Count > 0)
+            {
+                part.QuestionGroups.Add(new QuestionGroup
+                {
+                    Instruction = string.Empty,
+                    GroupType = "Normal",
+                    Questions = part.Questions
+                });
+            }
         }
     }
 }

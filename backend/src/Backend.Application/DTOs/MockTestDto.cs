@@ -9,6 +9,10 @@ public class MockTestDto
     public string? ReadingUrl { get; set; }
     public string? WritingUrl { get; set; }
     public string? SpeakingUrl { get; set; }
+    public string? ListeningAnswerUrl { get; set; }
+    public string? ReadingAnswerUrl { get; set; }
+    public string? WritingAnswerUrl { get; set; }
+    public string? SpeakingAnswerUrl { get; set; }
 }
 
 public class CreateMockTestRequest
@@ -19,4 +23,8 @@ public class CreateMockTestRequest
     public string? ReadingUrl { get; set; }
     public string? WritingUrl { get; set; }
     public string? SpeakingUrl { get; set; }
+    public string? ListeningAnswerUrl { get; set; }
+    public string? ReadingAnswerUrl { get; set; }
+    public string? WritingAnswerUrl { get; set; }
+    public string? SpeakingAnswerUrl { get; set; }
 }
