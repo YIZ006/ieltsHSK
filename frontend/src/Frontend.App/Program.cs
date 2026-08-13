@@ -19,6 +19,7 @@ builder.Services.AddScoped(_ =>
 
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<ExamSessionService>();
+builder.Services.AddScoped<ExamSubmissionService>();
 builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddScoped(sp => 
@@ -49,4 +50,11 @@ builder.Services.AddScoped(sp =>
     return new MockTestService(httpClient);
 });
 
+
+// AnswerKeyService: same base URL as frontend (loads .answers.json from wwwroot or absolute R2 URL)
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
+    return new AnswerKeyService(httpClient);
+});
 await builder.Build().RunAsync();

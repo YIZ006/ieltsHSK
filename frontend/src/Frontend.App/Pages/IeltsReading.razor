@@ -6,6 +6,7 @@
 @using Frontend.App.Services
 @using Microsoft.AspNetCore.Components.Forms
 @inject ExamService ExamService
+@inject AnswerKeyService answerKeyService
 @inject IJSRuntime JS
 @inject ExamSessionService ExamSession
 @inject NavigationManager Navigation
@@ -214,6 +215,52 @@ else
     </div>
 }
 
+
+@* ── RESULT PANEL (shown after submit) ── *@
+@if (isFinished && gradingResult != null)
+{
+    <div class="result-panel">
+        <div class="result-header">
+            <h2>📊 Kết quả Reading</h2>
+            <div class="result-score-row">
+                <div class="result-score-card band">
+                    <span class="rs-label">Band Score</span>
+                    <span class="rs-value band-val">@gradingResult.BandScore.ToString("0.0")</span>
+                </div>
+                <div class="result-score-card correct">
+                    <span class="rs-label">Đúng</span>
+                    <span class="rs-value">@gradingResult.CorrectCount / @gradingResult.TotalCount</span>
+                </div>
+                <div class="result-score-card wrong">
+                    <span class="rs-label">Sai</span>
+                    <span class="rs-value">@(gradingResult.TotalCount - gradingResult.CorrectCount - gradingResult.Questions.Values.Count(q => q.IsBlank))</span>
+                </div>
+                <div class="result-score-card blank">
+                    <span class="rs-label">Bỏ trống</span>
+                    <span class="rs-value">@gradingResult.Questions.Values.Count(q => q.IsBlank)</span>
+                </div>
+            </div>
+        </div>
+        <div class="result-answer-grid">
+            @foreach (var kv in gradingResult.Questions.OrderBy(x => x.Key))
+            {
+                var qr = kv.Value;
+                <div class="result-answer-item @(qr.IsCorrect ? "correct" : qr.IsBlank ? "blank" : "wrong")">
+                    <span class="ra-num">@qr.QuestionNumber</span>
+                    <span class="ra-student">@(string.IsNullOrEmpty(qr.StudentAnswer) ? "—" : qr.StudentAnswer)</span>
+                    @if (!qr.IsCorrect)
+                    {
+                        <span class="ra-correct">✓ @qr.CorrectAnswer</span>
+                    }
+                    else
+                    {
+                        <span class="ra-tick">✓</span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
 @code {
     [Parameter] public string? ExamUrl { get; set; }
     [Parameter][SupplyParameterFromQuery(Name = "ExamUrl")] public string? QueryExamUrl { get; set; }
@@ -230,6 +277,8 @@ else
     private IDisposable? _navigationRegistration;
     private string? _sessionKey;
     private bool isFinished;
+    private GradingResult? gradingResult;
+    private string? _examUrlLoaded;
     private bool timedOut;
 
     private const string DefaultExamUrl = "sample-data/reading-test-v2.json";
@@ -248,6 +297,7 @@ else
         isLoading = true;
         string actualUrl = string.IsNullOrWhiteSpace(ExamUrl) ? QueryExamUrl ?? DefaultExamUrl : ExamUrl;
         string url = Uri.UnescapeDataString(actualUrl);
+        _examUrlLoaded = url;
         exam = await ExamService.LoadExamAsync(url);
         if (exam?.Parts?.Count > 0)
             activeQuestionId = exam.Parts[0].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
@@ -337,7 +387,39 @@ else
         if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
         await ExamSession.LockTestContentAsync(".reading-split");
         await ExamSession.SetUnloadWarningAsync(false);
+
+        // Grade the exam
+        if (!string.IsNullOrEmpty(_examUrlLoaded))
+        {
+            var answerKey = await answerKeyService.LoadFromExamUrlAsync(_examUrlLoaded);
+            if (answerKey != null)
+            {
+                var studentAnswers = CollectStudentAnswers();
+                gradingResult = AnswerKeyService.Grade(answerKey, studentAnswers);
+            }
+        }
+
         await InvokeAsync(StateHasChanged);
+    }
+
+    private Dictionary<int, string> CollectStudentAnswers()
+    {
+        var result = new Dictionary<int, string>();
+        if (exam == null) return result;
+        int qNum = 1;
+        foreach (var part in exam.Parts)
+            foreach (var group in part.QuestionGroups)
+                foreach (var q in group.Questions)
+                {
+                    var answer = q.FillAnswer?.Trim();
+                    if (q.SelectedOptionId.HasValue)
+                    {
+                        var opt = q.Options?.FirstOrDefault(o => o.Id == q.SelectedOptionId);
+                        answer = opt?.Label ?? q.SelectedOptionId.ToString();
+                    }
+                    result[qNum++] = answer ?? "";
+                }
+        return result;
     }
 
     private async ValueTask ConfirmLeave(LocationChangingContext context)

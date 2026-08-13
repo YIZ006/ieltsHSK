@@ -378,6 +378,70 @@
 .sp-dot.done   { background: #86efac; color: #166534; }
 .sp-dot.locked { opacity: 0.4; background: #e5e7eb; color: #9ca3af; }
 
+.sp-score-panel {
+    max-width: 880px;
+    margin: 18px auto 28px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 10px 28px rgba(17, 24, 39, 0.08);
+    padding: 18px 22px;
+}
+
+.sp-score-panel > div:first-child,
+.sp-score-total,
+.sp-score-grid {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.sp-score-label,
+.sp-score-total span,
+.sp-score-grid span {
+    color: #6b7280;
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.sp-score-total {
+    margin-top: 14px;
+    padding: 14px 0;
+    border-top: 1px solid #e5e7eb;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.sp-score-total strong {
+    color: #e83e8c;
+    font-size: 2rem;
+}
+
+.sp-score-panel p {
+    color: #4b5563;
+    margin: 12px 0;
+    line-height: 1.5;
+}
+
+.sp-score-grid {
+    align-items: stretch;
+}
+
+.sp-score-grid > div {
+    flex: 1;
+    min-width: 0;
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.sp-score-grid strong {
+    display: block;
+    color: #111827;
+    margin-top: 4px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .sp-setup-card { padding: 28px 20px; }
@@ -386,4 +450,5 @@
     .sp-main-panel { padding: 16px; }
     .sp-stats-row { flex-wrap: wrap; }
     .sp-score-lbl { width: 130px; font-size: 0.75rem; }
+    .sp-score-grid { flex-direction: column; }
 }

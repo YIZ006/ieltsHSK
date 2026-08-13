@@ -188,6 +188,70 @@
     color: #16a34a; font-weight: 700; font-size: 0.85rem;
 }
 
+.writing-score-panel {
+    margin: 18px auto 28px;
+    max-width: 920px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    padding: 18px 22px;
+}
+
+.writing-score-panel > div:first-child,
+.score-overall,
+.score-criteria {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.score-label,
+.score-overall span,
+.score-criteria span {
+    color: #64748b;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.score-overall {
+    margin-top: 14px;
+    padding: 14px 0;
+    border-top: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.score-overall strong {
+    color: var(--primary);
+    font-size: 2rem;
+}
+
+.writing-score-panel p {
+    color: #475569;
+    margin: 12px 0;
+    line-height: 1.5;
+}
+
+.score-criteria {
+    align-items: stretch;
+}
+
+.score-criteria > div {
+    flex: 1;
+    min-width: 0;
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.score-criteria strong {
+    display: block;
+    color: #0f172a;
+    margin-top: 4px;
+}
+
 /* ── RESPONSIVE ── */
 @media (max-width: 768px) {
     .writing-split { flex-direction: column; height: auto; overflow: visible; }
@@ -195,4 +259,5 @@
     .split-divider { width: 100%; height: 4px; cursor: row-resize; }
     .essay-textarea { min-height: 300px; }
     .writing-split { height: auto; }
+    .score-criteria { flex-direction: column; }
 }
