@@ -8,6 +8,7 @@
 @inject HttpClient Http
 @inject IJSRuntime JS
 @inject ExamSessionService ExamSession
+@inject ExamSubmissionService Submissions
 @inject NavigationManager Navigation
 @implements IDisposable
 
@@ -141,7 +142,7 @@
             <button class="sp-btn-next-part" @onclick="ExitExam">Exit test</button>
             @if (isFinished)
             {
-                <span class="sp-session-time">Time is up</span>
+                <span class="sp-session-time">@(savedSubmission?.Status ?? "Submitted")</span>
             }
             @if (activePartIndex < exam.Parts.Count - 1 && (state == SpeakingState.Result || state == SpeakingState.Idle))
             {
@@ -371,6 +372,37 @@
             </div>
         }
     </div>
+
+    @if (savedSubmission != null)
+    {
+        <section class="sp-score-panel">
+            <div>
+                <span class="sp-score-label">Saved result</span>
+                <strong>@savedSubmission.Id</strong>
+            </div>
+            @if (scoreReport == null)
+            {
+                <p>Scoring your speaking...</p>
+            }
+            else
+            {
+                <div class="sp-score-total">
+                    <span>Band</span>
+                    <strong>@scoreReport.Overall.ToString("F1")</strong>
+                </div>
+                <p>@scoreReport.Summary</p>
+                <div class="sp-score-grid">
+                    @foreach (var criterion in scoreReport.Criteria)
+                    {
+                        <div>
+                            <span>@criterion.Name</span>
+                            <strong>@criterion.Score.ToString("F1")</strong>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    }
 }
 
 @code {
@@ -413,6 +445,11 @@
     private string? _sessionKey;
     private int sessionSecondsLeft;
     private bool isFinished;
+    private bool isSubmitting;
+    private string currentExamUrl = "sample-data/speaking-test-1.json";
+    private IeltsSubmissionRecord? savedSubmission;
+    private IeltsScoreReport? scoreReport;
+    private readonly List<SpeakingAnswerSubmission> speakingAnswers = new();
 
     private string FormatTimer(int s) => $"{s / 60:D2}:{s % 60:D2}";
     private string GetTimerClass() => partSecondsLeft < 30 ? "sp-timer-warn" : "";
@@ -423,6 +460,7 @@
         string? url = ExamUrl;
         if (string.IsNullOrWhiteSpace(url)) url = QueryExamUrl;
         string finalUrl = string.IsNullOrWhiteSpace(url) ? "sample-data/speaking-test-1.json" : Uri.UnescapeDataString(url);
+        currentExamUrl = finalUrl;
         try { exam = await Http.GetFromJsonAsync<SpeakingExamData>(finalUrl); } catch { exam = null; }
         isLoading = false;
         _dotNetRef = DotNetObjectReference.Create(this);
@@ -671,6 +709,7 @@
         lastResult = new SpeakingResult
         {
             Transcript = transcript,
+            DurationMs = durationMs,
             Fluency = evalRaw.GetProperty("fluency").GetInt32(),
             Lexical = evalRaw.GetProperty("lexical").GetInt32(),
             Grammar = evalRaw.GetProperty("grammar").GetInt32(),
@@ -684,6 +723,7 @@
             Markers = GetStringList(evalRaw.GetProperty("details").GetProperty("markers"))
         };
 
+        SaveCurrentSpeakingAnswer(durationMs);
         state = SpeakingState.Result;
         StateHasChanged();
     }
@@ -723,7 +763,17 @@
         InitPart();
     }
 
-    private Task FinishExam() => FinishExamAsync(false);
+    private async Task FinishExam()
+    {
+        if (isFinished || isSubmitting) return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            "Submit your Speaking test now? Your transcripts and scores will be saved, then the full test will be scored.");
+        if (!confirmed) return;
+
+        await FinishExamAsync(false);
+    }
 
     private void LogFinishExam()
     {
@@ -743,9 +793,23 @@
 
     private async Task FinishExamAsync(bool timeExpired)
     {
-        if (isFinished) return;
+        if (isFinished || isSubmitting) return;
+        isSubmitting = true;
+        await InvokeAsync(StateHasChanged);
+
+        if (timeExpired && state == SpeakingState.Recording)
+        {
+            await StopRecording();
+        }
+
+        savedSubmission = BuildSubmission(timeExpired);
+        await Submissions.SaveAsync(savedSubmission);
+        savedSubmission = await Submissions.ScoreAndSaveSpeakingAsync(savedSubmission);
+        scoreReport = savedSubmission.Score;
+
         isFinished = true;
         sessionSecondsLeft = 0;
+        isSubmitting = false;
         _timer?.Dispose();
         _sessionTimer?.Dispose();
         try { await JS.InvokeVoidAsync("SpeakingInterop.stopRecording"); } catch { }
@@ -754,6 +818,62 @@
         await ExamSession.SetUnloadWarningAsync(false);
         await JS.InvokeVoidAsync("SpeakingInterop.stopMicStream");
         await InvokeAsync(StateHasChanged);
+    }
+
+    private void SaveCurrentSpeakingAnswer(double durationMs)
+    {
+        if (exam == null || lastResult == null) return;
+
+        var part = exam.Parts[activePartIndex];
+        var question = part.Questions.ElementAtOrDefault(currentQuestionIndex);
+        if (question == null) return;
+
+        var existingIndex = speakingAnswers.FindIndex(answer =>
+            answer.PartNumber == part.PartNumber && answer.QuestionId == question.Id);
+
+        var answer = new SpeakingAnswerSubmission
+        {
+            PartNumber = part.PartNumber,
+            PartTitle = part.PartTitle,
+            QuestionId = question.Id,
+            Question = question.Question,
+            Transcript = lastResult.Transcript,
+            DurationMs = durationMs,
+            Score = new SpeakingAnswerScore
+            {
+                Fluency = lastResult.Fluency,
+                Lexical = lastResult.Lexical,
+                Grammar = lastResult.Grammar,
+                Coherence = lastResult.Coherence,
+                Overall = lastResult.Overall,
+                Wpm = lastResult.Wpm,
+                WordCount = lastResult.WordCount
+            }
+        };
+
+        if (existingIndex >= 0) speakingAnswers[existingIndex] = answer;
+        else speakingAnswers.Add(answer);
+    }
+
+    private IeltsSubmissionRecord BuildSubmission(bool timeExpired)
+    {
+        var totalSeconds = Math.Max(exam?.TotalMinutes ?? 14, 1) * 60;
+        return new IeltsSubmissionRecord
+        {
+            Skill = "speaking",
+            ExamTitle = exam?.Title ?? "IELTS Speaking",
+            ExamUrl = currentExamUrl,
+            SessionId = TestSessionId,
+            TimedOut = timeExpired,
+            DurationSeconds = Math.Max(totalSeconds - sessionSecondsLeft, 0),
+            Speaking = new SpeakingSubmissionData
+            {
+                Answers = speakingAnswers
+                    .OrderBy(answer => answer.PartNumber)
+                    .ThenBy(answer => answer.QuestionId)
+                    .ToList()
+            }
+        };
     }
 
     private async ValueTask ConfirmLeave(LocationChangingContext context)
@@ -777,6 +897,7 @@
     private class SpeakingResult
     {
         public string Transcript { get; set; } = "";
+        public double DurationMs { get; set; }
         public int Fluency { get; set; }
         public int Lexical { get; set; }
         public int Grammar { get; set; }

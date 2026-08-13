@@ -7,6 +7,7 @@
 @inject HttpClient Http
 @inject IJSRuntime JS
 @inject ExamSessionService ExamSession
+@inject ExamSubmissionService Submissions
 @inject NavigationManager Navigation
 @implements IDisposable
 
@@ -48,7 +49,9 @@ else
             {
                 <span class="test-session-status">@(timedOut ? "Time is up" : "Submitted")</span>
             }
-            <button class="btn-submit-exam" @onclick="SubmitExam">Submit ➤</button>
+            <button class="btn-submit-exam" disabled="@(isFinished || isSubmitting)" @onclick="SubmitExam">
+                @(isSubmitting ? "Saving..." : "Submit ➤")
+            </button>
         </div>
     </div>
 
@@ -107,6 +110,37 @@ else
             </div>
         </div>
     </div>
+
+    @if (savedSubmission != null)
+    {
+        <section class="writing-score-panel">
+            <div>
+                <span class="score-label">Saved result</span>
+                <strong>@savedSubmission.Id</strong>
+            </div>
+            @if (scoreReport == null)
+            {
+                <p>Scoring your writing...</p>
+            }
+            else
+            {
+                <div class="score-overall">
+                    <span>Band</span>
+                    <strong>@scoreReport.Overall.ToString("F1")</strong>
+                </div>
+                <p>@scoreReport.Summary</p>
+                <div class="score-criteria">
+                    @foreach (var criterion in scoreReport.Criteria)
+                    {
+                        <div>
+                            <span>@criterion.Name</span>
+                            <strong>@criterion.Score.ToString("F1")</strong>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    }
 }
 
 @code {
@@ -132,6 +166,10 @@ else
     private string? _sessionKey;
     private bool isFinished;
     private bool timedOut;
+    private bool isSubmitting;
+    private string currentExamUrl = DefaultExamUrl;
+    private IeltsSubmissionRecord? savedSubmission;
+    private IeltsScoreReport? scoreReport;
 
     private const string DefaultExamUrl = "sample-data/writing-test-1.json";
 
@@ -151,6 +189,7 @@ else
         string? actualUrl = ExamUrl;
         if (string.IsNullOrWhiteSpace(actualUrl)) actualUrl = QueryExamUrl;
         string url = string.IsNullOrWhiteSpace(actualUrl) ? DefaultExamUrl : Uri.UnescapeDataString(actualUrl);
+        currentExamUrl = url;
 
         try
         {
@@ -191,7 +230,17 @@ else
         StateHasChanged();
     }
 
-    private Task SubmitExam() => FinishExamAsync(false);
+    private async Task SubmitExam()
+    {
+        if (isFinished || isSubmitting) return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            "Submit your Writing test now? Your answers will be saved and then scored.");
+        if (!confirmed) return;
+
+        await FinishExamAsync(false);
+    }
 
     private void LogSubmit()
     {
@@ -210,14 +259,49 @@ else
 
     private async Task FinishExamAsync(bool timeExpired)
     {
-        if (isFinished) return;
+        if (isFinished || isSubmitting) return;
+        isSubmitting = true;
+        await InvokeAsync(StateHasChanged);
+
+        savedSubmission = BuildSubmission(timeExpired);
+        await Submissions.SaveAsync(savedSubmission);
+        savedSubmission = await Submissions.ScoreAndSaveWritingAsync(savedSubmission);
+        scoreReport = savedSubmission.Score;
+
         isFinished = true;
         timedOut = timeExpired;
+        isSubmitting = false;
         _timer?.Dispose();
         if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
         await ExamSession.LockTestContentAsync(".writing-split");
         await ExamSession.SetUnloadWarningAsync(false);
         await InvokeAsync(StateHasChanged);
+    }
+
+    private IeltsSubmissionRecord BuildSubmission(bool timeExpired)
+    {
+        var durationSeconds = Math.Max((exam?.TotalMinutes ?? 60) * 60 - secondsLeft, 0);
+        return new IeltsSubmissionRecord
+        {
+            Skill = "writing",
+            ExamTitle = exam?.Title ?? "IELTS Writing",
+            ExamUrl = currentExamUrl,
+            SessionId = TestSessionId,
+            TimedOut = timeExpired,
+            DurationSeconds = durationSeconds,
+            Writing = new WritingSubmissionData
+            {
+                Tasks = exam?.Tasks.Select(task => new WritingTaskSubmission
+                {
+                    TaskNumber = task.TaskNumber,
+                    TaskTitle = task.TaskTitle,
+                    Prompt = task.Prompt,
+                    Answer = task.Answer,
+                    WordCount = task.WordCount,
+                    MinWords = task.MinWords
+                }).ToList() ?? new()
+            }
+        };
     }
 
     private async ValueTask ConfirmLeave(LocationChangingContext context)
