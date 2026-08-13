@@ -44,6 +44,15 @@
                         <span class="upload-status">Đang tải lên Cloudflare R2...</span>
                     }
                 </div>
+                <label class="answer-url-label">Đáp án Reading (JSON URL public R2)</label>
+                <input @bind="formTest.ReadingAnswerUrl" class="form-control mb-2" placeholder="Nhập link đáp án hoặc upload file bên dưới..." style="margin-bottom: 8px;" />
+                <div class="upload-box">
+                    <InputFile OnChange="@(e => HandleFileUpload(e, "ReadingAnswer"))" accept=".json" class="file-input" />
+                    @if (uploadingSkill == "ReadingAnswer")
+                    {
+                        <span class="upload-status">Đang tải đáp án lên Cloudflare R2...</span>
+                    }
+                </div>
             </div>
 
             <div class="form-group">
@@ -54,6 +63,15 @@
                     @if (uploadingSkill == "Listening")
                     {
                         <span class="upload-status">Đang tải lên Cloudflare R2...</span>
+                    }
+                </div>
+                <label class="answer-url-label">Đáp án Listening (JSON URL public R2)</label>
+                <input @bind="formTest.ListeningAnswerUrl" class="form-control mb-2" placeholder="Nhập link đáp án hoặc upload file bên dưới..." style="margin-bottom: 8px;" />
+                <div class="upload-box">
+                    <InputFile OnChange="@(e => HandleFileUpload(e, "ListeningAnswer"))" accept=".json" class="file-input" />
+                    @if (uploadingSkill == "ListeningAnswer")
+                    {
+                        <span class="upload-status">Đang tải đáp án lên Cloudflare R2...</span>
                     }
                 </div>
             </div>
@@ -68,6 +86,15 @@
                         <span class="upload-status">Đang tải lên Cloudflare R2...</span>
                     }
                 </div>
+                <label class="answer-url-label">Đáp án / rubric Writing (JSON URL public R2)</label>
+                <input @bind="formTest.WritingAnswerUrl" class="form-control mb-2" placeholder="Nhập link rubric/đáp án hoặc upload file bên dưới..." style="margin-bottom: 8px;" />
+                <div class="upload-box">
+                    <InputFile OnChange="@(e => HandleFileUpload(e, "WritingAnswer"))" accept=".json" class="file-input" />
+                    @if (uploadingSkill == "WritingAnswer")
+                    {
+                        <span class="upload-status">Đang tải rubric/đáp án lên Cloudflare R2...</span>
+                    }
+                </div>
             </div>
 
             <div class="form-group">
@@ -78,6 +105,15 @@
                     @if (uploadingSkill == "Speaking")
                     {
                         <span class="upload-status">Đang tải lên Cloudflare R2...</span>
+                    }
+                </div>
+                <label class="answer-url-label">Đáp án / rubric Speaking (JSON URL public R2)</label>
+                <input @bind="formTest.SpeakingAnswerUrl" class="form-control mb-2" placeholder="Nhập link rubric/đáp án hoặc upload file bên dưới..." style="margin-bottom: 8px;" />
+                <div class="upload-box">
+                    <InputFile OnChange="@(e => HandleFileUpload(e, "SpeakingAnswer"))" accept=".json" class="file-input" />
+                    @if (uploadingSkill == "SpeakingAnswer")
+                    {
+                        <span class="upload-status">Đang tải rubric/đáp án lên Cloudflare R2...</span>
                     }
                 </div>
             </div>
@@ -110,9 +146,13 @@
                         <th>Bộ Đề</th>
                         <th>Tên Bài Thi</th>
                         <th>L</th>
+                        <th>L Ans</th>
                         <th>R</th>
+                        <th>R Ans</th>
                         <th>W</th>
+                        <th>W Rubric</th>
                         <th>S</th>
+                        <th>S Rubric</th>
                         <th>Hành động</th>
                     </tr>
                 </thead>
@@ -124,9 +164,13 @@
                             <td>@t.CollectionName</td>
                             <td>@t.Title</td>
                             <td>@(string.IsNullOrEmpty(t.ListeningUrl) ? "❌" : "✅")</td>
+                            <td>@(string.IsNullOrEmpty(t.ListeningAnswerUrl) ? "❌" : "✅")</td>
                             <td>@(string.IsNullOrEmpty(t.ReadingUrl) ? "❌" : "✅")</td>
+                            <td>@(string.IsNullOrEmpty(t.ReadingAnswerUrl) ? "❌" : "✅")</td>
                             <td>@(string.IsNullOrEmpty(t.WritingUrl) ? "❌" : "✅")</td>
+                            <td>@(string.IsNullOrEmpty(t.WritingAnswerUrl) ? "❌" : "✅")</td>
                             <td>@(string.IsNullOrEmpty(t.SpeakingUrl) ? "❌" : "✅")</td>
+                            <td>@(string.IsNullOrEmpty(t.SpeakingAnswerUrl) ? "❌" : "✅")</td>
                             <td>
                                 <button class="btn-sm btn-edit" @onclick="() => OpenForm(t)">Sửa</button>
                             </td>
@@ -178,7 +222,11 @@
                 ListeningUrl = testToEdit.ListeningUrl,
                 ReadingUrl = testToEdit.ReadingUrl,
                 WritingUrl = testToEdit.WritingUrl,
-                SpeakingUrl = testToEdit.SpeakingUrl
+                SpeakingUrl = testToEdit.SpeakingUrl,
+                ListeningAnswerUrl = testToEdit.ListeningAnswerUrl,
+                ReadingAnswerUrl = testToEdit.ReadingAnswerUrl,
+                WritingAnswerUrl = testToEdit.WritingAnswerUrl,
+                SpeakingAnswerUrl = testToEdit.SpeakingAnswerUrl
             };
         }
         isFormOpen = true;
@@ -203,6 +251,10 @@
                     case "Listening": formTest.ListeningUrl = url; break;
                     case "Writing": formTest.WritingUrl = url; break;
                     case "Speaking": formTest.SpeakingUrl = url; break;
+                    case "ReadingAnswer": formTest.ReadingAnswerUrl = url; break;
+                    case "ListeningAnswer": formTest.ListeningAnswerUrl = url; break;
+                    case "WritingAnswer": formTest.WritingAnswerUrl = url; break;
+                    case "SpeakingAnswer": formTest.SpeakingAnswerUrl = url; break;
                 }
             }
             else

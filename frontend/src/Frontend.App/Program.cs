@@ -19,7 +19,12 @@ builder.Services.AddScoped(_ =>
 
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<ExamSessionService>();
-builder.Services.AddScoped<ExamSubmissionService>();
+builder.Services.AddScoped(sp => 
+{
+    var httpClient = new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    return new ExamSubmissionService(localStorage, httpClient);
+});
 builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
 builder.Services.AddScoped(sp => 

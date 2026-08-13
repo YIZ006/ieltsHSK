@@ -9,6 +9,7 @@
 @inject AnswerKeyService answerKeyService
 @inject IJSRuntime JS
 @inject ExamSessionService ExamSession
+@inject ExamSubmissionService SubmissionService
 @inject NavigationManager Navigation
 @implements IDisposable
 
@@ -29,6 +30,31 @@ else if (exam == null)
         <p>Vui lòng thử lại hoặc chọn đề khác.</p>
     </div>
 }
+<PageTitle>@(exam?.Title ?? "IELTS Listening") - IeltsHSK</PageTitle>
+
+@if (isLoading)
+{
+    <div class="reading-loading">
+        <div class="loading-ring"></div>
+        <p>Đang tải đề thi...</p>
+    </div>
+}
+else if (exam == null)
+{
+    <div class="reading-error">
+        <div class="error-icon">📭</div>
+        <h3>Không tải được đề thi</h3>
+        <p>Vui lòng thử lại hoặc chọn đề khác.</p>
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(_statusMessage))
+{
+    <div class="reading-error">
+        <div class="error-icon">⚠️</div>
+        <h3>Không thể chấm bài</h3>
+        <p>@_statusMessage</p>
+    </div>
+}
 else
 {
     var activePart = exam.Parts[activePartIndex];
@@ -36,25 +62,28 @@ else
     int qEnd   = qStart + activePart.QuestionGroups.Sum(g => g.Questions.Count) - 1;
 
     @* ── TOP BAR ── *@
-    <div class="reading-topbar">
-        <div class="topbar-left">
-            <span class="exam-title-short">@exam.Title</span>
-        </div>
-        <div class="topbar-center">
-            <div class="timer-box @(secondsLeft < 600 ? "timer-warning" : "")">
-                <span class="timer-icon">⏱</span>
-                <span class="timer-text">@TimerDisplay remaining</span>
+    @if (!isFinished || showReview)
+    {
+        <div class="reading-topbar">
+            <div class="topbar-left">
+                <span class="exam-title-short">@exam.Title</span>
+            </div>
+            <div class="topbar-center">
+                <div class="timer-box @(secondsLeft < 600 ? "timer-warning" : "")">
+                    <span class="timer-icon">⏱</span>
+                    <span class="timer-text">@TimerDisplay remaining</span>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <button class="btn-exit-exam" @onclick="ExitExam">Exit test</button>
+                @if (isFinished)
+                {
+                    <span class="test-session-status">@(timedOut ? "Time is up" : "Submitted")</span>
+                }
+                <button class="btn-submit-exam" @onclick="SubmitExam">Submit ➤</button>
             </div>
         </div>
-        <div class="topbar-right">
-            <button class="btn-exit-exam" @onclick="ExitExam">Exit test</button>
-            @if (isFinished)
-            {
-                <span class="test-session-status">@(timedOut ? "Time is up" : "Submitted")</span>
-            }
-            <button class="btn-submit-exam" @onclick="SubmitExam">Submit ➤</button>
-        </div>
-    </div>
+    }
 
     @* ── PART TABS ── *@
     <div class="part-tabs-bar">
@@ -235,23 +264,44 @@ else
                 <div class="result-answer-item @(qr.IsCorrect ? "correct" : qr.IsBlank ? "blank" : "wrong")">
                     <span class="ra-num">@qr.QuestionNumber</span>
                     <span class="ra-student">@(string.IsNullOrEmpty(qr.StudentAnswer) ? "—" : qr.StudentAnswer)</span>
-                    @if (!qr.IsCorrect)
+                    @if (!qr.IsCorrect && !qr.IsBlank)
                     {
                         <span class="ra-correct">✓ @qr.CorrectAnswer</span>
                     }
-                    else
+                    else if (qr.IsCorrect)
                     {
                         <span class="ra-tick">✓</span>
                     }
                 </div>
             }
         </div>
+        @if (gradingResult.DebugLines.Count > 0)
+        {
+            <div class="result-debug-log" style="margin-top: 20px; padding: 16px; background: #0f172a; color: #e2e8f0; border-radius: 14px; font-size: 0.82rem; line-height: 1.5;">
+                <div style="font-weight: 700; margin-bottom: 10px;">Debug log</div>
+                @foreach (var line in gradingResult.DebugLines)
+                {
+                    <div>@line</div>
+                }
+            </div>
+        }
+        @if (!showReview)
+        {
+            <div style="text-align: center; margin-top: 24px;">
+                <button class="nav-part-btn submit" @onclick="() => showReview = true">🔍 Xem lại bài làm</button>
+            </div>
+        }
     </div>
 }
+
 @code {
-    [Parameter] 
+    [Parameter]
     [SupplyParameterFromQuery(Name = "ExamUrl")]
     public string? QueryExamUrl { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "AnswerUrl")]
+    public string? QueryAnswerUrl { get; set; }
 
     [Parameter] 
     public string? ExamUrl { get; set; }
@@ -272,9 +322,14 @@ else
     private IDisposable? _navigationRegistration;
     private string? _sessionKey;
     private bool isFinished;
+    private bool showReview = false;
     private bool timedOut;
     private GradingResult? gradingResult;
     private string? _examUrlLoaded;
+    private string? _answerUrlLoaded;
+    private string? _statusMessage;
+
+    private const string DefaultExamUrl = "sample-data/listening-test-1.json";
 
     // Player state
     private bool isPlaying = false;
@@ -282,8 +337,6 @@ else
     private double totalDuration = 1;
 
     private double ProgressPercent => totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0;
-
-    private const string DefaultExamUrl = "sample-data/listening-test-1.json";
 
     private string TimerDisplay
     {
@@ -303,6 +356,7 @@ else
         
         string url = string.IsNullOrWhiteSpace(actualUrl) ? DefaultExamUrl : Uri.UnescapeDataString(actualUrl);
         _examUrlLoaded = url;
+        _answerUrlLoaded = string.IsNullOrWhiteSpace(QueryAnswerUrl) ? null : Uri.UnescapeDataString(QueryAnswerUrl);
         exam = await ExamService.LoadExamAsync(url);
         if (exam?.Parts?.Count > 0)
             activeQuestionId = exam.Parts[0].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
@@ -453,11 +507,22 @@ else
         // Grade the exam
         if (!string.IsNullOrEmpty(_examUrlLoaded))
         {
-            var answerKey = await answerKeyService.LoadFromExamUrlAsync(_examUrlLoaded);
+            Console.WriteLine($"[Listening] ExamUrl={_examUrlLoaded}");
+            Console.WriteLine($"[Listening] AnswerUrl={_answerUrlLoaded ?? "(fallback from exam url)"}");
+            var answerKey = !string.IsNullOrWhiteSpace(_answerUrlLoaded)
+                ? await answerKeyService.LoadAsync(_answerUrlLoaded)
+                : await answerKeyService.LoadFromExamUrlAsync(_examUrlLoaded);
             if (answerKey != null)
             {
                 var studentAnswers = CollectStudentAnswers();
                 gradingResult = AnswerKeyService.Grade(answerKey, studentAnswers);
+
+                // Save to DB
+                await SubmissionService.SaveToDbAsync("Listening", _examUrlLoaded, _sessionKey ?? "", gradingResult.BandScore, gradingResult.CorrectCount, gradingResult.TotalCount);
+            }
+            else
+            {
+                _statusMessage = "Không tải được file đáp án Listening. Hãy kiểm tra link AnswerUrl trong admin.";
             }
         }
 

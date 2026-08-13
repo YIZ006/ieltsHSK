@@ -25,6 +25,8 @@ public sealed class GradingResult
     public int CorrectCount { get; set; }
     public int TotalCount { get; set; }
     public double BandScore { get; set; }
+    public List<string> DebugLines { get; set; } = new();
+    public string? SourceUrl { get; set; }
 }
 
 /// <summary>
@@ -40,17 +42,25 @@ public sealed class AnswerKeyService
     public async Task<ExamAnswerKey?> LoadAsync(string answerUrl)
     {
         if (string.IsNullOrWhiteSpace(answerUrl)) return null;
+        answerUrl = NormalizeUrl(answerUrl);
         if (_cache.TryGetValue(answerUrl, out var cached)) return cached;
 
         try
         {
-            var key = await _http.GetFromJsonAsync<ExamAnswerKey>(answerUrl);
+            using var response = await _http.GetAsync(answerUrl);
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[AnswerKeyService] Failed to load answer key from {answerUrl} - HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+                return null;
+            }
+
+            var key = await response.Content.ReadFromJsonAsync<ExamAnswerKey>();
             if (key != null) _cache[answerUrl] = key;
             return key;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[AnswerKeyService] Không thể tải đáp án: {ex.Message}");
+            Console.WriteLine($"[AnswerKeyService] Không thể tải đáp án từ {answerUrl}: {ex.Message}");
             return null;
         }
     }
@@ -61,7 +71,7 @@ public sealed class AnswerKeyService
     /// </summary>
     public Task<ExamAnswerKey?> LoadFromExamUrlAsync(string examUrl)
     {
-        var answerUrl = examUrl.Replace(".json", ".answers.json", StringComparison.OrdinalIgnoreCase);
+        var answerUrl = NormalizeUrl(examUrl.Replace(".json", ".answers.json", StringComparison.OrdinalIgnoreCase));
         return LoadAsync(answerUrl);
     }
 
@@ -72,7 +82,11 @@ public sealed class AnswerKeyService
     public static GradingResult Grade(ExamAnswerKey answerKey, Dictionary<int, string> studentAnswers)
     {
         var results = new Dictionary<int, QuestionResult>();
+        var debugLines = new List<string>();
         int correct = 0;
+
+        debugLines.Add($"Grading '{answerKey.Title}' with {answerKey.Answers.Count} answer entries.");
+        Console.WriteLine($"[AnswerKeyService] {debugLines[^1]}");
 
         foreach (var (qNumStr, acceptedAnswers) in answerKey.Answers)
         {
@@ -80,8 +94,9 @@ public sealed class AnswerKeyService
             studentAnswers.TryGetValue(qNum, out string? student);
             student = (student ?? "").Trim();
 
+            var normalizedStudent = NormalizeAnswer(student);
             bool isCorrect = acceptedAnswers.Any(a =>
-                string.Equals(a.Trim(), student, StringComparison.OrdinalIgnoreCase));
+                string.Equals(NormalizeAnswer(a), normalizedStudent, StringComparison.OrdinalIgnoreCase));
 
             results[qNum] = new QuestionResult
             {
@@ -94,15 +109,53 @@ public sealed class AnswerKeyService
             };
 
             if (isCorrect) correct++;
+
+            var verdict = results[qNum].IsBlank ? "BLANK" : (isCorrect ? "CORRECT" : "WRONG");
+            var line = $"Q{qNum}: {verdict} | student='{student}' | correct='{results[qNum].CorrectAnswer}' | accepted=[{string.Join(", ", acceptedAnswers)}]";
+            debugLines.Add(line);
+            Console.WriteLine($"[AnswerKeyService] {line}");
         }
+
+        var missingQuestions = studentAnswers.Keys.Where(q => !results.ContainsKey(q)).OrderBy(q => q).ToList();
+        if (missingQuestions.Count > 0)
+        {
+            var line = $"Student answered {missingQuestions.Count} question(s) not present in answer key: {string.Join(", ", missingQuestions)}";
+            debugLines.Add(line);
+            Console.WriteLine($"[AnswerKeyService] {line}");
+        }
+
+        debugLines.Add($"Result: {correct}/{results.Count} correct.");
+        Console.WriteLine($"[AnswerKeyService] {debugLines[^1]}");
 
         return new GradingResult
         {
             Questions = results,
             CorrectCount = correct,
             TotalCount = results.Count,
-            BandScore = CalcBandScore(correct, results.Count)
+            BandScore = CalcBandScore(correct, results.Count),
+            DebugLines = debugLines,
+            SourceUrl = answerKey.Title
         };
+    }
+
+    private static string NormalizeAnswer(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "";
+        var cleaned = value.Trim().Trim('.', ',', ';', ':');
+        cleaned = cleaned.Replace("\r", " ").Replace("\n", " ").Replace("\t", " ");
+        cleaned = string.Join(' ', cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        return cleaned;
+    }
+
+    private static string NormalizeUrl(string url)
+    {
+        url = url.Trim();
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return uri.AbsoluteUri;
+        }
+
+        return url.Replace(" ", "%20");
     }
 
     private static double CalcBandScore(int correct, int total)

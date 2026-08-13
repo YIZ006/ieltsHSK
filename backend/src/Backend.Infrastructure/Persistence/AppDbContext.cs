@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<LearningSection> LearningSections { get; set; }
     public DbSet<Exam> Exams { get; set; }
     public DbSet<MockTest> MockTests { get; set; }
+    public DbSet<TestSubmission> TestSubmissions { get; set; }
     
     // LMS Block
     public DbSet<Course> Courses { get; set; }
