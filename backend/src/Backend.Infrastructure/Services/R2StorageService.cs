@@ -27,8 +27,7 @@ public class R2StorageService : IR2StorageService
         {
             ServiceURL = endpoint,
             AuthenticationRegion = "auto",
-            // Bypass SSL check for local dev if needed. Cloudflare R2 usually requires proper SSL though.
-            // UseHttp = true might be needed if endpoint is http.
+            ForcePathStyle = true // Bắt buộc đối với Cloudflare R2 để URL không bị sai định dạng
         };
 
         using var client = new AmazonS3Client(accessKey, secretKey, config);

@@ -1,0 +1,121 @@
+@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+
+<div class="admin-layout">
+    <!-- Top Horizontal Navbar -->
+    <header class="admin-topbar">
+        <div class="topbar-logo" @onclick='() => NavigationManager.NavigateTo("/admin")'>
+            <span class="logo-icon">⚙️</span>
+            <span class="logo-text">Admin Dashboard</span>
+        </div>
+        <nav class="topbar-nav">
+            <button class="nav-tab @(activeDomain == "IELTS" ? "active" : "")" @onclick='() => SwitchDomain("IELTS")'>
+                <span class="tab-icon">🇬🇧</span> IELTS
+            </button>
+            <button class="nav-tab @(activeDomain == "HSK" ? "active" : "")" @onclick='() => SwitchDomain("HSK")'>
+                <span class="tab-icon">🇨🇳</span> HSK
+            </button>
+        </nav>
+        <div class="topbar-user">
+            <span class="user-avatar">A</span>
+            <span class="user-name">Quản trị viên</span>
+        </div>
+    </header>
+
+    <div class="admin-body">
+        <!-- Left Vertical Sidebar -->
+        <aside class="admin-sidebar">
+            <div class="sidebar-header">
+                <h3>Quản lý @activeDomain</h3>
+            </div>
+            <ul class="sidebar-menu">
+                @if (activeDomain == "IELTS")
+                {
+                    <li class="menu-item @(IsActive("/admin/mock-tests") ? "active" : "")">
+                        <a href="/admin/mock-tests">
+                            <i class="bi bi-journal-text"></i> Quản lý đề thi (Mock Tests)
+                        </a>
+                    </li>
+                    <li class="menu-item">
+                        <a href="/admin/ielts-users" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
+                            <i class="bi bi-people"></i> Quản lý học viên
+                        </a>
+                    </li>
+                    <li class="menu-item">
+                        <a href="/admin/ielts-reports" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
+                            <i class="bi bi-bar-chart"></i> Thống kê điểm số
+                        </a>
+                    </li>
+                }
+                else if (activeDomain == "HSK")
+                {
+                    <li class="menu-item">
+                        <a href="/admin/hsk-mock-tests" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
+                            <i class="bi bi-journal-text"></i> Quản lý đề thi HSK
+                        </a>
+                    </li>
+                    <li class="menu-item">
+                        <a href="/admin/hsk-vocab" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
+                            <i class="bi bi-translate"></i> Quản lý từ vựng
+                        </a>
+                    </li>
+                }
+            </ul>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="admin-content">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    private string activeDomain = "IELTS";
+    private string currentUrl = "";
+
+    protected override void OnInitialized()
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        NavigationManager.LocationChanged += OnLocationChanged;
+        
+        // Auto-detect domain based on URL
+        if (currentUrl.Contains("hsk-", StringComparison.OrdinalIgnoreCase))
+        {
+            activeDomain = "HSK";
+        }
+        else
+        {
+            activeDomain = "IELTS";
+        }
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        StateHasChanged();
+    }
+
+    private void SwitchDomain(string domain)
+    {
+        activeDomain = domain;
+        if (domain == "IELTS")
+        {
+            NavigationManager.NavigateTo("/admin/mock-tests");
+        }
+        else
+        {
+            NavigationManager.NavigateTo("/admin");
+        }
+    }
+
+    private bool IsActive(string path)
+    {
+        return $"/{currentUrl}".StartsWith(path, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}
