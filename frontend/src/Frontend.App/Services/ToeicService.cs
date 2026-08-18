@@ -1,10 +1,10 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using Frontend.App.Models;
 
 namespace Frontend.App.Services;
 
 /// <summary>
-/// Service fetch ─æß╗ü thi TOEIC tß╗½ Cloudflare R2 hoß║╖c sample-data
+/// Service fetch đề thi TOEIC từ Cloudflare R2 hoặc sample-data
 /// </summary>
 public class ToeicService
 {
@@ -17,8 +17,8 @@ public class ToeicService
     }
 
     /// <summary>
-    /// Load ─æß╗ü thi TOEIC tß╗½ URL (Cloudflare R2 hoß║╖c sample-data)
-    /// V├¡ dß╗Ñ: "sample-data/toeic-test-1.json"
+    /// Load đề thi TOEIC từ URL (Cloudflare R2 hoặc sample-data)
+    /// Ví dụ: "sample-data/toeic-test-1.json"
     /// </summary>
     public async Task<ToeicExamData?> LoadExamAsync(string dataUrl)
     {
@@ -34,7 +34,7 @@ public class ToeicService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ToeicService] Lß╗ùi load ─æß╗ü: {ex.Message}");
+            Console.WriteLine($"[ToeicService] Lỗi load đề: {ex.Message}");
             throw; // Let ToeicTest catch it
         }
     }

@@ -1,4 +1,4 @@
-﻿window.toeicAudio = (() => {
+window.toeicAudio = (() => {
     let player;
 
     const stop = () => {
