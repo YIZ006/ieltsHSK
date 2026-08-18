@@ -33,7 +33,7 @@ public class ToeicBuilderService
     }
 
     /// <summary>Serialize exam data to JSON, upload to R2, save URL to DB. Returns R2 URL.</summary>
-    public async Task<string?> SaveExamAsync(string collectionName, string title, object examData)
+    public async Task<string?> SaveExamAsync(string collectionName, string title, object examData, int? mockTestId = null)
     {
         try
         {
@@ -41,7 +41,7 @@ public class ToeicBuilderService
             {
                 CollectionName = collectionName,
                 Title = title,
-                MockTestId = (int?)null,
+                MockTestId = mockTestId,
                 ExamData = examData
             };
 
