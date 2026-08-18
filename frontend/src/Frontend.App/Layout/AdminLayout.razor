@@ -52,6 +52,11 @@
                 }
                 else if (activeDomain == "TOEIC")
                 {
+                    <li class="menu-item @(IsActive("/admin/toeic-mock-tests") ? "active" : "")">
+                        <a href="/admin/toeic-mock-tests">
+                            <i class="bi bi-journal-text"></i> Quản lý đề thi TOEIC
+                        </a>
+                    </li>
                     <li class="menu-item @(IsActive("/admin/toeic-builder") ? "active" : "")">
                         <a href="/admin/toeic-builder">
                             <i class="bi bi-pencil-square"></i> Tạo & Sửa đề TOEIC
@@ -118,7 +123,7 @@
         if (domain == "IELTS")
             NavigationManager.NavigateTo("/admin/mock-tests");
         else if (domain == "TOEIC")
-            NavigationManager.NavigateTo("/admin/toeic-builder");
+            NavigationManager.NavigateTo("/admin/toeic-mock-tests");
         else
             NavigationManager.NavigateTo("/admin");
     }

@@ -1,0 +1,92 @@
+@page "/admin/toeic-mock-tests"
+@layout AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject MockTestService MockTestService
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+
+<PageTitle>Quản lý Đề thi TOEIC - Admin</PageTitle>
+
+<div class="admin-container">
+    <div class="admin-header">
+        <h1>Quản lý đề thi TOEIC (Mock Tests)</h1>
+        <button class="btn-create" @onclick='() => NavManager.NavigateTo("/admin/toeic-builder")'>+ Thêm Đề Mới</button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-state">Đang tải danh sách đề thi...</div>
+    }
+    else
+    {
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Bộ Đề</th>
+                        <th>Tên Bài Thi</th>
+                        <th>File Đề (JSON)</th>
+                        <th>Hành động</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in tests)
+                    {
+                        <tr>
+                            <td>@t.Id</td>
+                            <td>@t.CollectionName</td>
+                            <td>@t.Title</td>
+                            <td>@(string.IsNullOrEmpty(t.ToeicUrl) ? "❌" : "✅")</td>
+                            <td>
+                                <button class="btn-sm btn-edit" @onclick="() => EditTest(t.Id)">Sửa</button>
+                                <button class="btn-sm btn-delete" @onclick="() => DeleteTest(t.Id, t.Title)">Xóa</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<MockTestDto> tests = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTests();
+    }
+
+    private async Task LoadTests()
+    {
+        isLoading = true;
+        var allTests = await MockTestService.GetMockTestsAsync();
+        tests = allTests.Where(t => !string.IsNullOrEmpty(t.ToeicUrl)).ToList();
+        isLoading = false;
+    }
+
+    private void EditTest(int id)
+    {
+        NavManager.NavigateTo($"/admin/toeic-builder?editId={id}");
+    }
+
+    private async Task DeleteTest(int id, string title)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"Bạn có chắc chắn muốn xóa bài thi '{title}' không?");
+        if (confirmed)
+        {
+            var success = await MockTestService.DeleteMockTestAsync(id);
+            if (success)
+            {
+                await LoadTests();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Lỗi: Không thể xóa bài thi này.");
+            }
+        }
+    }
+}

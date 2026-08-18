@@ -9,7 +9,7 @@
 
 <div class="admin-container">
     <div class="admin-header">
-        <h1>Quản lý đề thi (Mock Tests)</h1>
+        <h1>Quản lý đề thi IELTS (Mock Tests)</h1>
         <button class="btn-create" @onclick="() => OpenForm(null)">+ Thêm Đề Mới</button>
     </div>
 
@@ -202,7 +202,8 @@
     private async Task LoadTests()
     {
         isLoading = true;
-        tests = await MockTestService.GetMockTestsAsync();
+        var allTests = await MockTestService.GetMockTestsAsync();
+        tests = allTests.Where(t => string.IsNullOrEmpty(t.ToeicUrl)).ToList();
         isLoading = false;
     }
 

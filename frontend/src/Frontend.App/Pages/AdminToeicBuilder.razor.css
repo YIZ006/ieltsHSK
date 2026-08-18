@@ -2,21 +2,21 @@
    TOEIC ADMIN BUILDER  ·  Dark Premium Theme
 ═══════════════════════════════════════════ */
 
-:root {
-    --bg-root:    #0e0f13;
-    --bg-side:    #13141a;
-    --bg-card:    #1a1b24;
-    --bg-nested:  #20212d;
-    --bg-input:   #111218;
-    --border:     #2c2d3f;
-    --accent:     #6c63ff;
-    --accent-dim: #4a43cc;
-    --green:      #22c55e;
-    --red:        #ef4444;
+.builder-root {
+    --bg-root:    var(--ig-bg);
+    --bg-side:    var(--ig-card-bg);
+    --bg-card:    var(--ig-card-bg);
+    --bg-nested:  var(--ig-bg);
+    --bg-input:   #ffffff;
+    --border:     var(--ig-border);
+    --accent:     var(--ig-primary);
+    --accent-dim: rgba(0, 149, 246, 0.7);
+    --green:      var(--ig-success, #22c55e);
+    --red:        var(--ig-danger, #ef4444);
     --yellow:     #f59e0b;
-    --text-1:     #f1f1f5;
-    --text-2:     #9899b0;
-    --text-3:     #5a5b72;
+    --text-1:     var(--ig-text);
+    --text-2:     var(--ig-text-secondary);
+    --text-3:     #6c757d;
     --radius:     12px;
     --radius-sm:  8px;
 }
@@ -620,110 +620,22 @@
 }
 
 /* ─── Builder polish ─── */
-.builder-root {
-    background:
-        radial-gradient(circle at 85% 0%, rgba(108, 99, 255, 0.16), transparent 26rem),
-        radial-gradient(circle at 25% 100%, rgba(34, 197, 94, 0.07), transparent 24rem),
-        var(--bg-root);
-}
-
-.builder-sidebar {
-    background: rgba(19, 20, 26, 0.92);
-    backdrop-filter: blur(18px);
-    box-shadow: 12px 0 35px rgba(0, 0, 0, 0.12);
-}
-
-.sidebar-logo {
-    font-size: 1.05rem;
-    letter-spacing: 0.02em;
-}
-
-.step-item {
-    position: relative;
-    min-height: 42px;
-}
-
-.step-item.active {
-    box-shadow: inset 0 0 0 1px rgba(135, 128, 255, 0.22), 0 7px 18px rgba(0, 0, 0, 0.12);
-}
-
-.step-item.active::before {
-    content: '';
-    position: absolute;
-    left: -12px;
-    width: 3px;
-    height: 22px;
-    border-radius: 0 6px 6px 0;
-    background: var(--accent);
-}
-
-.builder-main {
-    width: min(100%, 1120px);
-    max-width: none;
-    padding: 44px clamp(24px, 4vw, 64px) 64px;
-    margin: 0 auto;
-}
-
-.builder-section { gap: 24px; }
-
-.section-header {
-    padding: 24px 26px;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 18px;
-    background: linear-gradient(120deg, rgba(108, 99, 255, 0.17), rgba(26, 27, 36, 0.86) 55%);
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
-}
-
+.builder-root { background: var(--bg-root); }
+.builder-sidebar { background: var(--bg-side); box-shadow: 2px 0 15px rgba(0,0,0,0.05); }
+.section-header { padding: 24px 26px; border: 1px solid var(--border); border-radius: 18px; background: var(--bg-card); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
 .section-header h2 { font-size: clamp(1.3rem, 2vw, 1.65rem); }
 .section-header p { max-width: 720px; line-height: 1.6; }
-
-.q-card, .passage-card, .summary-card {
-    border-color: rgba(255, 255, 255, 0.08);
-    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.14);
-}
-
-.q-card:hover, .passage-card:hover {
-    border-color: rgba(135, 128, 255, 0.34);
-}
-
-.q-card-header, .passage-card-header {
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.form-input {
-    min-height: 42px;
-    border-color: rgba(255, 255, 255, 0.1);
-    background: rgba(8, 9, 14, 0.58);
-}
-
-.form-input:focus {
-    box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.18);
-}
-
-.link-input-group, .opts-detail, .expl-section {
-    border-color: rgba(255, 255, 255, 0.09);
-}
-
+.q-card, .passage-card, .summary-card { border-color: var(--border); box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+.q-card:hover, .passage-card:hover { border-color: var(--accent); }
+.q-card-header, .passage-card-header { padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.form-input { min-height: 42px; border-color: var(--border); background: var(--bg-input); }
+.form-input:focus { box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.18); }
+.link-input-group, .opts-detail, .expl-section { border-color: var(--border); }
 .option-row { padding: 10px 12px; }
 .option-row:focus-within { border-color: rgba(135, 128, 255, 0.7); }
-
-.step-footer, .section-footer, .submit-actions {
-    position: sticky;
-    bottom: 0;
-    z-index: 5;
-    padding: 16px 0;
-    background: linear-gradient(to top, var(--bg-root) 72%, transparent);
-}
-
-.btn-prev, .btn-next, .btn-submit, .btn-autofill, .btn-add-group {
-    min-height: 42px;
-}
-
-.btn-next, .btn-autofill {
-    box-shadow: 0 8px 18px rgba(108, 99, 255, 0.24);
-}
-
+.step-footer, .section-footer, .submit-actions { position: sticky; bottom: 0; z-index: 5; padding: 16px 0; background: linear-gradient(to top, var(--bg-root) 72%, transparent); }
+.btn-prev, .btn-next, .btn-submit, .btn-autofill, .btn-add-group { min-height: 42px; }
+.btn-next, .btn-autofill { box-shadow: 0 8px 18px rgba(108, 99, 255, 0.24); }
 .btn-next:hover, .btn-autofill:hover { transform: translateY(-1px); }
 
 @media (max-width: 760px) {
@@ -748,3 +660,67 @@
     from { opacity: 0; transform: translateY(-6px); }
     to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ─── EXAM LIST OVERLAY ─── */
+.exam-list-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+}
+.exam-list-panel {
+    background: var(--ig-bg);
+    border: 1px solid var(--ig-border);
+    border-radius: 12px;
+    width: 600px;
+    max-width: 90%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    overflow: hidden;
+}
+.exam-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--ig-border);
+    background: rgba(255,255,255,0.02);
+}
+.exam-list-header h2 { margin: 0; font-size: 1.2rem; }
+.btn-close-list { background: none; border: none; font-size: 1.5rem; color: var(--ig-text-secondary); cursor: pointer; }
+.btn-close-list:hover { color: var(--ig-danger); }
+.exam-list-loading, .exam-list-empty { padding: 2rem; text-align: center; color: var(--ig-text-secondary); }
+.exam-table { width: 100%; border-collapse: collapse; }
+.exam-table th, .exam-table td { padding: 1rem 1.5rem; text-align: left; border-bottom: 1px solid var(--ig-border); }
+.exam-table th { background: rgba(255,255,255,0.02); font-weight: 600; color: var(--ig-text-secondary); }
+.exam-table tr:hover td { background: rgba(255,255,255,0.02); }
+.btn-edit-exam { background: transparent; border: 1px solid var(--ig-primary); color: var(--ig-primary); padding: 0.3rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.9em; transition: 0.2s; }
+.btn-edit-exam:hover { background: var(--ig-primary); color: #fff; }
+
+.toeic-builder-topbar {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    padding: 1rem;
+    background: var(--ig-card-bg);
+    border: 1px solid var(--ig-border);
+    border-radius: 12px;
+    margin-bottom: 1rem;
+}
+.btn-show-list { background: var(--ig-primary); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 600; }
+.btn-show-list:hover { opacity: 0.9; }
+.d-none { display: none; }
+.btn-fast-import { background: transparent; border: 1px solid var(--green); color: var(--green); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+.btn-fast-import:hover { background: var(--green); color: #fff; }
+.btn-fill-json { background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+.btn-fill-json:hover { background: var(--accent); color: #fff; }
+.editing-badge { background: rgba(234, 179, 8, 0.15); color: #eab308; padding: 0.4rem 1rem; border-radius: 99px; font-weight: 600; font-size: 0.9em; border: 1px solid rgba(234, 179, 8, 0.3); }
+.btn-new-exam { background: transparent; border: 1px solid var(--ig-border); color: var(--ig-text-secondary); padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.9em; }
+.btn-new-exam:hover { border-color: var(--ig-primary); color: var(--ig-primary); }
+

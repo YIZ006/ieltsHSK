@@ -39,6 +39,12 @@ public class MockTestService
         return response.IsSuccessStatusCode;
     }
 
+    public async Task<bool> DeleteMockTestAsync(int id)
+    {
+        var response = await _http.DeleteAsync($"api/mock-tests/{id}");
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task<string?> UploadFileAsync(IBrowserFile file)
     {
         using var content = new MultipartFormDataContent();
