@@ -1,0 +1,854 @@
+﻿@page "/toeic/test"
+@page "/toeic/test/{*ExamUrl}"
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject ToeicService ToeicService
+@inject MockTestService MockTestService
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>@(exam?.Title ?? "TOEIC Test 1 - 2026") - Hß╗å THß╗ÉNG THI TRß╗░C TUYß║╛N</PageTitle>
+
+@if (isLoading)
+{
+    <div class="toeic-loading">
+        <div class="toeic-loading-inner">
+            <div class="loading-spinner"></div>
+            <p>─Éang tß║úi...</p>
+        </div>
+    </div>
+}
+else if (showTestList)
+{
+    <div class="toeic-test-list-container">
+        <div class="header-logo" style="justify-content: center; margin-top: 2rem; margin-bottom: 2rem;">
+            <span class="logo-icon">≡ƒÄô</span>
+            <span class="header-title" style="font-size: 2rem;">Hß╗å THß╗ÉNG THI TRß╗░C TUYß║╛N</span>
+        </div>
+        <h2 style="text-align: center; color: white; margin-bottom: 2rem;">Danh s├ích ─æß╗ü thi TOEIC (@availableTests?.Count ─æß╗ü)</h2>
+        
+        @if (availableTests == null || !availableTests.Any())
+        {
+            <p style="text-align:center; color: #aaa;">Ch╞░a c├│ ─æß╗ü thi n├áo.</p>
+        }
+        else
+        {
+            <div class="test-grid">
+                @foreach (var t in availableTests)
+                {
+                    <div class="test-card" @onclick="() => GoToTest(t.ListeningUrl)">
+                        <div class="test-collection">@t.CollectionName</div>
+                        <div class="test-title">@t.Title</div>
+                        <button class="btn-start">L├ám b├ái ΓåÆ</button>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+else if (exam == null)
+{
+    <div class="toeic-error">
+        <div class="error-icon">≡ƒô¡</div>
+        <h3>Kh├┤ng tß║úi ─æ╞░ß╗úc ─æß╗ü thi</h3>
+        <p>Vui l├▓ng thß╗¡ lß║íi hoß║╖c chß╗ìn ─æß╗ü kh├íc.</p>
+        <p style="color: gray; font-size: 0.8rem;">URL: @ExamUrl</p>
+        <p style="color: gray; font-size: 0.8rem;">Decoded: @Uri.UnescapeDataString(ExamUrl ?? "")</p>
+        @if (!string.IsNullOrEmpty(loadError))
+        {
+            <div style="margin-top: 1rem; padding: 1rem; background: #331111; color: #ff8888; text-align: left; border-radius: 6px; font-family: monospace;">
+                @loadError
+            </div>
+        }
+    </div>
+}
+else
+{
+    var activePart = exam.Parts[activePartIndex];
+    var pageGroup = CurrentPageGroup;
+    int totalAnswered = exam.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count(q => q.SelectedOptionId.HasValue)));
+
+    @* ΓöÇΓöÇ TOP HEADER ΓöÇΓöÇ *@
+    <header class="toeic-header">
+        <div class="header-left">
+            <div class="header-logo">
+                <span class="logo-icon">≡ƒÄô</span>
+                <span class="header-title">Hß╗å THß╗ÉNG THI TRß╗░C TUYß║╛N</span>
+            </div>
+        </div>
+        <div class="header-center">
+            <button class="btn-nopbai" @onclick="SubmitExam">
+                <span class="btn-nopbai-text">Nß╗ÿP B├ÇI</span>
+            </button>
+        </div>
+        <div class="header-right">
+            <div class="timer-display @(secondsLeft < 600 ? "timer-urgent" : secondsLeft < 1800 ? "timer-warning" : "")">
+                <span class="timer-val">@TimerDisplay</span>
+            </div>
+            <div class="user-info">
+                <span class="user-name">Guest (kh├ích)</span>
+            </div>
+            <button class="grid-btn" title="─Éiß╗üu h╞░ß╗¢ng c├óu hß╗Åi" @onclick="ToggleQuickNav">
+                <div class="grid-icon">
+                    <span></span><span></span><span></span>
+                    <span></span><span></span><span></span>
+                    <span></span><span></span><span></span>
+                </div>
+            </button>
+        </div>
+    </header>
+
+    @* ΓöÇΓöÇ PART TABS ΓöÇΓöÇ *@
+    <nav class="part-nav-bar">
+        @for (int i = 0; i < exam.Parts.Count; i++)
+        {
+            var idx  = i;
+            var part = exam.Parts[i];
+            int partAnswered = part.QuestionGroups.Sum(g => g.Questions.Count(q => q.SelectedOptionId.HasValue));
+            int partTotal    = part.QuestionGroups.Sum(g => g.Questions.Count);
+            <button class="part-tab @(activePartIndex == idx ? "active" : "")"
+                    id="part-tab-@idx"
+                    @onclick="() => SwitchPart(idx)">
+                <span class="part-tab-label">PART @part.PartNumber</span>
+                <span class="part-tab-count @(partAnswered == partTotal && partTotal > 0 ? "all-done" : "")">@partAnswered/@partTotal</span>
+            </button>
+        }
+        <div class="part-tab-spacer"></div>
+        <div class="total-score-badge">
+            <span class="score-num">@totalAnswered</span>
+            <span class="score-sep">/</span>
+            <span class="score-total">@exam.TotalQuestions</span>
+        </div>
+    </nav>
+
+    @* ΓöÇΓöÇ PART HEADER ΓöÇΓöÇ *@
+    <div class="part-section-header">
+        <div class="part-section-label">
+            <span class="part-badge">PART @activePart.PartNumber</span>
+            <span class="part-name-text">@activePart.PartName</span>
+            @if (activePart.HasListening)
+            {
+                <span class="listening-badge">≡ƒÄº Listening</span>
+            }
+        </div>
+        <div class="part-score-badge">
+            <span>@exam.Parts.Take(activePartIndex).Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count)) + 1</span>
+            <span class="score-range-sep">ΓÇô</span>
+            <span>@(exam.Parts.Take(activePartIndex + 1).Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count)))</span>
+        </div>
+    </div>
+
+    @* ΓöÇΓöÇ INSTRUCTIONS ΓöÇΓöÇ *@
+    @if (!string.IsNullOrWhiteSpace(activePart.Instructions))
+    {
+        <div class="part-instructions">
+            <button class="instructions-toggle" @onclick="() => showInstructions = !showInstructions">
+                <span>≡ƒôï H╞░ß╗¢ng dß║½n</span>
+                <span class="toggle-arrow">@(showInstructions ? "Γû▓" : "Γû╝")</span>
+            </button>
+            @if (showInstructions)
+            {
+                <div class="instructions-text">@activePart.Instructions</div>
+            }
+        </div>
+    }
+
+    @* ΓöÇΓöÇ MAIN CONTENT AREA ΓöÇΓöÇ *@
+    <main class="toeic-main">
+        <div class="exam-page-toolbar" style="display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; padding:12px 16px; border:1px solid #30363d; border-radius:10px; background:#161b22; color:#8b949e; font-weight:700;">
+            <span>Trang @(activePageIndex + 1) / @PageCount</span>
+            @if (activePart.HasListening && pageGroup is not null && !string.IsNullOrWhiteSpace(pageGroup.AudioUrl))
+            {
+                <button class="audio-start-btn" style="border:0; border-radius:6px; padding:9px 16px; color:#fff; background:linear-gradient(135deg,#FF6B35,#f97316); cursor:pointer; font-weight:700;" @onclick="StartCurrentAudio">
+                    @(audioStarted ? "≡ƒöè Nghe lß║íi audio" : "Γû╢ Bß║»t ─æß║ºu nghe")
+                </button>
+            }
+        </div>
+        @if (activePart.PartNumber == 1 && activePageIndex == 0)
+        {
+            <div class="toeic-intro-block">
+                <h2 class="intro-title">LISTENING TEST</h2>
+                <p class="intro-desc">In the Listening test, you will be asked to demonstrate how well you understand spoken English. The entire Listening test will last approximately 45 minutes. There are four parts, and directions are given for each part. You must mark your answers on the separate answer sheet. Do not write your answers in your test book.</p>
+                
+                <h3 class="part-title">PART 1:</h3>
+                <p class="part-directions">Directions: For each question in this part, you will hear four statements about a picture in your test book. When you hear the statements, you must select the one statement that best describes what you see in the picture. Then find the number of the question on your answer sheet and mark your answer. The statements will not be printed in your test book and will be spoken only one time.</p>
+                
+                <div class="sample-image-box">
+                    <div class="beta-badge">BETA</div>
+                    <img src="https://ui-avatars.com/api/?name=Sample+Image&background=random&size=400" alt="Sample" style="width:100%; max-width:400px; filter: grayscale(100%);" />
+                </div>
+            </div>
+        }
+
+        @if (pageGroup is not null)
+        {
+            var group = pageGroup;
+            @* Part 1: H├¼nh ß║únh tr├íi, c├óu hß╗Åi phß║úi *@
+            @if (activePart.PartType == "Photographs")
+            {
+                <div class="question-group photographs-group">
+                    <div class="photo-layout">
+                        <div class="photo-left">
+                            @if (!string.IsNullOrWhiteSpace(group.ImageUrl))
+                            {
+                                <div class="photo-container">
+                                    <div class="photo-number-badge">C├óu hß╗Åi</div>
+                                    <img src="@group.ImageUrl" alt="Question photo" class="question-photo" />
+                                </div>
+                            }
+                        </div>
+                        <div class="photo-divider"></div>
+                        <div class="photo-right">
+                            @foreach (var q in CurrentPageQuestions)
+                            {
+                                <div class="toeic-question-block @(q.SelectedOptionId.HasValue ? "answered" : "") @(q.Id == activeQuestionId ? "active" : "")"
+                                     id="tq-@q.Id">
+                                    <div class="q-number-label">@q.Id.</div>
+                                    <div class="q-listening-note">≡ƒÄº Nghe v├á chß╗ìn ─æ├íp ├ín ─æ├║ng</div>
+                                    <div class="options-list">
+                                        @foreach (var opt in q.Options)
+                                        {
+                                            <button class="option-btn @(q.SelectedOptionId == opt.Id ? "selected" : "")"
+                                                    id="opt-@q.Id-@opt.Id"
+                                                    @onclick="() => SelectAnswer(q, opt.Id)">
+                                                <span class="opt-circle">@opt.Label</span>
+                                                <span class="opt-text">@opt.Text</span>
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+            @* Part 2: Chß╗ë hiß╗ân thß╗ï c├óu hß╗Åi, 3 lß╗▒a chß╗ìn *@
+            else if (activePart.PartType == "QuestionResponse")
+            {
+                <div class="question-group qr-group">
+                    @foreach (var q in CurrentPageQuestions)
+                    {
+                        <div class="toeic-question-block @(q.SelectedOptionId.HasValue ? "answered" : "") @(q.Id == activeQuestionId ? "active" : "")"
+                             id="tq-@q.Id">
+                            <div class="q-header">
+                                <span class="q-number-circle">@q.Id</span>
+                                <span class="q-text-content">≡ƒÄº @q.Text</span>
+                            </div>
+                            <div class="options-list options-horizontal">
+                                @foreach (var opt in q.Options)
+                                {
+                                    <button class="option-btn @(q.SelectedOptionId == opt.Id ? "selected" : "")"
+                                            id="opt-@q.Id-@opt.Id"
+                                            @onclick="() => SelectAnswer(q, opt.Id)">
+                                        <span class="opt-circle">@opt.Label</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            @* Part 3 & 4: Ti├¬u ─æß╗ü ─æoß║ín hß╗Öi thoß║íi + c├óu hß╗Åi *@
+            else if (activePart.PartType == "Conversations" || activePart.PartType == "Talks")
+            {
+                <div class="question-group conversation-group">
+                    @if (!string.IsNullOrWhiteSpace(group.PassageTitle))
+                    {
+                        <div class="conversation-header">
+                            <span class="conv-icon">≡ƒÄº</span>
+                            <span class="conv-title">@group.PassageTitle</span>
+                            <span class="conv-note">Nghe v├á trß║ú lß╗¥i c├óu hß╗Åi</span>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(group.ImageUrl))
+                    {
+                        <div class="conversation-image-container">
+                            <img src="@group.ImageUrl" alt="ß║ónh minh hoß║í c├óu hß╗Åi" class="conversation-image" />
+                        </div>
+                    }
+                    @if (showAnswers && !string.IsNullOrWhiteSpace(group.Transcript))
+                    {
+                        <section class="conversation-transcript">
+                            <h3>≡ƒô¥ Nß╗Öi dung audio</h3>
+                            <div>@group.Transcript</div>
+                        </section>
+                    }
+                    <div class="conversation-questions">
+                        @foreach (var q in CurrentPageQuestions)
+                        {
+                            <div class="toeic-question-block @(q.SelectedOptionId.HasValue ? "answered" : "") @(q.Id == activeQuestionId ? "active" : "")"
+                                 id="tq-@q.Id">
+                                <div class="q-header">
+                                    <span class="q-number-circle">@q.Id</span>
+                                    <span class="q-text-content">@q.Text</span>
+                                </div>
+                                <div class="options-list">
+                                    @foreach (var opt in q.Options)
+                                    {
+                                        <button class="option-btn @(q.SelectedOptionId == opt.Id ? "selected" : "")"
+                                                id="opt-@q.Id-@opt.Id"
+                                                @onclick="() => SelectAnswer(q, opt.Id)">
+                                            <span class="opt-circle">@opt.Label</span>
+                                            <span class="opt-text">@opt.Text</span>
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            @* Part 5: C├óu ho├án chß╗ënh *@
+            else if (activePart.PartType == "IncompleteSentences")
+            {
+                <div class="question-group p5-group">
+                    @foreach (var q in CurrentPageQuestions)
+                    {
+                        <div class="toeic-question-block @(q.SelectedOptionId.HasValue ? "answered" : "") @(q.Id == activeQuestionId ? "active" : "")"
+                             id="tq-@q.Id">
+                            <div class="q-header">
+                                <span class="q-number-circle">@q.Id</span>
+                                <span class="q-sentence">@q.Text</span>
+                            </div>
+                            <div class="options-list options-grid-2">
+                                @foreach (var opt in q.Options)
+                                {
+                                    <button class="option-btn @(q.SelectedOptionId == opt.Id ? "selected" : "")"
+                                            id="opt-@q.Id-@opt.Id"
+                                            @onclick="() => SelectAnswer(q, opt.Id)">
+                                        <span class="opt-circle">@opt.Label</span>
+                                        <span class="opt-text">@opt.Text</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            @* Part 6: ─Éiß╗ün ─æoß║ín v─ân - Layout split *@
+            else if (activePart.PartType == "TextCompletion")
+            {
+                <div class="question-group p6-group">
+                    <div class="split-layout">
+                        <div class="split-passage" id="passage-@group.GroupId">
+                            @if (!string.IsNullOrWhiteSpace(group.ImageUrl))
+                            {
+                                <img src="@group.ImageUrl" alt="─Éoß║ín v─ân Part 6" class="passage-image" />
+                            }
+                            else if (!string.IsNullOrWhiteSpace(group.PassageTitle))
+                            {
+                                <h3 class="passage-title">@group.PassageTitle</h3>
+                            }
+                            <div class="passage-content">
+                                @((MarkupString)group.PassageHtml)
+                            </div>
+                        </div>
+                        <div class="split-divider"></div>
+                        <div class="split-questions">
+                            @foreach (var q in CurrentPageQuestions)
+                            {
+                                <div class="toeic-question-block @(q.SelectedOptionId.HasValue ? "answered" : "") @(q.Id == activeQuestionId ? "active" : "")"
+                                     id="tq-@q.Id">
+                                    <div class="q-header">
+                                        <span class="q-number-circle">@q.Id</span>
+                                        @if (!string.IsNullOrWhiteSpace(q.Text))
+                                        {
+                                            <span class="q-text-content">@q.Text</span>
+                                        }
+                                    </div>
+                                    <div class="options-list options-grid-2">
+                                        @foreach (var opt in q.Options)
+                                        {
+                                            <button class="option-btn @(q.SelectedOptionId == opt.Id ? "selected" : "")"
+                                                    id="opt-@q.Id-@opt.Id"
+                                                    @onclick="() => SelectAnswer(q, opt.Id)">
+                                                <span class="opt-circle">@opt.Label</span>
+                                                <span class="opt-text">@opt.Text</span>
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    @if (showAnswers && !string.IsNullOrWhiteSpace(group.Translation))
+                    {
+                        <section class="passage-translation">
+                            <h3>Dß╗èCH:</h3>
+                            <div>@((MarkupString)FormatTranslation(group.Translation))</div>
+                        </section>
+                    }
+                </div>
+            }
+            @* Part 7: ─Éß╗ìc hiß╗âu - Layout split *@
+            else if (activePart.PartType == "ReadingComprehension")
+            {
+                <div class="question-group p7-group">
+                    <div class="split-layout">
+                        <div class="split-passage" id="passage-@group.GroupId">
+                            @if (!string.IsNullOrWhiteSpace(group.ImageUrl))
+                            {
+                                <img src="@group.ImageUrl" alt="─Éoß║ín v─ân Part 7" class="passage-image" />
+                            }
+                            else if (!string.IsNullOrWhiteSpace(group.PassageTitle))
+                            {
+                                <h3 class="passage-title">@group.PassageTitle</h3>
+                            }
+                            <div class="passage-content">
+                                @((MarkupString)group.PassageHtml)
+                            </div>
+                        </div>
+                        <div class="split-divider"></div>
+                        <div class="split-questions">
+                            @foreach (var q in CurrentPageQuestions)
+                            {
+                                <div class="toeic-question-block @(q.SelectedOptionId.HasValue ? "answered" : "") @(q.Id == activeQuestionId ? "active" : "")"
+                                     id="tq-@q.Id">
+                                    <div class="q-header">
+                                        <span class="q-number-circle">@q.Id</span>
+                                        <span class="q-text-content">@q.Text</span>
+                                    </div>
+                                    <div class="options-list">
+                                        @foreach (var opt in q.Options)
+                                        {
+                                            <button class="option-btn @(q.SelectedOptionId == opt.Id ? "selected" : "")"
+                                                    id="opt-@q.Id-@opt.Id"
+                                                    @onclick="() => SelectAnswer(q, opt.Id)">
+                                                <span class="opt-circle">@opt.Label</span>
+                                                <span class="opt-text">@opt.Text</span>
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    @if (showAnswers && !string.IsNullOrWhiteSpace(group.Translation))
+                    {
+                        <section class="passage-translation">
+                            <h3>Dß╗èCH:</h3>
+                            <div>@((MarkupString)FormatTranslation(group.Translation))</div>
+                        </section>
+                    }
+                </div>
+            }
+        }
+
+        @* Part Navigation Buttons *@
+        <div class="part-footer-nav">
+            @if (HasPreviousPage)
+            {
+                <button class="nav-btn prev-btn" @onclick="PreviousPage">
+                    @PreviousPageLabel
+                </button>
+            }
+            <div class="nav-spacer"></div>
+            @if (HasNextPage)
+            {
+                <button class="nav-btn next-btn" @onclick="NextPage">
+                    @NextPageLabel
+                </button>
+            }
+            else
+            {
+                <button class="nav-btn submit-final-btn" @onclick="SubmitExam">
+                    Nß╗ÿP B├ÇI Γ£ô
+                </button>
+            }
+        </div>
+    </main>
+
+    @* ΓöÇΓöÇ QUICK NAV OVERLAY ΓöÇΓöÇ *@
+    @if (showQuickNav)
+    {
+        <div class="quicknav-overlay" @onclick="() => showQuickNav = false">
+            <div class="quicknav-panel" @onclick:stopPropagation="true">
+                <div class="quicknav-header">
+                    <span>─Éiß╗üu h╞░ß╗¢ng c├óu hß╗Åi</span>
+                    <button class="quicknav-close" @onclick="() => showQuickNav = false">Γ£ò</button>
+                </div>
+                <div class="quicknav-parts">
+                    @foreach (var part in exam.Parts)
+                    {
+                        var pIdx = exam.Parts.IndexOf(part);
+                        <div class="quicknav-part-section">
+                            <div class="quicknav-part-label @(activePartIndex == pIdx ? "active" : "")"
+                                 @onclick="() => { SwitchPart(pIdx); showQuickNav = false; }">
+                                Part @part.PartNumber ΓÇô @part.PartName
+                            </div>
+                            <div class="quicknav-nums">
+                                @foreach (var group in part.QuestionGroups)
+                                {
+                                    @foreach (var q in group.Questions)
+                                    {
+                                        <button class="qnav-num @(q.SelectedOptionId.HasValue ? "qnav-answered" : "") @(q.Id == activeQuestionId ? "qnav-active" : "")"
+                                                id="qnav-@q.Id"
+                                                @onclick="async () => { SwitchPart(pIdx); showQuickNav = false; await Task.Delay(100); await ScrollToQuestion(q.Id); activeQuestionId = q.Id; }">
+                                            @q.Id
+                                        </button>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="quicknav-legend">
+                    <span class="legend-item answered-legend">Γûá ─É├ú trß║ú lß╗¥i</span>
+                    <span class="legend-item unanswered-legend">Γûí Ch╞░a trß║ú lß╗¥i</span>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ΓöÇΓöÇ BOTTOM Q-NAVIGATOR BAR ΓöÇΓöÇ *@
+    <div class="bottom-qnav">
+        <div class="bottom-qnav-inner">
+            <span class="bottom-qnav-label">Part @activePart.PartNumber:</span>
+            <div class="bottom-qnav-nums">
+                @foreach (var group in activePart.QuestionGroups)
+                {
+                    @foreach (var q in group.Questions)
+                    {
+                        <button class="qnav-num @(q.SelectedOptionId.HasValue ? "qnav-answered" : "") @(q.Id == activeQuestionId ? "qnav-active" : "")"
+                                @onclick="async () => { activeQuestionId = q.Id; await ScrollToQuestion(q.Id); }">
+                            @q.Id
+                        </button>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ΓöÇΓöÇ BOTTOM BANNER ΓöÇΓöÇ *@
+    <div class="bottom-banner">
+        <span class="banner-icon">≡ƒô₧</span>
+        Khi c├│ vß║Ñn ─æß╗ü hoß║╖c thß║»c mß║»c vß╗ü b├ái test online, h├úy giß╗» nguy├¬n m├án h├¼nh v├á li├¬n hß╗ç Ms. Nga: 0961.596.734 ─æß╗â ─æ╞░ß╗úc hß╗ù trß╗ú.
+    </div>
+
+    @* ΓöÇΓöÇ RESULT MODAL ΓöÇΓöÇ *@
+    @if (showResult)
+    {
+        <div class="result-overlay">
+            <div class="result-modal">
+                <div class="result-title">≡ƒÄë Kß║╛T QUß║ó B├ÇI THI</div>
+                <div class="result-score">
+                    <span class="result-num">@totalAnswered</span>
+                    <span class="result-sep">/</span>
+                    <span class="result-total">@exam.TotalQuestions</span>
+                    <span class="result-label">c├óu ─æ├ú trß║ú lß╗¥i</span>
+                </div>
+                <div class="result-time">
+                    ΓÅ▒ Thß╗¥i gian ─æ├ú d├╣ng: @ElapsedTime
+                </div>
+                <button class="result-close-btn" @onclick="ShowAnswers">Xem ─æ├íp ├ín</button>
+                <button class="result-close-btn" @onclick="() => showResult = false">─É├│ng</button>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public string? ExamUrl { get; set; }
+
+    private ToeicExamData? exam;
+    private bool isLoading = true;
+    private int activePartIndex = 0;
+    private int activePageIndex = 0;
+    private int activeQuestionId = 0;
+    private bool audioStarted = false;
+    private bool showInstructions = false;
+    private bool showQuickNav = false;
+    private bool showResult = false;
+    private bool showAnswers = false;
+
+    // Timer: 120 ph├║t
+    private int secondsLeft = 120 * 60;
+    private System.Threading.Timer? _timer;
+
+    private const string DefaultExamUrl = "sample-data/toeic-test-1.json";
+
+    private ToeicPart ActivePart => exam!.Parts[activePartIndex];
+    private bool IsSingleQuestionPage => ActivePart.PartNumber is 1 or 2 or 5;
+    private int PageCount => IsSingleQuestionPage
+        ? ActivePart.QuestionGroups.Sum(g => g.Questions.Count)
+        : ActivePart.QuestionGroups.Count;
+    private bool HasPreviousPage => activePageIndex > 0 || activePartIndex > 0;
+    private bool HasNextPage => activePageIndex < PageCount - 1 || activePartIndex < exam!.Parts.Count - 1;
+    private string PreviousPageLabel => activePageIndex > 0
+        ? "ΓåÉ Trang tr╞░ß╗¢c"
+        : $"ΓåÉ PART {exam!.Parts[activePartIndex - 1].PartNumber}";
+    private string NextPageLabel => activePageIndex < PageCount - 1
+        ? "Trang tiß║┐p ΓåÆ"
+        : $"PART {exam!.Parts[activePartIndex + 1].PartNumber} ΓåÆ";
+
+    private ToeicQuestionGroup? CurrentPageGroup
+    {
+        get
+        {
+            if (!IsSingleQuestionPage) return ActivePart.QuestionGroups.ElementAtOrDefault(activePageIndex);
+
+            var page = activePageIndex;
+            foreach (var group in ActivePart.QuestionGroups)
+            {
+                if (page < group.Questions.Count) return group;
+                page -= group.Questions.Count;
+            }
+            return null;
+        }
+    }
+
+    private IEnumerable<ToeicQuestion> CurrentPageQuestions
+    {
+        get
+        {
+            var group = CurrentPageGroup;
+            if (group is null) return Enumerable.Empty<ToeicQuestion>();
+            if (!IsSingleQuestionPage) return group.Questions;
+
+            var page = activePageIndex;
+            foreach (var item in ActivePart.QuestionGroups)
+            {
+                if (page < item.Questions.Count) return new[] { item.Questions[page] };
+                page -= item.Questions.Count;
+            }
+            return Enumerable.Empty<ToeicQuestion>();
+        }
+    }
+
+    private string TimerDisplay
+    {
+        get
+        {
+            int h = secondsLeft / 3600;
+            int m = (secondsLeft % 3600) / 60;
+            int s = secondsLeft % 60;
+            return $"{h:D2}:{m:D2}:{s:D2}";
+        }
+    }
+
+    private string ElapsedTime
+    {
+        get
+        {
+            int elapsed = (exam?.TotalTimeSeconds ?? 7200) - secondsLeft;
+            int h = elapsed / 3600;
+            int m = (elapsed % 3600) / 60;
+            int s = elapsed % 60;
+            return $"{h:D2}:{m:D2}:{s:D2}";
+        }
+    }
+
+    private string loadError = "";
+    private List<MockTestDto>? availableTests;
+    private bool showTestList => string.IsNullOrWhiteSpace(ExamUrl);
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        loadError = "";
+        
+        try
+        {
+            if (string.IsNullOrWhiteSpace(ExamUrl))
+            {
+                availableTests = await MockTestService.GetMockTestsAsync();
+                availableTests = availableTests.Where(t => 
+                    !string.IsNullOrEmpty(t.ListeningUrl) && 
+                    t.CollectionName.Contains("TOEIC", StringComparison.OrdinalIgnoreCase)
+                ).ToList();
+            }
+            else
+            {
+                string url = ExamUrl;
+                // Try decoding Base64 first to avoid slash collapsing issues
+                try
+                {
+                    // Check if it looks like Base64 (no special chars like :, /)
+                    if (!url.Contains(":") && !url.Contains("/") && url.Length % 4 == 0)
+                    {
+                        var bytes = Convert.FromBase64String(url);
+                        url = System.Text.Encoding.UTF8.GetString(bytes);
+                    }
+                    else
+                    {
+                        url = Uri.UnescapeDataString(ExamUrl);
+                        // Fix collapsed slashes if any
+                        if (url.StartsWith("http:/") && !url.StartsWith("http://")) url = url.Replace("http:/", "http://");
+                        if (url.StartsWith("https:/") && !url.StartsWith("https://")) url = url.Replace("https:/", "https://");
+                    }
+                }
+                catch
+                {
+                    url = Uri.UnescapeDataString(ExamUrl);
+                    if (url.StartsWith("http:/") && !url.StartsWith("http://")) url = url.Replace("http:/", "http://");
+                    if (url.StartsWith("https:/") && !url.StartsWith("https://")) url = url.Replace("https:/", "https://");
+                }
+
+                // Explicitly check for empty URL
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    throw new Exception("URL ─æß╗ü thi rß╗ùng sau khi giß║úi m├ú!");
+                }
+
+                exam = await ToeicService.LoadExamAsync(url);
+
+                if (exam?.Parts?.Count > 0)
+                {
+                    secondsLeft = exam.TotalTimeSeconds;
+                    activeQuestionId = exam.Parts[0].QuestionGroups
+                        .FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
+                }
+                else if (exam == null)
+                {
+                    throw new Exception($"Kh├┤ng thß╗â tß║úi ─æß╗ü thi tß╗½ URL: {url}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            loadError = ex.ToString();
+        }
+
+        isLoading = false;
+
+        _timer = new System.Threading.Timer(_ =>
+        {
+            if (secondsLeft > 0)
+            {
+                secondsLeft--;
+                InvokeAsync(StateHasChanged);
+            }
+            else
+            {
+                _timer?.Dispose();
+                InvokeAsync(() => { showResult = true; StateHasChanged(); });
+            }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void SwitchPart(int idx)
+    {
+        activePartIndex = idx;
+        activePageIndex = 0;
+        activeQuestionId = exam!.Parts[idx].QuestionGroups
+            .FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
+        showInstructions = false;
+        _ = JS.InvokeVoidAsync("toeicAudio.stop");
+    }
+
+    private async Task StartCurrentAudio()
+    {
+        var audioUrl = CurrentPageGroup?.AudioUrl;
+        if (string.IsNullOrWhiteSpace(audioUrl)) return;
+
+        audioStarted = true;
+        await JS.InvokeVoidAsync("toeicAudio.play", audioUrl, DotNetObjectReference.Create(this));
+    }
+
+    [JSInvokable]
+    public Task OnToeicAudioEnded() => InvokeAsync(() =>
+    {
+        if (audioStarted) NextPage();
+        StateHasChanged();
+    });
+
+    private void NextPage()
+    {
+        if (activePageIndex < PageCount - 1)
+        {
+            activePageIndex++;
+            SetCurrentQuestion();
+            PlayNextAudioIfStarted();
+            return;
+        }
+
+        if (activePartIndex < exam!.Parts.Count - 1)
+        {
+            SwitchPart(activePartIndex + 1);
+            PlayNextAudioIfStarted();
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (activePageIndex > 0)
+        {
+            activePageIndex--;
+            SetCurrentQuestion();
+            PlayNextAudioIfStarted();
+            return;
+        }
+
+        if (activePartIndex > 0)
+        {
+            SwitchPart(activePartIndex - 1);
+            activePageIndex = PageCount - 1;
+            SetCurrentQuestion();
+            PlayNextAudioIfStarted();
+        }
+    }
+
+    private void SetCurrentQuestion() => activeQuestionId = CurrentPageQuestions.FirstOrDefault()?.Id ?? 0;
+
+    private void PlayNextAudioIfStarted()
+    {
+        if (audioStarted && !string.IsNullOrWhiteSpace(CurrentPageGroup?.AudioUrl))
+            _ = StartCurrentAudio();
+    }
+
+    private void SelectAnswer(ToeicQuestion q, int optId)
+    {
+        q.SelectedOptionId = q.SelectedOptionId == optId ? null : optId;
+        activeQuestionId = q.Id;
+    }
+
+    private void ToggleQuickNav() => showQuickNav = !showQuickNav;
+
+    private async Task ScrollToQuestion(int qId)
+    {
+        await Task.Delay(50);
+        try { await JS.InvokeVoidAsync("scrollToElementId", $"tq-{qId}"); }
+        catch (Exception ex) { Console.WriteLine($"[ToeicTest] JS Error: {ex.Message}"); }
+    }
+
+    private void SubmitExam()
+    {
+        _timer?.Dispose();
+        showResult = true;
+    }
+
+    private void GoToTest(string? listeningUrl)
+    {
+        if (!string.IsNullOrEmpty(listeningUrl))
+        {
+            var bytes = System.Text.Encoding.UTF8.GetBytes(listeningUrl);
+            string base64 = Convert.ToBase64String(bytes);
+            NavManager.NavigateTo($"/toeic/test/{base64}");
+        }
+    }
+
+    private void ShowAnswers()
+    {
+        showAnswers = true;
+        showResult = false;
+    }
+
+    private string FormatTranslation(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return "";
+        return input.Replace("<red>", "<span class=\"text-red\">")
+                    .Replace("</red>", "</span>")
+                    .Replace("<green>", "<span class=\"text-green\">")
+                    .Replace("</green>", "</span>")
+                    .Replace("<blue>", "<span class=\"text-blue\">")
+                    .Replace("</blue>", "</span>")
+                    .Replace("<orange>", "<span class=\"text-orange\">")
+                    .Replace("</orange>", "</span>")
+                    .Replace("<purple>", "<span class=\"text-purple\">")
+                    .Replace("</purple>", "</span>")
+                    .Replace("\n", "<br/>");
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

@@ -19,6 +19,7 @@ public class MockTest
     public string? ReadingAnswerUrl { get; set; }
     public string? WritingAnswerUrl { get; set; }
     public string? SpeakingAnswerUrl { get; set; }
+    public string? ToeicUrl { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public bool IsActive { get; set; } = true;
