@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="secret-hacker-key" content="hsk-master-2026" />
+    <title>Frontend.App</title>
+    <base href="/" />
+    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link href="Frontend.App.styles.css" rel="stylesheet" />
+</head>
+
+<body>
+    <div id="app">
+        <svg class="loading-progress">
+            <circle r="40%" cx="50%" cy="50%" />
+            <circle r="40%" cx="50%" cy="50%" />
+        </svg>
+        <div class="loading-progress-text"></div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="js/googleAuth.js"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
+    <script>
+        // Block Keyboard Shortcuts
+        document.addEventListener('keydown', function (event) {
+            // Block F12
+            if (event.keyCode === 123) {
+                event.preventDefault();
+                return false;
+            }
+            // Block Ctrl+Shift+I / Ctrl+Shift+J
+            if (event.ctrlKey && event.shiftKey && (event.keyCode === 73 || event.keyCode === 74)) {
+                event.preventDefault();
+                return false;
+            }
+            // Block Ctrl+U
+            if (event.ctrlKey && event.keyCode === 85) {
+                event.preventDefault();
+                return false;
+            }
+        });
+
+        // Block Right Click
+        document.addEventListener('contextmenu', function (event) {
+            event.preventDefault();
+        });
+
+        // Scroll to Element Helper
+        window.scrollToElementId = function (elementId) {
+            try {
+                var element = document.getElementById(elementId);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            } catch (err) {
+                console.error("Error scrolling:", err);
+            }
+        };
+
+        // Bind Listening Inputs
+        window.bindListeningInputs = function (dotNetHelper) {
+            document.querySelectorAll('.ielts-input').forEach(input => {
+                if (!input.dataset.bound) {
+                    input.dataset.bound = "true";
+                    input.addEventListener('input', function (e) {
+                        const qId = parseInt(e.target.dataset.q);
+                        const val = e.target.value;
+                        if (qId) {
+                            dotNetHelper.invokeMethodAsync('OnHtmlInputChange', qId, val);
+                        }
+                    });
+                }
+            });
+        };
+    </script>
+    <script src="js/guard.js"></script>
+    <script src="js/youtubePlayer.js"></script>
+    <script src="js/exam-session.js"></script>
+    <script src="js/speaking-interop.js"></script>
+    <script>
+        window.scrollBuilderToTop = () => {
+            const el = document.getElementById('builder-main');
+            if (el) el.scrollTop = 0;
+            else window.scrollTo(0, 0);
+        };
+    </script>
+</body>
+
+</html>

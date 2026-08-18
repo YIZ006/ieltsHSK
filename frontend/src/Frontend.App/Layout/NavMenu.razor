@@ -1,0 +1,74 @@
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+
+<nav class="navbar">
+    <div class="navbar-brand">
+        <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+            <span class="brand-text">ieltsHSK</span>
+        </NavLink>
+    </div>
+
+    <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+        <i class="bi bi-list"></i>
+    </button>
+
+    <div class="@NavMenuCssClass navbar-collapse" @onclick="ToggleNavMenu">
+        <ul class="navbar-nav me-auto">
+            <li class="nav-item">
+                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                    Home
+                </NavLink>
+            </li>
+        </ul>
+
+        <ul class="navbar-nav ms-auto auth-nav">
+            <AuthorizeView>
+                <Authorized>
+                    <li class="nav-item">
+                        <span class="nav-link welcome-text">Xin chào, @(context.User.FindFirst(c => c.Type == "unique_name")?.Value ?? context.User.Identity?.Name ?? "User")!</span>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link btn-logout" @onclick="Logout" @onclick:stopPropagation>
+                            <i class="bi bi-box-arrow-right"></i> Logout
+                        </button>
+                    </li>
+                </Authorized>
+                <NotAuthorized>
+                    <li class="nav-item">
+                        <button class="nav-link btn-auth" @onclick="() => OnShowLogin.InvokeAsync()" @onclick:stopPropagation>
+                            Login
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link btn-auth btn-register" @onclick="() => OnShowRegister.InvokeAsync()" @onclick:stopPropagation>
+                            Register
+                        </button>
+                    </li>
+                </NotAuthorized>
+            </AuthorizeView>
+        </ul>
+    </div>
+</nav>
+
+@code {
+    [Parameter]
+    public EventCallback OnShowLogin { get; set; }
+
+    [Parameter]
+    public EventCallback OnShowRegister { get; set; }
+
+    private bool collapseNavMenu = true;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+        NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: false);
+    }
+}

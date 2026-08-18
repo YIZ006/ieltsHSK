@@ -1,0 +1,919 @@
+@page "/ielts/speaking/preview"
+@page "/ielts/speaking/{ExamUrl}"
+@page "/ielts/speaking"
+@layout Frontend.App.Layout.ExamLayout
+@using Frontend.App.Models
+@using System.Net.Http.Json
+@using Microsoft.JSInterop
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject ExamSessionService ExamSession
+@inject ExamSubmissionService Submissions
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<PageTitle>@(exam?.Title ?? "IELTS Speaking") - IeltsHSK</PageTitle>
+
+@* ══════════════════════════════════════════════
+   SETUP SCREEN
+══════════════════════════════════════════════ *@
+@if (state == SpeakingState.Setup)
+{
+    <div class="sp-setup-overlay">
+        <div class="sp-setup-card">
+            <div class="sp-setup-logo">🎤</div>
+            <h1 class="sp-setup-title">IELTS Speaking Test</h1>
+            <p class="sp-setup-subtitle">Before you begin, let's make sure your microphone and speaker are working properly.</p>
+
+            @* Step 1: Mic *@
+            <div class="sp-setup-step @(micOk ? "step-ok" : micError ? "step-error" : "")">
+                <div class="sp-step-icon">@(micOk ? "✅" : micError ? "❌" : "🎙️")</div>
+                <div class="sp-step-content">
+                    <h3>Step 1 — Microphone Check</h3>
+                    @if (!micChecked)
+                    {
+                        <p>We need access to your microphone to record your answers.</p>
+                        <button class="sp-btn-primary" @onclick="RequestMic">🎙️ Allow Microphone</button>
+                    }
+                    else if (micError)
+                    {
+                        <p class="sp-error-msg">⚠️ Microphone access was denied. Please click the camera icon in your browser address bar, allow microphone, then reload.</p>
+                        <button class="sp-btn-secondary" @onclick="RequestMic">🔄 Try again</button>
+                    }
+                    else if (micOk)
+                    {
+                        @if (microphones.Count > 0)
+                        {
+                            <div class="sp-mic-device-picker">
+                                <label for="microphone-device">Microphone to test</label>
+                                <div class="sp-mic-device-actions">
+                                    <select id="microphone-device" value="@selectedMicrophoneId" @onchange="ChangeMicrophone">
+                                        @foreach (var microphone in microphones)
+                                        {
+                                            <option value="@microphone.DeviceId">@microphone.Label</option>
+                                        }
+                                    </select>
+                                    <button type="button" class="sp-btn-secondary sp-btn-sm" @onclick="RefreshMicrophones">Refresh devices</button>
+                                </div>
+                                <p class="sp-mic-device-hint">Connect a headset or USB mic, refresh this list, then select it before recording.</p>
+                            </div>
+                        }
+                        @if (!micTested && micTestUrl == null && micCountdown == 5)
+                        {
+                            <div class="sp-mic-status">
+                                <span class="sp-mic-dot"></span>
+                                <span>Microphone active — we can hear you!</span>
+                            </div>
+                            <canvas id="setup-waveform" class="sp-waveform" width="560" height="72"></canvas>
+                            <p class="sp-waveform-hint">Speak to see your voice waveform above</p>
+                            <button class="sp-btn-primary" @onclick="StartMicTest">🔴 Record a sample (5 sec)</button>
+                        }
+                        else if (micTestUrl == null)
+                        {
+                            <div class="sp-mic-status">
+                                <span class="sp-mic-dot"></span>
+                                <span>Recording... @micCountdown seconds left</span>
+                            </div>
+                            <canvas id="setup-waveform" class="sp-waveform" width="560" height="72"></canvas>
+                        }
+                        else if (!micTestDone)
+                        {
+                            <p style="margin-bottom:8px">Listen to your recording — does it sound clear?</p>
+                            <audio src="@micTestUrl" controls class="sp-playback"></audio>
+                            <div class="sp-step-actions" style="margin-top:8px">
+                                <button class="sp-btn-ok" @onclick="MicTestOk">✅ Yes, clear!</button>
+                                <button class="sp-btn-secondary" @onclick="RetryMicTest">🔄 Record again</button>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            @* Step 2: Speaker *@
+            @if (micOk && micTestDone)
+            {
+                <div class="sp-setup-step @(speakerOk ? "step-ok" : "")">
+                    <div class="sp-step-icon">@(speakerOk ? "✅" : "🔊")</div>
+                    <div class="sp-step-content">
+                        <h3>Step 2 — Speaker / Headphone Check</h3>
+                        <div class="sp-speaker-test">
+                            <span class="sp-speaker-icon">🎧</span>
+                            <div class="sp-speaker-info">
+                                <p>Click play to hear a test tone. Make sure your volume is turned up.</p>
+                            </div>
+                            <button class="sp-btn-secondary" @onclick="TestSpeaker">▶ Play</button>
+                        </div>
+                        @if (speakerPlayed && !speakerOk)
+                        {
+                            <div class="sp-step-actions" style="margin-top:12px">
+                                <button class="sp-btn-ok" @onclick="ConfirmSpeaker">✅ I can hear it</button>
+                                <button class="sp-btn-secondary" @onclick="TestSpeaker">🔄 Play again</button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @* Start button *@
+            @if (micOk && micTestDone && speakerOk)
+            {
+                <button class="sp-btn-start" @onclick="StartExam">
+                    🚀 I'm Ready — Start Speaking Test
+                </button>
+            }
+        </div>
+    </div>
+}
+
+@* ══════════════════════════════════════════════
+   EXAM SCREEN
+══════════════════════════════════════════════ *@
+@if (state != SpeakingState.Setup && exam != null)
+{
+    var part = exam.Parts[activePartIndex];
+    var question = part.Questions.ElementAtOrDefault(currentQuestionIndex);
+
+    @* TOP BAR *@
+    <div class="sp-topbar">
+        <span class="sp-exam-title">IELTS Speaking Test</span>
+        <span class="sp-session-time">@FormatTimer(sessionSecondsLeft) total</span>
+        <div class="sp-timer @GetTimerClass()">⏱ @part.PartTitle: @FormatTimer(partSecondsLeft)</div>
+        <div class="sp-topbar-actions">
+            <button class="sp-btn-next-part" @onclick="ExitExam">Exit test</button>
+            @if (isFinished)
+            {
+                <span class="sp-session-time">@(savedSubmission?.Status ?? "Submitted")</span>
+            }
+            @if (activePartIndex < exam.Parts.Count - 1 && (state == SpeakingState.Result || state == SpeakingState.Idle))
+            {
+                <button class="sp-btn-next-part" @onclick="NextPart">Next Part ➤</button>
+            }
+            else if (activePartIndex == exam.Parts.Count - 1 && state == SpeakingState.Result)
+            {
+                <button class="sp-btn-finish" @onclick="FinishExam">✅ Finish Test</button>
+            }
+        </div>
+    </div>
+
+    @* PART TABS *@
+    <div class="sp-part-tabs">
+        @for (int i = 0; i < exam.Parts.Count; i++)
+        {
+            var idx = i; var p = exam.Parts[i];
+            <div class="sp-part-tab @(activePartIndex == idx ? "active" : idx < activePartIndex ? "done" : "")">
+                <span class="sp-tab-num">@p.PartTitle</span>
+                <span class="sp-tab-cap">@p.Caption</span>
+            </div>
+        }
+        <div class="sp-progress-bar"><div class="sp-progress-fill" style="width:@GetProgress()%"></div></div>
+    </div>
+
+    @* MAIN BODY *@
+    <div class="sp-body">
+
+        @* ── THINK TIME (Part 2) ── *@
+        @if (state == SpeakingState.ThinkTime && part.ThinkTimeSeconds > 0)
+        {
+            <div class="sp-think-wrap">
+                <div class="sp-think-card">
+                    <div class="sp-think-top">
+                        <span class="sp-think-emoji">💡</span>
+                        <h2>Preparation Time</h2>
+                        <div class="sp-think-timer">@FormatTimer(thinkSecondsLeft)</div>
+                        <p>Read the topic below carefully. Speak will start automatically.</p>
+                    </div>
+                    @if (!string.IsNullOrEmpty(part.TopicDescription))
+                    {
+                        <div class="sp-cue-card">@((MarkupString)part.TopicDescription)</div>
+                    }
+                    <button class="sp-btn-ready" @onclick="BeginPartNow">Skip thinking — Start now</button>
+                </div>
+            </div>
+        }
+
+        @* ── QUESTION VIEW ── *@
+        @if (state != SpeakingState.ThinkTime && question != null)
+        {
+            <div class="sp-question-layout @(part.IsGridLayout ? "has-sidebar" : "")">
+
+                @* Cue sidebar for Part 2 *@
+                @if (part.IsGridLayout && !string.IsNullOrEmpty(part.TopicDescription))
+                {
+                    <div class="sp-cue-sidebar">
+                        <div class="sp-cue-label">📋 Topic Card</div>
+                        @((MarkupString)part.TopicDescription)
+                    </div>
+                }
+
+                @* Main panel *@
+                <div class="sp-main-panel">
+
+                    @* Video *@
+                    <div class="sp-video-wrap">
+                        @if (state == SpeakingState.VideoCountdown)
+                        {
+                            <div class="sp-video-countdown-overlay">
+                                <span class="sp-cd-num">@videoCountdown</span>
+                                <p>Get ready to listen...</p>
+                            </div>
+                        }
+                        <video id="sp-video" class="sp-video"
+                               src="@question.VideoUrl"
+                               @key="question.Id"
+                               @onended="OnVideoEnded"
+                               playsinline>
+                        </video>
+                        @if (state == SpeakingState.Idle || state == SpeakingState.VideoPlaying)
+                        {
+                            <div class="sp-video-state-badge">📺 Examiner asking...</div>
+                        }
+                    </div>
+
+                    @* Question text — hidden during exam, revealed after answering *@
+                    @if (state == SpeakingState.Result || state == SpeakingState.Evaluating)
+                    {
+                        <div class="sp-q-text sp-q-revealed">
+                            <span class="sp-q-reveal-label">💬 Question was:</span>
+                            <h3>"@question.Question"</h3>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="sp-q-text sp-q-hidden-hint">
+                            <span class="sp-q-meta">Q@(currentQuestionIndex + 1) / @part.Questions.Count · @part.PartTitle</span>
+                            <p>👂 Listen carefully to the examiner's question in the video above.</p>
+                        </div>
+                    }
+
+                    @* Recording state *@
+                    @if (state == SpeakingState.Recording)
+                    {
+                        <div class="sp-record-panel">
+                            <div class="sp-rec-badge">🔴 REC @FormatTimer(recordingSecondsElapsed)</div>
+                            <canvas id="rec-waveform" class="sp-rec-waveform" width="600" height="60"></canvas>
+                            <div class="sp-transcript-live">
+                                <span class="sp-transcript-label">📝 Live transcript:</span>
+                                <p>@(string.IsNullOrEmpty(liveTranscript) ? "Speak now..." : liveTranscript)</p>
+                            </div>
+                            <div class="sp-rec-actions">
+                                <button class="sp-btn-stop" @onclick="StopRecording">⏹ Done speaking</button>
+                                @if (replaysLeft > 0)
+                                {
+                                    <button class="sp-btn-secondary sp-btn-sm" @onclick="ReplayVideo">🔄 Repeat Question (@replaysLeft left)</button>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @* Evaluating state *@
+                    @if (state == SpeakingState.Evaluating)
+                    {
+                        <div class="sp-evaluating">
+                            <div class="sp-eval-spinner"></div>
+                            <p>Analysing your response...</p>
+                        </div>
+                    }
+
+                    @* Result state *@
+                    @if (state == SpeakingState.Result && lastResult != null)
+                    {
+                        <div class="sp-result-card">
+                            <div class="sp-result-header">
+                                <span class="sp-result-title">📊 Speaking Analysis</span>
+                                <div class="sp-overall-badge">@lastResult.Overall.ToString("F1")</div>
+                            </div>
+
+                            <div class="sp-transcript-box">
+                                <span class="sp-tbox-label">Your answer:</span>
+                                <p>@(string.IsNullOrEmpty(lastResult.Transcript) ? "(No speech detected)" : lastResult.Transcript)</p>
+                            </div>
+
+                            <div class="sp-stats-row">
+                                <div class="sp-stat"><span class="sp-stat-val">@lastResult.Wpm</span><span class="sp-stat-lbl">wpm</span></div>
+                                <div class="sp-stat"><span class="sp-stat-val">@lastResult.WordCount</span><span class="sp-stat-lbl">words</span></div>
+                                <div class="sp-stat"><span class="sp-stat-val">@lastResult.Ttr%</span><span class="sp-stat-lbl">vocab range</span></div>
+                                <div class="sp-stat"><span class="sp-stat-val">@lastResult.FillerCount</span><span class="sp-stat-lbl">fillers</span></div>
+                            </div>
+
+                            <div class="sp-scores">
+                                <div class="sp-score-row">
+                                    <span class="sp-score-lbl">Fluency & Coherence</span>
+                                    <div class="sp-score-bar"><div class="sp-score-fill" style="width:@(lastResult.Fluency * 100/9)%"></div></div>
+                                    <span class="sp-score-num">@lastResult.Fluency</span>
+                                </div>
+                                <div class="sp-score-row">
+                                    <span class="sp-score-lbl">Lexical Resource</span>
+                                    <div class="sp-score-bar"><div class="sp-score-fill sp-fill-lex" style="width:@(lastResult.Lexical * 100/9)%"></div></div>
+                                    <span class="sp-score-num">@lastResult.Lexical</span>
+                                </div>
+                                <div class="sp-score-row">
+                                    <span class="sp-score-lbl">Grammatical Range</span>
+                                    <div class="sp-score-bar"><div class="sp-score-fill sp-fill-gram" style="width:@(lastResult.Grammar * 100/9)%"></div></div>
+                                    <span class="sp-score-num">@lastResult.Grammar</span>
+                                </div>
+                            </div>
+
+                            @if (lastResult.Markers?.Count > 0)
+                            {
+                                <div class="sp-tip sp-tip-good">✅ Good use of: @string.Join(", ", lastResult.Markers)</div>
+                            }
+                            @if (lastResult.FillerCount > 2)
+                            {
+                                <div class="sp-tip sp-tip-warn">⚠️ Try to reduce filler words: @string.Join(", ", lastResult.FillerWords)</div>
+                            }
+                            @if (lastResult.Wpm < 80)
+                            {
+                                <div class="sp-tip sp-tip-warn">⚠️ Try to speak faster. Target: 100–150 wpm</div>
+                            }
+                            @if (lastResult.Wpm >= 120)
+                            {
+                                <div class="sp-tip sp-tip-good">✅ Great speaking pace!</div>
+                            }
+
+                            @* Navigation *@
+                            <div class="sp-result-nav">
+                                @if (currentQuestionIndex < part.Questions.Count - 1)
+                                {
+                                    <button class="sp-btn-primary" @onclick="NextQuestion">Next Question ➤</button>
+                                }
+                                else if (activePartIndex < exam.Parts.Count - 1)
+                                {
+                                    <button class="sp-btn-primary" @onclick="NextPart">Next Part ➤</button>
+                                }
+                                else
+                                {
+                                    <button class="sp-btn-finish" @onclick="FinishExam">🏁 Finish Test</button>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @* Idle: Start button *@
+                    @if (state == SpeakingState.Idle)
+                    {
+                        <div class="sp-idle-hint">
+                            <p>Video will play automatically. After it ends, recording starts.</p>
+                            <button class="sp-btn-primary" @onclick="StartRecordingManual">🎤 Start Recording Now</button>
+                        </div>
+                    }
+
+                    @* Question dots *@
+                    @if (state != SpeakingState.Recording && state != SpeakingState.VideoCountdown)
+                    {
+                        <div class="sp-q-dots">
+                            @for (int qi = 0; qi < part.Questions.Count; qi++)
+                            {
+                                var qidx = qi;
+                                <span class="sp-dot @(qidx == currentQuestionIndex ? "active" : qidx < currentQuestionIndex ? "done" : "locked")">@(qi + 1)</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (savedSubmission != null)
+    {
+        <section class="sp-score-panel">
+            <div>
+                <span class="sp-score-label">Saved result</span>
+                <strong>@savedSubmission.Id</strong>
+            </div>
+            @if (scoreReport == null)
+            {
+                <p>Scoring your speaking...</p>
+            }
+            else
+            {
+                <div class="sp-score-total">
+                    <span>Band</span>
+                    <strong>@scoreReport.Overall.ToString("F1")</strong>
+                </div>
+                <p>@scoreReport.Summary</p>
+                <div class="sp-score-grid">
+                    @foreach (var criterion in scoreReport.Criteria)
+                    {
+                        <div>
+                            <span>@criterion.Name</span>
+                            <strong>@criterion.Score.ToString("F1")</strong>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    }
+}
+
+@code {
+    [Parameter][SupplyParameterFromQuery(Name = "ExamUrl")] public string? QueryExamUrl { get; set; }
+    [Parameter] public string? ExamUrl { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "Session")] public string? TestSessionId { get; set; }
+
+    private SpeakingExamData? exam;
+    private bool isLoading = true;
+
+    // Setup state
+    private bool micChecked = false;
+    private bool micOk = false;
+    private bool micError = false;
+    private bool micTested = false;
+    private bool micTestDone = false;
+    private string? micTestUrl = null;
+    private int micCountdown = 5;
+    private List<MicrophoneDevice> microphones = new();
+    private string? selectedMicrophoneId;
+    private bool speakerPlayed = false;
+    private bool speakerOk = false;
+
+    // Exam state
+    private enum SpeakingState { Setup, ThinkTime, Idle, VideoCountdown, VideoPlaying, Recording, Evaluating, Result }
+    private SpeakingState state = SpeakingState.Setup;
+    private int activePartIndex = 0;
+    private int currentQuestionIndex = 0;
+    private int partSecondsLeft = 0;
+    private int thinkSecondsLeft = 0;
+    private int recordingSecondsElapsed = 0;
+    private int videoCountdown = 3;
+    private int replaysLeft = 3;
+    private string liveTranscript = "";
+    private SpeakingResult? lastResult = null;
+    private System.Threading.Timer? _timer;
+    private System.Threading.Timer? _sessionTimer;
+    private DotNetObjectReference<IeltsSpeaking>? _dotNetRef;
+    private IDisposable? _navigationRegistration;
+    private string? _sessionKey;
+    private int sessionSecondsLeft;
+    private bool isFinished;
+    private bool isSubmitting;
+    private string currentExamUrl = "sample-data/speaking-test-1.json";
+    private IeltsSubmissionRecord? savedSubmission;
+    private IeltsScoreReport? scoreReport;
+    private readonly List<SpeakingAnswerSubmission> speakingAnswers = new();
+
+    private string FormatTimer(int s) => $"{s / 60:D2}:{s % 60:D2}";
+    private string GetTimerClass() => partSecondsLeft < 30 ? "sp-timer-warn" : "";
+    private double GetProgress() => ((activePartIndex + 1.0) / (exam?.Parts.Count ?? 1)) * 100;
+
+    protected override async Task OnInitializedAsync()
+    {
+        string? url = ExamUrl;
+        if (string.IsNullOrWhiteSpace(url)) url = QueryExamUrl;
+        string finalUrl = string.IsNullOrWhiteSpace(url) ? "sample-data/speaking-test-1.json" : Uri.UnescapeDataString(url);
+        currentExamUrl = finalUrl;
+        try { exam = await Http.GetFromJsonAsync<SpeakingExamData>(finalUrl); } catch { exam = null; }
+        isLoading = false;
+        _dotNetRef = DotNetObjectReference.Create(this);
+    }
+
+    // ── SETUP ──────────────────────────────────────────
+
+    private bool _needsVisualizerStart = false;
+
+    private async Task RequestMic()
+    {
+        micChecked = true;
+        micError = false;
+        StateHasChanged();
+        var result = await JS.InvokeAsync<System.Text.Json.JsonElement>("SpeakingInterop.requestMicPermission");
+        micOk = result.GetProperty("success").GetBoolean();
+        micError = !micOk;
+        if (micOk)
+        {
+            selectedMicrophoneId = result.GetProperty("deviceId").GetString();
+            await RefreshMicrophones();
+            // Flag to start visualizer AFTER Blazor renders canvas
+            _needsVisualizerStart = true;
+        }
+        StateHasChanged();
+    }
+
+    private async Task RefreshMicrophones()
+    {
+        microphones = await JS.InvokeAsync<List<MicrophoneDevice>>("SpeakingInterop.getMicrophones");
+    }
+
+    private async Task ChangeMicrophone(ChangeEventArgs args)
+    {
+        var deviceId = args.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(deviceId) || deviceId == selectedMicrophoneId) return;
+
+        await JS.InvokeVoidAsync("SpeakingInterop.stopVisualizer");
+        var result = await JS.InvokeAsync<System.Text.Json.JsonElement>("SpeakingInterop.selectMicrophone", deviceId);
+        micOk = result.GetProperty("success").GetBoolean();
+        micError = !micOk;
+        if (!micOk) return;
+
+        selectedMicrophoneId = result.GetProperty("deviceId").GetString();
+        micTested = false;
+        micTestUrl = null;
+        micTestDone = false;
+        micCountdown = 5;
+        _needsVisualizerStart = true;
+        await RefreshMicrophones();
+    }
+
+    private async Task StartMicTest()
+    {
+        micTested = true;
+        micTestUrl = null;
+        micCountdown = 5;
+        // Keep waveform showing during recording
+        StateHasChanged();
+
+        _timer?.Dispose();
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            if (micCountdown > 0) micCountdown--;
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+
+        micTestUrl = await JS.InvokeAsync<string>("SpeakingInterop.recordMicTest", 5);
+        _timer?.Dispose();
+        StateHasChanged();
+    }
+
+    private void RetryMicTest()
+    {
+        micTested = false;
+        micTestUrl = null;
+        micTestDone = false;
+        micCountdown = 5;
+        _needsVisualizerStart = true;
+    }
+    private void MicTestOk() { micTestDone = true; }
+    private void ConfirmSpeaker() { speakerOk = true; }
+
+    private async Task TestSpeaker()
+    {
+        speakerPlayed = true;
+        StateHasChanged();
+        // Web Audio API oscillator generates tone directly — no file needed
+        await JS.InvokeAsync<bool>("SpeakingInterop.playTestAudio");
+    }
+
+    private async Task StartExam()
+    {
+        await StartExamSessionAsync();
+        if (isFinished) return;
+        await JS.InvokeVoidAsync("SpeakingInterop.stopVisualizer");
+        state = SpeakingState.Idle;
+        InitPart();
+    }
+
+    // ── EXAM FLOW ──────────────────────────────────────
+
+    private async Task StartExamSessionAsync()
+    {
+        if (!string.IsNullOrEmpty(_sessionKey)) return;
+
+        var durationSeconds = Math.Max(exam?.TotalMinutes ?? 14, 1) * 60;
+        var examIdentity = QueryExamUrl ?? ExamUrl ?? "sample-data/speaking-test-1.json";
+        _sessionKey = ExamSessionService.CreateStorageKey("speaking", TestSessionId, examIdentity);
+        var session = await ExamSession.StartAsync(_sessionKey, durationSeconds);
+        sessionSecondsLeft = session.SecondsRemaining;
+        isFinished = session.IsCompleted || session.IsExpired;
+        if (isFinished) return;
+
+        _navigationRegistration = Navigation.RegisterLocationChangingHandler(ConfirmLeave);
+        await ExamSession.SetUnloadWarningAsync(true);
+        _sessionTimer = new System.Threading.Timer(_ => _ = UpdateSessionTimerAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void InitPart()
+    {
+        _timer?.Dispose();
+        currentQuestionIndex = 0;
+        lastResult = null;
+        liveTranscript = "";
+        var part = exam!.Parts[activePartIndex];
+
+        if (part.ThinkTimeSeconds > 0)
+        {
+            state = SpeakingState.ThinkTime;
+            thinkSecondsLeft = part.ThinkTimeSeconds;
+            partSecondsLeft = part.TimerSeconds;
+            _timer = new System.Threading.Timer(async _ =>
+            {
+                if (thinkSecondsLeft > 0) { thinkSecondsLeft--; await InvokeAsync(StateHasChanged); }
+                else await InvokeAsync(BeginPartNow);
+            }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        }
+        else
+        {
+            partSecondsLeft = part.TimerSeconds;
+            StartPartTimer();
+            StartVideoCountdown();
+        }
+    }
+
+    private void StartPartTimer()
+    {
+        _timer?.Dispose();
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            if (partSecondsLeft > 0) { partSecondsLeft--; await InvokeAsync(StateHasChanged); }
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private async Task BeginPartNow()
+    {
+        _timer?.Dispose();
+        partSecondsLeft = exam!.Parts[activePartIndex].TimerSeconds;
+        StartPartTimer();
+        StartVideoCountdown();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void StartVideoCountdown()
+    {
+        state = SpeakingState.VideoCountdown;
+        videoCountdown = 3;
+        
+        // Don't dispose _timer entirely if partTimer is running on it! 
+        // Wait, _timer is shared for everything (think time, recording, part time).
+        // Let's create a local task for the countdown instead of using the global _timer to avoid killing the PartTimer.
+        Task.Run(async () =>
+        {
+            while (videoCountdown > 1)
+            {
+                await Task.Delay(1000);
+                videoCountdown--;
+                await InvokeAsync(StateHasChanged);
+            }
+            await Task.Delay(1000);
+            state = SpeakingState.VideoPlaying;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(50);
+            try { await JS.InvokeVoidAsync("SpeakingInterop.playVideo", "sp-video"); } catch { }
+        });
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Start mic visualizer AFTER canvas is rendered in DOM
+        if (_needsVisualizerStart)
+        {
+            _needsVisualizerStart = false;
+            try { await JS.InvokeVoidAsync("SpeakingInterop.startMicVisualizer", "setup-waveform"); } catch { }
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnVideoEnded()
+    {
+        if (!isFinished && (state == SpeakingState.Idle || state == SpeakingState.VideoPlaying))
+            await StartRecordingManual();
+    }
+
+    private async Task StartRecordingManual()
+    {
+        if (isFinished) return;
+        state = SpeakingState.Recording;
+        recordingSecondsElapsed = 0;
+        liveTranscript = "";
+        StateHasChanged();
+        await Task.Delay(50);
+
+        bool ok = await JS.InvokeAsync<bool>("SpeakingInterop.startRecording", "rec-waveform", _dotNetRef);
+        if (!ok) { state = SpeakingState.Idle; StateHasChanged(); return; }
+
+        _timer?.Dispose();
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            recordingSecondsElapsed++;
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    [JSInvokable]
+    public void OnTranscriptUpdate(string text)
+    {
+        liveTranscript = text;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task StopRecording()
+    {
+        _timer?.Dispose();
+        state = SpeakingState.Evaluating;
+        StateHasChanged();
+
+        var raw = await JS.InvokeAsync<System.Text.Json.JsonElement>("SpeakingInterop.stopRecording");
+        string transcript = raw.GetProperty("transcript").GetString() ?? "";
+        double durationMs = raw.GetProperty("durationMs").GetDouble();
+
+        // Rule-based evaluate
+        var evalRaw = await JS.InvokeAsync<System.Text.Json.JsonElement>("SpeakingInterop.evaluate", transcript, durationMs);
+
+        lastResult = new SpeakingResult
+        {
+            Transcript = transcript,
+            DurationMs = durationMs,
+            Fluency = evalRaw.GetProperty("fluency").GetInt32(),
+            Lexical = evalRaw.GetProperty("lexical").GetInt32(),
+            Grammar = evalRaw.GetProperty("grammar").GetInt32(),
+            Coherence = evalRaw.GetProperty("coherence").GetInt32(),
+            Overall = evalRaw.GetProperty("overall").GetDouble(),
+            Wpm = evalRaw.GetProperty("wpm").GetInt32(),
+            WordCount = evalRaw.GetProperty("wordCount").GetInt32(),
+            Ttr = evalRaw.GetProperty("details").GetProperty("ttr").GetInt32(),
+            FillerCount = evalRaw.GetProperty("details").GetProperty("fillerCount").GetInt32(),
+            FillerWords = GetStringList(evalRaw.GetProperty("details").GetProperty("fillerWords")),
+            Markers = GetStringList(evalRaw.GetProperty("details").GetProperty("markers"))
+        };
+
+        SaveCurrentSpeakingAnswer(durationMs);
+        state = SpeakingState.Result;
+        StateHasChanged();
+    }
+
+    private List<string> GetStringList(System.Text.Json.JsonElement arr)
+    {
+        var list = new List<string>();
+        foreach (var item in arr.EnumerateArray())
+            list.Add(item.GetString() ?? "");
+        return list;
+    }
+
+    private void NextQuestion()
+    {
+        currentQuestionIndex++;
+        lastResult = null;
+        liveTranscript = "";
+        replaysLeft = 3;
+        StartVideoCountdown();
+    }
+
+    private async Task ReplayVideo()
+    {
+        if (replaysLeft <= 0) return;
+        replaysLeft--;
+        _timer?.Dispose(); // Stops recording timer
+        try { _ = JS.InvokeVoidAsync("SpeakingInterop.stopRecording"); } catch { }
+        
+        // Resume part timer since we stopped it
+        StartPartTimer();
+        StartVideoCountdown();
+    }
+
+    private void NextPart()
+    {
+        activePartIndex++;
+        InitPart();
+    }
+
+    private async Task FinishExam()
+    {
+        if (isFinished || isSubmitting) return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            "Submit your Speaking test now? Your transcripts and scores will be saved, then the full test will be scored.");
+        if (!confirmed) return;
+
+        await FinishExamAsync(false);
+    }
+
+    private void LogFinishExam()
+    {
+        JS.InvokeVoidAsync("SpeakingInterop.stopMicStream");
+        Console.WriteLine("Speaking test finished!");
+    }
+
+    private async Task UpdateSessionTimerAsync()
+    {
+        if (isFinished || string.IsNullOrEmpty(_sessionKey)) return;
+        var session = await ExamSession.GetAsync(_sessionKey);
+        if (session == null) return;
+        sessionSecondsLeft = session.SecondsRemaining;
+        if (session.IsExpired) await InvokeAsync(() => FinishExamAsync(true));
+        else await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task FinishExamAsync(bool timeExpired)
+    {
+        if (isFinished || isSubmitting) return;
+        isSubmitting = true;
+        await InvokeAsync(StateHasChanged);
+
+        if (timeExpired && state == SpeakingState.Recording)
+        {
+            await StopRecording();
+        }
+
+        savedSubmission = BuildSubmission(timeExpired);
+        await Submissions.SaveAsync(savedSubmission);
+        savedSubmission = await Submissions.ScoreAndSaveSpeakingAsync(savedSubmission);
+        scoreReport = savedSubmission.Score;
+
+        isFinished = true;
+        sessionSecondsLeft = 0;
+        isSubmitting = false;
+        _timer?.Dispose();
+        _sessionTimer?.Dispose();
+        try { await JS.InvokeVoidAsync("SpeakingInterop.stopRecording"); } catch { }
+        if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
+        await ExamSession.LockTestContentAsync(".sp-body");
+        await ExamSession.SetUnloadWarningAsync(false);
+        await JS.InvokeVoidAsync("SpeakingInterop.stopMicStream");
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void SaveCurrentSpeakingAnswer(double durationMs)
+    {
+        if (exam == null || lastResult == null) return;
+
+        var part = exam.Parts[activePartIndex];
+        var question = part.Questions.ElementAtOrDefault(currentQuestionIndex);
+        if (question == null) return;
+
+        var existingIndex = speakingAnswers.FindIndex(answer =>
+            answer.PartNumber == part.PartNumber && answer.QuestionId == question.Id);
+
+        var answer = new SpeakingAnswerSubmission
+        {
+            PartNumber = part.PartNumber,
+            PartTitle = part.PartTitle,
+            QuestionId = question.Id,
+            Question = question.Question,
+            Transcript = lastResult.Transcript,
+            DurationMs = durationMs,
+            Score = new SpeakingAnswerScore
+            {
+                Fluency = lastResult.Fluency,
+                Lexical = lastResult.Lexical,
+                Grammar = lastResult.Grammar,
+                Coherence = lastResult.Coherence,
+                Overall = lastResult.Overall,
+                Wpm = lastResult.Wpm,
+                WordCount = lastResult.WordCount
+            }
+        };
+
+        if (existingIndex >= 0) speakingAnswers[existingIndex] = answer;
+        else speakingAnswers.Add(answer);
+    }
+
+    private IeltsSubmissionRecord BuildSubmission(bool timeExpired)
+    {
+        var totalSeconds = Math.Max(exam?.TotalMinutes ?? 14, 1) * 60;
+        return new IeltsSubmissionRecord
+        {
+            Skill = "speaking",
+            ExamTitle = exam?.Title ?? "IELTS Speaking",
+            ExamUrl = currentExamUrl,
+            SessionId = TestSessionId,
+            TimedOut = timeExpired,
+            DurationSeconds = Math.Max(totalSeconds - sessionSecondsLeft, 0),
+            Speaking = new SpeakingSubmissionData
+            {
+                Answers = speakingAnswers
+                    .OrderBy(answer => answer.PartNumber)
+                    .ThenBy(answer => answer.QuestionId)
+                    .ToList()
+            }
+        };
+    }
+
+    private async ValueTask ConfirmLeave(LocationChangingContext context)
+    {
+        if (!isFinished && !await ExamSession.ConfirmLeaveAsync()) context.PreventNavigation();
+    }
+
+    private void ExitExam() => Navigation.NavigateTo("/ielts/luyen-de");
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _sessionTimer?.Dispose();
+        _dotNetRef?.Dispose();
+        _navigationRegistration?.Dispose();
+        JS.InvokeVoidAsync("SpeakingInterop.stopMicStream");
+        _ = ExamSession.SetUnloadWarningAsync(false);
+    }
+
+    // Result model (local)
+    private class SpeakingResult
+    {
+        public string Transcript { get; set; } = "";
+        public double DurationMs { get; set; }
+        public int Fluency { get; set; }
+        public int Lexical { get; set; }
+        public int Grammar { get; set; }
+        public int Coherence { get; set; }
+        public double Overall { get; set; }
+        public int Wpm { get; set; }
+        public int WordCount { get; set; }
+        public int Ttr { get; set; }
+        public int FillerCount { get; set; }
+        public List<string> FillerWords { get; set; } = new();
+        public List<string> Markers { get; set; } = new();
+    }
+
+    private class MicrophoneDevice
+    {
+        public string DeviceId { get; set; } = "";
+        public string Label { get; set; } = "";
+    }
+}

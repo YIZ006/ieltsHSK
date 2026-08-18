@@ -1,49 +1,106 @@
-# IELTS & HSK Learning Platform
+# ieltsHSK Monorepo
 
-Hệ thống ứng dụng học và luyện thi chứng chỉ ngoại ngữ IELTS & HSK. Dự án bao gồm Frontend (Blazor WebAssembly) và Backend (.NET Core Web API), sử dụng cơ sở dữ liệu SQL Server.
+This repository contains two independent .NET 9 applications in one Git repo:
 
-## 🚀 Hướng dẫn khởi chạy Server & Ứng dụng
+- `frontend/` - Blazor WebAssembly app
+- `backend/` - ASP.NET Core Web API using a Clean Architecture layout
 
-Để chạy được dự án này trên máy tính của bạn, hãy làm theo tuần tự các bước dưới đây:
+The two apps are deployed and built separately. There are no project references between them.
 
-### 1. Yêu cầu hệ thống (Prerequisites)
-- Đã cài đặt **.NET 9.0 SDK** (cho Frontend) và **.NET 10.0 SDK** (cho Backend).
-- Đã cài đặt và đang chạy **SQL Server** (Mặc định cấu hình đang dùng `localhost\SQLEXPRESS01`).
+## What The Project Does
 
-### 2. Khởi chạy Backend API (Bắt buộc chạy trước)
-Backend chứa cơ sở dữ liệu và các API cung cấp dữ liệu cho Frontend.
-- Mở cửa sổ Terminal (hoặc CMD).
-- Trỏ đường dẫn vào thư mục của Backend Api:
-  ```bash
-  cd backend/src/Backend.Api
-  ```
-- Chạy lệnh khởi động:
-  ```bash
-  dotnet run
-  ```
-- *Lưu ý: Ngay lần chạy đầu tiên, Backend sẽ tự động cập nhật cơ sở dữ liệu (Database Migrations) và nạp dữ liệu mẫu (Data Seeding).*
-- Backend sẽ chạy tại: **http://localhost:5101**
+This project is an IELTS learning platform with:
 
-### 3. Khởi chạy Frontend (Blazor WebAssembly)
-Sau khi Backend đã báo chạy thành công (`Application started`), hãy tiếp tục bật Frontend.
-- Mở một cửa sổ Terminal (hoặc CMD) **mới**.
-- Trỏ đường dẫn vào thư mục của Frontend:
-  ```bash
-  cd frontend/src/Frontend.App
-  ```
-- Chạy lệnh khởi động:
-  ```bash
-  dotnet run
-  ```
-- Frontend sẽ chạy tại: **http://localhost:5102**
+- IELTS mock tests for Listening, Reading, Writing, and Speaking
+- admin pages for creating and managing mock tests
+- public exam content stored as JSON
+- answer keys stored as separate JSON files
+- test submissions stored in the backend database
+- Cloudflare R2 integration for hosting exam and answer files
 
----
+## Repository Layout
 
-### 4. Truy cập Ứng dụng
-- Mở trình duyệt web (Chrome, Cốc Cốc, Edge...).
-- Nhập địa chỉ: [http://localhost:5102](http://localhost:5102)
-- Bạn sẽ thấy trang chủ. Bấm vào nút "Explore IELTS" hoặc "Explore HSK" để trải nghiệm các tính năng đã được thiết kế.
+- `frontend/`
+  - Blazor UI
+  - IELTS exam pages and admin pages
+  - static sample data under `frontend/src/Frontend.App/wwwroot/sample-data/`
+  - local browser-side scoring and answer-key loading
+- `backend/`
+  - API endpoints
+  - domain entities
+  - application DTOs and abstractions
+  - persistence and EF Core migrations
+  - R2 upload service and auth service
+- `AGENTS.md`
+  - repo rules for agents and cleanup policy
 
-### 💡 Xử lý sự cố thường gặp
-- **Lỗi không kết nối được Database:** Hãy kiểm tra lại chuỗi kết nối (Connection String) trong file `backend/src/Backend.Api/appsettings.Development.json` xem tên máy chủ SQL Server của bạn có đúng là `localhost\SQLEXPRESS01` không.
-- **Lỗi port đã được sử dụng (Address already in use):** Đảm bảo bạn đã tắt các tiến trình `dotnet` cũ (Bấm `Ctrl + C` ở CMD cũ) trước khi chạy lệnh `dotnet run` mới.
+## Key Flow
+
+Mock test flow:
+
+1. Admin uploads or pastes the exam JSON URL.
+2. Admin uploads or pastes the answer-key JSON URL.
+3. The frontend opens the test using those public links.
+4. The user answers questions in the browser.
+5. On submit, the frontend loads the answer key and grades the attempt.
+6. The result is saved to the backend via `/api/test-submissions`.
+
+For Listening and Reading, answer keys are separate files from the exam JSON.
+
+## Solutions
+
+- `frontend/Frontend.sln`
+- `backend/Backend.sln`
+
+## Build
+
+Build each app separately:
+
+```bash
+dotnet restore frontend/Frontend.sln
+dotnet restore backend/Backend.sln
+dotnet build frontend/Frontend.sln -c Release
+dotnet build backend/Backend.sln -c Release
+```
+
+Build outputs are written to each project `bin/Release/net9.0/` directory.
+
+## Run
+
+Backend:
+
+```bash
+dotnet run --project backend/src/Backend.Api/Backend.Api.csproj --launch-profile https
+```
+
+Frontend:
+
+```bash
+dotnet run --project frontend/src/Frontend.App/Frontend.App.csproj --launch-profile https
+```
+
+Default local URLs:
+
+- Backend: `https://localhost:7101` and `http://localhost:5101`
+- Frontend: `https://localhost:7102` and `http://localhost:5102`
+
+## Sample Data
+
+The frontend ships with local sample JSON files under:
+
+- `frontend/src/Frontend.App/wwwroot/sample-data/`
+
+These are useful for local testing without R2. The app also supports public Cloudflare R2 URLs for real mock-test content.
+
+## Notes For Contributors
+
+- Keep exam JSON and answer-key JSON as separate files.
+- Keep root-level scratch files out of commits.
+- Prefer editing tracked source files over creating parallel draft copies in the repo root.
+- If you add new mock-test fixtures, put them under `frontend/src/Frontend.App/wwwroot/sample-data/` unless they are meant only as temporary local drafts.
+
+## Useful Documents
+
+- `speaking-audio-api-proxy.md` - notes for the speaking audio upload/proxy flow
+- `walkthrough.md` - project walkthrough notes
+

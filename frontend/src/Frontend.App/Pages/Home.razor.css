@@ -1,0 +1,237 @@
+:root {
+    --ielts-color: var(--ig-primary);
+    --ielts-glow: rgba(0, 149, 246, 0.4);
+    --toeic-color: #8b5cf6;
+    --toeic-glow: rgba(139, 92, 246, 0.4);
+    --hsk-color: var(--ig-danger);
+    --hsk-glow: rgba(237, 73, 86, 0.4);
+    --card-bg: var(--ig-card-bg);
+    --card-border: var(--ig-border);
+}
+
+.landing-container {
+    min-height: calc(100vh - 60px);
+    background-color: var(--ig-bg);
+    color: var(--ig-text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    font-family: 'Inter', 'Roboto', sans-serif;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Background aesthetic gradients */
+.landing-container::before {
+    content: '';
+    position: absolute;
+    top: -20%;
+    left: -10%;
+    width: 50%;
+    height: 50%;
+    background: radial-gradient(circle, var(--ielts-glow) 0%, transparent 70%);
+    filter: blur(80px);
+    z-index: 0;
+}
+
+.landing-container::after {
+    content: '';
+    position: absolute;
+    bottom: -20%;
+    right: -10%;
+    width: 50%;
+    height: 50%;
+    background: radial-gradient(circle, var(--hsk-glow) 0%, transparent 70%);
+    filter: blur(80px);
+    z-index: 0;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 4rem;
+    z-index: 1;
+}
+
+.main-title {
+    font-size: 3.5rem;
+    font-weight: 800;
+    margin-bottom: 1rem;
+    color: var(--ig-text);
+    letter-spacing: -1px;
+}
+
+.subtitle {
+    font-size: 1.25rem;
+    color: var(--ig-text-secondary);
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.6;
+}
+
+.cards-wrapper {
+    display: flex;
+    gap: 2rem;
+    z-index: 1;
+    max-width: 1000px;
+    width: 100%;
+}
+
+.path-card {
+    flex: 1;
+    position: relative;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 24px;
+    padding: 3rem 2rem;
+    text-decoration: none;
+    color: var(--text-color);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.path-card:hover {
+    transform: translateY(-10px);
+    border-color: var(--ig-border);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+    .path-card {
+        box-shadow: 0 8px 30px rgba(255, 255, 255, 0.05);
+    }
+    .path-card:hover {
+        box-shadow: 0 15px 35px rgba(255, 255, 255, 0.1);
+    }
+}
+
+.card-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 250px;
+    height: 250px;
+    border-radius: 50%;
+    filter: blur(60px);
+    z-index: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+}
+
+.path-card:hover .card-glow {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2);
+}
+
+.ielts-glow {
+    background: var(--ielts-color);
+}
+
+.toeic-glow {
+    background: var(--toeic-color);
+}
+
+.hsk-glow {
+    background: var(--hsk-color);
+}
+
+.card-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+}
+
+.icon-wrapper {
+    font-size: 4rem;
+    margin-bottom: 1.5rem;
+    transition: transform 0.3s ease;
+}
+
+.ielts-icon {
+    color: var(--ielts-color);
+}
+
+.toeic-icon {
+    color: var(--toeic-color);
+}
+
+.hsk-icon {
+    color: var(--hsk-color);
+}
+
+.path-card:hover .icon-wrapper {
+    transform: scale(1.1);
+}
+
+.path-card h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.path-card p {
+    color: var(--ig-text-secondary);
+    line-height: 1.6;
+    margin-bottom: 2rem;
+}
+
+.explore-btn {
+    padding: 0.75rem 2rem;
+    border-radius: 9999px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.ielts-card .explore-btn {
+    background-color: transparent;
+    color: var(--ig-primary);
+    border: 1px solid var(--ig-primary);
+}
+
+.ielts-card:hover .explore-btn {
+    background-color: var(--ig-primary);
+    color: #ffffff;
+}
+
+.toeic-card .explore-btn {
+    background-color: transparent;
+    color: var(--toeic-color);
+    border: 1px solid var(--toeic-color);
+}
+
+.toeic-card:hover .explore-btn {
+    background-color: var(--toeic-color);
+    color: #ffffff;
+}
+
+.hsk-card .explore-btn {
+    background-color: transparent;
+    color: var(--ig-danger);
+    border: 1px solid var(--ig-danger);
+}
+
+.hsk-card:hover .explore-btn {
+    background-color: var(--ig-danger);
+    color: #ffffff;
+}
+
+@media (max-width: 768px) {
+    .cards-wrapper {
+        flex-direction: column;
+    }
+    .main-title {
+        font-size: 2.5rem;
+    }
+}

@@ -1,0 +1,208 @@
+@using Frontend.App.Services
+@implements IDisposable
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
+@inject IConfiguration Configuration
+
+@if (IsVisible)
+{
+    <div class="modal-backdrop" @onclick="Close">
+        <div class="modal-content" @onclick:stopPropagation>
+            <button class="btn-close" @onclick="Close">
+                <i class="bi bi-x-lg"></i>
+            </button>
+            
+            <div class="modal-header">
+                <h2>@(IsLogin ? "Sign In" : "Register")</h2>
+                <p>@(IsLogin ? "Welcome back! Please login to continue." : "Create a new account to join us.")</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(ErrorMessage))
+            {
+                <div class="@(ErrorMessage.Contains("successful") ? "alert-success" : "alert-error")">@ErrorMessage</div>
+            }
+
+            @if (IsLogin)
+            {
+                <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+                    <DataAnnotationsValidator />
+                    <div class="form-group">
+                        <label>Username</label>
+                        <InputText class="form-control" @bind-Value="loginModel.Username" placeholder="Enter username" />
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <InputText type="password" class="form-control" @bind-Value="loginModel.Password" placeholder="Enter password" />
+                    </div>
+                    <button type="submit" class="btn-primary" disabled="@IsLoading">
+                        @(IsLoading ? "Processing..." : "Login")
+                    </button>
+                </EditForm>
+                <div class="modal-footer">
+                    Don't have an account? <a href="javascript:void(0)" @onclick="() => SwitchMode(false)">Register here</a>
+                </div>
+            }
+            else
+            {
+                <EditForm Model="registerModel" OnValidSubmit="HandleRegister">
+                    <DataAnnotationsValidator />
+                    <div class="form-group">
+                        <label>Username</label>
+                        <InputText class="form-control" @bind-Value="registerModel.Username" placeholder="Choose a username" />
+                        <ValidationMessage For="@(() => registerModel.Username)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <InputText type="email" class="form-control" @bind-Value="registerModel.Email" placeholder="Enter your email" />
+                        <ValidationMessage For="@(() => registerModel.Email)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <InputText type="password" class="form-control" @bind-Value="registerModel.Password" placeholder="Create a password" />
+                        <ValidationMessage For="@(() => registerModel.Password)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                    </div>
+                    <button type="submit" class="btn-primary" disabled="@IsLoading">
+                        @(IsLoading ? "Processing..." : "Register")
+                    </button>
+                </EditForm>
+                <div class="modal-footer">
+                    Already have an account? <a href="javascript:void(0)" @onclick="() => SwitchMode(true)">Login here</a>
+                </div>
+            }
+
+            <div class="divider">
+                <span>OR</span>
+            </div>
+            
+            <div class="google-auth-container">
+                <div id="google-signin-btn"></div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    public bool IsVisible { get; private set; }
+    private bool IsLogin = true;
+    private bool IsLoading = false;
+    private string ErrorMessage = string.Empty;
+
+    private LoginRequest loginModel = new();
+    private RegisterRequest registerModel = new();
+    private DotNetObjectReference<AuthModal>? objRef;
+
+    protected override void OnInitialized()
+    {
+        objRef = DotNetObjectReference.Create(this);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsVisible)
+        {
+            var clientId = "161879464750-doria0e5kppfoq51dmkijv9l9jmjkl7d.apps.googleusercontent.com";
+            await JS.InvokeVoidAsync("initializeGoogleAuth", objRef, clientId);
+        }
+    }
+
+    public void Show(bool isLogin)
+    {
+        IsLogin = isLogin;
+        ErrorMessage = string.Empty;
+        IsVisible = true;
+        StateHasChanged();
+    }
+
+    public void Close()
+    {
+        IsVisible = false;
+        StateHasChanged();
+    }
+
+    private void SwitchMode(bool isLogin)
+    {
+        IsLogin = isLogin;
+        ErrorMessage = string.Empty;
+    }
+
+    private async Task HandleLogin()
+    {
+        IsLoading = true;
+        ErrorMessage = string.Empty;
+        
+        var success = await AuthService.LoginAsync(loginModel);
+        if (success)
+        {
+            Close();
+            NavigationManager.NavigateTo("/ielts", forceLoad: false);
+        }
+        else
+        {
+            ErrorMessage = "Invalid username or password.";
+        }
+        
+        IsLoading = false;
+    }
+
+    private async Task HandleRegister()
+    {
+        IsLoading = true;
+        ErrorMessage = string.Empty;
+        
+        var success = await AuthService.RegisterAsync(registerModel);
+        if (success)
+        {
+            IsLogin = true; // Switch to login after successful registration
+            ErrorMessage = "Registration successful! Please login.";
+        }
+        else
+        {
+            ErrorMessage = "Registration failed. Username or email might be taken.";
+        }
+        
+        IsLoading = false;
+    }
+
+    [JSInvokable]
+    public async Task HandleGoogleLogin(string idToken)
+    {
+        IsLoading = true;
+        ErrorMessage = string.Empty;
+        StateHasChanged();
+
+        var (success, error) = await AuthService.LoginWithGoogleAsync(idToken);
+        if (success)
+        {
+            Close();
+            NavigationManager.NavigateTo("/ielts", forceLoad: false);
+        }
+        else
+        {
+            if (error.Contains("UserNotRegistered|"))
+            {
+                var emailParts = error.Split("UserNotRegistered|");
+                if (emailParts.Length > 1) 
+                {
+                    var email = emailParts[1].Trim('"', '\r', '\n');
+                    SwitchMode(false); // Switch to register mode
+                    registerModel.Email = email;
+                    ErrorMessage = "Tài khoản chưa được đăng ký. Vui lòng tạo tài khoản mới (Username & Password).";
+                }
+            }
+            else
+            {
+                ErrorMessage = "Đăng nhập Google thất bại: " + error;
+            }
+        }
+        
+        IsLoading = false;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        objRef?.Dispose();
+    }
+}

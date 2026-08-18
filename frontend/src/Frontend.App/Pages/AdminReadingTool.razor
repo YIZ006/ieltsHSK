@@ -1,0 +1,114 @@
+@page "/admin/reading-tool"
+@using Frontend.App.Models
+@using System.Text.Json
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+
+<PageTitle>Admin - Reading JSON Generator</PageTitle>
+
+<div class="admin-container">
+    <div class="header">
+        <h1>Công cụ tạo Đề thi (JSON Generator)</h1>
+        <p>Nhập thông tin đề thi để tự động xuất ra file JSON đúng cấu trúc hệ thống.</p>
+    </div>
+
+    <div class="two-col-layout">
+        <div class="editor-panel">
+            <div class="card">
+                <h3>1. Thông tin bài đọc</h3>
+                <div class="form-group">
+                    <label>Tiêu đề đề thi</label>
+                    <input class="form-control" @bind="examTitle" placeholder="VD: Cambridge 16 Test 1 - Passage 1" />
+                </div>
+                <div class="form-group">
+                    <label>Nội dung bài đọc (Mã HTML)</label>
+                    <textarea class="form-control html-editor" @bind="currentPart.PassageHtml" placeholder="Nhập mã HTML vào đây..."></textarea>
+                    <small>Gợi ý: Dùng thẻ &lt;p&gt; để xuống dòng, &lt;span class='vocab'&gt; để tạo từ vựng.</small>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>2. Bộ câu hỏi trắc nghiệm</h3>
+                
+                @foreach (var (q, index) in currentGroup.Questions.Select((v, i) => (v, i)))
+                {
+                    <div class="question-box">
+                        <div class="q-header">
+                            <strong>Câu hỏi @(index + 1)</strong>
+                            <button class="btn-remove" @onclick="() => RemoveQuestion(q)">Xóa</button>
+                        </div>
+                        <input class="form-control mb-2" @bind="q.Text" placeholder="Nội dung câu hỏi..." />
+                        
+                        <div class="options-grid">
+                            @foreach (var opt in q.Options)
+                            {
+                                <div class="option-item">
+                                    <input type="radio" name="correct_@q.Id" 
+                                           checked="@(q.CorrectOptionId == opt.Id)"
+                                           @onchange="() => q.CorrectOptionId = opt.Id" />
+                                    <span class="opt-label">@opt.Label.</span>
+                                    <input class="form-control" @bind="opt.Text" placeholder="Nội dung đáp án" />
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <button class="btn-add" @onclick="AddQuestion">+ Thêm câu hỏi mới</button>
+            </div>
+            
+            <button class="btn-generate" @onclick="GenerateJson">🚀 XUẤT RA JSON</button>
+        </div>
+
+        <div class="preview-panel">
+            <div class="card sticky-card">
+                <h3>3. Kết quả JSON</h3>
+                <p>Copy đoạn mã này lưu thành file <code>.json</code> rồi up lên Cloud.</p>
+                <textarea class="json-output" readonly>@generatedJson</textarea>
+                <button class="btn-copy" @onclick="CopyJson">Copy JSON</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // AdminTool dùng Part 1 đơn giản để tạo đề thủ công
+    private QuestionGroup currentGroup = new();
+    private ExamPart currentPart = new() { PartNumber = 1, PassageHtml = "" };
+    private string examTitle = "";
+    private string generatedJson = "";
+    private int nextQuestionId = 1;
+
+    protected override void OnInitialized()
+    {
+        currentPart.QuestionGroups.Add(currentGroup);
+        AddQuestion();
+    }
+
+    private void AddQuestion()
+    {
+        currentGroup.Questions.Add(new QuestionData
+        {
+            Id = nextQuestionId++,
+            Text = "",
+            Options = new List<OptionData>
+            {
+                new OptionData { Id = 1, Label = "A", Text = "" },
+                new OptionData { Id = 2, Label = "B", Text = "" },
+                new OptionData { Id = 3, Label = "C", Text = "" },
+                new OptionData { Id = 4, Label = "D", Text = "" }
+            },
+            CorrectOptionId = 1
+        });
+    }
+
+    private void RemoveQuestion(QuestionData q) => currentGroup.Questions.Remove(q);
+
+    private void GenerateJson()
+    {
+        var exam = new ExamData { Title = examTitle, Parts = new() { currentPart } };
+        generatedJson = System.Text.Json.JsonSerializer.Serialize(exam, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private void CopyJson() { /* JS Interop clipboard */ }
+}

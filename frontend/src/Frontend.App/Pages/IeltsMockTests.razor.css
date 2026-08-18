@@ -1,0 +1,304 @@
+.mocktests-container {
+    display: flex;
+    gap: 30px;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    color: var(--ig-text, #fff);
+    font-family: 'Inter', 'Roboto', sans-serif;
+}
+
+.main-content {
+    flex: 1;
+}
+
+.sidebar {
+    width: 320px;
+    display: none;
+}
+
+@media (min-width: 992px) {
+    .sidebar {
+        display: block;
+    }
+}
+
+/* Header Collection */
+.collection-header {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 40px;
+    background: linear-gradient(135deg, #1e1e24 0%, #2a2a35 100%);
+    padding: 30px;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.collection-image img {
+    width: 200px;
+    height: 200px;
+    border-radius: 16px;
+    object-fit: cover;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+}
+
+.collection-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.collection-info h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    margin: 0 0 15px;
+    color: #fff;
+    letter-spacing: -0.5px;
+}
+
+.rating {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 25px;
+    background: rgba(255,255,255,0.05);
+    padding: 8px 16px;
+    border-radius: 50px;
+    width: fit-content;
+}
+
+.score {
+    color: #ffd700;
+    font-weight: 800;
+    font-size: 1.15rem;
+}
+
+.stars {
+    color: #ffd700;
+    font-size: 1.1rem;
+}
+
+.votes {
+    color: #a0a0a0;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.meta p {
+    color: #b0b0b0;
+    margin: 8px 0;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.meta p i {
+    color: #6c757d;
+    font-size: 1.1rem;
+}
+.meta p strong {
+    color: #fff;
+    font-weight: 600;
+}
+
+/* Tests List Grid */
+.tests-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 25px;
+}
+
+/* Test Blocks */
+.test-block {
+    background-color: #1a1a24;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    padding: 25px;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.test-block:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.25);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.test-block h2 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin: 0 0 20px;
+    color: #f8f9fa;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    padding-bottom: 15px;
+}
+
+.skills-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    flex: 1;
+}
+
+.skill-card {
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    transition: all 0.2s ease;
+}
+
+.skill-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.skill-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 15px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.skill-header i {
+    font-size: 1.8rem;
+    margin-bottom: 4px;
+}
+
+/* Colors for specific skills */
+.listening .skill-header { color: #4facfe; }
+.reading .skill-header { color: #43e97b; }
+.writing .skill-header { color: #fa709a; }
+.speaking .skill-header { color: #f83600; }
+
+.btn-take-test {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Premium Gradient Buttons */
+.listening .btn-take-test { background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%); color: #fff; box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3); }
+.reading .btn-take-test { background: linear-gradient(135deg, #38f9d7 0%, #43e97b 100%); color: #004d40; box-shadow: 0 4px 15px rgba(67, 233, 123, 0.3); }
+.writing .btn-take-test { background: linear-gradient(135deg, #fee140 0%, #fa709a 100%); color: #fff; box-shadow: 0 4px 15px rgba(250, 112, 154, 0.3); }
+.speaking .btn-take-test { background: linear-gradient(135deg, #f9d423 0%, #f83600 100%); color: #fff; box-shadow: 0 4px 15px rgba(248, 54, 0, 0.3); }
+
+.btn-take-test:hover:not(:disabled) {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+}
+
+.btn-take-test:disabled {
+    background: #2a2a35 !important;
+    color: #555 !important;
+    box-shadow: none !important;
+    cursor: not-allowed;
+    border: 1px solid rgba(255,255,255,0.05);
+}
+
+/* Sidebar Ad */
+.ad-banner {
+    background: linear-gradient(135deg, #ffffff 0%, #f0f4f8 100%);
+    border-radius: 20px;
+    padding: 30px;
+    text-align: center;
+    color: #333;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+
+.ad-banner h3 {
+    margin-top: 0;
+    font-size: 1.5rem;
+    color: #1e88e5;
+    font-weight: 800;
+}
+
+.ad-banner .highlight {
+    font-size: 1.8rem;
+    color: #0d47a1;
+    display: block;
+    margin-top: 5px;
+}
+
+.ad-banner p {
+    color: #2e7d32;
+    font-weight: 600;
+    margin: 15px 0 25px;
+    font-size: 1.1rem;
+}
+
+.btn-learn-more {
+    background: linear-gradient(135deg, #43a047 0%, #2e7d32 100%);
+    color: white;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 30px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 25px;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 15px rgba(46, 125, 50, 0.3);
+}
+
+.btn-learn-more:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(46, 125, 50, 0.4);
+}
+
+.ad-banner img {
+    width: 100%;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.loading-spinner {
+    text-align: center;
+    padding: 60px;
+    color: #888;
+    font-size: 1.1rem;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px;
+    background: #1a1a24;
+    border-radius: 20px;
+    color: #888;
+    border: 1px dashed rgba(255,255,255,0.1);
+}
+
+@media (max-width: 768px) {
+    .collection-header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+    
+    .rating {
+        margin: 0 auto 20px;
+    }
+    
+    .tests-grid {
+        grid-template-columns: 1fr;
+    }
+}

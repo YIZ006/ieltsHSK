@@ -1,0 +1,263 @@
+/* ══════════════════════════════════════════════════════
+   IeltsWriting.razor — Full-Screen Split Layout
+   ══════════════════════════════════════════════════════ */
+
+:root {
+    --topbar-h: 52px;
+    --tabs-h: 44px;
+    --border: #e0e0e0;
+    --primary: #0a7cff;
+    --shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+
+/* ── LOADING / ERROR ── */
+.writing-loading {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; height: 60vh; gap: 16px; color: #666;
+}
+.loading-ring {
+    width: 44px; height: 44px;
+    border: 4px solid #e0e0e0; border-top-color: var(--primary);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.writing-error { text-align: center; padding: 80px 20px; color: #555; }
+.writing-error .error-icon { font-size: 3rem; margin-bottom: 12px; }
+
+/* ── TOP BAR ── */
+.writing-topbar {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center;
+    height: var(--topbar-h);
+    background: #fff; border-bottom: 1px solid var(--border);
+    padding: 0 20px; box-shadow: var(--shadow); gap: 16px;
+}
+.topbar-left { flex: 1; }
+.exam-title-short {
+    font-size: 0.85rem; font-weight: 600; color: #333;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 500px; display: block;
+}
+.topbar-center { flex: 0 0 auto; }
+.timer-box {
+    display: flex; align-items: center; gap: 6px;
+    background: #f0f4ff; border: 1px solid #c7d7ff;
+    border-radius: 20px; padding: 6px 16px;
+    font-weight: 600; font-size: 0.92rem; color: #1a56db;
+}
+.timer-box.timer-warning { background: #fff0f0; border-color: #fca5a5; color: #dc2626; }
+.timer-icon { font-size: 1rem; }
+.topbar-right { flex: 1; display: flex; justify-content: flex-end; }
+.btn-submit-exam {
+    background: #16a34a; color: #fff; border: none;
+    padding: 8px 20px; border-radius: 6px; font-weight: 700;
+    font-size: 0.9rem; cursor: pointer; transition: background 0.2s;
+}
+.btn-submit-exam:hover { background: #15803d; }
+.btn-exit-exam { background: transparent; border: 1px solid #cbd5e1; color: #475569; padding: 8px 14px; border-radius: 6px; margin-right: 8px; cursor: pointer; }
+.btn-exit-exam:hover { border-color: #e83e8c; color: #e83e8c; }
+.test-session-status { color: #b91c1c; font-size: 0.85rem; font-weight: 700; }
+
+/* ── TASK TABS ── */
+.writing-task-tabs {
+    position: sticky; top: var(--topbar-h); z-index: 99;
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 20px; height: var(--tabs-h);
+    background: #f8f9fb; border-bottom: 1px solid var(--border);
+}
+.task-tab-btn {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 18px; border: 1px solid transparent;
+    border-radius: 6px; background: transparent; cursor: pointer;
+    font-size: 0.88rem; font-weight: 600; color: #555;
+    transition: all 0.15s;
+}
+.task-tab-btn:hover { background: #e8f0fe; color: var(--primary); }
+.task-tab-btn.active {
+    background: #fff; border-color: var(--border);
+    color: var(--primary); box-shadow: var(--shadow);
+}
+.word-count-badge {
+    font-size: 0.75rem; background: #e8f0fe; color: var(--primary);
+    border-radius: 10px; padding: 2px 8px; font-weight: 500;
+}
+.task-tab-btn.active .word-count-badge { background: var(--primary); color: #fff; }
+
+/* ── SPLIT LAYOUT ── */
+.writing-split {
+    display: flex;
+    height: calc(100vh - var(--topbar-h) - var(--tabs-h));
+    overflow: hidden;
+}
+
+/* ── PROMPT COLUMN (LEFT) ── */
+.prompt-col {
+    flex: 1 1 50%; width: 50%;
+    overflow-y: auto;
+    padding: 32px 40px;
+    background: #f4f6f9; /* Distinct light blue-gray background for the reading/prompt side */
+    border-right: 1px solid var(--border);
+}
+
+.task-instruction { margin-bottom: 24px; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.03); }
+
+.task-title {
+    font-size: 1.4rem; font-weight: 800; color: #1a1a1a;
+    margin: 0 0 12px;
+    border-bottom: 2px solid var(--primary);
+    display: inline-block;
+    padding-bottom: 4px;
+}
+.task-meta {
+    font-size: 0.95rem; color: #555; margin: 0 0 16px;
+    font-style: italic;
+}
+.task-prompt {
+    font-size: 1.05rem; line-height: 1.8; color: #222;
+    margin-bottom: 16px;
+}
+.task-prompt p { margin: 0 0 12px; }
+.task-word-req {
+    font-size: 0.95rem; color: #444; margin: 0;
+    padding: 10px 16px; background: #f8f9fb;
+    border-left: 4px solid var(--primary); border-radius: 4px;
+}
+
+.task-image-wrap {
+    margin-top: 20px;
+}
+.task-image {
+    width: 100%; max-width: 100%;
+    height: auto; border-radius: 8px;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+
+/* ── SPLIT DIVIDER ── */
+.split-divider {
+    width: 6px; flex-shrink: 0;
+    background: #e2e8f0;
+    cursor: col-resize;
+    transition: background 0.2s;
+}
+.split-divider:hover {
+    background: #cbd5e1;
+}
+
+/* ── EDITOR COLUMN (RIGHT) ── */
+.editor-col {
+    flex: 1 1 50%; width: 50%;
+    display: flex; flex-direction: column;
+    background: #eef2f6; /* Outer background to frame the white paper */
+    overflow: hidden;
+    padding: 24px; /* Padding to make the text area look like a piece of paper */
+}
+
+.essay-textarea {
+    flex: 1;
+    width: 100%; height: 100%;
+    resize: none; border: 1px solid var(--border); outline: none;
+    background: #fff;
+    padding: 32px 40px;
+    font-size: 1.05rem; line-height: 1.9;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    color: #1a1a1a;
+    box-sizing: border-box;
+    border-radius: 8px 8px 0 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+.essay-textarea::placeholder { color: #aaa; font-style: italic; }
+.essay-textarea:focus { border-color: var(--primary); box-shadow: 0 4px 12px rgba(10, 124, 255, 0.15); }
+
+.editor-footer {
+    flex-shrink: 0;
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 32px;
+    border-top: none;
+    border: 1px solid var(--border);
+    border-top: 1px dashed #e2e8f0;
+    background: #f8fafc;
+    font-size: 0.9rem; color: #555;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+.word-count { font-size: 0.88rem; }
+.word-count.count-low strong { color: #e85c00; }
+.word-count.count-ok strong { color: #16a34a; }
+.count-check {
+    color: #16a34a; font-weight: 700; font-size: 0.85rem;
+}
+
+.writing-score-panel {
+    margin: 18px auto 28px;
+    max-width: 920px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    padding: 18px 22px;
+}
+
+.writing-score-panel > div:first-child,
+.score-overall,
+.score-criteria {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.score-label,
+.score-overall span,
+.score-criteria span {
+    color: #64748b;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.score-overall {
+    margin-top: 14px;
+    padding: 14px 0;
+    border-top: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.score-overall strong {
+    color: var(--primary);
+    font-size: 2rem;
+}
+
+.writing-score-panel p {
+    color: #475569;
+    margin: 12px 0;
+    line-height: 1.5;
+}
+
+.score-criteria {
+    align-items: stretch;
+}
+
+.score-criteria > div {
+    flex: 1;
+    min-width: 0;
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.score-criteria strong {
+    display: block;
+    color: #0f172a;
+    margin-top: 4px;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+    .writing-split { flex-direction: column; height: auto; overflow: visible; }
+    .prompt-col, .editor-col { width: 100%; flex: none; }
+    .split-divider { width: 100%; height: 4px; cursor: row-resize; }
+    .essay-textarea { min-height: 300px; }
+    .writing-split { height: auto; }
+    .score-criteria { flex-direction: column; }
+}

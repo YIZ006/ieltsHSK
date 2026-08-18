@@ -1,0 +1,180 @@
+.navbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 1rem;
+    background-color: var(--ig-bg);
+}
+
+.navbar-brand {
+    display: flex;
+    align-items: center;
+}
+
+.brand-text {
+    font-size: 1.8rem;
+    font-weight: 800;
+    font-style: italic;
+    color: var(--ig-text);
+    letter-spacing: 0.5px;
+}
+
+.navbar-brand a {
+    text-decoration: none;
+}
+
+.navbar-brand a:hover .brand-text {
+    color: var(--ig-text-secondary);
+}
+
+.navbar-toggler {
+    background-color: transparent;
+    border: 1px solid var(--ig-border);
+    color: var(--ig-text);
+    padding: 0.25rem 0.75rem;
+    font-size: 1.25rem;
+    line-height: 1;
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+
+.navbar-toggler:focus {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(255, 51, 51, 0.25);
+}
+
+.navbar-collapse {
+    flex-basis: 100%;
+    flex-grow: 1;
+    align-items: center;
+    display: flex;
+}
+
+.navbar-collapse.collapse {
+    display: none;
+}
+
+.navbar-nav {
+    display: flex;
+    flex-direction: column;
+    padding-left: 0;
+    margin-bottom: 0;
+    list-style: none;
+}
+
+.me-auto {
+    margin-right: auto;
+}
+
+.ms-auto {
+    margin-left: auto;
+}
+
+.nav-item {
+    margin: 0.25rem 0;
+}
+
+.nav-link {
+    display: block;
+    padding: 0.5rem 1rem;
+    color: var(--ig-text-secondary);
+    text-decoration: none !important;
+    font-weight: 500;
+    transition: color 0.2s, background-color 0.2s;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    outline: none;
+    text-align: left;
+    width: 100%;
+}
+
+.nav-link:hover, .nav-link:focus {
+    color: var(--ig-text);
+    background-color: rgba(0, 0, 0, 0.05);
+    outline: none;
+    text-decoration: none !important;
+}
+
+@media (prefers-color-scheme: dark) {
+    .nav-link:hover, .nav-link:focus {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+}
+
+.nav-link.active {
+    color: var(--ig-text);
+    font-weight: 700;
+}
+
+.welcome-text {
+    color: var(--ig-text);
+    cursor: default;
+}
+
+.welcome-text:hover {
+    background-color: transparent;
+}
+
+.btn-auth {
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 0.5rem 1.2rem;
+    margin-left: 0.5rem;
+}
+
+.btn-register {
+    background-color: var(--ig-primary);
+    color: #ffffff;
+    font-weight: 600;
+    text-align: center;
+    border-radius: 8px;
+    border: none;
+}
+
+.btn-register:hover {
+    background-color: var(--ig-primary-hover);
+    color: #ffffff;
+}
+
+.btn-logout {
+    color: var(--ig-danger);
+    cursor: pointer;
+    background: transparent;
+    border: none;
+}
+
+.btn-logout:hover {
+    color: #ed4956;
+    background-color: rgba(237, 73, 86, 0.1);
+}
+
+@media (min-width: 768px) {
+    .navbar {
+        flex-wrap: nowrap;
+        padding: 0.5rem 2rem;
+    }
+
+    .navbar-collapse {
+        display: flex !important;
+        flex-basis: auto;
+    }
+
+    .navbar-toggler {
+        display: none;
+    }
+
+    .navbar-nav {
+        flex-direction: row;
+    }
+
+    .nav-item {
+        margin: 0 0.25rem;
+    }
+
+    .nav-link {
+        text-align: center;
+        width: auto;
+    }
+}

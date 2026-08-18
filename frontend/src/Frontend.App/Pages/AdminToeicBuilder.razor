@@ -1,0 +1,1617 @@
+@page "/admin/toeic-builder"
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject ToeicBuilderService BuilderService
+@inject MockTestService MockTestService
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<PageTitle>Admin — Tạo đề TOEIC</PageTitle>
+
+@* ��� EXAM LIST PANEL ��� *@
+@if (showExamList)
+{
+    <div class="exam-list-overlay">
+        <div class="exam-list-panel">
+            <div class="exam-list-header">
+                <h2>📋 Danh sách đề TOEIC</h2>
+                <button class="btn-close-list" @onclick="() => showExamList = false">✕</button>
+            </div>
+            @if (examList == null)
+            {
+                <div class="exam-list-loading"><span class="spinner-inline"></span> Đang tải...</div>
+            }
+            else if (!examList.Any())
+            {
+                <div class="exam-list-empty">Chưa có đề thi nào.</div>
+            }
+            else
+            {
+                <table class="exam-table">
+                    <thead><tr><th>Bộ đề</th><th>Tên bài</th><th>Thao tác</th></tr></thead>
+                    <tbody>
+                    @foreach (var exam in examList)
+                    {
+                        var e = exam;
+                        <tr>
+                            <td>@e.CollectionName</td>
+                            <td>@e.Title</td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(e.ToeicUrl))
+                                {
+                                    <button class="btn-edit-exam" @onclick="() => LoadExamForEdit(e)">✏️ Sửa</button>
+                                }
+                                else
+                                {
+                                    <span style="color:#888;font-size:0.85em">(Không có link TOEIC)</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+<div class="toeic-builder-topbar">
+    <button class="btn-show-list" @onclick="OpenExamList">📋 Xem & Sửa đề cũ</button>
+    
+    <InputFile OnChange="HandleJsonImport" accept=".json" class="d-none" id="import-json" />
+    <label for="import-json" class="btn-fast-import">📁 Upload JSON</label>
+
+    @if (editingMockTestId.HasValue)
+    {
+        <span class="editing-badge">✏️ Đang sửa: @editingTitle</span>
+        <button class="btn-new-exam" @onclick="ResetToNew">+ Tạo đề mới</button>
+    }
+</div>
+
+<div class="builder-root">
+    @* ─── SIDEBAR STEPS ─── *@
+    <aside class="builder-sidebar">
+        <div class="sidebar-logo">
+            <span class="logo-dot"></span>
+            <span>TOEIC Builder</span>
+        </div>
+        <nav class="step-nav">
+            @for (int s = 0; s < steps.Length; s++)
+            {
+                var si = s;
+                <button class="step-item @(currentStep == si ? "active" : si < currentStep ? "done" : "")"
+                        @onclick="() => GoStep(si)">
+                    <span class="step-num">@(si < currentStep ? "✓" : (si + 1).ToString())</span>
+                    <span class="step-label">@steps[si]</span>
+                </button>
+            }
+        </nav>
+        <div class="sidebar-footer">
+            <button class="btn-save-draft" @onclick="SaveDraft" disabled="@isSavingDraft">
+                @if (isSavingDraft)
+                {
+                    <span class="spinner-inline" style="width:12px;height:12px"></span>
+                }
+                else
+                {
+                    <span>💾</span>
+                }
+                Lưu nháp
+            </button>
+            @if (hasDraft)
+            {
+                <button class="btn-clear-draft" @onclick="ClearDraft">🗑️ Xóa nháp</button>
+            }
+            @if (!string.IsNullOrEmpty(draftToast))
+            {
+                <div class="draft-toast @draftToastClass">@draftToast</div>
+            }
+        </div>
+    </aside>
+
+    @* ─── MAIN PANEL ─── *@
+    <main class="builder-main" id="builder-main">
+
+        @* ────── STEP 0: Thông tin đề ────── *@
+        @if (currentStep == 0)
+        {
+            <section class="builder-section">
+                <div class="section-header">
+                    <h2>📋 Thông tin đề thi</h2>
+                    <p>Điền các thông tin cơ bản cho bộ đề TOEIC</p>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group full">
+                        <label>Tên bộ đề <span class="req">*</span></label>
+                        <input @bind="collectionName" class="form-input" placeholder="VD: TOEIC ETS 2024 Volume 1" />
+                    </div>
+                    <div class="form-group full">
+                        <label>Tên bài thi <span class="req">*</span></label>
+                        <input @bind="examTitle" class="form-input" placeholder="VD: Test 1" />
+                    </div>
+                    <div class="form-group full">
+                        <label>Mô tả</label>
+                        <textarea @bind="examDescription" class="form-input" rows="3" placeholder="Mô tả ngắn gọn về đề thi..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Thời gian thi (phút)</label>
+                        <input type="number" @bind="examTimeMins" class="form-input" min="30" max="180" />
+                    </div>
+                </div>
+                
+                @* ─── Autofill Tool ─── *@
+                <div class="autofill-section">
+                    <h3 class="autofill-title">⚡ Điền nhanh Link R2 (Tự động điền theo câu hỏi)</h3>
+                    <p class="autofill-desc">Nhập thư mục gốc chứa file trên R2. Hệ thống sẽ tự động ghép với <code>{ID}.jpg</code> (câu đơn) hoặc <code>{StartID}-{EndID}.mp3</code> (nhóm câu) tương ứng (VD: <code>/1.mp3</code>, <code>/32-34.mp3</code>).</p>
+                    <div class="form-grid">
+                        <div class="form-group full">
+                            <label>Base URL Ảnh</label>
+                            <input @bind="autofillBaseImageUrl" class="form-input" placeholder="VD: https://pub-xxx.r2.dev/ETS 2026 Test 1/Ảnh" />
+                        </div>
+                        <div class="form-group full">
+                            <label>Base URL Audio</label>
+                            <input @bind="autofillBaseAudioUrl" class="form-input" placeholder="VD: https://pub-xxx.r2.dev/ETS 2026 Test 1/Audio" />
+                        </div>
+                    </div>
+                    <button class="btn-autofill" @onclick="AutofillMediaLinks">🔄 Tự động điền cho tất cả các Part</button>
+                </div>
+
+                <div class="section-footer">
+                    <button class="btn-next" @onclick="() => GoStep(1)">Tiếp theo: Part 1 →</button>
+                </div>
+            </section>
+        }
+
+        @* ────── STEP 1: Part 1 — Photographs ────── *@
+        else if (currentStep == 1)
+        {
+            <section class="builder-section">
+                <div class="section-header">
+                    <h2>📸 Part 1 — Photographs <span class="q-badge">6 câu</span></h2>
+                    <p>Mỗi câu gồm 1 ảnh + 1 file audio. Đáp án A/B/C/D đọc trong audio.</p>
+                </div>
+                @for (int i = 0; i < part1Groups.Count; i++)
+                {
+                    var gi = i;
+                    var g = part1Groups[gi];
+                    <div class="q-card">
+                        <div class="q-card-header">
+                            <span class="q-badge-num">Câu @(gi + 1)</span>
+                            @if (!string.IsNullOrEmpty(g.CorrectAnswer))
+                            {
+                                <span class="ans-tag">Đáp án: @g.CorrectAnswer</span>
+                            }
+                        </div>
+                        <div class="q-card-body two-col">
+                            @* Ảnh: dán link R2 *@
+                            <div class="link-input-group">
+                                <label class="link-label">🖼️ Link ảnh (R2)</label>
+                                <input @bind="g.ImageUrl" @bind:event="oninput" class="form-input link-url-input"
+                                       placeholder="https://r2.example.com/exams/p1-q1.jpg" />
+                                @if (!string.IsNullOrWhiteSpace(g.ImageUrl))
+                                {
+                                    <img src="@g.ImageUrl" class="preview-img" alt="preview"
+                                         onerror="this.style.display='none'" />
+                                    <span class="link-ok">✅ Ảnh</span>
+                                }
+                            </div>
+                            @* Audio: dán link R2 *@
+                            <div class="link-input-group">
+                                <label class="link-label">🎵 Link audio (R2)</label>
+                                <input @bind="g.AudioUrl" @bind:event="oninput" class="form-input link-url-input"
+                                       placeholder="https://r2.example.com/exams/p1-q1.mp3" />
+                                @if (!string.IsNullOrWhiteSpace(g.AudioUrl))
+                                {
+                                    <audio controls src="@g.AudioUrl" class="preview-audio"></audio>
+                                }
+                            </div>
+                        </div>
+                        <div class="q-card-answer">
+                            <label>Đáp án đúng:</label>
+                            @foreach (var opt in new[] { "A", "B", "C", "D" })
+                            {
+                                var o = opt;
+                                <button class="ans-btn @(g.CorrectAnswer == o ? "selected" : "")"
+                                        @onclick="() => g.CorrectAnswer = o">@o</button>
+                            }
+                        </div>
+                        @* Nội dung từng đáp án *@
+                        <div class="opts-detail">
+                            <div class="opts-detail-title">📝 Nội dung đáp án (ghi lại nội dung trong audio)</div>
+                            <textarea class="form-input bulk-answer-input" rows="4"
+                                      value="@g.BulkOptionText"
+                                      @oninput="(e) => ApplyBulkOptions(g, e.Value?.ToString(), 4)"
+                                      placeholder="Dán đáp án theo mẫu: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C&#10;D. Nội dung D"></textarea>
+                            <span class="bulk-answer-hint">Dán một lần, hệ thống sẽ tự điền vào các ô A–D.</span>
+                            <div class="options-grid">
+                                @foreach (var opt in g.Options)
+                                {
+                                    var o = opt;
+                                    <div class="option-row @(g.CorrectAnswer == o.Label ? "correct-opt" : "")">
+                                        <span class="opt-label">@o.Label</span>
+                                        <input @bind="o.Text" class="form-input" placeholder="Nội dung đáp án @o.Label..." />
+                                        <button class="mark-correct @(g.CorrectAnswer == o.Label ? "active" : "")"
+                                                @onclick="() => g.CorrectAnswer = o.Label">✓</button>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        @* Giải thích *@
+                        <div class="expl-section">
+                            <div class="expl-title">💡 Giải thích đáp án</div>
+                            <textarea @bind="g.Explanation" class="form-input" rows="2"
+                                      placeholder="VD: Đáp án B đúng vì trong audio người nói... Đáp án A sai vì..."></textarea>
+                        </div>
+                    </div>
+                }
+                <div class="step-footer">
+                    <button class="btn-prev" @onclick="() => GoStep(0)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(2)">Tiếp: Part 2 →</button>
+                </div>
+            </section>
+        }
+
+        @* ────── STEP 2: Part 2 — Question Response ────── *@
+        else if (currentStep == 2)
+        {
+            <section class="builder-section">
+                <div class="section-header">
+                    <h2>🎧 Part 2 — Question-Response <span class="q-badge">25 câu</span></h2>
+                    <p>Mỗi câu chỉ gồm 1 file audio. Đáp án là A/B/C.</p>
+                </div>
+                <div class="p2-list">
+                    @for (int i = 0; i < part2Groups.Count; i++)
+                    {
+                        var gi = i;
+                        var g = part2Groups[gi];
+                        <div class="q-card">
+                            <div class="q-card-header">
+                                <span class="q-badge-num">Câu @(gi + 7)</span>
+                                @if (!string.IsNullOrEmpty(g.CorrectAnswer))
+                                {
+                                    <span class="ans-tag">Đáp án: @g.CorrectAnswer</span>
+                                }
+                            </div>
+                            @* Audio: dán link R2 *@
+                            <div class="link-input-group">
+                                <label class="link-label">🎵 Link audio câu hỏi (R2)</label>
+                                <input @bind="g.AudioUrl" @bind:event="oninput" class="form-input link-url-input"
+                                       placeholder="https://r2.example.com/exams/p2-q7.mp3" />
+                                @if (!string.IsNullOrWhiteSpace(g.AudioUrl))
+                                {
+                                    <audio controls src="@g.AudioUrl" class="preview-audio"></audio>
+                                }
+                            </div>
+                            <div class="form-group full">
+                                <label>Nội dung câu hỏi</label>
+                                <input @bind="g.QuestionText" class="form-input"
+                                       placeholder="VD: Where will the meeting be held?" />
+                            </div>
+                            @* Nội dung đáp án A/B/C *@
+                            <div class="opts-detail">
+                                <div class="opts-detail-title">📝 Nội dung đáp án (ghi lại nội dung trong audio)</div>
+                                <textarea class="form-input bulk-answer-input" rows="3"
+                                          value="@g.BulkOptionText"
+                                          @oninput="(e) => ApplyBulkOptions(g, e.Value?.ToString(), 3)"
+                                          placeholder="Dán đáp án theo mẫu: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C"></textarea>
+                                <span class="bulk-answer-hint">Dán một lần, hệ thống sẽ tự điền vào các ô A–C.</span>
+                                <div class="options-grid">
+                                    @foreach (var opt in g.Options.Take(3))
+                                    {
+                                        var o = opt;
+                                        <div class="option-row @(g.CorrectAnswer == o.Label ? "correct-opt" : "")">
+                                            <span class="opt-label">@o.Label</span>
+                                            <input @bind="o.Text" class="form-input" placeholder="Nội dung đáp án @o.Label..." />
+                                            <button class="mark-correct @(g.CorrectAnswer == o.Label ? "active" : "")"
+                                                    @onclick="() => g.CorrectAnswer = o.Label">✓</button>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            @* Giải thích *@
+                            <div class="expl-section">
+                                <div class="expl-title">💡 Giải thích đáp án</div>
+                                <textarea @bind="g.Explanation" class="form-input" rows="2"
+                                          placeholder="VD: Đáp án B đúng vì..."></textarea>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="step-footer">
+                    <button class="btn-prev" @onclick="() => GoStep(1)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(3)">Tiếp: Part 3 →</button>
+                </div>
+            </section>
+        }
+
+        @* ────── STEP 3: Part 3 — Conversations ────── *@
+        else if (currentStep == 3)
+        {
+            <section class="builder-section">
+                <div class="section-header">
+                    <h2>💬 Part 3 — Conversations <span class="q-badge">13 nhóm × 3 câu = 39 câu</span></h2>
+                    <p>Mỗi nhóm có 1 audio và 3 câu hỏi cố định.</p>
+                </div>
+                @{ int p3StartQ = 32; }
+                @for (int gi = 0; gi < part3Groups.Count; gi++)
+                {
+                    var gidx = gi;
+                    var g = part3Groups[gidx];
+                    int gStartQ = p3StartQ + gidx * 3;
+                    <div class="passage-card">
+                        <div class="passage-card-header">
+                            <span class="q-badge-num">Nhóm @(gidx+1) — Câu @gStartQ–@(gStartQ+2)</span>
+                        </div>
+                        <div class="link-input-group">
+                            <label class="link-label">🎵 Link audio hội thoại (R2)</label>
+                            <input @bind="g.AudioUrl" @bind:event="oninput" class="form-input link-url-input"
+                                   placeholder="https://r2.example.com/exams/p3-g1.mp3" />
+                            @if (!string.IsNullOrWhiteSpace(g.AudioUrl))
+                            {
+                                <audio controls src="@g.AudioUrl" class="preview-audio"></audio>
+                            }
+                        </div>
+                        <div class="link-input-group">
+                            <label class="link-label">🖼️ Link ảnh minh hoạ (R2, nếu có)</label>
+                            <input @bind="g.ImageUrl" @bind:event="oninput" class="form-input link-url-input"
+                                   placeholder="https://r2.example.com/exams/p3-g1.jpg" />
+                            @if (!string.IsNullOrWhiteSpace(g.ImageUrl))
+                            {
+                                <img src="@g.ImageUrl" class="preview-img" alt="Ảnh minh hoạ" onerror="this.style.display='none'" />
+                            }
+                        </div>
+                        <div class="form-group full">
+                            <label>📝 Transcript hội thoại (chỉ hiện khi xem đáp án)</label>
+                            <textarea @bind="g.Transcript" class="form-input" rows="6"
+                                      placeholder="Dán nội dung hội thoại người nói ở đây..."></textarea>
+                        </div>
+                        @for (int qi = 0; qi < g.Questions.Count; qi++)
+                        {
+                            var qidx = qi;
+                            var q = g.Questions[qidx];
+                            <div class="q-card-text nested">
+                                <div class="q-card-header"><span class="q-badge-num-sm">Câu @(gStartQ + qidx)</span></div>
+                                <div class="form-group full">
+                                    <label>Câu hỏi</label>
+                                    <input @bind="q.Text" class="form-input" placeholder="VD: What are the speakers discussing?" />
+                                </div>
+                                <textarea class="form-input bulk-answer-input" rows="4"
+                                          value="@q.BulkOptionText"
+                                          @oninput="(e) => ApplyBulkOptions(q, e.Value?.ToString())"
+                                          placeholder="Dán đáp án: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C&#10;D. Nội dung D"></textarea>
+                                <span class="bulk-answer-hint">Dán một lần để tự động điền vào các ô A–D.</span>
+                                <div class="options-grid">
+                                    @foreach (var opt in q.Options)
+                                    {
+                                        var o = opt;
+                                        <div class="option-row @(q.CorrectOptionLabel == o.Label ? "correct-opt" : "")">
+                                            <span class="opt-label">@o.Label</span>
+                                            <input @bind="o.Text" class="form-input" placeholder="Nội dung đáp án @o.Label" />
+                                            <button class="mark-correct @(q.CorrectOptionLabel == o.Label ? "active" : "")"
+                                                    @onclick="() => q.CorrectOptionLabel = o.Label">✓</button>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="expl-section">
+                                    <div class="expl-title">💡 Giải thích đáp án</div>
+                                    <textarea @bind="q.Explanation" class="form-input" rows="2"
+                                              placeholder="VD: Đáp án B đúng vì trong hội thoại người nói..."></textarea>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                <div class="step-footer">
+                    <button class="btn-prev" @onclick="() => GoStep(2)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(4)">Tiếp: Part 4 →</button>
+                </div>
+            </section>
+        }
+
+        @* ────── STEP 4: Part 4 — Short Talks ────── *@
+        else if (currentStep == 4)
+        {
+            <section class="builder-section">
+                <div class="section-header">
+                    <h2>🎙️ Part 4 — Short Talks <span class="q-badge">10 nhóm × 3 câu = 30 câu</span></h2>
+                    <p>Mỗi nhóm có 1 audio và 3 câu hỏi cố định.</p>
+                </div>
+                @{ int p4StartQ = 71; }
+                @for (int gi = 0; gi < part4Groups.Count; gi++)
+                {
+                    var gidx = gi;
+                    var g = part4Groups[gidx];
+                    int gStartQ = p4StartQ + gidx * 3;
+                    <div class="passage-card">
+                        <div class="passage-card-header">
+                            <span class="q-badge-num">Nhóm @(gidx+1) — Câu @gStartQ–@(gStartQ+2)</span>
+                        </div>
+                        <div class="link-input-group">
+                            <label class="link-label">🎵 Link audio độc thoại (R2)</label>
+                            <input @bind="g.AudioUrl" @bind:event="oninput" class="form-input link-url-input"
+                                   placeholder="https://r2.example.com/exams/p4-g1.mp3" />
+                            @if (!string.IsNullOrWhiteSpace(g.AudioUrl))
+                            {
+                                <audio controls src="@g.AudioUrl" class="preview-audio"></audio>
+                            }
+                        </div>
+                        <div class="link-input-group">
+                            <label class="link-label">🖼️ Link ảnh minh hoạ (R2, nếu có)</label>
+                            <input @bind="g.ImageUrl" @bind:event="oninput" class="form-input link-url-input"
+                                   placeholder="https://r2.example.com/exams/p4-g1.jpg" />
+                            @if (!string.IsNullOrWhiteSpace(g.ImageUrl))
+                            {
+                                <img src="@g.ImageUrl" class="preview-img" alt="Ảnh minh hoạ" onerror="this.style.display='none'" />
+                            }
+                        </div>
+                        <div class="form-group full">
+                            <label>📝 Transcript bài nói (chỉ hiện khi xem đáp án)</label>
+                            <textarea @bind="g.Transcript" class="form-input" rows="6"
+                                      placeholder="Dán nội dung bài nói ở đây..."></textarea>
+                        </div>
+                        @for (int qi = 0; qi < g.Questions.Count; qi++)
+                        {
+                            var qidx = qi;
+                            var q = g.Questions[qidx];
+                            <div class="q-card-text nested">
+                                <div class="q-card-header"><span class="q-badge-num-sm">Câu @(gStartQ + qidx)</span></div>
+                                <div class="form-group full">
+                                    <label>Câu hỏi</label>
+                                    <input @bind="q.Text" class="form-input" placeholder="VD: What is the talk mainly about?" />
+                                </div>
+                                <textarea class="form-input bulk-answer-input" rows="4"
+                                          value="@q.BulkOptionText"
+                                          @oninput="(e) => ApplyBulkOptions(q, e.Value?.ToString())"
+                                          placeholder="Dán đáp án: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C&#10;D. Nội dung D"></textarea>
+                                <span class="bulk-answer-hint">Dán một lần để tự động điền vào các ô A–D.</span>
+                                <div class="options-grid">
+                                    @foreach (var opt in q.Options)
+                                    {
+                                        var o = opt;
+                                        <div class="option-row @(q.CorrectOptionLabel == o.Label ? "correct-opt" : "")">
+                                            <span class="opt-label">@o.Label</span>
+                                            <input @bind="o.Text" class="form-input" placeholder="Nội dung đáp án @o.Label" />
+                                            <button class="mark-correct @(q.CorrectOptionLabel == o.Label ? "active" : "")"
+                                                    @onclick="() => q.CorrectOptionLabel = o.Label">✓</button>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="expl-section">
+                                    <div class="expl-title">💡 Giải thích đáp án</div>
+                                    <textarea @bind="q.Explanation" class="form-input" rows="2"
+                                              placeholder="VD: Đáp án C đúng vì người nói đề cập đến..."></textarea>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                <div class="step-footer">
+                    <button class="btn-prev" @onclick="() => GoStep(3)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(5)">Tiếp: Part 5 →</button>
+                </div>
+            </section>
+        }
+
+        @* ────── STEP 5: Part 5 — Incomplete Sentences ────── *@
+        else if (currentStep == 5)
+        {
+            <section class="builder-section">
+                <div class="section-header">
+                    <h2>📝 Part 5 — Incomplete Sentences <span class="q-badge">30 câu</span></h2>
+                    <p>Điền nội dung câu hỏi và 4 đáp án. Chọn đáp án đúng.</p>
+                </div>
+                @for (int i = 0; i < part5Questions.Count; i++)
+                {
+                    var qi = i;
+                    var q = part5Questions[qi];
+                    <div class="q-card-text">
+                        <div class="q-card-header">
+                            <span class="q-badge-num">Câu @(101 + qi)</span>
+                        </div>
+                        <div class="form-group full">
+                            <label>Nội dung câu hỏi</label>
+                            <textarea @bind="q.Text" class="form-input" rows="2" placeholder="VD: The manager _____ the report before the deadline."></textarea>
+                        </div>
+                        <textarea class="form-input bulk-answer-input" rows="4"
+                                  value="@q.BulkOptionText"
+                                  @oninput="(e) => ApplyBulkOptions(q, e.Value?.ToString())"
+                                  placeholder="Dán đáp án: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C&#10;D. Nội dung D"></textarea>
+                        <span class="bulk-answer-hint">Dán một lần để tự động điền vào các ô A–D.</span>
+                        <div class="options-grid">
+                            @foreach (var opt in q.Options)
+                            {
+                                var o = opt;
+                                <div class="option-row @(q.CorrectOptionLabel == o.Label ? "correct-opt" : "")">
+                                    <span class="opt-label">@o.Label</span>
+                                    <input @bind="o.Text" class="form-input" placeholder="Đáp án @o.Label" />
+                                    <button class="mark-correct @(q.CorrectOptionLabel == o.Label ? "active" : "")"
+                                            @onclick="() => q.CorrectOptionLabel = o.Label" title="Chọn đáp án đúng">✓</button>
+                                </div>
+                            }
+                        </div>
+                        <div class="expl-section">
+                            <div class="expl-title">💡 Giải thích đáp án</div>
+                            <textarea @bind="q.Explanation" class="form-input" rows="2"
+                                      placeholder="VD: Đáp án A đúng vì từ 'submitted' là dạng bị động phù hợp với chủ ngữ..."></textarea>
+                        </div>
+                    </div>
+                }
+                <div class="step-footer">
+                    <button class="btn-prev" @onclick="() => GoStep(4)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(6)">Tiếp: Part 6 →</button>
+                </div>
+            </section>
+        }
+
+        @* ────── STEP 6: Part 6 — Text Completion ────── *@
+        else if (currentStep == 6)
+        {
+            <section class="builder-section">
+                <div class="section-header">
+                    <h2>📄 Part 6 — Text Completion <span class="q-badge">16 câu / 4 bài</span></h2>
+                    <p>Mỗi bài đọc dùng một ảnh đoạn văn từ R2 + 4 câu hỏi điền vào chỗ trống.</p>
+                </div>
+                @for (int gi = 0; gi < part6Groups.Count; gi++)
+                {
+                    var gidx = gi;
+                    var g = part6Groups[gidx];
+                    <div class="passage-card">
+                        <div class="passage-card-header">
+                            <span class="q-badge-num">Bài @(gidx + 1) — Câu @(131 + gidx * 4)–@(134 + gidx * 4)</span>
+                        </div>
+                        <div class="link-input-group">
+                            <label class="link-label">🖼️ Link ảnh đoạn văn (R2)</label>
+                            <input @bind="g.ImageUrl" @bind:event="oninput" class="form-input link-url-input"
+                                   placeholder="https://r2.example.com/exams/p6-g1.jpg" />
+                            @if (!string.IsNullOrWhiteSpace(g.ImageUrl))
+                            {
+                                <img src="@g.ImageUrl" class="preview-img" alt="Đoạn văn Part 6" onerror="this.style.display='none'" />
+                            }
+                        </div>
+                        @for (int qi = 0; qi < g.Questions.Count; qi++)
+                        {
+                            var qidx = qi;
+                            var q = g.Questions[qidx];
+                            <div class="q-card-text nested">
+                                <div class="q-card-header"><span class="q-badge-num-sm">Câu @(131 + gidx * 4 + qidx)</span></div>
+                                <textarea class="form-input bulk-answer-input" rows="4"
+                                          value="@q.BulkOptionText"
+                                          @oninput="(e) => ApplyBulkOptions(q, e.Value?.ToString())"
+                                          placeholder="Dán đáp án: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C&#10;D. Nội dung D"></textarea>
+                                <span class="bulk-answer-hint">Dán một lần để tự động điền vào các ô A–D.</span>
+                                <div class="options-grid">
+                                    @foreach (var opt in q.Options)
+                                    {
+                                        var o = opt;
+                                        <div class="option-row @(q.CorrectOptionLabel == o.Label ? "correct-opt" : "")">
+                                            <span class="opt-label">@o.Label</span>
+                                            <input @bind="o.Text" class="form-input" />
+                                            <button class="mark-correct @(q.CorrectOptionLabel == o.Label ? "active" : "")"
+                                                    @onclick="() => q.CorrectOptionLabel = o.Label">✓</button>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="expl-section">
+                                    <div class="expl-title">💡 Giải thích đáp án</div>
+                                    <textarea @bind="q.Explanation" class="form-input" rows="2"
+                                              placeholder="VD: Đáp án A đúng vì đoạn văn đề cập..."></textarea>
+                                </div>
+                            </div>
+                        }
+                        <div class="form-group full">
+                            <label>🌐 Dịch đoạn văn</label>
+                            <textarea @bind="g.Translation" class="form-input" rows="8"
+                                      placeholder="Dán bản dịch tiếng Việt của đoạn văn ở đây..."></textarea>
+                            <span class="bulk-answer-hint">Phần dịch được hiển thị ở cuối bài khi xem đáp án. Mẹo: Dùng thẻ <code>&lt;red&gt;chữ&lt;/red&gt;</code> để tô đỏ, hoặc thay bằng <code>green, blue, orange, purple</code>.</span>
+                        </div>
+                    </div>
+                }
+                <div class="step-footer">
+                    <button class="btn-prev" @onclick="() => GoStep(5)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(7)">Tiếp: Part 7 →</button>
+                </div>
+            </section>
+        }
+
+        @* ────── STEP 7: Part 7 — Reading Comprehension ────── *@
+        else if (currentStep == 7)
+        {
+            <section class="builder-section">
+                <div class="section-header">
+                    <h2>📚 Part 7 — Reading Comprehension <span class="q-badge">54 câu</span></h2>
+                    <p>Mỗi bài đọc dùng ảnh đoạn văn từ R2. Chọn số câu hỏi (2–5) cho mỗi nhóm.</p>
+                </div>
+                <div class="p7-toolbar">
+                    <button class="btn-add-group" @onclick="AddPart7Group" disabled="@(!CanAddPart7Group)">+ Thêm bài đọc</button>
+                    <span class="p7-count">@part7Groups.Count bài đọc | @Part7QuestionCount/@MaxPart7Questions câu hỏi</span>
+                </div>
+                @for (int gi = 0; gi < part7Groups.Count; gi++)
+                {
+                    var gidx = gi;
+                    var g = part7Groups[gidx];
+                    int startQ = 147 + part7Groups.Take(gidx).Sum(x => x.Questions.Count);
+                    <div class="passage-card">
+                        <div class="passage-card-header">
+                            <span class="q-badge-num">Bài @(gidx + 1) — Câu @startQ–@(startQ + g.Questions.Count - 1)</span>
+                            <div class="p7-controls">
+                                <label>Số câu:</label>
+                                <select value="@g.QuestionCount" @onchange="e => ChangePart7QuestionCount(g, int.Parse(e.Value!.ToString()!))" class="sel-sm">
+                                    @foreach (var count in AvailablePart7QuestionCounts(g))
+                                    {
+                                        <option value="@count">@count</option>
+                                    }
+                                </select>
+                                <button class="btn-remove" @onclick="() => part7Groups.RemoveAt(gidx)">🗑️</button>
+                            </div>
+                        </div>
+
+                        <div class="link-input-group">
+                            <label class="link-label">🖼️ Link ảnh đoạn văn (R2)</label>
+                            <input @bind="g.ImageUrl" @bind:event="oninput" class="form-input link-url-input"
+                                   placeholder="https://r2.example.com/exams/p7-g1.jpg" />
+                            @if (!string.IsNullOrWhiteSpace(g.ImageUrl))
+                            {
+                                <img src="@g.ImageUrl" class="preview-img" alt="Đoạn văn Part 7" onerror="this.style.display='none'" />
+                            }
+                        </div>
+
+                        @for (int qi = 0; qi < g.Questions.Count; qi++)
+                        {
+                            var qidx = qi;
+                            var q = g.Questions[qidx];
+                            <div class="q-card-text nested">
+                                <div class="q-card-header"><span class="q-badge-num-sm">Câu @(startQ + qidx)</span></div>
+                                <div class="form-group full">
+                                    <label>Câu hỏi</label>
+                                    <input @bind="q.Text" class="form-input" placeholder="VD: What is the purpose of the advertisement?" />
+                                </div>
+                                <textarea class="form-input bulk-answer-input" rows="4"
+                                          value="@q.BulkOptionText"
+                                          @oninput="(e) => ApplyBulkOptions(q, e.Value?.ToString())"
+                                          placeholder="Dán đáp án: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C&#10;D. Nội dung D"></textarea>
+                                <span class="bulk-answer-hint">Dán một lần để tự động điền vào các ô A–D.</span>
+                                <div class="options-grid">
+                                    @foreach (var opt in q.Options)
+                                    {
+                                        var o = opt;
+                                        <div class="option-row @(q.CorrectOptionLabel == o.Label ? "correct-opt" : "")">
+                                            <span class="opt-label">@o.Label</span>
+                                            <input @bind="o.Text" class="form-input" />
+                                            <button class="mark-correct @(q.CorrectOptionLabel == o.Label ? "active" : "")"
+                                                    @onclick="() => q.CorrectOptionLabel = o.Label">✓</button>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        <div class="form-group full">
+                            <label>🌐 Dịch đoạn văn</label>
+                            <textarea @bind="g.Translation" class="form-input" rows="8"
+                                      placeholder="Dán bản dịch tiếng Việt của đoạn văn ở đây..."></textarea>
+                            <span class="bulk-answer-hint">Phần dịch được hiển thị ở cuối bài khi xem đáp án. Mẹo: Dùng thẻ <code>&lt;red&gt;chữ&lt;/red&gt;</code> để tô đỏ, hoặc thay bằng <code>green, blue, orange, purple</code>.</span>
+                        </div>
+                    </div>
+                }
+                <div class="step-footer">
+                    <button class="btn-prev" @onclick="() => GoStep(6)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(8)">Xem trước & Lưu →</button>
+                </div>
+            </section>
+        }
+
+        @* ────── STEP 8: Preview & Submit ────── *@
+        else if (currentStep == 8)
+        {
+            <section class="builder-section">
+                <div class="section-header">
+                    <h2>🚀 Xem trước & Lưu đề thi</h2>
+                    <p>Kiểm tra thông tin trước khi upload lên Cloudflare R2 và lưu vào database.</p>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-row"><span>Bộ đề:</span><strong>@collectionName</strong></div>
+                    <div class="summary-row"><span>Tên bài:</span><strong>@examTitle</strong></div>
+                    <div class="summary-row"><span>Thời gian:</span><strong>@examTimeMins phút</strong></div>
+                    <div class="summary-divider"></div>
+                    <div class="summary-row"><span>Part 1:</span><strong>@part1Groups.Count(g => !string.IsNullOrEmpty(g.ImageUrl) && !string.IsNullOrEmpty(g.AudioUrl)) / @part1Groups.Count câu đủ dữ liệu</strong></div>
+                    <div class="summary-row"><span>Part 2:</span><strong>@part2Groups.Count(g => !string.IsNullOrEmpty(g.AudioUrl)) / @part2Groups.Count câu đủ audio</strong></div>
+                    <div class="summary-row"><span>Part 3:</span><strong>@part3Groups.Count(g => !string.IsNullOrEmpty(g.AudioUrl)) / @part3Groups.Count nhóm đủ audio</strong></div>
+                    <div class="summary-row"><span>Part 4:</span><strong>@part4Groups.Count(g => !string.IsNullOrEmpty(g.AudioUrl)) / @part4Groups.Count nhóm đủ audio</strong></div>
+                    <div class="summary-row"><span>Part 5:</span><strong>@part5Questions.Count câu</strong></div>
+                    <div class="summary-row"><span>Part 6:</span><strong>@part6Groups.Count bài / @part6Groups.Sum(g => g.Questions.Count) câu</strong></div>
+                    <div class="summary-row"><span>Part 7:</span><strong>@part7Groups.Count bài / @Part7QuestionCount/@MaxPart7Questions câu</strong></div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(saveError))
+                {
+                    <div class="alert-error">⚠️ @saveError</div>
+                }
+                @if (!string.IsNullOrEmpty(saveSuccess))
+                {
+                    <div class="alert-success">✅ @saveSuccess</div>
+                }
+
+                <div class="submit-actions">
+                    <button class="btn-prev" @onclick="() => GoStep(7)">← Quay lại</button>
+                    <button class="btn-submit" @onclick="SubmitExam" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-inline"></span>
+                            <span>Đang upload & lưu...</span>
+                        }
+                        else
+                        {
+                            <span>🚀 Upload & Lưu đề thi</span>
+                        }
+                    </button>
+                </div>
+            </section>
+        }
+    </main>
+</div>
+
+@code {
+    private string[] steps = { "Thông tin", "Part 1", "Part 2", "Part 3", "Part 4", "Part 5", "Part 6", "Part 7", "Lưu đề" };
+    private int currentStep = 0;
+
+    private string collectionName = "";
+    private string examTitle = "";
+    private string examDescription = "";
+    private int examTimeMins = 120;
+
+    private List<MediaGroup>   part1Groups    = Enumerable.Range(0, 6).Select((_, i) => new MediaGroup { GroupId = $"p1g{i+1}" }).ToList();
+    private List<MediaGroup>   part2Groups    = Enumerable.Range(0, 25).Select((_, i) => new MediaGroup { GroupId = $"p2g{i+1}" }).ToList();
+    private List<ConvGroup>    part3Groups    = Enumerable.Range(0, 13).Select((_, i) => new ConvGroup { GroupId = $"p3g{i+1}", Questions = MakeConvQs(3) }).ToList();
+    private List<ConvGroup>    part4Groups    = Enumerable.Range(0, 10).Select((_, i) => new ConvGroup { GroupId = $"p4g{i+1}", Questions = MakeConvQs(3) }).ToList();
+    private List<TextQuestion> part5Questions = Enumerable.Range(0, 30).Select((_, i) => new TextQuestion { Id = 101 + i }).ToList();
+    private List<PassageGroup> part6Groups    = Enumerable.Range(0, 4).Select((_, i) => new PassageGroup { GroupId = $"p6g{i+1}", Questions = MakeTextQs(4, 131 + i * 4) }).ToList();
+    private List<Part7Group>   part7Groups    = new();
+    private const int MaxPart7Questions = 54;
+    private int Part7QuestionCount => part7Groups.Sum(g => g.Questions.Count);
+    private bool CanAddPart7Group => MaxPart7Questions - Part7QuestionCount >= 2;
+
+    private bool isSaving = false;
+    private string saveError = "";
+    private string saveSuccess = "";
+
+    // ��� Edit mode ���
+    private int? editingMockTestId = null;
+    private string editingTitle = "";
+    private bool showExamList = false;
+    private List<MockTestDto>? examList = null;
+
+    // ─── Draft state ───
+    private bool isSavingDraft = false;
+    private bool hasDraft = false;
+    private string draftToast = "";
+    private string draftToastClass = "";
+    private bool _draftChecked = false;
+    private const string DraftKey = "toeic_builder_draft";
+
+    protected override void OnInitialized()
+    {
+        AddPart7Group(); AddPart7Group(); AddPart7Group();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_draftChecked)
+        {
+            _draftChecked = true;
+            hasDraft = await LocalStorage.ContainKeyAsync(DraftKey);
+            if (hasDraft)
+            {
+                var confirm = await JS.InvokeAsync<bool>("confirm",
+                    "Tìm thấy bản nháp cũ. Bạn có muốn khôi phục không?");
+                if (confirm)
+                    await LoadDraft();
+            }
+        }
+    }
+
+    private async Task GoStep(int s)
+    {
+        currentStep = Math.Clamp(s, 0, steps.Length - 1);
+        // Auto-save nháp mỗi khi chuyển bước
+        await AutoSaveDraft();
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
+        await JS.InvokeVoidAsync("scrollBuilderToTop");
+    }
+    // ─── Autofill Links ───
+    private string autofillBaseImageUrl = "";
+    private string autofillBaseAudioUrl = "";
+
+    private void AutofillMediaLinks()
+    {
+        // Part 1 (Q1-Q6)
+        for (int i = 0; i < part1Groups.Count; i++)
+        {
+            if (!string.IsNullOrWhiteSpace(autofillBaseImageUrl)) part1Groups[i].ImageUrl = $"{autofillBaseImageUrl.TrimEnd('/')}/{i + 1}.jpg";
+            if (!string.IsNullOrWhiteSpace(autofillBaseAudioUrl)) part1Groups[i].AudioUrl = $"{autofillBaseAudioUrl.TrimEnd('/')}/{i + 1}.mp3";
+        }
+
+        // Part 2 (Q7-Q31)
+        for (int i = 0; i < part2Groups.Count; i++)
+        {
+            if (!string.IsNullOrWhiteSpace(autofillBaseAudioUrl)) part2Groups[i].AudioUrl = $"{autofillBaseAudioUrl.TrimEnd('/')}/{i + 7}.mp3";
+        }
+
+        // Part 3 (Q32-Q70)
+        int p3q = 32;
+        foreach (var g in part3Groups)
+        {
+            int endQ = p3q + g.Questions.Count - 1;
+            if (!string.IsNullOrWhiteSpace(autofillBaseAudioUrl)) g.AudioUrl = $"{autofillBaseAudioUrl.TrimEnd('/')}/{p3q}-{endQ}.mp3";
+            p3q += g.Questions.Count;
+        }
+
+        // Part 4 (Q71-Q100)
+        int p4q = 71;
+        foreach (var g in part4Groups)
+        {
+            int endQ = p4q + g.Questions.Count - 1;
+            if (!string.IsNullOrWhiteSpace(autofillBaseAudioUrl)) g.AudioUrl = $"{autofillBaseAudioUrl.TrimEnd('/')}/{p4q}-{endQ}.mp3";
+            p4q += g.Questions.Count;
+        }
+
+        // Part 7 (Q147-Q200)
+        int p7q = 147;
+        foreach (var g in part7Groups)
+        {
+            int endQ = p7q + g.Questions.Count - 1;
+            if (!string.IsNullOrWhiteSpace(autofillBaseImageUrl))
+            {
+                g.ImageUrl = $"{autofillBaseImageUrl.TrimEnd('/')}/{p7q}-{endQ}.jpg";
+            }
+            if (!string.IsNullOrWhiteSpace(autofillBaseAudioUrl)) 
+            {
+                g.AudioUrl = $"{autofillBaseAudioUrl.TrimEnd('/')}/{p7q}-{endQ}.mp3";
+            }
+            p7q += g.Questions.Count;
+        }
+
+        ShowDraftToast("✨ Đã tự động điền link R2!", "toast-ok");
+    }
+
+
+    private void AddPart7Group()
+    {
+        var remaining = MaxPart7Questions - Part7QuestionCount;
+        if (remaining < 2) return;
+
+        var g = new Part7Group { GroupId = $"p7g{part7Groups.Count + 1}", QuestionCount = Math.Min(3, remaining), ContentType = "image" };
+        SyncPart7Questions(g);
+        part7Groups.Add(g);
+    }
+
+    private IEnumerable<int> AvailablePart7QuestionCounts(Part7Group group)
+    {
+        var otherQuestions = Part7QuestionCount - group.Questions.Count;
+        return Enumerable.Range(2, 4).Where(count => otherQuestions + count <= MaxPart7Questions);
+    }
+
+    private void ChangePart7QuestionCount(Part7Group group, int count)
+    {
+        if (!AvailablePart7QuestionCounts(group).Contains(count)) return;
+        group.QuestionCount = count;
+        SyncPart7Questions(group);
+    }
+
+    private void NormalizePart7Groups()
+    {
+        var used = 0;
+        for (var i = 0; i < part7Groups.Count; i++)
+        {
+            var remaining = MaxPart7Questions - used;
+            if (remaining < 2)
+            {
+                part7Groups.RemoveRange(i, part7Groups.Count - i);
+                break;
+            }
+
+            var group = part7Groups[i];
+            group.QuestionCount = Math.Clamp(group.QuestionCount, 2, Math.Min(5, remaining));
+            SyncPart7Questions(group);
+            used += group.Questions.Count;
+        }
+    }
+
+    private void SyncPart7Questions(Part7Group g)
+    {
+        while (g.Questions.Count < g.QuestionCount)
+            g.Questions.Add(new TextQuestion { Id = g.Questions.Count + 1 });
+        while (g.Questions.Count > g.QuestionCount)
+            g.Questions.RemoveAt(g.Questions.Count - 1);
+    }
+
+    // ─── Draft: Save ───
+    private async Task SaveDraft()
+    {
+        isSavingDraft = true;
+        StateHasChanged();
+        try
+        {
+            var draft = BuildDraftPayload();
+            await LocalStorage.SetItemAsync(DraftKey, draft);
+            hasDraft = true;
+            ShowDraftToast("✅ Đã lưu nháp!", "toast-ok");
+        }
+        catch (Exception ex)
+        {
+            ShowDraftToast($"⚠️ Lỗi: {ex.Message}", "toast-err");
+        }
+        isSavingDraft = false;
+        StateHasChanged();
+    }
+
+    // Auto-save nhẹ khi chuyển bước (không show toast)
+    private async Task AutoSaveDraft()
+    {
+        try
+        {
+            var draft = BuildDraftPayload();
+            await LocalStorage.SetItemAsync(DraftKey, draft);
+            hasDraft = true;
+        }
+        catch { /* silent */ }
+    }
+
+    // ─── Draft: Load ───
+    private async Task LoadDraft()
+    {
+        try
+        {
+            var draft = await LocalStorage.GetItemAsync<BuilderDraft>(DraftKey);
+            if (draft == null) return;
+
+            collectionName  = draft.CollectionName ?? "";
+            examTitle       = draft.ExamTitle ?? "";
+            examDescription = draft.ExamDescription ?? "";
+            examTimeMins    = draft.ExamTimeMins;
+            currentStep     = draft.CurrentStep;
+
+            if (draft.Part1 != null)  part1Groups    = draft.Part1;
+            if (draft.Part2 != null)  part2Groups    = draft.Part2;
+            if (draft.Part3 != null)  part3Groups    = draft.Part3;
+            if (draft.Part4 != null)  part4Groups    = draft.Part4;
+            if (draft.Part5 != null)  part5Questions = draft.Part5;
+            if (draft.Part6 != null)  part6Groups    = draft.Part6;
+            if (draft.Part7 != null && draft.Part7.Count > 0)
+            {
+                part7Groups = draft.Part7;
+                NormalizePart7Groups();
+            }
+
+            ShowDraftToast("✅ Đã khôi phục bản nháp!", "toast-ok");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowDraftToast($"⚠️ Không thể đọc nháp: {ex.Message}", "toast-err");
+        }
+    }
+
+    // ─── Draft: Clear ───
+    private async Task ClearDraft()
+    {
+        var confirm = await JS.InvokeAsync<bool>("confirm", "Xóa bản nháp này?");
+        if (!confirm) return;
+        await LocalStorage.RemoveItemAsync(DraftKey);
+        hasDraft = false;
+        ShowDraftToast("🗑️ Đã xóa nháp", "toast-warn");
+        StateHasChanged();
+    }
+
+    // ─── Toast helper ───
+    private System.Timers.Timer? _toastTimer;
+    private void ShowDraftToast(string msg, string cls)
+    {
+        draftToast = msg; draftToastClass = cls;
+        _toastTimer?.Stop();
+        _toastTimer = new System.Timers.Timer(3000);
+        _toastTimer.Elapsed += async (_, _) =>
+        {
+            draftToast = "";
+            await InvokeAsync(StateHasChanged);
+            _toastTimer?.Stop();
+        };
+        _toastTimer.Start();
+    }
+
+    // ─── Build draft payload ───
+    private BuilderDraft BuildDraftPayload() => new()
+    {
+        CollectionName  = collectionName,
+        ExamTitle       = examTitle,
+        ExamDescription = examDescription,
+        ExamTimeMins    = examTimeMins,
+        CurrentStep     = currentStep,
+        Part1 = part1Groups,
+        Part2 = part2Groups,
+        Part3 = part3Groups,
+        Part4 = part4Groups,
+        Part5 = part5Questions,
+        Part6 = part6Groups,
+        Part7 = part7Groups
+    };
+
+    private async Task SubmitExam()
+    {
+        if (string.IsNullOrWhiteSpace(collectionName) || string.IsNullOrWhiteSpace(examTitle))
+        {
+            saveError = "Lỗi: Bạn phải nhập 'Bộ đề' và 'Tên bài' ở Tab Thông tin (Step 1) trước khi lưu.";
+            return;
+        }
+
+        isSaving = true; saveError = ""; saveSuccess = "";
+        StateHasChanged();
+        try
+        {
+            var examData = BuildExamJson();
+            var resultUrl = await BuilderService.SaveExamAsync(collectionName, examTitle, examData, editingMockTestId);
+            if (!string.IsNullOrEmpty(resultUrl))
+            {
+                saveSuccess = editingMockTestId.HasValue
+                    ? $"Đề thi đã cập nhật thành công! URL: {resultUrl}"
+                    : $"Đề thi đã lưu thành công! URL: {resultUrl}";
+                editingMockTestId = null;
+                editingTitle = "";
+            }
+            else
+                saveError = "Lưu thất bại. Kiểm tra lại kết nối backend và cấu hình R2.";
+        }
+        catch (Exception ex)
+        {
+            saveError = $"Lỗi: {ex.Message}";
+        }
+        isSaving = false;
+    }
+
+    private async Task OpenExamList()
+    {
+        showExamList = true;
+        examList = null;
+        StateHasChanged();
+        try { examList = await MockTestService.GetMockTestsAsync(); }
+        catch { examList = new List<MockTestDto>(); }
+    }
+
+    private async Task LoadExamForEdit(MockTestDto exam)
+    {
+        if (string.IsNullOrEmpty(exam.ToeicUrl)) return;
+        showExamList = false;
+        editingMockTestId = exam.Id;
+        editingTitle = exam.Title;
+        collectionName = exam.CollectionName;
+        examTitle = exam.Title;
+        currentStep = 0;
+        saveError = ""; saveSuccess = "";
+        // Load JSON từ R2 và điền vào form
+        try
+        {
+            using var http = new HttpClient();
+            var json = await http.GetStringAsync(exam.ToeicUrl);
+            var doc = JsonDocument.Parse(json).RootElement;
+            if (doc.TryGetProperty("TotalTimeSeconds", out var t)) examTimeMins = t.GetInt32() / 60;
+            if (doc.TryGetProperty("Description", out var desc)) examDescription = desc.GetString() ?? "";
+            saveSuccess = "Đã tải đề thi lên. Hãy chỉnh sửa và bấm 'Upload & Lưu' để cập nhật.";
+        }
+        catch (Exception ex) { saveError = $"Không thể tải đề: {ex.Message}"; }
+    }
+
+    private void ResetToNew()
+    {
+        editingMockTestId = null;
+        editingTitle = "";
+        collectionName = ""; examTitle = ""; examDescription = "";
+        examTimeMins = 120; currentStep = 0;
+        saveError = ""; saveSuccess = "";
+    }
+
+    private async Task HandleJsonImport(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file == null) return;
+            
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var reader = new System.IO.StreamReader(stream);
+            var jsonContent = await reader.ReadToEndAsync();
+            
+            PopulateFormFromJson(jsonContent);
+            
+            ShowDraftToast("✨ Đã điền form từ file JSON!", "toast-ok");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            saveError = "Lỗi đọc file JSON: $($ex.Message)";
+            ShowDraftToast("⚠️ Lỗi định dạng JSON", "toast-err");
+            StateHasChanged();
+        }
+    }
+
+    private string IdToLabel(int id) => id switch { 1=>"A", 2=>"B", 3=>"C", 4=>"D", _=>"A" };
+
+    private void PopulateFormFromJson(string json)
+    {
+        var doc = System.Text.Json.JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        examTitle = root.TryGetProperty("Title", out var titleProp) ? titleProp.GetString() ?? "" : "";
+        examDescription = root.TryGetProperty("Description", out var descProp) ? descProp.GetString() ?? "" : "";
+        if (root.TryGetProperty("TotalTimeSeconds", out var timeProp)) examTimeMins = timeProp.GetInt32() / 60;
+
+        if (root.TryGetProperty("Parts", out var parts))
+        {
+            foreach (var part in parts.EnumerateArray())
+            {
+                int pNum = part.GetProperty("PartNumber").GetInt32();
+                if (!part.TryGetProperty("QuestionGroups", out var groups)) continue;
+
+                switch (pNum)
+                {
+                    case 1:
+                        int p1Idx = 0;
+                        foreach(var g in groups.EnumerateArray())
+                        {
+                            if (p1Idx >= part1Groups.Count) break;
+                            var q = g.GetProperty("Questions")[0];
+                            var mg = part1Groups[p1Idx];
+                            mg.ImageUrl = g.TryGetProperty("ImageUrl", out var iu) ? iu.GetString() : null;
+                            mg.AudioUrl = g.TryGetProperty("AudioUrl", out var au) ? au.GetString() : null;
+                            mg.CorrectAnswer = IdToLabel(q.GetProperty("CorrectOptionId").GetInt32());
+                            mg.Explanation = q.TryGetProperty("Explanation", out var expl) ? expl.GetString() ?? "" : "";
+                            if (q.TryGetProperty("Options", out var opts))
+                            {
+                                int i = 0;
+                                foreach (var opt in opts.EnumerateArray()) { if (i < 4) mg.Options[i++].Text = opt.GetProperty("Text").GetString() ?? ""; }
+                                mg.BulkOptionText = string.Join("\n", mg.Options.Select(o => o.Text));
+                            }
+                            p1Idx++;
+                        }
+                        break;
+                    case 2:
+                        int p2Idx = 0;
+                        foreach(var g in groups.EnumerateArray())
+                        {
+                            if (p2Idx >= part2Groups.Count) break;
+                            var q = g.GetProperty("Questions")[0];
+                            var mg = part2Groups[p2Idx];
+                            mg.AudioUrl = g.TryGetProperty("AudioUrl", out var au) ? au.GetString() : null;
+                            mg.QuestionText = q.TryGetProperty("Text", out var qt) ? qt.GetString() ?? "" : "";
+                            mg.CorrectAnswer = IdToLabel(q.GetProperty("CorrectOptionId").GetInt32());
+                            mg.Explanation = q.TryGetProperty("Explanation", out var expl) ? expl.GetString() ?? "" : "";
+                            if (q.TryGetProperty("Options", out var opts))
+                            {
+                                int i = 0;
+                                foreach (var opt in opts.EnumerateArray()) { if (i < 3) mg.Options[i++].Text = opt.GetProperty("Text").GetString() ?? ""; }
+                                mg.BulkOptionText = string.Join("\n", mg.Options.Take(3).Select(o => o.Text));
+                            }
+                            p2Idx++;
+                        }
+                        break;
+                    case 3:
+                    case 4:
+                        var targetList = pNum == 3 ? part3Groups : part4Groups;
+                        int p34Idx = 0;
+                        foreach(var g in groups.EnumerateArray())
+                        {
+                            if (p34Idx >= targetList.Count) break;
+                            var cg = targetList[p34Idx];
+                            cg.Title = g.TryGetProperty("PassageTitle", out var t2) ? t2.GetString() ?? "" : "";
+                            cg.Transcript = g.TryGetProperty("PassageHtml", out var h2) ? h2.GetString() ?? "" : "";
+                            cg.AudioUrl = g.TryGetProperty("AudioUrl", out var au) ? au.GetString() : null;
+                            cg.ImageUrl = g.TryGetProperty("ImageUrl", out var iu) ? iu.GetString() : null;
+                            
+                            int qIdx = 0;
+                            foreach(var q in g.GetProperty("Questions").EnumerateArray())
+                            {
+                                if (qIdx >= cg.Questions.Count) break;
+                                var cq = cg.Questions[qIdx];
+                                cq.Text = q.TryGetProperty("Text", out var qt) ? qt.GetString() ?? "" : "";
+                                cq.CorrectOptionLabel = IdToLabel(q.GetProperty("CorrectOptionId").GetInt32());
+                                cq.Explanation = q.TryGetProperty("Explanation", out var expl) ? expl.GetString() ?? "" : "";
+                                if (q.TryGetProperty("Options", out var opts))
+                                {
+                                    int i = 0;
+                                    foreach (var opt in opts.EnumerateArray()) { if (i < 4) cq.Options[i++].Text = opt.GetProperty("Text").GetString() ?? ""; }
+                                    cq.BulkOptionText = string.Join("\n", cq.Options.Select(o => o.Text));
+                                }
+                                qIdx++;
+                            }
+                            p34Idx++;
+                        }
+                        break;
+                    case 5:
+                        int p5Idx = 0;
+                        foreach(var g in groups.EnumerateArray())
+                        {
+                            if (p5Idx >= part5Questions.Count) break;
+                            var q = g.GetProperty("Questions")[0];
+                            var tq = part5Questions[p5Idx];
+                            tq.Text = q.TryGetProperty("Text", out var qt) ? qt.GetString() ?? "" : "";
+                            tq.CorrectOptionLabel = IdToLabel(q.GetProperty("CorrectOptionId").GetInt32());
+                            tq.Explanation = q.TryGetProperty("Explanation", out var expl) ? expl.GetString() ?? "" : "";
+                            if (q.TryGetProperty("Options", out var opts))
+                            {
+                                int i = 0;
+                                foreach (var opt in opts.EnumerateArray()) { if (i < 4) tq.Options[i++].Text = opt.GetProperty("Text").GetString() ?? ""; }
+                                tq.BulkOptionText = string.Join("\n", tq.Options.Select(o => o.Text));
+                            }
+                            p5Idx++;
+                        }
+                        break;
+                    case 6:
+                        int p6Idx = 0;
+                        foreach(var g in groups.EnumerateArray())
+                        {
+                            if (p6Idx >= part6Groups.Count) break;
+                            var pg = part6Groups[p6Idx];
+                            pg.PassageTitle = g.TryGetProperty("PassageTitle", out var pt) ? pt.GetString() ?? "" : "";
+                            pg.PassageHtml = g.TryGetProperty("PassageHtml", out var ph) ? ph.GetString() ?? "" : "";
+                            pg.ImageUrl = g.TryGetProperty("ImageUrl", out var iu) ? iu.GetString() : null;
+                            
+                            int qIdx = 0;
+                            foreach(var q in g.GetProperty("Questions").EnumerateArray())
+                            {
+                                if (qIdx >= pg.Questions.Count) break;
+                                var tq = pg.Questions[qIdx];
+                                tq.Text = q.TryGetProperty("Text", out var qt) ? qt.GetString() ?? "" : "";
+                                tq.CorrectOptionLabel = IdToLabel(q.GetProperty("CorrectOptionId").GetInt32());
+                                tq.Explanation = q.TryGetProperty("Explanation", out var expl) ? expl.GetString() ?? "" : "";
+                                if (q.TryGetProperty("Options", out var opts))
+                                {
+                                    int i = 0;
+                                    foreach (var opt in opts.EnumerateArray()) { if (i < 4) tq.Options[i++].Text = opt.GetProperty("Text").GetString() ?? ""; }
+                                    tq.BulkOptionText = string.Join("\n", tq.Options.Select(o => o.Text));
+                                }
+                                qIdx++;
+                            }
+                            p6Idx++;
+                        }
+                        break;
+                    case 7:
+                        part7Groups.Clear();
+                        foreach(var g in groups.EnumerateArray())
+                        {
+                            var p7 = new Part7Group {
+                                GroupId = g.GetProperty("GroupId").GetString() ?? "",
+                                PassageTitle = g.TryGetProperty("PassageTitle", out var pt2) ? pt2.GetString() ?? "" : "",
+                                PassageHtml = g.TryGetProperty("PassageHtml", out var ph2) ? ph2.GetString() ?? "" : "",
+                                ImageUrl = g.TryGetProperty("ImageUrl", out var iu2) ? iu2.GetString() : null,
+                                AudioUrl = g.TryGetProperty("AudioUrl", out var au2) ? au2.GetString() : null,
+                            };
+                            p7.Questions.Clear();
+                            foreach(var q in g.GetProperty("Questions").EnumerateArray())
+                            {
+                                var tq = new TextQuestion {
+                                    Id = q.GetProperty("Id").GetInt32(),
+                                    Text = q.TryGetProperty("Text", out var qt2) ? qt2.GetString() ?? "" : "",
+                                    CorrectOptionLabel = IdToLabel(q.GetProperty("CorrectOptionId").GetInt32()),
+                                    Explanation = q.TryGetProperty("Explanation", out var expl2) ? expl2.GetString() ?? "" : ""
+                                };
+                                if (q.TryGetProperty("Options", out var opts))
+                                {
+                                    int i = 0;
+                                    foreach (var opt in opts.EnumerateArray()) { if (i < 4) tq.Options[i++].Text = opt.GetProperty("Text").GetString() ?? ""; }
+                                    tq.BulkOptionText = string.Join("\n", tq.Options.Select(o => o.Text));
+                                }
+                                p7.Questions.Add(tq);
+                            }
+                            p7.QuestionCount = p7.Questions.Count;
+                            part7Groups.Add(p7);
+                        }
+                        break;
+                }
+            }
+        }
+        NormalizePart7Groups();
+    }
+    private object BuildExamJson()
+    {
+        var parts = new List<object>();
+        int qId;
+
+        // Part 1 — option texts taken from g.Options (filled by admin)
+        qId = 1;
+        parts.Add(new {
+            PartNumber=1, PartName="Photographs", PartType="Photographs", HasListening=true,
+            Instructions="Directions: For each question in this part, you will hear four statements about a picture in your test book.",
+            QuestionGroups = part1Groups.Select((g,i) => (object)new {
+                GroupId=g.GroupId, ImageUrl=g.ImageUrl??"", AudioUrl=g.AudioUrl??"", PassageHtml="", PassageTitle="", Instructions="",
+                Questions=new[]{
+                    new {
+                        Id=qId++, Text="",
+                        Options=g.Options.Select((o,oi) => new { Id=oi+1, o.Label, o.Text }).ToArray(),
+                        CorrectOptionId=LabelToId(g.CorrectAnswer),
+                        SelectedOptionId=(int?)null,
+                        Explanation=g.Explanation
+                    }
+                }
+            }).ToList()
+        });
+
+        // Part 2 — option texts taken from g.Options (first 3: A/B/C)
+        qId = 7;
+        parts.Add(new {
+            PartNumber=2, PartName="Question-Response", PartType="QuestionResponse", HasListening=true,
+            Instructions="Directions: You will hear a question or statement and three responses.",
+            QuestionGroups = part2Groups.Select((g,i) => (object)new {
+                GroupId=g.GroupId, ImageUrl="", AudioUrl=g.AudioUrl??"", PassageHtml="", PassageTitle="", Instructions="",
+                Questions=new[]{
+                    new {
+                        Id=qId++, Text=g.QuestionText,
+                        Options=g.Options.Take(3).Select((o,oi) => new { Id=oi+1, o.Label, o.Text }).ToArray(),
+                        CorrectOptionId=LabelToId(g.CorrectAnswer),
+                        SelectedOptionId=(int?)null,
+                        Explanation=g.Explanation
+                    }
+                }
+            }).ToList()
+        });
+
+        // Part 3
+        qId = 32;
+        parts.Add(BuildConvPartObj(3, "Conversations", "Conversations", part3Groups, ref qId,
+            "Directions: You will hear some conversations between two or more people."));
+
+        // Part 4
+        qId = 71;
+        parts.Add(BuildConvPartObj(4, "Short Talks", "Talks", part4Groups, ref qId,
+            "Directions: You will hear some talks given by a single speaker."));
+
+        // Part 5
+        qId = 101;
+        parts.Add(new {
+            PartNumber=5, PartName="Incomplete Sentences", PartType="IncompleteSentences", HasListening=false,
+            Instructions="Directions: A word or phrase is missing in each of the following sentences.",
+            QuestionGroups = part5Questions.Select(q => (object)new {
+                GroupId=$"p5g{q.Id}", ImageUrl="", AudioUrl="", PassageHtml="", PassageTitle="", Instructions="",
+                Questions=new[]{
+                    new {
+                        Id=qId++, q.Text,
+                        Options=q.Options.Select((o,oi)=>new{Id=oi+1,o.Label,o.Text}).ToArray(),
+                        CorrectOptionId=LabelToId(q.CorrectOptionLabel),
+                        SelectedOptionId=(int?)null,
+                        Explanation=q.Explanation
+                    }
+                }
+            }).ToList()
+        });
+
+        // Part 6
+        qId = 131;
+        parts.Add(new {
+            PartNumber=6, PartName="Text Completion", PartType="TextCompletion", HasListening=false,
+            Instructions="Directions: Read the texts that follow. A word, phrase, or sentence is missing.",
+            QuestionGroups = part6Groups.Select(g => (object)new {
+                g.GroupId, ImageUrl=g.ImageUrl??"", AudioUrl="", PassageHtml="", PassageTitle="", Translation=g.Translation??"", Instructions="",
+                Questions=g.Questions.Select(q=>new{
+                    Id=qId++, q.Text,
+                    Options=q.Options.Select((o,oi)=>new{Id=oi+1,o.Label,o.Text}).ToArray(),
+                    CorrectOptionId=LabelToId(q.CorrectOptionLabel),
+                    SelectedOptionId=(int?)null,
+                    Explanation=q.Explanation
+                }).ToList()
+            }).ToList()
+        });
+
+        // Part 7
+        qId = 147;
+        parts.Add(new {
+            PartNumber=7, PartName="Reading Comprehension", PartType="ReadingComprehension", HasListening=false,
+            Instructions="Directions: In this part you will read a selection of texts.",
+            QuestionGroups = part7Groups.Select(g => (object)new {
+                g.GroupId,
+                ImageUrl=g.ImageUrl??"",
+                AudioUrl="",
+                PassageHtml="",
+                PassageTitle="",
+                Translation=g.Translation??"",
+                Instructions="",
+                Questions=g.Questions.Select(q=>new{
+                    Id=qId++, q.Text,
+                    Options=q.Options.Select((o,oi)=>new{Id=oi+1,o.Label,o.Text}).ToArray(),
+                    CorrectOptionId=LabelToId(q.CorrectOptionLabel),
+                    SelectedOptionId=(int?)null,
+                    Explanation=q.Explanation
+                }).ToList()
+            }).ToList()
+        });
+
+        return new {
+            Title=examTitle, Description=examDescription,
+            TotalTimeSeconds=examTimeMins*60, TotalQuestions=200, Parts=parts
+        };
+    }
+
+    private object BuildConvPartObj(int pNum, string pName, string pType, List<ConvGroup> groups, ref int qId, string instr)
+    {
+        var localQ = qId;
+        var obj = new {
+            PartNumber=pNum, PartName=pName, PartType=pType, HasListening=true, Instructions=instr,
+            QuestionGroups = groups.Select(g => (object)new {
+                g.GroupId, ImageUrl=g.ImageUrl??"", AudioUrl=g.AudioUrl??"", PassageHtml="", PassageTitle=g.Title, Transcript=g.Transcript??"", Instructions="",
+                Questions=g.Questions.Select(q=>(object)new{
+                    Id=localQ++, q.Text,
+                    Options=q.Options.Select((o,oi)=>new{Id=oi+1,o.Label,o.Text}).ToArray(),
+                    CorrectOptionId=LabelToId(q.CorrectOptionLabel),
+                    SelectedOptionId=(int?)null,
+                    Explanation=q.Explanation
+                }).ToList()
+            }).ToList()
+        };
+        qId = localQ;
+        return obj;
+    }
+
+    private static int LabelToId(string? label) => label switch { "A"=>1, "B"=>2, "C"=>3, "D"=>4, _=>1 };
+
+    private static void ApplyBulkOptions(MediaGroup group, string? rawValue, int optionCount)
+    {
+        group.BulkOptionText = rawValue ?? string.Empty;
+        var input = group.BulkOptionText.Trim();
+        if (string.IsNullOrEmpty(input)) return;
+
+        // Accept common copied formats: "A. ...", "A) ...", "A: ...", including all answers on one line.
+        var matches = System.Text.RegularExpressions.Regex.Matches(
+            input,
+            @"(?im)(?<!\S)(?:\(\s*)?([A-D])\s*(?:\)\s*(?:[\.:\-]\s*)?|[\.:\-]\s*)");
+
+        if (matches.Count > 0)
+        {
+            for (var i = 0; i < matches.Count; i++)
+            {
+                var label = matches[i].Groups[1].Value.ToUpperInvariant();
+                var textStart = matches[i].Index + matches[i].Length;
+                var textEnd = i + 1 < matches.Count ? matches[i + 1].Index : input.Length;
+                var option = group.Options.FirstOrDefault(o => o.Label == label);
+                if (option != null && Array.IndexOf(new[] { "A", "B", "C", "D" }, label) < optionCount)
+                    option.Text = input[textStart..textEnd].Trim();
+            }
+            return;
+        }
+
+        // Also allow one answer per line when the copied text has no A/B/C/D prefixes.
+        var answers = input.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < Math.Min(optionCount, answers.Length); i++)
+            group.Options[i].Text = answers[i].Trim();
+    }
+
+    private static void ApplyBulkOptions(ConvQuestion question, string? rawValue)
+    {
+        question.BulkOptionText = rawValue ?? string.Empty;
+        ApplyBulkOptions(question.Options, question.BulkOptionText);
+    }
+
+    private static void ApplyBulkOptions(TextQuestion question, string? rawValue)
+    {
+        question.BulkOptionText = rawValue ?? string.Empty;
+        ApplyBulkOptions(question.Options, question.BulkOptionText);
+    }
+
+    private static void ApplyBulkOptions(List<OptionItem> options, string rawValue)
+    {
+        var input = rawValue.Trim();
+        if (string.IsNullOrEmpty(input)) return;
+
+        var matches = System.Text.RegularExpressions.Regex.Matches(
+            input, @"(?im)(?<!\S)(?:\(\s*)?([A-D])\s*(?:\)\s*(?:[\.:\-]\s*)?|[\.:\-]\s*)");
+
+        if (matches.Count > 0)
+        {
+            for (var i = 0; i < matches.Count; i++)
+            {
+                var label = matches[i].Groups[1].Value.ToUpperInvariant();
+                var textStart = matches[i].Index + matches[i].Length;
+                var textEnd = i + 1 < matches.Count ? matches[i + 1].Index : input.Length;
+                var option = options.FirstOrDefault(o => o.Label == label);
+                if (option != null) option.Text = input[textStart..textEnd].Trim();
+            }
+            return;
+        }
+
+        var answers = input.Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < Math.Min(options.Count, answers.Length); i++)
+            options[i].Text = answers[i].Trim();
+    }
+
+    private static List<ConvQuestion> MakeConvQs(int n) => Enumerable.Range(0, n).Select(_ => new ConvQuestion { Options = new[]{ "A","B","C","D" }.Select(l => new OptionItem { Label = l }).ToList() }).ToList();
+    private static List<TextQuestion> MakeTextQs(int n, int startId) => Enumerable.Range(0, n).Select(i => new TextQuestion { Id=startId+i }).ToList();
+
+    // ─── Local model classes ───
+    // Explanation mixin — tất cả question types đều có
+    public class MediaGroup
+    {
+        public string GroupId { get; set; } = "";
+        public string? ImageUrl { get; set; }
+        public string? AudioUrl { get; set; }
+        public string QuestionText { get; set; } = "";
+        public string CorrectAnswer { get; set; } = "";
+        public string Explanation { get; set; } = "";
+        public string BulkOptionText { get; set; } = "";
+        public List<OptionItem> Options { get; set; } = new[] { "A","B","C","D" }.Select(l => new OptionItem { Label = l }).ToList();
+    }
+
+    public class ConvGroup
+    {
+        public string GroupId { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Transcript { get; set; } = "";
+        public string? AudioUrl { get; set; }
+        public string? ImageUrl { get; set; }
+        public List<ConvQuestion> Questions { get; set; } = new();
+    }
+
+    public class ConvQuestion
+    {
+        public string Text { get; set; } = "";
+        public string BulkOptionText { get; set; } = "";
+        public string CorrectOptionLabel { get; set; } = "";
+        public string Explanation { get; set; } = "";
+        public List<OptionItem> Options { get; set; } = new[] { "A", "B", "C", "D" }.Select(l => new OptionItem { Label = l }).ToList();
+    }
+
+    public class Part7Group
+    {
+        public string GroupId { get; set; } = "";
+        public string ContentType { get; set; } = "text";
+        public string PassageTitle { get; set; } = "";
+        public string PassageHtml { get; set; } = "";
+        public string Translation { get; set; } = "";
+        public string? ImageUrl { get; set; }
+        public string? AudioUrl { get; set; }
+        public int QuestionCount { get; set; } = 3;
+        public List<TextQuestion> Questions { get; set; } = new();
+    }
+
+    public class PassageGroup
+    {
+        public string GroupId { get; set; } = "";
+        public string PassageTitle { get; set; } = "";
+        public string PassageHtml { get; set; } = "";
+        public string Translation { get; set; } = "";
+        public string? ImageUrl { get; set; }
+        public List<TextQuestion> Questions { get; set; } = new();
+    }
+
+    public class TextQuestion
+    {
+        public int Id { get; set; }
+        public string Text { get; set; } = "";
+        public string BulkOptionText { get; set; } = "";
+        public string Explanation { get; set; } = "";
+        public string CorrectOptionLabel { get; set; } = "";
+        public List<OptionItem> Options { get; set; } = new[] { "A", "B", "C", "D" }.Select(l => new OptionItem { Label = l }).ToList();
+    }
+
+    public class OptionItem
+    {
+        public string Label { get; set; } = "";
+        public string Text { get; set; } = "";
+    }
+
+    // ─── Draft DTO — serialized to localStorage ───
+    public class BuilderDraft
+    {
+        public string CollectionName { get; set; } = "";
+        public string ExamTitle { get; set; } = "";
+        public string ExamDescription { get; set; } = "";
+        public int ExamTimeMins { get; set; } = 120;
+        public int CurrentStep { get; set; } = 0;
+        public List<MediaGroup>?   Part1 { get; set; }
+        public List<MediaGroup>?   Part2 { get; set; }
+        public List<ConvGroup>?    Part3 { get; set; }
+        public List<ConvGroup>?    Part4 { get; set; }
+        public List<TextQuestion>? Part5 { get; set; }
+        public List<PassageGroup>? Part6 { get; set; }
+        public List<Part7Group>?   Part7 { get; set; }
+    }
+}
