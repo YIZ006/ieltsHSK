@@ -1,6 +1,6 @@
-/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
-   TOEIC ADMIN BUILDER  ┬╖  Dark Premium Theme
-ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
+/* ═══════════════════════════════════════════
+   TOEIC ADMIN BUILDER  ·  Dark Premium Theme
+═══════════════════════════════════════════ */
 
 :root {
     --bg-root:    #0e0f13;
@@ -533,7 +533,7 @@
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ΓöÇΓöÇΓöÇ Option detail block (Part 1/2: ghi nß╗Öi dung audio) ΓöÇΓöÇΓöÇ */
+/* ─── Option detail block (Part 1/2: ghi nội dung audio) ─── */
 .opts-detail {
     display: flex;
     flex-direction: column;
@@ -561,7 +561,7 @@
     font-size: 0.78rem;
 }
 
-/* ΓöÇΓöÇΓöÇ Explanation section ΓöÇΓöÇΓöÇ */
+/* ─── Explanation section ─── */
 .expl-section {
     display: flex;
     flex-direction: column;
@@ -594,7 +594,7 @@
     gap: 16px;
 }
 
-/* ΓöÇΓöÇΓöÇ Draft UI ΓöÇΓöÇΓöÇ */
+/* ─── Draft UI ─── */
 .btn-clear-draft {
     width: 100%;
     margin-top: 6px;
@@ -619,7 +619,7 @@
     text-align: center;
 }
 
-/* ΓöÇΓöÇΓöÇ Builder polish ΓöÇΓöÇΓöÇ */
+/* ─── Builder polish ─── */
 .builder-root {
     background:
         radial-gradient(circle at 85% 0%, rgba(108, 99, 255, 0.16), transparent 26rem),
@@ -747,128 +747,4 @@
 @keyframes slideIn {
     from { opacity: 0; transform: translateY(-6px); }
     to   { opacity: 1; transform: translateY(0); }
-}
-
-/* ─── Topbar toolbar (edit mode) ─── */
-.toeic-builder-topbar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 24px;
-    background: rgba(19,20,26,0.9);
-    border-bottom: 1px solid rgba(108,99,255,0.18);
-    backdrop-filter: blur(10px);
-}
-.btn-show-list, .btn-new-exam {
-    padding: 7px 16px;
-    border-radius: 8px;
-    border: 1px solid rgba(108,99,255,0.35);
-    background: rgba(108,99,255,0.15);
-    color: var(--accent);
-    cursor: pointer;
-    font-size: 0.85rem;
-    font-weight: 600;
-    transition: all 0.18s;
-}
-.btn-show-list:hover, .btn-new-exam:hover {
-    background: rgba(108,99,255,0.28);
-    transform: translateY(-1px);
-}
-.editing-badge {
-    font-size: 0.85rem;
-    color: var(--yellow);
-    background: rgba(245,158,11,0.12);
-    padding: 5px 14px;
-    border-radius: 20px;
-    border: 1px solid rgba(245,158,11,0.25);
-}
-
-/* ─── Exam list overlay (modal) ─── */
-.exam-list-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.7);
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(4px);
-}
-.exam-list-panel {
-    background: #1a1b24;
-    border: 1px solid rgba(108,99,255,0.25);
-    border-radius: 16px;
-    width: min(760px, 94vw);
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
-}
-.exam-list-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 18px 24px;
-    border-bottom: 1px solid rgba(255,255,255,0.07);
-}
-.exam-list-header h2 { margin: 0; font-size: 1.1rem; }
-.btn-close-list {
-    background: transparent;
-    border: none;
-    color: #9899b0;
-    font-size: 1.3rem;
-    cursor: pointer;
-    padding: 4px 8px;
-    border-radius: 6px;
-    line-height: 1;
-    transition: color 0.15s;
-}
-.btn-close-list:hover { color: #fff; }
-.exam-list-loading, .exam-list-empty {
-    padding: 40px 24px;
-    text-align: center;
-    color: #9899b0;
-    font-size: 0.95rem;
-}
-.exam-table {
-    width: 100%;
-    border-collapse: collapse;
-    overflow-y: auto;
-    display: block;
-    max-height: calc(80vh - 80px);
-}
-.exam-table thead { display: table; width: 100%; }
-.exam-table tbody { display: block; overflow-y: auto; max-height: calc(80vh - 130px); }
-.exam-table tr { display: table; width: 100%; table-layout: fixed; }
-.exam-table th {
-    padding: 10px 16px;
-    background: rgba(0,0,0,0.25);
-    color: #9899b0;
-    font-size: 0.82rem;
-    font-weight: 600;
-    text-align: left;
-    border-bottom: 1px solid rgba(255,255,255,0.07);
-}
-.exam-table td {
-    padding: 10px 16px;
-    font-size: 0.88rem;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-    vertical-align: middle;
-}
-.exam-table tr:hover td { background: rgba(108,99,255,0.06); }
-.btn-edit-exam {
-    padding: 5px 14px;
-    border-radius: 6px;
-    border: 1px solid rgba(108,99,255,0.3);
-    background: rgba(108,99,255,0.14);
-    color: var(--accent);
-    cursor: pointer;
-    font-size: 0.82rem;
-    font-weight: 600;
-    transition: all 0.15s;
-}
-.btn-edit-exam:hover {
-    background: rgba(108,99,255,0.26);
-    transform: translateY(-1px);
 }

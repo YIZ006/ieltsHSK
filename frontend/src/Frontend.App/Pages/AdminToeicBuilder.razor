@@ -11,9 +11,9 @@
 @inject IJSRuntime JS
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 
-<PageTitle>Admin ΓÇö Tß║ío ─æß╗ü TOEIC</PageTitle>
+<PageTitle>Admin — Tạo đề TOEIC</PageTitle>
 
-@* ─── EXAM LIST PANEL ─── *@
+@* ��� EXAM LIST PANEL ��� *@
 @if (showExamList)
 {
     <div class="exam-list-overlay">
@@ -62,6 +62,10 @@
 
 <div class="toeic-builder-topbar">
     <button class="btn-show-list" @onclick="OpenExamList">📋 Xem & Sửa đề cũ</button>
+    
+    <InputFile OnChange="HandleJsonImport" accept=".json" class="d-none" id="import-json" />
+    <label for="import-json" class="btn-fast-import">📁 Upload JSON</label>
+
     @if (editingMockTestId.HasValue)
     {
         <span class="editing-badge">✏️ Đang sửa: @editingTitle</span>
@@ -70,7 +74,7 @@
 </div>
 
 <div class="builder-root">
-    @* ΓöÇΓöÇΓöÇ SIDEBAR STEPS ΓöÇΓöÇΓöÇ *@
+    @* ─── SIDEBAR STEPS ─── *@
     <aside class="builder-sidebar">
         <div class="sidebar-logo">
             <span class="logo-dot"></span>
@@ -82,7 +86,7 @@
                 var si = s;
                 <button class="step-item @(currentStep == si ? "active" : si < currentStep ? "done" : "")"
                         @onclick="() => GoStep(si)">
-                    <span class="step-num">@(si < currentStep ? "Γ£ô" : (si + 1).ToString())</span>
+                    <span class="step-num">@(si < currentStep ? "✓" : (si + 1).ToString())</span>
                     <span class="step-label">@steps[si]</span>
                 </button>
             }
@@ -95,13 +99,13 @@
                 }
                 else
                 {
-                    <span>≡ƒÆ╛</span>
+                    <span>💾</span>
                 }
-                L╞░u nh├íp
+                Lưu nháp
             </button>
             @if (hasDraft)
             {
-                <button class="btn-clear-draft" @onclick="ClearDraft">≡ƒùæ∩╕Å X├│a nh├íp</button>
+                <button class="btn-clear-draft" @onclick="ClearDraft">🗑️ Xóa nháp</button>
             }
             @if (!string.IsNullOrEmpty(draftToast))
             {
@@ -110,66 +114,66 @@
         </div>
     </aside>
 
-    @* ΓöÇΓöÇΓöÇ MAIN PANEL ΓöÇΓöÇΓöÇ *@
+    @* ─── MAIN PANEL ─── *@
     <main class="builder-main" id="builder-main">
 
-        @* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ STEP 0: Th├┤ng tin ─æß╗ü ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ *@
+        @* ────── STEP 0: Thông tin đề ────── *@
         @if (currentStep == 0)
         {
             <section class="builder-section">
                 <div class="section-header">
-                    <h2>≡ƒôï Th├┤ng tin ─æß╗ü thi</h2>
-                    <p>─Éiß╗ün c├íc th├┤ng tin c╞í bß║ún cho bß╗Ö ─æß╗ü TOEIC</p>
+                    <h2>📋 Thông tin đề thi</h2>
+                    <p>Điền các thông tin cơ bản cho bộ đề TOEIC</p>
                 </div>
                 <div class="form-grid">
                     <div class="form-group full">
-                        <label>T├¬n bß╗Ö ─æß╗ü <span class="req">*</span></label>
+                        <label>Tên bộ đề <span class="req">*</span></label>
                         <input @bind="collectionName" class="form-input" placeholder="VD: TOEIC ETS 2024 Volume 1" />
                     </div>
                     <div class="form-group full">
-                        <label>T├¬n b├ái thi <span class="req">*</span></label>
+                        <label>Tên bài thi <span class="req">*</span></label>
                         <input @bind="examTitle" class="form-input" placeholder="VD: Test 1" />
                     </div>
                     <div class="form-group full">
-                        <label>M├┤ tß║ú</label>
-                        <textarea @bind="examDescription" class="form-input" rows="3" placeholder="M├┤ tß║ú ngß║»n gß╗ìn vß╗ü ─æß╗ü thi..."></textarea>
+                        <label>Mô tả</label>
+                        <textarea @bind="examDescription" class="form-input" rows="3" placeholder="Mô tả ngắn gọn về đề thi..."></textarea>
                     </div>
                     <div class="form-group">
-                        <label>Thß╗¥i gian thi (ph├║t)</label>
+                        <label>Thời gian thi (phút)</label>
                         <input type="number" @bind="examTimeMins" class="form-input" min="30" max="180" />
                     </div>
                 </div>
                 
-                @* ΓöÇΓöÇΓöÇ Autofill Tool ΓöÇΓöÇΓöÇ *@
+                @* ─── Autofill Tool ─── *@
                 <div class="autofill-section">
-                    <h3 class="autofill-title">ΓÜí ─Éiß╗ün nhanh Link R2 (Tß╗▒ ─æß╗Öng ─æiß╗ün theo c├óu hß╗Åi)</h3>
-                    <p class="autofill-desc">Nhß║¡p th╞░ mß╗Ñc gß╗æc chß╗⌐a file tr├¬n R2. Hß╗ç thß╗æng sß║╜ tß╗▒ ─æß╗Öng gh├⌐p vß╗¢i <code>{ID}.jpg</code> (c├óu ─æ╞ín) hoß║╖c <code>{StartID}-{EndID}.mp3</code> (nh├│m c├óu) t╞░╞íng ß╗⌐ng (VD: <code>/1.mp3</code>, <code>/32-34.mp3</code>).</p>
+                    <h3 class="autofill-title">⚡ Điền nhanh Link R2 (Tự động điền theo câu hỏi)</h3>
+                    <p class="autofill-desc">Nhập thư mục gốc chứa file trên R2. Hệ thống sẽ tự động ghép với <code>{ID}.jpg</code> (câu đơn) hoặc <code>{StartID}-{EndID}.mp3</code> (nhóm câu) tương ứng (VD: <code>/1.mp3</code>, <code>/32-34.mp3</code>).</p>
                     <div class="form-grid">
                         <div class="form-group full">
-                            <label>Base URL ß║ónh</label>
-                            <input @bind="autofillBaseImageUrl" class="form-input" placeholder="VD: https://pub-xxx.r2.dev/ETS 2026 Test 1/ß║ónh" />
+                            <label>Base URL Ảnh</label>
+                            <input @bind="autofillBaseImageUrl" class="form-input" placeholder="VD: https://pub-xxx.r2.dev/ETS 2026 Test 1/Ảnh" />
                         </div>
                         <div class="form-group full">
                             <label>Base URL Audio</label>
                             <input @bind="autofillBaseAudioUrl" class="form-input" placeholder="VD: https://pub-xxx.r2.dev/ETS 2026 Test 1/Audio" />
                         </div>
                     </div>
-                    <button class="btn-autofill" @onclick="AutofillMediaLinks">≡ƒöä Tß╗▒ ─æß╗Öng ─æiß╗ün cho tß║Ñt cß║ú c├íc Part</button>
+                    <button class="btn-autofill" @onclick="AutofillMediaLinks">🔄 Tự động điền cho tất cả các Part</button>
                 </div>
 
                 <div class="section-footer">
-                    <button class="btn-next" @onclick="() => GoStep(1)">Tiß║┐p theo: Part 1 ΓåÆ</button>
+                    <button class="btn-next" @onclick="() => GoStep(1)">Tiếp theo: Part 1 →</button>
                 </div>
             </section>
         }
 
-        @* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ STEP 1: Part 1 ΓÇö Photographs ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ *@
+        @* ────── STEP 1: Part 1 — Photographs ────── *@
         else if (currentStep == 1)
         {
             <section class="builder-section">
                 <div class="section-header">
-                    <h2>≡ƒô╕ Part 1 ΓÇö Photographs <span class="q-badge">6 c├óu</span></h2>
-                    <p>Mß╗ùi c├óu gß╗ôm 1 ß║únh + 1 file audio. ─É├íp ├ín A/B/C/D ─æß╗ìc trong audio.</p>
+                    <h2>📸 Part 1 — Photographs <span class="q-badge">6 câu</span></h2>
+                    <p>Mỗi câu gồm 1 ảnh + 1 file audio. Đáp án A/B/C/D đọc trong audio.</p>
                 </div>
                 @for (int i = 0; i < part1Groups.Count; i++)
                 {
@@ -177,28 +181,28 @@
                     var g = part1Groups[gi];
                     <div class="q-card">
                         <div class="q-card-header">
-                            <span class="q-badge-num">C├óu @(gi + 1)</span>
+                            <span class="q-badge-num">Câu @(gi + 1)</span>
                             @if (!string.IsNullOrEmpty(g.CorrectAnswer))
                             {
-                                <span class="ans-tag">─É├íp ├ín: @g.CorrectAnswer</span>
+                                <span class="ans-tag">Đáp án: @g.CorrectAnswer</span>
                             }
                         </div>
                         <div class="q-card-body two-col">
-                            @* ß║ónh: d├ín link R2 *@
+                            @* Ảnh: dán link R2 *@
                             <div class="link-input-group">
-                                <label class="link-label">≡ƒû╝∩╕Å Link ß║únh (R2)</label>
+                                <label class="link-label">🖼️ Link ảnh (R2)</label>
                                 <input @bind="g.ImageUrl" @bind:event="oninput" class="form-input link-url-input"
                                        placeholder="https://r2.example.com/exams/p1-q1.jpg" />
                                 @if (!string.IsNullOrWhiteSpace(g.ImageUrl))
                                 {
                                     <img src="@g.ImageUrl" class="preview-img" alt="preview"
                                          onerror="this.style.display='none'" />
-                                    <span class="link-ok">Γ£à ß║ónh</span>
+                                    <span class="link-ok">✅ Ảnh</span>
                                 }
                             </div>
-                            @* Audio: d├ín link R2 *@
+                            @* Audio: dán link R2 *@
                             <div class="link-input-group">
-                                <label class="link-label">≡ƒÄ╡ Link audio (R2)</label>
+                                <label class="link-label">🎵 Link audio (R2)</label>
                                 <input @bind="g.AudioUrl" @bind:event="oninput" class="form-input link-url-input"
                                        placeholder="https://r2.example.com/exams/p1-q1.mp3" />
                                 @if (!string.IsNullOrWhiteSpace(g.AudioUrl))
@@ -208,7 +212,7 @@
                             </div>
                         </div>
                         <div class="q-card-answer">
-                            <label>─É├íp ├ín ─æ├║ng:</label>
+                            <label>Đáp án đúng:</label>
                             @foreach (var opt in new[] { "A", "B", "C", "D" })
                             {
                                 var o = opt;
@@ -216,49 +220,49 @@
                                         @onclick="() => g.CorrectAnswer = o">@o</button>
                             }
                         </div>
-                        @* Nß╗Öi dung tß╗½ng ─æ├íp ├ín *@
+                        @* Nội dung từng đáp án *@
                         <div class="opts-detail">
-                            <div class="opts-detail-title">≡ƒô¥ Nß╗Öi dung ─æ├íp ├ín (ghi lß║íi nß╗Öi dung trong audio)</div>
+                            <div class="opts-detail-title">📝 Nội dung đáp án (ghi lại nội dung trong audio)</div>
                             <textarea class="form-input bulk-answer-input" rows="4"
                                       value="@g.BulkOptionText"
                                       @oninput="(e) => ApplyBulkOptions(g, e.Value?.ToString(), 4)"
-                                      placeholder="D├ín ─æ├íp ├ín theo mß║½u: A. Nß╗Öi dung A&#10;B. Nß╗Öi dung B&#10;C. Nß╗Öi dung C&#10;D. Nß╗Öi dung D"></textarea>
-                            <span class="bulk-answer-hint">D├ín mß╗Öt lß║ºn, hß╗ç thß╗æng sß║╜ tß╗▒ ─æiß╗ün v├áo c├íc ├┤ AΓÇôD.</span>
+                                      placeholder="Dán đáp án theo mẫu: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C&#10;D. Nội dung D"></textarea>
+                            <span class="bulk-answer-hint">Dán một lần, hệ thống sẽ tự điền vào các ô A–D.</span>
                             <div class="options-grid">
                                 @foreach (var opt in g.Options)
                                 {
                                     var o = opt;
                                     <div class="option-row @(g.CorrectAnswer == o.Label ? "correct-opt" : "")">
                                         <span class="opt-label">@o.Label</span>
-                                        <input @bind="o.Text" class="form-input" placeholder="Nß╗Öi dung ─æ├íp ├ín @o.Label..." />
+                                        <input @bind="o.Text" class="form-input" placeholder="Nội dung đáp án @o.Label..." />
                                         <button class="mark-correct @(g.CorrectAnswer == o.Label ? "active" : "")"
-                                                @onclick="() => g.CorrectAnswer = o.Label">Γ£ô</button>
+                                                @onclick="() => g.CorrectAnswer = o.Label">✓</button>
                                     </div>
                                 }
                             </div>
                         </div>
-                        @* Giß║úi th├¡ch *@
+                        @* Giải thích *@
                         <div class="expl-section">
-                            <div class="expl-title">≡ƒÆí Giß║úi th├¡ch ─æ├íp ├ín</div>
+                            <div class="expl-title">💡 Giải thích đáp án</div>
                             <textarea @bind="g.Explanation" class="form-input" rows="2"
-                                      placeholder="VD: ─É├íp ├ín B ─æ├║ng v├¼ trong audio ng╞░ß╗¥i n├│i... ─É├íp ├ín A sai v├¼..."></textarea>
+                                      placeholder="VD: Đáp án B đúng vì trong audio người nói... Đáp án A sai vì..."></textarea>
                         </div>
                     </div>
                 }
                 <div class="step-footer">
-                    <button class="btn-prev" @onclick="() => GoStep(0)">ΓåÉ Tr╞░ß╗¢c</button>
-                    <button class="btn-next" @onclick="() => GoStep(2)">Tiß║┐p: Part 2 ΓåÆ</button>
+                    <button class="btn-prev" @onclick="() => GoStep(0)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(2)">Tiếp: Part 2 →</button>
                 </div>
             </section>
         }
 
-        @* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ STEP 2: Part 2 ΓÇö Question Response ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ *@
+        @* ────── STEP 2: Part 2 — Question Response ────── *@
         else if (currentStep == 2)
         {
             <section class="builder-section">
                 <div class="section-header">
-                    <h2>≡ƒÄº Part 2 ΓÇö Question-Response <span class="q-badge">25 c├óu</span></h2>
-                    <p>Mß╗ùi c├óu chß╗ë gß╗ôm 1 file audio. ─É├íp ├ín l├á A/B/C.</p>
+                    <h2>🎧 Part 2 — Question-Response <span class="q-badge">25 câu</span></h2>
+                    <p>Mỗi câu chỉ gồm 1 file audio. Đáp án là A/B/C.</p>
                 </div>
                 <div class="p2-list">
                     @for (int i = 0; i < part2Groups.Count; i++)
@@ -267,15 +271,15 @@
                         var g = part2Groups[gi];
                         <div class="q-card">
                             <div class="q-card-header">
-                                <span class="q-badge-num">C├óu @(gi + 7)</span>
+                                <span class="q-badge-num">Câu @(gi + 7)</span>
                                 @if (!string.IsNullOrEmpty(g.CorrectAnswer))
                                 {
-                                    <span class="ans-tag">─É├íp ├ín: @g.CorrectAnswer</span>
+                                    <span class="ans-tag">Đáp án: @g.CorrectAnswer</span>
                                 }
                             </div>
-                            @* Audio: d├ín link R2 *@
+                            @* Audio: dán link R2 *@
                             <div class="link-input-group">
-                                <label class="link-label">≡ƒÄ╡ Link audio c├óu hß╗Åi (R2)</label>
+                                <label class="link-label">🎵 Link audio câu hỏi (R2)</label>
                                 <input @bind="g.AudioUrl" @bind:event="oninput" class="form-input link-url-input"
                                        placeholder="https://r2.example.com/exams/p2-q7.mp3" />
                                 @if (!string.IsNullOrWhiteSpace(g.AudioUrl))
@@ -284,54 +288,54 @@
                                 }
                             </div>
                             <div class="form-group full">
-                                <label>Nß╗Öi dung c├óu hß╗Åi</label>
+                                <label>Nội dung câu hỏi</label>
                                 <input @bind="g.QuestionText" class="form-input"
                                        placeholder="VD: Where will the meeting be held?" />
                             </div>
-                            @* Nß╗Öi dung ─æ├íp ├ín A/B/C *@
+                            @* Nội dung đáp án A/B/C *@
                             <div class="opts-detail">
-                                <div class="opts-detail-title">≡ƒô¥ Nß╗Öi dung ─æ├íp ├ín (ghi lß║íi nß╗Öi dung trong audio)</div>
+                                <div class="opts-detail-title">📝 Nội dung đáp án (ghi lại nội dung trong audio)</div>
                                 <textarea class="form-input bulk-answer-input" rows="3"
                                           value="@g.BulkOptionText"
                                           @oninput="(e) => ApplyBulkOptions(g, e.Value?.ToString(), 3)"
-                                          placeholder="D├ín ─æ├íp ├ín theo mß║½u: A. Nß╗Öi dung A&#10;B. Nß╗Öi dung B&#10;C. Nß╗Öi dung C"></textarea>
-                                <span class="bulk-answer-hint">D├ín mß╗Öt lß║ºn, hß╗ç thß╗æng sß║╜ tß╗▒ ─æiß╗ün v├áo c├íc ├┤ AΓÇôC.</span>
+                                          placeholder="Dán đáp án theo mẫu: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C"></textarea>
+                                <span class="bulk-answer-hint">Dán một lần, hệ thống sẽ tự điền vào các ô A–C.</span>
                                 <div class="options-grid">
                                     @foreach (var opt in g.Options.Take(3))
                                     {
                                         var o = opt;
                                         <div class="option-row @(g.CorrectAnswer == o.Label ? "correct-opt" : "")">
                                             <span class="opt-label">@o.Label</span>
-                                            <input @bind="o.Text" class="form-input" placeholder="Nß╗Öi dung ─æ├íp ├ín @o.Label..." />
+                                            <input @bind="o.Text" class="form-input" placeholder="Nội dung đáp án @o.Label..." />
                                             <button class="mark-correct @(g.CorrectAnswer == o.Label ? "active" : "")"
-                                                    @onclick="() => g.CorrectAnswer = o.Label">Γ£ô</button>
+                                                    @onclick="() => g.CorrectAnswer = o.Label">✓</button>
                                         </div>
                                     }
                                 </div>
                             </div>
-                            @* Giß║úi th├¡ch *@
+                            @* Giải thích *@
                             <div class="expl-section">
-                                <div class="expl-title">≡ƒÆí Giß║úi th├¡ch ─æ├íp ├ín</div>
+                                <div class="expl-title">💡 Giải thích đáp án</div>
                                 <textarea @bind="g.Explanation" class="form-input" rows="2"
-                                          placeholder="VD: ─É├íp ├ín B ─æ├║ng v├¼..."></textarea>
+                                          placeholder="VD: Đáp án B đúng vì..."></textarea>
                             </div>
                         </div>
                     }
                 </div>
                 <div class="step-footer">
-                    <button class="btn-prev" @onclick="() => GoStep(1)">ΓåÉ Tr╞░ß╗¢c</button>
-                    <button class="btn-next" @onclick="() => GoStep(3)">Tiß║┐p: Part 3 ΓåÆ</button>
+                    <button class="btn-prev" @onclick="() => GoStep(1)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(3)">Tiếp: Part 3 →</button>
                 </div>
             </section>
         }
 
-        @* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ STEP 3: Part 3 ΓÇö Conversations ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ *@
+        @* ────── STEP 3: Part 3 — Conversations ────── *@
         else if (currentStep == 3)
         {
             <section class="builder-section">
                 <div class="section-header">
-                    <h2>≡ƒÆ¼ Part 3 ΓÇö Conversations <span class="q-badge">13 nh├│m ├ù 3 c├óu = 39 c├óu</span></h2>
-                    <p>Mß╗ùi nh├│m c├│ 1 audio v├á 3 c├óu hß╗Åi cß╗æ ─æß╗ïnh.</p>
+                    <h2>💬 Part 3 — Conversations <span class="q-badge">13 nhóm × 3 câu = 39 câu</span></h2>
+                    <p>Mỗi nhóm có 1 audio và 3 câu hỏi cố định.</p>
                 </div>
                 @{ int p3StartQ = 32; }
                 @for (int gi = 0; gi < part3Groups.Count; gi++)
@@ -341,10 +345,10 @@
                     int gStartQ = p3StartQ + gidx * 3;
                     <div class="passage-card">
                         <div class="passage-card-header">
-                            <span class="q-badge-num">Nh├│m @(gidx+1) ΓÇö C├óu @gStartQΓÇô@(gStartQ+2)</span>
+                            <span class="q-badge-num">Nhóm @(gidx+1) — Câu @gStartQ–@(gStartQ+2)</span>
                         </div>
                         <div class="link-input-group">
-                            <label class="link-label">≡ƒÄ╡ Link audio hß╗Öi thoß║íi (R2)</label>
+                            <label class="link-label">🎵 Link audio hội thoại (R2)</label>
                             <input @bind="g.AudioUrl" @bind:event="oninput" class="form-input link-url-input"
                                    placeholder="https://r2.example.com/exams/p3-g1.mp3" />
                             @if (!string.IsNullOrWhiteSpace(g.AudioUrl))
@@ -353,69 +357,69 @@
                             }
                         </div>
                         <div class="link-input-group">
-                            <label class="link-label">≡ƒû╝∩╕Å Link ß║únh minh hoß║í (R2, nß║┐u c├│)</label>
+                            <label class="link-label">🖼️ Link ảnh minh hoạ (R2, nếu có)</label>
                             <input @bind="g.ImageUrl" @bind:event="oninput" class="form-input link-url-input"
                                    placeholder="https://r2.example.com/exams/p3-g1.jpg" />
                             @if (!string.IsNullOrWhiteSpace(g.ImageUrl))
                             {
-                                <img src="@g.ImageUrl" class="preview-img" alt="ß║ónh minh hoß║í" onerror="this.style.display='none'" />
+                                <img src="@g.ImageUrl" class="preview-img" alt="Ảnh minh hoạ" onerror="this.style.display='none'" />
                             }
                         </div>
                         <div class="form-group full">
-                            <label>≡ƒô¥ Transcript hß╗Öi thoß║íi (chß╗ë hiß╗çn khi xem ─æ├íp ├ín)</label>
+                            <label>📝 Transcript hội thoại (chỉ hiện khi xem đáp án)</label>
                             <textarea @bind="g.Transcript" class="form-input" rows="6"
-                                      placeholder="D├ín nß╗Öi dung hß╗Öi thoß║íi ng╞░ß╗¥i n├│i ß╗ƒ ─æ├óy..."></textarea>
+                                      placeholder="Dán nội dung hội thoại người nói ở đây..."></textarea>
                         </div>
                         @for (int qi = 0; qi < g.Questions.Count; qi++)
                         {
                             var qidx = qi;
                             var q = g.Questions[qidx];
                             <div class="q-card-text nested">
-                                <div class="q-card-header"><span class="q-badge-num-sm">C├óu @(gStartQ + qidx)</span></div>
+                                <div class="q-card-header"><span class="q-badge-num-sm">Câu @(gStartQ + qidx)</span></div>
                                 <div class="form-group full">
-                                    <label>C├óu hß╗Åi</label>
+                                    <label>Câu hỏi</label>
                                     <input @bind="q.Text" class="form-input" placeholder="VD: What are the speakers discussing?" />
                                 </div>
                                 <textarea class="form-input bulk-answer-input" rows="4"
                                           value="@q.BulkOptionText"
                                           @oninput="(e) => ApplyBulkOptions(q, e.Value?.ToString())"
-                                          placeholder="D├ín ─æ├íp ├ín: A. Nß╗Öi dung A&#10;B. Nß╗Öi dung B&#10;C. Nß╗Öi dung C&#10;D. Nß╗Öi dung D"></textarea>
-                                <span class="bulk-answer-hint">D├ín mß╗Öt lß║ºn ─æß╗â tß╗▒ ─æß╗Öng ─æiß╗ün v├áo c├íc ├┤ AΓÇôD.</span>
+                                          placeholder="Dán đáp án: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C&#10;D. Nội dung D"></textarea>
+                                <span class="bulk-answer-hint">Dán một lần để tự động điền vào các ô A–D.</span>
                                 <div class="options-grid">
                                     @foreach (var opt in q.Options)
                                     {
                                         var o = opt;
                                         <div class="option-row @(q.CorrectOptionLabel == o.Label ? "correct-opt" : "")">
                                             <span class="opt-label">@o.Label</span>
-                                            <input @bind="o.Text" class="form-input" placeholder="Nß╗Öi dung ─æ├íp ├ín @o.Label" />
+                                            <input @bind="o.Text" class="form-input" placeholder="Nội dung đáp án @o.Label" />
                                             <button class="mark-correct @(q.CorrectOptionLabel == o.Label ? "active" : "")"
-                                                    @onclick="() => q.CorrectOptionLabel = o.Label">Γ£ô</button>
+                                                    @onclick="() => q.CorrectOptionLabel = o.Label">✓</button>
                                         </div>
                                     }
                                 </div>
                                 <div class="expl-section">
-                                    <div class="expl-title">≡ƒÆí Giß║úi th├¡ch ─æ├íp ├ín</div>
+                                    <div class="expl-title">💡 Giải thích đáp án</div>
                                     <textarea @bind="q.Explanation" class="form-input" rows="2"
-                                              placeholder="VD: ─É├íp ├ín B ─æ├║ng v├¼ trong hß╗Öi thoß║íi ng╞░ß╗¥i n├│i..."></textarea>
+                                              placeholder="VD: Đáp án B đúng vì trong hội thoại người nói..."></textarea>
                                 </div>
                             </div>
                         }
                     </div>
                 }
                 <div class="step-footer">
-                    <button class="btn-prev" @onclick="() => GoStep(2)">ΓåÉ Tr╞░ß╗¢c</button>
-                    <button class="btn-next" @onclick="() => GoStep(4)">Tiß║┐p: Part 4 ΓåÆ</button>
+                    <button class="btn-prev" @onclick="() => GoStep(2)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(4)">Tiếp: Part 4 →</button>
                 </div>
             </section>
         }
 
-        @* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ STEP 4: Part 4 ΓÇö Short Talks ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ *@
+        @* ────── STEP 4: Part 4 — Short Talks ────── *@
         else if (currentStep == 4)
         {
             <section class="builder-section">
                 <div class="section-header">
-                    <h2>≡ƒÄÖ∩╕Å Part 4 ΓÇö Short Talks <span class="q-badge">10 nh├│m ├ù 3 c├óu = 30 c├óu</span></h2>
-                    <p>Mß╗ùi nh├│m c├│ 1 audio v├á 3 c├óu hß╗Åi cß╗æ ─æß╗ïnh.</p>
+                    <h2>🎙️ Part 4 — Short Talks <span class="q-badge">10 nhóm × 3 câu = 30 câu</span></h2>
+                    <p>Mỗi nhóm có 1 audio và 3 câu hỏi cố định.</p>
                 </div>
                 @{ int p4StartQ = 71; }
                 @for (int gi = 0; gi < part4Groups.Count; gi++)
@@ -425,10 +429,10 @@
                     int gStartQ = p4StartQ + gidx * 3;
                     <div class="passage-card">
                         <div class="passage-card-header">
-                            <span class="q-badge-num">Nh├│m @(gidx+1) ΓÇö C├óu @gStartQΓÇô@(gStartQ+2)</span>
+                            <span class="q-badge-num">Nhóm @(gidx+1) — Câu @gStartQ–@(gStartQ+2)</span>
                         </div>
                         <div class="link-input-group">
-                            <label class="link-label">≡ƒÄ╡ Link audio ─æß╗Öc thoß║íi (R2)</label>
+                            <label class="link-label">🎵 Link audio độc thoại (R2)</label>
                             <input @bind="g.AudioUrl" @bind:event="oninput" class="form-input link-url-input"
                                    placeholder="https://r2.example.com/exams/p4-g1.mp3" />
                             @if (!string.IsNullOrWhiteSpace(g.AudioUrl))
@@ -437,69 +441,69 @@
                             }
                         </div>
                         <div class="link-input-group">
-                            <label class="link-label">≡ƒû╝∩╕Å Link ß║únh minh hoß║í (R2, nß║┐u c├│)</label>
+                            <label class="link-label">🖼️ Link ảnh minh hoạ (R2, nếu có)</label>
                             <input @bind="g.ImageUrl" @bind:event="oninput" class="form-input link-url-input"
                                    placeholder="https://r2.example.com/exams/p4-g1.jpg" />
                             @if (!string.IsNullOrWhiteSpace(g.ImageUrl))
                             {
-                                <img src="@g.ImageUrl" class="preview-img" alt="ß║ónh minh hoß║í" onerror="this.style.display='none'" />
+                                <img src="@g.ImageUrl" class="preview-img" alt="Ảnh minh hoạ" onerror="this.style.display='none'" />
                             }
                         </div>
                         <div class="form-group full">
-                            <label>≡ƒô¥ Transcript b├ái n├│i (chß╗ë hiß╗çn khi xem ─æ├íp ├ín)</label>
+                            <label>📝 Transcript bài nói (chỉ hiện khi xem đáp án)</label>
                             <textarea @bind="g.Transcript" class="form-input" rows="6"
-                                      placeholder="D├ín nß╗Öi dung b├ái n├│i ß╗ƒ ─æ├óy..."></textarea>
+                                      placeholder="Dán nội dung bài nói ở đây..."></textarea>
                         </div>
                         @for (int qi = 0; qi < g.Questions.Count; qi++)
                         {
                             var qidx = qi;
                             var q = g.Questions[qidx];
                             <div class="q-card-text nested">
-                                <div class="q-card-header"><span class="q-badge-num-sm">C├óu @(gStartQ + qidx)</span></div>
+                                <div class="q-card-header"><span class="q-badge-num-sm">Câu @(gStartQ + qidx)</span></div>
                                 <div class="form-group full">
-                                    <label>C├óu hß╗Åi</label>
+                                    <label>Câu hỏi</label>
                                     <input @bind="q.Text" class="form-input" placeholder="VD: What is the talk mainly about?" />
                                 </div>
                                 <textarea class="form-input bulk-answer-input" rows="4"
                                           value="@q.BulkOptionText"
                                           @oninput="(e) => ApplyBulkOptions(q, e.Value?.ToString())"
-                                          placeholder="D├ín ─æ├íp ├ín: A. Nß╗Öi dung A&#10;B. Nß╗Öi dung B&#10;C. Nß╗Öi dung C&#10;D. Nß╗Öi dung D"></textarea>
-                                <span class="bulk-answer-hint">D├ín mß╗Öt lß║ºn ─æß╗â tß╗▒ ─æß╗Öng ─æiß╗ün v├áo c├íc ├┤ AΓÇôD.</span>
+                                          placeholder="Dán đáp án: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C&#10;D. Nội dung D"></textarea>
+                                <span class="bulk-answer-hint">Dán một lần để tự động điền vào các ô A–D.</span>
                                 <div class="options-grid">
                                     @foreach (var opt in q.Options)
                                     {
                                         var o = opt;
                                         <div class="option-row @(q.CorrectOptionLabel == o.Label ? "correct-opt" : "")">
                                             <span class="opt-label">@o.Label</span>
-                                            <input @bind="o.Text" class="form-input" placeholder="Nß╗Öi dung ─æ├íp ├ín @o.Label" />
+                                            <input @bind="o.Text" class="form-input" placeholder="Nội dung đáp án @o.Label" />
                                             <button class="mark-correct @(q.CorrectOptionLabel == o.Label ? "active" : "")"
-                                                    @onclick="() => q.CorrectOptionLabel = o.Label">Γ£ô</button>
+                                                    @onclick="() => q.CorrectOptionLabel = o.Label">✓</button>
                                         </div>
                                     }
                                 </div>
                                 <div class="expl-section">
-                                    <div class="expl-title">≡ƒÆí Giß║úi th├¡ch ─æ├íp ├ín</div>
+                                    <div class="expl-title">💡 Giải thích đáp án</div>
                                     <textarea @bind="q.Explanation" class="form-input" rows="2"
-                                              placeholder="VD: ─É├íp ├ín C ─æ├║ng v├¼ ng╞░ß╗¥i n├│i ─æß╗ü cß║¡p ─æß║┐n..."></textarea>
+                                              placeholder="VD: Đáp án C đúng vì người nói đề cập đến..."></textarea>
                                 </div>
                             </div>
                         }
                     </div>
                 }
                 <div class="step-footer">
-                    <button class="btn-prev" @onclick="() => GoStep(3)">ΓåÉ Tr╞░ß╗¢c</button>
-                    <button class="btn-next" @onclick="() => GoStep(5)">Tiß║┐p: Part 5 ΓåÆ</button>
+                    <button class="btn-prev" @onclick="() => GoStep(3)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(5)">Tiếp: Part 5 →</button>
                 </div>
             </section>
         }
 
-        @* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ STEP 5: Part 5 ΓÇö Incomplete Sentences ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ *@
+        @* ────── STEP 5: Part 5 — Incomplete Sentences ────── *@
         else if (currentStep == 5)
         {
             <section class="builder-section">
                 <div class="section-header">
-                    <h2>≡ƒô¥ Part 5 ΓÇö Incomplete Sentences <span class="q-badge">30 c├óu</span></h2>
-                    <p>─Éiß╗ün nß╗Öi dung c├óu hß╗Åi v├á 4 ─æ├íp ├ín. Chß╗ìn ─æ├íp ├ín ─æ├║ng.</p>
+                    <h2>📝 Part 5 — Incomplete Sentences <span class="q-badge">30 câu</span></h2>
+                    <p>Điền nội dung câu hỏi và 4 đáp án. Chọn đáp án đúng.</p>
                 </div>
                 @for (int i = 0; i < part5Questions.Count; i++)
                 {
@@ -507,50 +511,50 @@
                     var q = part5Questions[qi];
                     <div class="q-card-text">
                         <div class="q-card-header">
-                            <span class="q-badge-num">C├óu @(101 + qi)</span>
+                            <span class="q-badge-num">Câu @(101 + qi)</span>
                         </div>
                         <div class="form-group full">
-                            <label>Nß╗Öi dung c├óu hß╗Åi</label>
+                            <label>Nội dung câu hỏi</label>
                             <textarea @bind="q.Text" class="form-input" rows="2" placeholder="VD: The manager _____ the report before the deadline."></textarea>
                         </div>
                         <textarea class="form-input bulk-answer-input" rows="4"
                                   value="@q.BulkOptionText"
                                   @oninput="(e) => ApplyBulkOptions(q, e.Value?.ToString())"
-                                  placeholder="D├ín ─æ├íp ├ín: A. Nß╗Öi dung A&#10;B. Nß╗Öi dung B&#10;C. Nß╗Öi dung C&#10;D. Nß╗Öi dung D"></textarea>
-                        <span class="bulk-answer-hint">D├ín mß╗Öt lß║ºn ─æß╗â tß╗▒ ─æß╗Öng ─æiß╗ün v├áo c├íc ├┤ AΓÇôD.</span>
+                                  placeholder="Dán đáp án: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C&#10;D. Nội dung D"></textarea>
+                        <span class="bulk-answer-hint">Dán một lần để tự động điền vào các ô A–D.</span>
                         <div class="options-grid">
                             @foreach (var opt in q.Options)
                             {
                                 var o = opt;
                                 <div class="option-row @(q.CorrectOptionLabel == o.Label ? "correct-opt" : "")">
                                     <span class="opt-label">@o.Label</span>
-                                    <input @bind="o.Text" class="form-input" placeholder="─É├íp ├ín @o.Label" />
+                                    <input @bind="o.Text" class="form-input" placeholder="Đáp án @o.Label" />
                                     <button class="mark-correct @(q.CorrectOptionLabel == o.Label ? "active" : "")"
-                                            @onclick="() => q.CorrectOptionLabel = o.Label" title="Chß╗ìn ─æ├íp ├ín ─æ├║ng">Γ£ô</button>
+                                            @onclick="() => q.CorrectOptionLabel = o.Label" title="Chọn đáp án đúng">✓</button>
                                 </div>
                             }
                         </div>
                         <div class="expl-section">
-                            <div class="expl-title">≡ƒÆí Giß║úi th├¡ch ─æ├íp ├ín</div>
+                            <div class="expl-title">💡 Giải thích đáp án</div>
                             <textarea @bind="q.Explanation" class="form-input" rows="2"
-                                      placeholder="VD: ─É├íp ├ín A ─æ├║ng v├¼ tß╗½ 'submitted' l├á dß║íng bß╗ï ─æß╗Öng ph├╣ hß╗úp vß╗¢i chß╗º ngß╗»..."></textarea>
+                                      placeholder="VD: Đáp án A đúng vì từ 'submitted' là dạng bị động phù hợp với chủ ngữ..."></textarea>
                         </div>
                     </div>
                 }
                 <div class="step-footer">
-                    <button class="btn-prev" @onclick="() => GoStep(4)">ΓåÉ Tr╞░ß╗¢c</button>
-                    <button class="btn-next" @onclick="() => GoStep(6)">Tiß║┐p: Part 6 ΓåÆ</button>
+                    <button class="btn-prev" @onclick="() => GoStep(4)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(6)">Tiếp: Part 6 →</button>
                 </div>
             </section>
         }
 
-        @* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ STEP 6: Part 6 ΓÇö Text Completion ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ *@
+        @* ────── STEP 6: Part 6 — Text Completion ────── *@
         else if (currentStep == 6)
         {
             <section class="builder-section">
                 <div class="section-header">
-                    <h2>≡ƒôä Part 6 ΓÇö Text Completion <span class="q-badge">16 c├óu / 4 b├ái</span></h2>
-                    <p>Mß╗ùi b├ái ─æß╗ìc d├╣ng mß╗Öt ß║únh ─æoß║ín v─ân tß╗½ R2 + 4 c├óu hß╗Åi ─æiß╗ün v├áo chß╗ù trß╗æng.</p>
+                    <h2>📄 Part 6 — Text Completion <span class="q-badge">16 câu / 4 bài</span></h2>
+                    <p>Mỗi bài đọc dùng một ảnh đoạn văn từ R2 + 4 câu hỏi điền vào chỗ trống.</p>
                 </div>
                 @for (int gi = 0; gi < part6Groups.Count; gi++)
                 {
@@ -558,15 +562,15 @@
                     var g = part6Groups[gidx];
                     <div class="passage-card">
                         <div class="passage-card-header">
-                            <span class="q-badge-num">B├ái @(gidx + 1) ΓÇö C├óu @(131 + gidx * 4)ΓÇô@(134 + gidx * 4)</span>
+                            <span class="q-badge-num">Bài @(gidx + 1) — Câu @(131 + gidx * 4)–@(134 + gidx * 4)</span>
                         </div>
                         <div class="link-input-group">
-                            <label class="link-label">≡ƒû╝∩╕Å Link ß║únh ─æoß║ín v─ân (R2)</label>
+                            <label class="link-label">🖼️ Link ảnh đoạn văn (R2)</label>
                             <input @bind="g.ImageUrl" @bind:event="oninput" class="form-input link-url-input"
                                    placeholder="https://r2.example.com/exams/p6-g1.jpg" />
                             @if (!string.IsNullOrWhiteSpace(g.ImageUrl))
                             {
-                                <img src="@g.ImageUrl" class="preview-img" alt="─Éoß║ín v─ân Part 6" onerror="this.style.display='none'" />
+                                <img src="@g.ImageUrl" class="preview-img" alt="Đoạn văn Part 6" onerror="this.style.display='none'" />
                             }
                         </div>
                         @for (int qi = 0; qi < g.Questions.Count; qi++)
@@ -574,12 +578,12 @@
                             var qidx = qi;
                             var q = g.Questions[qidx];
                             <div class="q-card-text nested">
-                                <div class="q-card-header"><span class="q-badge-num-sm">C├óu @(131 + gidx * 4 + qidx)</span></div>
+                                <div class="q-card-header"><span class="q-badge-num-sm">Câu @(131 + gidx * 4 + qidx)</span></div>
                                 <textarea class="form-input bulk-answer-input" rows="4"
                                           value="@q.BulkOptionText"
                                           @oninput="(e) => ApplyBulkOptions(q, e.Value?.ToString())"
-                                          placeholder="D├ín ─æ├íp ├ín: A. Nß╗Öi dung A&#10;B. Nß╗Öi dung B&#10;C. Nß╗Öi dung C&#10;D. Nß╗Öi dung D"></textarea>
-                                <span class="bulk-answer-hint">D├ín mß╗Öt lß║ºn ─æß╗â tß╗▒ ─æß╗Öng ─æiß╗ün v├áo c├íc ├┤ AΓÇôD.</span>
+                                          placeholder="Dán đáp án: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C&#10;D. Nội dung D"></textarea>
+                                <span class="bulk-answer-hint">Dán một lần để tự động điền vào các ô A–D.</span>
                                 <div class="options-grid">
                                     @foreach (var opt in q.Options)
                                     {
@@ -588,43 +592,43 @@
                                             <span class="opt-label">@o.Label</span>
                                             <input @bind="o.Text" class="form-input" />
                                             <button class="mark-correct @(q.CorrectOptionLabel == o.Label ? "active" : "")"
-                                                    @onclick="() => q.CorrectOptionLabel = o.Label">Γ£ô</button>
+                                                    @onclick="() => q.CorrectOptionLabel = o.Label">✓</button>
                                         </div>
                                     }
                                 </div>
                                 <div class="expl-section">
-                                    <div class="expl-title">≡ƒÆí Giß║úi th├¡ch ─æ├íp ├ín</div>
+                                    <div class="expl-title">💡 Giải thích đáp án</div>
                                     <textarea @bind="q.Explanation" class="form-input" rows="2"
-                                              placeholder="VD: ─É├íp ├ín A ─æ├║ng v├¼ ─æoß║ín v─ân ─æß╗ü cß║¡p..."></textarea>
+                                              placeholder="VD: Đáp án A đúng vì đoạn văn đề cập..."></textarea>
                                 </div>
                             </div>
                         }
                         <div class="form-group full">
-                            <label>≡ƒîÉ Dß╗ïch ─æoß║ín v─ân</label>
+                            <label>🌐 Dịch đoạn văn</label>
                             <textarea @bind="g.Translation" class="form-input" rows="8"
-                                      placeholder="D├ín bß║ún dß╗ïch tiß║┐ng Viß╗çt cß╗ºa ─æoß║ín v─ân ß╗ƒ ─æ├óy..."></textarea>
-                            <span class="bulk-answer-hint">Phß║ºn dß╗ïch ─æ╞░ß╗úc hiß╗ân thß╗ï ß╗ƒ cuß╗æi b├ái khi xem ─æ├íp ├ín. Mß║╣o: D├╣ng thß║╗ <code>&lt;red&gt;chß╗»&lt;/red&gt;</code> ─æß╗â t├┤ ─æß╗Å, hoß║╖c thay bß║▒ng <code>green, blue, orange, purple</code>.</span>
+                                      placeholder="Dán bản dịch tiếng Việt của đoạn văn ở đây..."></textarea>
+                            <span class="bulk-answer-hint">Phần dịch được hiển thị ở cuối bài khi xem đáp án. Mẹo: Dùng thẻ <code>&lt;red&gt;chữ&lt;/red&gt;</code> để tô đỏ, hoặc thay bằng <code>green, blue, orange, purple</code>.</span>
                         </div>
                     </div>
                 }
                 <div class="step-footer">
-                    <button class="btn-prev" @onclick="() => GoStep(5)">ΓåÉ Tr╞░ß╗¢c</button>
-                    <button class="btn-next" @onclick="() => GoStep(7)">Tiß║┐p: Part 7 ΓåÆ</button>
+                    <button class="btn-prev" @onclick="() => GoStep(5)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(7)">Tiếp: Part 7 →</button>
                 </div>
             </section>
         }
 
-        @* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ STEP 7: Part 7 ΓÇö Reading Comprehension ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ *@
+        @* ────── STEP 7: Part 7 — Reading Comprehension ────── *@
         else if (currentStep == 7)
         {
             <section class="builder-section">
                 <div class="section-header">
-                    <h2>≡ƒôÜ Part 7 ΓÇö Reading Comprehension <span class="q-badge">54 c├óu</span></h2>
-                    <p>Mß╗ùi b├ái ─æß╗ìc d├╣ng ß║únh ─æoß║ín v─ân tß╗½ R2. Chß╗ìn sß╗æ c├óu hß╗Åi (2ΓÇô5) cho mß╗ùi nh├│m.</p>
+                    <h2>📚 Part 7 — Reading Comprehension <span class="q-badge">54 câu</span></h2>
+                    <p>Mỗi bài đọc dùng ảnh đoạn văn từ R2. Chọn số câu hỏi (2–5) cho mỗi nhóm.</p>
                 </div>
                 <div class="p7-toolbar">
-                    <button class="btn-add-group" @onclick="AddPart7Group" disabled="@(!CanAddPart7Group)">+ Th├¬m b├ái ─æß╗ìc</button>
-                    <span class="p7-count">@part7Groups.Count b├ái ─æß╗ìc | @Part7QuestionCount/@MaxPart7Questions c├óu hß╗Åi</span>
+                    <button class="btn-add-group" @onclick="AddPart7Group" disabled="@(!CanAddPart7Group)">+ Thêm bài đọc</button>
+                    <span class="p7-count">@part7Groups.Count bài đọc | @Part7QuestionCount/@MaxPart7Questions câu hỏi</span>
                 </div>
                 @for (int gi = 0; gi < part7Groups.Count; gi++)
                 {
@@ -633,26 +637,26 @@
                     int startQ = 147 + part7Groups.Take(gidx).Sum(x => x.Questions.Count);
                     <div class="passage-card">
                         <div class="passage-card-header">
-                            <span class="q-badge-num">B├ái @(gidx + 1) ΓÇö C├óu @startQΓÇô@(startQ + g.Questions.Count - 1)</span>
+                            <span class="q-badge-num">Bài @(gidx + 1) — Câu @startQ–@(startQ + g.Questions.Count - 1)</span>
                             <div class="p7-controls">
-                                <label>Sß╗æ c├óu:</label>
+                                <label>Số câu:</label>
                                 <select value="@g.QuestionCount" @onchange="e => ChangePart7QuestionCount(g, int.Parse(e.Value!.ToString()!))" class="sel-sm">
                                     @foreach (var count in AvailablePart7QuestionCounts(g))
                                     {
                                         <option value="@count">@count</option>
                                     }
                                 </select>
-                                <button class="btn-remove" @onclick="() => part7Groups.RemoveAt(gidx)">≡ƒùæ∩╕Å</button>
+                                <button class="btn-remove" @onclick="() => part7Groups.RemoveAt(gidx)">🗑️</button>
                             </div>
                         </div>
 
                         <div class="link-input-group">
-                            <label class="link-label">≡ƒû╝∩╕Å Link ß║únh ─æoß║ín v─ân (R2)</label>
+                            <label class="link-label">🖼️ Link ảnh đoạn văn (R2)</label>
                             <input @bind="g.ImageUrl" @bind:event="oninput" class="form-input link-url-input"
                                    placeholder="https://r2.example.com/exams/p7-g1.jpg" />
                             @if (!string.IsNullOrWhiteSpace(g.ImageUrl))
                             {
-                                <img src="@g.ImageUrl" class="preview-img" alt="─Éoß║ín v─ân Part 7" onerror="this.style.display='none'" />
+                                <img src="@g.ImageUrl" class="preview-img" alt="Đoạn văn Part 7" onerror="this.style.display='none'" />
                             }
                         </div>
 
@@ -661,16 +665,16 @@
                             var qidx = qi;
                             var q = g.Questions[qidx];
                             <div class="q-card-text nested">
-                                <div class="q-card-header"><span class="q-badge-num-sm">C├óu @(startQ + qidx)</span></div>
+                                <div class="q-card-header"><span class="q-badge-num-sm">Câu @(startQ + qidx)</span></div>
                                 <div class="form-group full">
-                                    <label>C├óu hß╗Åi</label>
+                                    <label>Câu hỏi</label>
                                     <input @bind="q.Text" class="form-input" placeholder="VD: What is the purpose of the advertisement?" />
                                 </div>
                                 <textarea class="form-input bulk-answer-input" rows="4"
                                           value="@q.BulkOptionText"
                                           @oninput="(e) => ApplyBulkOptions(q, e.Value?.ToString())"
-                                          placeholder="D├ín ─æ├íp ├ín: A. Nß╗Öi dung A&#10;B. Nß╗Öi dung B&#10;C. Nß╗Öi dung C&#10;D. Nß╗Öi dung D"></textarea>
-                                <span class="bulk-answer-hint">D├ín mß╗Öt lß║ºn ─æß╗â tß╗▒ ─æß╗Öng ─æiß╗ün v├áo c├íc ├┤ AΓÇôD.</span>
+                                          placeholder="Dán đáp án: A. Nội dung A&#10;B. Nội dung B&#10;C. Nội dung C&#10;D. Nội dung D"></textarea>
+                                <span class="bulk-answer-hint">Dán một lần để tự động điền vào các ô A–D.</span>
                                 <div class="options-grid">
                                     @foreach (var opt in q.Options)
                                     {
@@ -679,69 +683,69 @@
                                             <span class="opt-label">@o.Label</span>
                                             <input @bind="o.Text" class="form-input" />
                                             <button class="mark-correct @(q.CorrectOptionLabel == o.Label ? "active" : "")"
-                                                    @onclick="() => q.CorrectOptionLabel = o.Label">Γ£ô</button>
+                                                    @onclick="() => q.CorrectOptionLabel = o.Label">✓</button>
                                         </div>
                                     }
                                 </div>
                             </div>
                         }
                         <div class="form-group full">
-                            <label>≡ƒîÉ Dß╗ïch ─æoß║ín v─ân</label>
+                            <label>🌐 Dịch đoạn văn</label>
                             <textarea @bind="g.Translation" class="form-input" rows="8"
-                                      placeholder="D├ín bß║ún dß╗ïch tiß║┐ng Viß╗çt cß╗ºa ─æoß║ín v─ân ß╗ƒ ─æ├óy..."></textarea>
-                            <span class="bulk-answer-hint">Phß║ºn dß╗ïch ─æ╞░ß╗úc hiß╗ân thß╗ï ß╗ƒ cuß╗æi b├ái khi xem ─æ├íp ├ín. Mß║╣o: D├╣ng thß║╗ <code>&lt;red&gt;chß╗»&lt;/red&gt;</code> ─æß╗â t├┤ ─æß╗Å, hoß║╖c thay bß║▒ng <code>green, blue, orange, purple</code>.</span>
+                                      placeholder="Dán bản dịch tiếng Việt của đoạn văn ở đây..."></textarea>
+                            <span class="bulk-answer-hint">Phần dịch được hiển thị ở cuối bài khi xem đáp án. Mẹo: Dùng thẻ <code>&lt;red&gt;chữ&lt;/red&gt;</code> để tô đỏ, hoặc thay bằng <code>green, blue, orange, purple</code>.</span>
                         </div>
                     </div>
                 }
                 <div class="step-footer">
-                    <button class="btn-prev" @onclick="() => GoStep(6)">ΓåÉ Tr╞░ß╗¢c</button>
-                    <button class="btn-next" @onclick="() => GoStep(8)">Xem tr╞░ß╗¢c & L╞░u ΓåÆ</button>
+                    <button class="btn-prev" @onclick="() => GoStep(6)">← Trước</button>
+                    <button class="btn-next" @onclick="() => GoStep(8)">Xem trước & Lưu →</button>
                 </div>
             </section>
         }
 
-        @* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ STEP 8: Preview & Submit ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ *@
+        @* ────── STEP 8: Preview & Submit ────── *@
         else if (currentStep == 8)
         {
             <section class="builder-section">
                 <div class="section-header">
-                    <h2>≡ƒÜÇ Xem tr╞░ß╗¢c & L╞░u ─æß╗ü thi</h2>
-                    <p>Kiß╗âm tra th├┤ng tin tr╞░ß╗¢c khi upload l├¬n Cloudflare R2 v├á l╞░u v├áo database.</p>
+                    <h2>🚀 Xem trước & Lưu đề thi</h2>
+                    <p>Kiểm tra thông tin trước khi upload lên Cloudflare R2 và lưu vào database.</p>
                 </div>
                 <div class="summary-card">
-                    <div class="summary-row"><span>Bß╗Ö ─æß╗ü:</span><strong>@collectionName</strong></div>
-                    <div class="summary-row"><span>T├¬n b├ái:</span><strong>@examTitle</strong></div>
-                    <div class="summary-row"><span>Thß╗¥i gian:</span><strong>@examTimeMins ph├║t</strong></div>
+                    <div class="summary-row"><span>Bộ đề:</span><strong>@collectionName</strong></div>
+                    <div class="summary-row"><span>Tên bài:</span><strong>@examTitle</strong></div>
+                    <div class="summary-row"><span>Thời gian:</span><strong>@examTimeMins phút</strong></div>
                     <div class="summary-divider"></div>
-                    <div class="summary-row"><span>Part 1:</span><strong>@part1Groups.Count(g => !string.IsNullOrEmpty(g.ImageUrl) && !string.IsNullOrEmpty(g.AudioUrl)) / @part1Groups.Count c├óu ─æß╗º dß╗» liß╗çu</strong></div>
-                    <div class="summary-row"><span>Part 2:</span><strong>@part2Groups.Count(g => !string.IsNullOrEmpty(g.AudioUrl)) / @part2Groups.Count c├óu ─æß╗º audio</strong></div>
-                    <div class="summary-row"><span>Part 3:</span><strong>@part3Groups.Count(g => !string.IsNullOrEmpty(g.AudioUrl)) / @part3Groups.Count nh├│m ─æß╗º audio</strong></div>
-                    <div class="summary-row"><span>Part 4:</span><strong>@part4Groups.Count(g => !string.IsNullOrEmpty(g.AudioUrl)) / @part4Groups.Count nh├│m ─æß╗º audio</strong></div>
-                    <div class="summary-row"><span>Part 5:</span><strong>@part5Questions.Count c├óu</strong></div>
-                    <div class="summary-row"><span>Part 6:</span><strong>@part6Groups.Count b├ái / @part6Groups.Sum(g => g.Questions.Count) c├óu</strong></div>
-                    <div class="summary-row"><span>Part 7:</span><strong>@part7Groups.Count b├ái / @Part7QuestionCount/@MaxPart7Questions c├óu</strong></div>
+                    <div class="summary-row"><span>Part 1:</span><strong>@part1Groups.Count(g => !string.IsNullOrEmpty(g.ImageUrl) && !string.IsNullOrEmpty(g.AudioUrl)) / @part1Groups.Count câu đủ dữ liệu</strong></div>
+                    <div class="summary-row"><span>Part 2:</span><strong>@part2Groups.Count(g => !string.IsNullOrEmpty(g.AudioUrl)) / @part2Groups.Count câu đủ audio</strong></div>
+                    <div class="summary-row"><span>Part 3:</span><strong>@part3Groups.Count(g => !string.IsNullOrEmpty(g.AudioUrl)) / @part3Groups.Count nhóm đủ audio</strong></div>
+                    <div class="summary-row"><span>Part 4:</span><strong>@part4Groups.Count(g => !string.IsNullOrEmpty(g.AudioUrl)) / @part4Groups.Count nhóm đủ audio</strong></div>
+                    <div class="summary-row"><span>Part 5:</span><strong>@part5Questions.Count câu</strong></div>
+                    <div class="summary-row"><span>Part 6:</span><strong>@part6Groups.Count bài / @part6Groups.Sum(g => g.Questions.Count) câu</strong></div>
+                    <div class="summary-row"><span>Part 7:</span><strong>@part7Groups.Count bài / @Part7QuestionCount/@MaxPart7Questions câu</strong></div>
                 </div>
 
                 @if (!string.IsNullOrEmpty(saveError))
                 {
-                    <div class="alert-error">ΓÜá∩╕Å @saveError</div>
+                    <div class="alert-error">⚠️ @saveError</div>
                 }
                 @if (!string.IsNullOrEmpty(saveSuccess))
                 {
-                    <div class="alert-success">Γ£à @saveSuccess</div>
+                    <div class="alert-success">✅ @saveSuccess</div>
                 }
 
                 <div class="submit-actions">
-                    <button class="btn-prev" @onclick="() => GoStep(7)">ΓåÉ Quay lß║íi</button>
+                    <button class="btn-prev" @onclick="() => GoStep(7)">← Quay lại</button>
                     <button class="btn-submit" @onclick="SubmitExam" disabled="@isSaving">
                         @if (isSaving)
                         {
                             <span class="spinner-inline"></span>
-                            <span>─Éang upload & l╞░u...</span>
+                            <span>Đang upload & lưu...</span>
                         }
                         else
                         {
-                            <span>≡ƒÜÇ Upload & L╞░u ─æß╗ü thi</span>
+                            <span>🚀 Upload & Lưu đề thi</span>
                         }
                     </button>
                 </div>
@@ -751,7 +755,7 @@
 </div>
 
 @code {
-    private string[] steps = { "Th├┤ng tin", "Part 1", "Part 2", "Part 3", "Part 4", "Part 5", "Part 6", "Part 7", "L╞░u ─æß╗ü" };
+    private string[] steps = { "Thông tin", "Part 1", "Part 2", "Part 3", "Part 4", "Part 5", "Part 6", "Part 7", "Lưu đề" };
     private int currentStep = 0;
 
     private string collectionName = "";
@@ -774,13 +778,13 @@
     private string saveError = "";
     private string saveSuccess = "";
 
-    // ─── Edit mode ───
+    // ��� Edit mode ���
     private int? editingMockTestId = null;
     private string editingTitle = "";
     private bool showExamList = false;
     private List<MockTestDto>? examList = null;
 
-    // ΓöÇΓöÇΓöÇ Draft state ΓöÇΓöÇΓöÇ
+    // ─── Draft state ───
     private bool isSavingDraft = false;
     private bool hasDraft = false;
     private string draftToast = "";
@@ -802,7 +806,7 @@
             if (hasDraft)
             {
                 var confirm = await JS.InvokeAsync<bool>("confirm",
-                    "T├¼m thß║Ñy bß║ún nh├íp c┼⌐. Bß║ín c├│ muß╗æn kh├┤i phß╗Ñc kh├┤ng?");
+                    "Tìm thấy bản nháp cũ. Bạn có muốn khôi phục không?");
                 if (confirm)
                     await LoadDraft();
             }
@@ -812,13 +816,13 @@
     private async Task GoStep(int s)
     {
         currentStep = Math.Clamp(s, 0, steps.Length - 1);
-        // Auto-save nh├íp mß╗ùi khi chuyß╗ân b╞░ß╗¢c
+        // Auto-save nháp mỗi khi chuyển bước
         await AutoSaveDraft();
         await InvokeAsync(StateHasChanged);
         await Task.Yield();
         await JS.InvokeVoidAsync("scrollBuilderToTop");
     }
-    // ΓöÇΓöÇΓöÇ Autofill Links ΓöÇΓöÇΓöÇ
+    // ─── Autofill Links ───
     private string autofillBaseImageUrl = "";
     private string autofillBaseAudioUrl = "";
 
@@ -871,7 +875,7 @@
             p7q += g.Questions.Count;
         }
 
-        ShowDraftToast("Γ£¿ ─É├ú tß╗▒ ─æß╗Öng ─æiß╗ün link R2!", "toast-ok");
+        ShowDraftToast("✨ Đã tự động điền link R2!", "toast-ok");
     }
 
 
@@ -925,7 +929,7 @@
             g.Questions.RemoveAt(g.Questions.Count - 1);
     }
 
-    // ΓöÇΓöÇΓöÇ Draft: Save ΓöÇΓöÇΓöÇ
+    // ─── Draft: Save ───
     private async Task SaveDraft()
     {
         isSavingDraft = true;
@@ -935,17 +939,17 @@
             var draft = BuildDraftPayload();
             await LocalStorage.SetItemAsync(DraftKey, draft);
             hasDraft = true;
-            ShowDraftToast("Γ£à ─É├ú l╞░u nh├íp!", "toast-ok");
+            ShowDraftToast("✅ Đã lưu nháp!", "toast-ok");
         }
         catch (Exception ex)
         {
-            ShowDraftToast($"ΓÜá∩╕Å Lß╗ùi: {ex.Message}", "toast-err");
+            ShowDraftToast($"⚠️ Lỗi: {ex.Message}", "toast-err");
         }
         isSavingDraft = false;
         StateHasChanged();
     }
 
-    // Auto-save nhß║╣ khi chuyß╗ân b╞░ß╗¢c (kh├┤ng show toast)
+    // Auto-save nhẹ khi chuyển bước (không show toast)
     private async Task AutoSaveDraft()
     {
         try
@@ -957,7 +961,7 @@
         catch { /* silent */ }
     }
 
-    // ΓöÇΓöÇΓöÇ Draft: Load ΓöÇΓöÇΓöÇ
+    // ─── Draft: Load ───
     private async Task LoadDraft()
     {
         try
@@ -983,27 +987,27 @@
                 NormalizePart7Groups();
             }
 
-            ShowDraftToast("Γ£à ─É├ú kh├┤i phß╗Ñc bß║ún nh├íp!", "toast-ok");
+            ShowDraftToast("✅ Đã khôi phục bản nháp!", "toast-ok");
             StateHasChanged();
         }
         catch (Exception ex)
         {
-            ShowDraftToast($"ΓÜá∩╕Å Kh├┤ng thß╗â ─æß╗ìc nh├íp: {ex.Message}", "toast-err");
+            ShowDraftToast($"⚠️ Không thể đọc nháp: {ex.Message}", "toast-err");
         }
     }
 
-    // ΓöÇΓöÇΓöÇ Draft: Clear ΓöÇΓöÇΓöÇ
+    // ─── Draft: Clear ───
     private async Task ClearDraft()
     {
-        var confirm = await JS.InvokeAsync<bool>("confirm", "X├│a bß║ún nh├íp n├áy?");
+        var confirm = await JS.InvokeAsync<bool>("confirm", "Xóa bản nháp này?");
         if (!confirm) return;
         await LocalStorage.RemoveItemAsync(DraftKey);
         hasDraft = false;
-        ShowDraftToast("≡ƒùæ∩╕Å ─É├ú x├│a nh├íp", "toast-warn");
+        ShowDraftToast("🗑️ Đã xóa nháp", "toast-warn");
         StateHasChanged();
     }
 
-    // ΓöÇΓöÇΓöÇ Toast helper ΓöÇΓöÇΓöÇ
+    // ─── Toast helper ───
     private System.Timers.Timer? _toastTimer;
     private void ShowDraftToast(string msg, string cls)
     {
@@ -1019,7 +1023,7 @@
         _toastTimer.Start();
     }
 
-    // ΓöÇΓöÇΓöÇ Build draft payload ΓöÇΓöÇΓöÇ
+    // ─── Build draft payload ───
     private BuilderDraft BuildDraftPayload() => new()
     {
         CollectionName  = collectionName,
@@ -1038,6 +1042,12 @@
 
     private async Task SubmitExam()
     {
+        if (string.IsNullOrWhiteSpace(collectionName) || string.IsNullOrWhiteSpace(examTitle))
+        {
+            saveError = "Lỗi: Bạn phải nhập 'Bộ đề' và 'Tên bài' ở Tab Thông tin (Step 1) trước khi lưu.";
+            return;
+        }
+
         isSaving = true; saveError = ""; saveSuccess = "";
         StateHasChanged();
         try
@@ -1103,12 +1113,213 @@
         saveError = ""; saveSuccess = "";
     }
 
+    private async Task HandleJsonImport(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file == null) return;
+            
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var reader = new System.IO.StreamReader(stream);
+            var jsonContent = await reader.ReadToEndAsync();
+            
+            PopulateFormFromJson(jsonContent);
+            
+            ShowDraftToast("✨ Đã điền form từ file JSON!", "toast-ok");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            saveError = "Lỗi đọc file JSON: $($ex.Message)";
+            ShowDraftToast("⚠️ Lỗi định dạng JSON", "toast-err");
+            StateHasChanged();
+        }
+    }
+
+    private string IdToLabel(int id) => id switch { 1=>"A", 2=>"B", 3=>"C", 4=>"D", _=>"A" };
+
+    private void PopulateFormFromJson(string json)
+    {
+        var doc = System.Text.Json.JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        examTitle = root.TryGetProperty("Title", out var titleProp) ? titleProp.GetString() ?? "" : "";
+        examDescription = root.TryGetProperty("Description", out var descProp) ? descProp.GetString() ?? "" : "";
+        if (root.TryGetProperty("TotalTimeSeconds", out var timeProp)) examTimeMins = timeProp.GetInt32() / 60;
+
+        if (root.TryGetProperty("Parts", out var parts))
+        {
+            foreach (var part in parts.EnumerateArray())
+            {
+                int pNum = part.GetProperty("PartNumber").GetInt32();
+                if (!part.TryGetProperty("QuestionGroups", out var groups)) continue;
+
+                switch (pNum)
+                {
+                    case 1:
+                        int p1Idx = 0;
+                        foreach(var g in groups.EnumerateArray())
+                        {
+                            if (p1Idx >= part1Groups.Count) break;
+                            var q = g.GetProperty("Questions")[0];
+                            var mg = part1Groups[p1Idx];
+                            mg.ImageUrl = g.TryGetProperty("ImageUrl", out var iu) ? iu.GetString() : null;
+                            mg.AudioUrl = g.TryGetProperty("AudioUrl", out var au) ? au.GetString() : null;
+                            mg.CorrectAnswer = IdToLabel(q.GetProperty("CorrectOptionId").GetInt32());
+                            mg.Explanation = q.TryGetProperty("Explanation", out var expl) ? expl.GetString() ?? "" : "";
+                            if (q.TryGetProperty("Options", out var opts))
+                            {
+                                int i = 0;
+                                foreach (var opt in opts.EnumerateArray()) { if (i < 4) mg.Options[i++].Text = opt.GetProperty("Text").GetString() ?? ""; }
+                                mg.BulkOptionText = string.Join("\n", mg.Options.Select(o => o.Text));
+                            }
+                            p1Idx++;
+                        }
+                        break;
+                    case 2:
+                        int p2Idx = 0;
+                        foreach(var g in groups.EnumerateArray())
+                        {
+                            if (p2Idx >= part2Groups.Count) break;
+                            var q = g.GetProperty("Questions")[0];
+                            var mg = part2Groups[p2Idx];
+                            mg.AudioUrl = g.TryGetProperty("AudioUrl", out var au) ? au.GetString() : null;
+                            mg.QuestionText = q.TryGetProperty("Text", out var qt) ? qt.GetString() ?? "" : "";
+                            mg.CorrectAnswer = IdToLabel(q.GetProperty("CorrectOptionId").GetInt32());
+                            mg.Explanation = q.TryGetProperty("Explanation", out var expl) ? expl.GetString() ?? "" : "";
+                            if (q.TryGetProperty("Options", out var opts))
+                            {
+                                int i = 0;
+                                foreach (var opt in opts.EnumerateArray()) { if (i < 3) mg.Options[i++].Text = opt.GetProperty("Text").GetString() ?? ""; }
+                                mg.BulkOptionText = string.Join("\n", mg.Options.Take(3).Select(o => o.Text));
+                            }
+                            p2Idx++;
+                        }
+                        break;
+                    case 3:
+                    case 4:
+                        var targetList = pNum == 3 ? part3Groups : part4Groups;
+                        int p34Idx = 0;
+                        foreach(var g in groups.EnumerateArray())
+                        {
+                            if (p34Idx >= targetList.Count) break;
+                            var cg = targetList[p34Idx];
+                            cg.Title = g.TryGetProperty("PassageTitle", out var t2) ? t2.GetString() ?? "" : "";
+                            cg.Transcript = g.TryGetProperty("PassageHtml", out var h2) ? h2.GetString() ?? "" : "";
+                            cg.AudioUrl = g.TryGetProperty("AudioUrl", out var au) ? au.GetString() : null;
+                            cg.ImageUrl = g.TryGetProperty("ImageUrl", out var iu) ? iu.GetString() : null;
+                            
+                            int qIdx = 0;
+                            foreach(var q in g.GetProperty("Questions").EnumerateArray())
+                            {
+                                if (qIdx >= cg.Questions.Count) break;
+                                var cq = cg.Questions[qIdx];
+                                cq.Text = q.TryGetProperty("Text", out var qt) ? qt.GetString() ?? "" : "";
+                                cq.CorrectOptionLabel = IdToLabel(q.GetProperty("CorrectOptionId").GetInt32());
+                                cq.Explanation = q.TryGetProperty("Explanation", out var expl) ? expl.GetString() ?? "" : "";
+                                if (q.TryGetProperty("Options", out var opts))
+                                {
+                                    int i = 0;
+                                    foreach (var opt in opts.EnumerateArray()) { if (i < 4) cq.Options[i++].Text = opt.GetProperty("Text").GetString() ?? ""; }
+                                    cq.BulkOptionText = string.Join("\n", cq.Options.Select(o => o.Text));
+                                }
+                                qIdx++;
+                            }
+                            p34Idx++;
+                        }
+                        break;
+                    case 5:
+                        int p5Idx = 0;
+                        foreach(var g in groups.EnumerateArray())
+                        {
+                            if (p5Idx >= part5Questions.Count) break;
+                            var q = g.GetProperty("Questions")[0];
+                            var tq = part5Questions[p5Idx];
+                            tq.Text = q.TryGetProperty("Text", out var qt) ? qt.GetString() ?? "" : "";
+                            tq.CorrectOptionLabel = IdToLabel(q.GetProperty("CorrectOptionId").GetInt32());
+                            tq.Explanation = q.TryGetProperty("Explanation", out var expl) ? expl.GetString() ?? "" : "";
+                            if (q.TryGetProperty("Options", out var opts))
+                            {
+                                int i = 0;
+                                foreach (var opt in opts.EnumerateArray()) { if (i < 4) tq.Options[i++].Text = opt.GetProperty("Text").GetString() ?? ""; }
+                                tq.BulkOptionText = string.Join("\n", tq.Options.Select(o => o.Text));
+                            }
+                            p5Idx++;
+                        }
+                        break;
+                    case 6:
+                        int p6Idx = 0;
+                        foreach(var g in groups.EnumerateArray())
+                        {
+                            if (p6Idx >= part6Groups.Count) break;
+                            var pg = part6Groups[p6Idx];
+                            pg.PassageTitle = g.TryGetProperty("PassageTitle", out var pt) ? pt.GetString() ?? "" : "";
+                            pg.PassageHtml = g.TryGetProperty("PassageHtml", out var ph) ? ph.GetString() ?? "" : "";
+                            pg.ImageUrl = g.TryGetProperty("ImageUrl", out var iu) ? iu.GetString() : null;
+                            
+                            int qIdx = 0;
+                            foreach(var q in g.GetProperty("Questions").EnumerateArray())
+                            {
+                                if (qIdx >= pg.Questions.Count) break;
+                                var tq = pg.Questions[qIdx];
+                                tq.Text = q.TryGetProperty("Text", out var qt) ? qt.GetString() ?? "" : "";
+                                tq.CorrectOptionLabel = IdToLabel(q.GetProperty("CorrectOptionId").GetInt32());
+                                tq.Explanation = q.TryGetProperty("Explanation", out var expl) ? expl.GetString() ?? "" : "";
+                                if (q.TryGetProperty("Options", out var opts))
+                                {
+                                    int i = 0;
+                                    foreach (var opt in opts.EnumerateArray()) { if (i < 4) tq.Options[i++].Text = opt.GetProperty("Text").GetString() ?? ""; }
+                                    tq.BulkOptionText = string.Join("\n", tq.Options.Select(o => o.Text));
+                                }
+                                qIdx++;
+                            }
+                            p6Idx++;
+                        }
+                        break;
+                    case 7:
+                        part7Groups.Clear();
+                        foreach(var g in groups.EnumerateArray())
+                        {
+                            var p7 = new Part7Group {
+                                GroupId = g.GetProperty("GroupId").GetString() ?? "",
+                                PassageTitle = g.TryGetProperty("PassageTitle", out var pt2) ? pt2.GetString() ?? "" : "",
+                                PassageHtml = g.TryGetProperty("PassageHtml", out var ph2) ? ph2.GetString() ?? "" : "",
+                                ImageUrl = g.TryGetProperty("ImageUrl", out var iu2) ? iu2.GetString() : null,
+                                AudioUrl = g.TryGetProperty("AudioUrl", out var au2) ? au2.GetString() : null,
+                            };
+                            p7.Questions.Clear();
+                            foreach(var q in g.GetProperty("Questions").EnumerateArray())
+                            {
+                                var tq = new TextQuestion {
+                                    Id = q.GetProperty("Id").GetInt32(),
+                                    Text = q.TryGetProperty("Text", out var qt2) ? qt2.GetString() ?? "" : "",
+                                    CorrectOptionLabel = IdToLabel(q.GetProperty("CorrectOptionId").GetInt32()),
+                                    Explanation = q.TryGetProperty("Explanation", out var expl2) ? expl2.GetString() ?? "" : ""
+                                };
+                                if (q.TryGetProperty("Options", out var opts))
+                                {
+                                    int i = 0;
+                                    foreach (var opt in opts.EnumerateArray()) { if (i < 4) tq.Options[i++].Text = opt.GetProperty("Text").GetString() ?? ""; }
+                                    tq.BulkOptionText = string.Join("\n", tq.Options.Select(o => o.Text));
+                                }
+                                p7.Questions.Add(tq);
+                            }
+                            p7.QuestionCount = p7.Questions.Count;
+                            part7Groups.Add(p7);
+                        }
+                        break;
+                }
+            }
+        }
+        NormalizePart7Groups();
+    }
     private object BuildExamJson()
     {
         var parts = new List<object>();
         int qId;
 
-        // Part 1 ΓÇö option texts taken from g.Options (filled by admin)
+        // Part 1 — option texts taken from g.Options (filled by admin)
         qId = 1;
         parts.Add(new {
             PartNumber=1, PartName="Photographs", PartType="Photographs", HasListening=true,
@@ -1127,7 +1338,7 @@
             }).ToList()
         });
 
-        // Part 2 ΓÇö option texts taken from g.Options (first 3: A/B/C)
+        // Part 2 — option texts taken from g.Options (first 3: A/B/C)
         qId = 7;
         parts.Add(new {
             PartNumber=2, PartName="Question-Response", PartType="QuestionResponse", HasListening=true,
@@ -1315,8 +1526,8 @@
     private static List<ConvQuestion> MakeConvQs(int n) => Enumerable.Range(0, n).Select(_ => new ConvQuestion { Options = new[]{ "A","B","C","D" }.Select(l => new OptionItem { Label = l }).ToList() }).ToList();
     private static List<TextQuestion> MakeTextQs(int n, int startId) => Enumerable.Range(0, n).Select(i => new TextQuestion { Id=startId+i }).ToList();
 
-    // ΓöÇΓöÇΓöÇ Local model classes ΓöÇΓöÇΓöÇ
-    // Explanation mixin ΓÇö tß║Ñt cß║ú question types ─æß╗üu c├│
+    // ─── Local model classes ───
+    // Explanation mixin — tất cả question types đều có
     public class MediaGroup
     {
         public string GroupId { get; set; } = "";
@@ -1387,7 +1598,7 @@
         public string Text { get; set; } = "";
     }
 
-    // ΓöÇΓöÇΓöÇ Draft DTO ΓÇö serialized to localStorage ΓöÇΓöÇΓöÇ
+    // ─── Draft DTO — serialized to localStorage ───
     public class BuilderDraft
     {
         public string CollectionName { get; set; } = "";
