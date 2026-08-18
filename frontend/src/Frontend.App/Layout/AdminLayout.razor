@@ -12,6 +12,9 @@
             <button class="nav-tab @(activeDomain == "IELTS" ? "active" : "")" @onclick='() => SwitchDomain("IELTS")'>
                 <span class="tab-icon">🇬🇧</span> IELTS
             </button>
+            <button class="nav-tab @(activeDomain == "TOEIC" ? "active" : "")" @onclick='() => SwitchDomain("TOEIC")'>
+                <span class="tab-icon">🏆</span> TOEIC
+            </button>
             <button class="nav-tab @(activeDomain == "HSK" ? "active" : "")" @onclick='() => SwitchDomain("HSK")'>
                 <span class="tab-icon">🇨🇳</span> HSK
             </button>
@@ -44,6 +47,19 @@
                     <li class="menu-item">
                         <a href="/admin/ielts-reports" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
                             <i class="bi bi-bar-chart"></i> Thống kê điểm số
+                        </a>
+                    </li>
+                }
+                else if (activeDomain == "TOEIC")
+                {
+                    <li class="menu-item @(IsActive("/admin/toeic-builder") ? "active" : "")">
+                        <a href="/admin/toeic-builder">
+                            <i class="bi bi-pencil-square"></i> Tạo & Sửa đề TOEIC
+                        </a>
+                    </li>
+                    <li class="menu-item">
+                        <a href="/admin/toeic-users" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
+                            <i class="bi bi-people"></i> Quản lý học viên
                         </a>
                     </li>
                 }
@@ -100,13 +116,11 @@
     {
         activeDomain = domain;
         if (domain == "IELTS")
-        {
             NavigationManager.NavigateTo("/admin/mock-tests");
-        }
+        else if (domain == "TOEIC")
+            NavigationManager.NavigateTo("/admin/toeic-builder");
         else
-        {
             NavigationManager.NavigateTo("/admin");
-        }
     }
 
     private bool IsActive(string path)

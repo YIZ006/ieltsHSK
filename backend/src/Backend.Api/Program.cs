@@ -221,7 +221,8 @@ app.MapGet("/api/mock-tests", async (Backend.Infrastructure.Persistence.AppDbCon
         ListeningAnswerUrl = m.ListeningAnswerUrl,
         ReadingAnswerUrl = m.ReadingAnswerUrl,
         WritingAnswerUrl = m.WritingAnswerUrl,
-        SpeakingAnswerUrl = m.SpeakingAnswerUrl
+        SpeakingAnswerUrl = m.SpeakingAnswerUrl,
+        ToeicUrl = m.ToeicUrl
     }).ToList();
     
     return Results.Ok(dtos);
@@ -240,7 +241,8 @@ app.MapPost("/api/mock-tests", async (Backend.Application.DTOs.CreateMockTestReq
         ListeningAnswerUrl = request.ListeningAnswerUrl,
         ReadingAnswerUrl = request.ReadingAnswerUrl,
         WritingAnswerUrl = request.WritingAnswerUrl,
-        SpeakingAnswerUrl = request.SpeakingAnswerUrl
+        SpeakingAnswerUrl = request.SpeakingAnswerUrl,
+        ToeicUrl = request.ToeicUrl
     };
     
     dbContext.MockTests.Add(newTest);
@@ -264,6 +266,7 @@ app.MapPut("/api/mock-tests/{id}", async (int id, Backend.Application.DTOs.Creat
     test.ReadingAnswerUrl = request.ReadingAnswerUrl;
     test.WritingAnswerUrl = request.WritingAnswerUrl;
     test.SpeakingAnswerUrl = request.SpeakingAnswerUrl;
+    test.ToeicUrl = request.ToeicUrl;
 
     await dbContext.SaveChangesAsync(cancellationToken);
     return Results.Ok();
@@ -309,6 +312,86 @@ app.MapPost("/api/test-submissions", async (Backend.Application.DTOs.CreateTestS
     return Results.Ok(new { Id = submission.Id });
 });
 
+// ─── TOEIC: Upload media (ảnh/audio) lên R2 ───
+app.MapPost("/api/toeic/upload-media", async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Application.Abstractions.IR2StorageService r2Service, CancellationToken cancellationToken) =>
+{
+    if (file == null || file.Length == 0)
+        return Results.BadRequest("No file uploaded.");
+    long maxSize = file.ContentType.StartsWith("image/") ? 10 * 1024 * 1024 : 80 * 1024 * 1024;
+    bool isImage = file.ContentType.StartsWith("image/");
+    if (file.Length > maxSize)
+        return Results.BadRequest($"File too large. Max {(isImage ? "10MB" : "80MB")}.");
+    var folder = isImage ? "toeic/images" : "toeic/audio";
+    var ext = Path.GetExtension(file.FileName);
+    var fileName = $"{folder}/{Guid.NewGuid()}{ext}";
+    using var stream = file.OpenReadStream();
+    try
+    {
+        var url = await r2Service.UploadFileAsync(stream, fileName, file.ContentType, cancellationToken);
+        return Results.Ok(new { Url = url, Type = isImage ? "image" : "audio" });
+    }
+    catch (Exception ex) { return Results.BadRequest(ex.Message); }
+}).DisableAntiforgery();
+
+// ─── TOEIC: Lưu đề thi JSON lên R2 và ghi URL vào DB ───
+app.MapPost("/api/toeic/save-exam", async (
+        SaveToeicExamRequest req,
+        Backend.Application.Abstractions.IR2StorageService r2Service,
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(req.CollectionName) || string.IsNullOrWhiteSpace(req.Title))
+        return Results.BadRequest("CollectionName and Title are required.");
+
+    var json = System.Text.Json.JsonSerializer.Serialize(req.ExamData,
+        new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
+    var jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
+    var fileId = Guid.NewGuid().ToString("N");
+    var fileName = $"toeic/exams/{fileId}.json";
+
+    string jsonUrl;
+    try
+    {
+        using var ms = new MemoryStream(jsonBytes);
+        jsonUrl = await r2Service.UploadFileAsync(ms, fileName, "application/json", cancellationToken);
+    }
+    catch
+    {
+        // Fallback: lưu local nếu R2 lỗi (dev only)
+        var dir = Path.Combine("wwwroot", "exports");
+        Directory.CreateDirectory(dir);
+        var localPath = Path.Combine(dir, $"{fileId}.json");
+        await File.WriteAllBytesAsync(localPath, jsonBytes, cancellationToken);
+        jsonUrl = $"/exports/{fileId}.json";
+    }
+
+    // Cập nhật hoặc tạo mới MockTest
+    Backend.Domain.Entities.MockTest? test = null;
+    if (req.MockTestId.HasValue)
+        test = await dbContext.MockTests.FindAsync(new object[] { req.MockTestId.Value }, cancellationToken);
+
+    if (test == null)
+    {
+        test = new Backend.Domain.Entities.MockTest
+        {
+            CollectionName = req.CollectionName,
+            Title = req.Title,
+            ToeicUrl = jsonUrl
+        };
+        dbContext.MockTests.Add(test);
+    }
+    else
+    {
+        test.CollectionName = req.CollectionName;
+        test.Title = req.Title;
+        test.ToeicUrl = jsonUrl;
+    }
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new { Url = jsonUrl, Id = test.Id });
+});
+
 app.Run();
 
 public record CreateExamRequest(string Title, string DataUrl, string Category = "IELTS");
+public record SaveToeicExamRequest(string CollectionName, string Title, int? MockTestId, System.Text.Json.JsonElement ExamData);
