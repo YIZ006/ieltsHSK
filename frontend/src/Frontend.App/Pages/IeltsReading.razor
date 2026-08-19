@@ -11,6 +11,7 @@
 @inject ExamSessionService ExamSession
 @inject ExamSubmissionService SubmissionService
 @inject NavigationManager Navigation
+@inject IConfiguration Config
 @implements IDisposable
 
 <PageTitle>@(exam?.Title ?? "IELTS Reading") - IeltsHSK</PageTitle>
@@ -353,8 +354,21 @@ else if (isFinished && !string.IsNullOrWhiteSpace(_statusMessage))
         isLoading = true;
         string actualUrl = string.IsNullOrWhiteSpace(ExamUrl) ? QueryExamUrl ?? DefaultExamUrl : ExamUrl;
         string url = Uri.UnescapeDataString(actualUrl);
+        
+        if (url.StartsWith("/"))
+        {
+            var backendUrl = Config["BackendApi:BaseUrl"] ?? "http://localhost:5101/";
+            url = backendUrl.TrimEnd('/') + url;
+        }
+
         _examUrlLoaded = url;
         _answerUrlLoaded = string.IsNullOrWhiteSpace(QueryAnswerUrl) ? null : Uri.UnescapeDataString(QueryAnswerUrl);
+        if (!string.IsNullOrWhiteSpace(_answerUrlLoaded) && _answerUrlLoaded.StartsWith("/"))
+        {
+            var backendUrl = Config["BackendApi:BaseUrl"] ?? "http://localhost:5101/";
+            _answerUrlLoaded = backendUrl.TrimEnd('/') + _answerUrlLoaded;
+        }
+
         exam = await ExamService.LoadExamAsync(url);
         if (exam?.Parts?.Count > 0)
             activeQuestionId = FirstQuestionId(exam.Parts[0]);

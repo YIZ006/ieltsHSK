@@ -6,6 +6,7 @@
 @inject MockTestService MockTestService
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
+@inject IConfiguration Config
 @implements IDisposable
 
 <PageTitle>@(exam?.Title ?? "TOEIC Test 1 - 2026") - HỆ THỐNG THI TRỰC TUYẾN</PageTitle>
@@ -22,22 +23,22 @@
 else if (showTestList)
 {
     <div class="toeic-test-list-container">
-        <div class="header-logo" style="justify-content: center; margin-top: 2rem; margin-bottom: 2rem;">
+        <div class="header-logo" style="justify-content: center; margin-top: 2rem; margin-bottom: 1.5rem;">
             <span class="logo-icon">🎓</span>
-            <span class="header-title" style="font-size: 2rem;">HỆ THỐNG THI TRỰC TUYẾN</span>
+            <span class="header-title">HỆ THỐNG THI TRỰC TUYẾN</span>
         </div>
-        <h2 style="text-align: center; color: white; margin-bottom: 2rem;">Danh sách đề thi TOEIC (@availableTests?.Count đề)</h2>
+        <h2 style="text-align: center; color: #94a3b8; margin-bottom: 2.5rem; font-size: 1.1rem; font-weight: 500; letter-spacing: 0.5px;">Danh sách đề thi TOEIC — <span style="color: #8b5cf6; font-weight: 700;">@availableTests?.Count đề</span></h2>
         
         @if (availableTests == null || !availableTests.Any())
         {
-            <p style="text-align:center; color: #aaa;">Chưa có đề thi nào.</p>
+            <p style="text-align:center; color: #64748b; font-size: 1rem;">Chưa có đề thi nào.</p>
         }
         else
         {
             <div class="test-grid">
                 @foreach (var t in availableTests)
                 {
-                    <div class="test-card" @onclick="() => GoToTest(t.ListeningUrl)">
+                    <div class="test-card" @onclick="() => GoToTest(t.ToeicUrl)">
                         <div class="test-collection">@t.CollectionName</div>
                         <div class="test-title">@t.Title</div>
                         <button class="btn-start">Làm bài →</button>
@@ -54,7 +55,6 @@ else if (exam == null)
         <h3>Không tải được đề thi</h3>
         <p>Vui lòng thử lại hoặc chọn đề khác.</p>
         <p style="color: gray; font-size: 0.8rem;">URL: @ExamUrl</p>
-        <p style="color: gray; font-size: 0.8rem;">Decoded: @Uri.UnescapeDataString(ExamUrl ?? "")</p>
         @if (!string.IsNullOrEmpty(loadError))
         {
             <div style="margin-top: 1rem; padding: 1rem; background: #331111; color: #ff8888; text-align: left; border-radius: 6px; font-family: monospace;">
@@ -156,11 +156,11 @@ else
 
     @* ── MAIN CONTENT AREA ── *@
     <main class="toeic-main">
-        <div class="exam-page-toolbar" style="display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; padding:12px 16px; border:1px solid #30363d; border-radius:10px; background:#161b22; color:#8b949e; font-weight:700;">
+        <div class="exam-page-toolbar">
             <span>Trang @(activePageIndex + 1) / @PageCount</span>
             @if (activePart.HasListening && pageGroup is not null && !string.IsNullOrWhiteSpace(pageGroup.AudioUrl))
             {
-                <button class="audio-start-btn" style="border:0; border-radius:6px; padding:9px 16px; color:#fff; background:linear-gradient(135deg,#FF6B35,#f97316); cursor:pointer; font-weight:700;" @onclick="StartCurrentAudio">
+                <button class="audio-start-btn" @onclick="StartCurrentAudio">
                     @(audioStarted ? "🔊 Nghe lại audio" : "▶ Bắt đầu nghe")
                 </button>
             }
@@ -541,8 +541,10 @@ else
                 <div class="result-time">
                     ⏱ Thời gian đã dùng: @ElapsedTime
                 </div>
-                <button class="result-close-btn" @onclick="ShowAnswers">Xem đáp án</button>
-                <button class="result-close-btn" @onclick="() => showResult = false">Đóng</button>
+                <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+                    <button class="result-close-btn" @onclick="ShowAnswers">📋 Xem đáp án</button>
+                    <button class="result-close-btn" style="background: rgba(255,255,255,0.08); box-shadow: none; border: 1px solid rgba(255,255,255,0.15);" @onclick="() => showResult = false">Đóng</button>
+                </div>
             </div>
         </div>
     }
@@ -642,11 +644,16 @@ else
     private string loadError = "";
     private List<MockTestDto>? availableTests;
     private bool showTestList => string.IsNullOrWhiteSpace(ExamUrl);
+    private string? _lastLoadedExamUrl = "FIRST_LOAD_FLAG";
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
+        if (_lastLoadedExamUrl == ExamUrl) return;
+        _lastLoadedExamUrl = ExamUrl;
+
         isLoading = true;
         loadError = "";
+        exam = null;
         
         try
         {
@@ -654,35 +661,31 @@ else
             {
                 availableTests = await MockTestService.GetMockTestsAsync();
                 availableTests = availableTests.Where(t => 
-                    !string.IsNullOrEmpty(t.ToeicUrl) && 
-                    t.CollectionName.Contains("TOEIC", StringComparison.OrdinalIgnoreCase)
+                    !string.IsNullOrEmpty(t.ToeicUrl)
                 ).ToList();
             }
             else
             {
-                string url = ExamUrl;
-                // Try decoding Base64 first to avoid slash collapsing issues
+                string url = Uri.UnescapeDataString(ExamUrl);
                 try
                 {
-                    // Check if it looks like Base64 (no special chars like :, /)
-                    if (!url.Contains(":") && !url.Contains("/") && url.Length % 4 == 0)
-                    {
-                        var bytes = Convert.FromBase64String(url);
-                        url = System.Text.Encoding.UTF8.GetString(bytes);
-                    }
-                    else
-                    {
-                        url = Uri.UnescapeDataString(ExamUrl);
-                        // Fix collapsed slashes if any
-                        if (url.StartsWith("http:/") && !url.StartsWith("http://")) url = url.Replace("http:/", "http://");
-                        if (url.StartsWith("https:/") && !url.StartsWith("https://")) url = url.Replace("https:/", "https://");
-                    }
+                    // If it's valid base64, decode it
+                    // Base64 padding might be missing, so we can pad it if needed, but Convert.FromBase64String usually handles standard base64 if it has padding.
+                    // Let's just try decoding
+                    var bytes = Convert.FromBase64String(url);
+                    url = System.Text.Encoding.UTF8.GetString(bytes);
                 }
                 catch
                 {
-                    url = Uri.UnescapeDataString(ExamUrl);
+                    // Not base64, or invalid base64. Keep as is.
                     if (url.StartsWith("http:/") && !url.StartsWith("http://")) url = url.Replace("http:/", "http://");
                     if (url.StartsWith("https:/") && !url.StartsWith("https://")) url = url.Replace("https:/", "https://");
+                }
+
+                if (url.StartsWith("/"))
+                {
+                    var backendUrl = Config["BackendApi:BaseUrl"] ?? "http://localhost:5101/";
+                    url = backendUrl.TrimEnd('/') + url;
                 }
 
                 // Explicitly check for empty URL
@@ -818,11 +821,11 @@ else
         showResult = true;
     }
 
-    private void GoToTest(string? listeningUrl)
+    private void GoToTest(string? examUrl)
     {
-        if (!string.IsNullOrEmpty(listeningUrl))
+        if (!string.IsNullOrEmpty(examUrl))
         {
-            var bytes = System.Text.Encoding.UTF8.GetBytes(listeningUrl);
+            var bytes = System.Text.Encoding.UTF8.GetBytes(examUrl);
             string base64 = Convert.ToBase64String(bytes);
             NavManager.NavigateTo($"/toeic/test/{base64}");
         }
