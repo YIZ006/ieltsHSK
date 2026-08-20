@@ -22,6 +22,21 @@
                 <h2>📋 Danh sách đề TOEIC</h2>
                 <button class="btn-close-list" @onclick="() => showExamList = false">✕</button>
             </div>
+
+            @if (hasDraft)
+            {
+                <div style="background-color: #2b2b2b; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ff9800; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h3 style="color: #ff9800; margin: 0 0 5px 0;">📝 Bản nháp chưa lưu</h3>
+                        <p style="margin: 0; font-size: 0.9em; color: #ccc;">Bạn có một bản nháp đang làm dở cục bộ.</p>
+                    </div>
+                    <div>
+                        <button class="btn-edit-exam" style="background-color: #ff9800; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold;" @onclick="async () => { await LoadDraft(); showExamList = false; }">Khôi phục nháp</button>
+                        <button class="btn-clear-draft" style="width: auto; margin-top: 0; background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-left: 10px;" @onclick="async () => { await ClearDraft(); showExamList = false; }">Xóa nháp</button>
+                    </div>
+                </div>
+            }
+
             @if (examList == null)
             {
                 <div class="exam-list-loading"><span class="spinner-inline"></span> Đang tải...</div>
@@ -50,6 +65,7 @@
                                 {
                                     <span style="color:#888;font-size:0.85em">(Không có link TOEIC)</span>
                                 }
+                                <button class="btn-clear-draft" style="width: auto; margin-top: 0; background-color: #dc3545; color: white; padding: 4px 10px; border: none; border-radius: 4px; margin-left: 8px; cursor: pointer;" @onclick="() => DeleteExam(e)">🗑️ Xóa</button>
                             </td>
                         </tr>
                     }
@@ -805,10 +821,7 @@
             hasDraft = await LocalStorage.ContainKeyAsync(DraftKey);
             if (hasDraft)
             {
-                var confirm = await JS.InvokeAsync<bool>("confirm",
-                    "Tìm thấy bản nháp cũ. Bạn có muốn khôi phục không?");
-                if (confirm)
-                    await LoadDraft();
+                StateHasChanged();
             }
         }
     }
@@ -1081,6 +1094,22 @@
         catch { examList = new List<MockTestDto>(); }
     }
 
+    private async Task DeleteExam(MockTestDto exam)
+    {
+        var confirm = await JS.InvokeAsync<bool>("confirm", $"Bạn có chắc muốn xóa vĩnh viễn đề thi '{exam.Title}' không?");
+        if (!confirm) return;
+
+        var success = await MockTestService.DeleteMockTestAsync(exam.Id);
+        if (success)
+        {
+            await OpenExamList(); // Làm mới lại danh sách
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", "Xóa thất bại! Vui lòng thử lại.");
+        }
+    }
+
     private async Task LoadExamForEdit(MockTestDto exam)
     {
         if (string.IsNullOrEmpty(exam.ToeicUrl)) return;
@@ -1206,7 +1235,7 @@
                             if (p34Idx >= targetList.Count) break;
                             var cg = targetList[p34Idx];
                             cg.Title = g.TryGetProperty("PassageTitle", out var t2) ? t2.GetString() ?? "" : "";
-                            cg.Transcript = g.TryGetProperty("PassageHtml", out var h2) ? h2.GetString() ?? "" : "";
+                            cg.Transcript = g.TryGetProperty("Transcript", out var tr) ? tr.GetString() ?? (g.TryGetProperty("PassageHtml", out var h2) ? h2.GetString() ?? "" : "") : "";
                             cg.AudioUrl = g.TryGetProperty("AudioUrl", out var au) ? au.GetString() : null;
                             cg.ImageUrl = g.TryGetProperty("ImageUrl", out var iu) ? iu.GetString() : null;
                             
@@ -1256,6 +1285,7 @@
                             var pg = part6Groups[p6Idx];
                             pg.PassageTitle = g.TryGetProperty("PassageTitle", out var pt) ? pt.GetString() ?? "" : "";
                             pg.PassageHtml = g.TryGetProperty("PassageHtml", out var ph) ? ph.GetString() ?? "" : "";
+                            pg.Translation = g.TryGetProperty("Translation", out var tr6) ? tr6.GetString() ?? "" : "";
                             pg.ImageUrl = g.TryGetProperty("ImageUrl", out var iu) ? iu.GetString() : null;
                             
                             int qIdx = 0;
@@ -1285,6 +1315,7 @@
                                 GroupId = g.GetProperty("GroupId").GetString() ?? "",
                                 PassageTitle = g.TryGetProperty("PassageTitle", out var pt2) ? pt2.GetString() ?? "" : "",
                                 PassageHtml = g.TryGetProperty("PassageHtml", out var ph2) ? ph2.GetString() ?? "" : "",
+                                Translation = g.TryGetProperty("Translation", out var tr7) ? tr7.GetString() ?? "" : "",
                                 ImageUrl = g.TryGetProperty("ImageUrl", out var iu2) ? iu2.GetString() : null,
                                 AudioUrl = g.TryGetProperty("AudioUrl", out var au2) ? au2.GetString() : null,
                             };

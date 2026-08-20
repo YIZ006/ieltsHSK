@@ -37,7 +37,7 @@ else if (showTestList)
             <div class="test-grid">
                 @foreach (var t in availableTests)
                 {
-                    <div class="test-card" @onclick="() => GoToTest(t.ListeningUrl)">
+                    <div class="test-card" @onclick="() => GoToTest(t.ToeicUrl)">
                         <div class="test-collection">@t.CollectionName</div>
                         <div class="test-title">@t.Title</div>
                         <button class="btn-start">Làm bài →</button>
@@ -818,11 +818,11 @@ else
         showResult = true;
     }
 
-    private void GoToTest(string? listeningUrl)
+    private void GoToTest(string? toeicUrl)
     {
-        if (!string.IsNullOrEmpty(listeningUrl))
+        if (!string.IsNullOrEmpty(toeicUrl))
         {
-            var bytes = System.Text.Encoding.UTF8.GetBytes(listeningUrl);
+            var bytes = System.Text.Encoding.UTF8.GetBytes(toeicUrl);
             string base64 = Convert.ToBase64String(bytes);
             NavManager.NavigateTo($"/toeic/test/{base64}");
         }
