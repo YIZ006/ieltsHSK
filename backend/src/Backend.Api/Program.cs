@@ -710,7 +710,9 @@ app.MapPost("/api/toeic/save-exam", async (
         new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
     var jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
     var fileId = Guid.NewGuid().ToString("N");
-    var fileName = $"toeic/exams/{fileId}.json";
+    var safeCollection = req.CollectionName.Replace("/", "-").Replace("\\", "-");
+    var safeTitle = req.Title.Replace("/", "-").Replace("\\", "-");
+    var fileName = $"Cuongkeng/Toeic Data/{safeCollection}-{safeTitle}.json";
 
     string jsonUrl;
     try
@@ -718,14 +720,9 @@ app.MapPost("/api/toeic/save-exam", async (
         using var ms = new MemoryStream(jsonBytes);
         jsonUrl = await r2Service.UploadFileAsync(ms, fileName, "application/json", cancellationToken);
     }
-    catch
+    catch (Exception ex)
     {
-        // Fallback: lưu local nếu R2 lỗi (dev only)
-        var dir = Path.Combine("wwwroot", "exports");
-        Directory.CreateDirectory(dir);
-        var localPath = Path.Combine(dir, $"{fileId}.json");
-        await File.WriteAllBytesAsync(localPath, jsonBytes, cancellationToken);
-        jsonUrl = $"/exports/{fileId}.json";
+        return Results.BadRequest("R2 Upload Failed: " + ex.Message + " | StackTrace: " + ex.StackTrace);
     }
 
     // Cập nhật hoặc tạo mới MockTest
