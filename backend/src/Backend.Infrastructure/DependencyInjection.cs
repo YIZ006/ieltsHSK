@@ -15,6 +15,7 @@ public static class DependencyInjection
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
         services.AddScoped<IAuthService, Backend.Infrastructure.Services.AuthService>();
         services.AddScoped<Backend.Application.Abstractions.IR2StorageService, Backend.Infrastructure.Services.R2StorageService>();
+        services.AddScoped<Backend.Infrastructure.Services.YoutubeTranscriptService>();
         return services;
     }
 

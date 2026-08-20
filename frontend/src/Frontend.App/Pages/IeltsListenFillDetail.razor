@@ -1,0 +1,336 @@
+@page "/ielts/nghe-dien/{HashId}"
+@layout Frontend.App.Layout.IeltsLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using System.Net.Http.Json
+@inject IeltsService IeltsService
+@inject HttpClient Http
+
+<PageTitle>@(video?.Title ?? "Đang tải...") - IELTS Nghe Điền Từ</PageTitle>
+
+@if (isLoading)
+{
+    <div class="text-center p-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 text-muted">Đang tải video và bộ từ...</p>
+    </div>
+}
+else if (video == null)
+{
+    <div class="alert alert-danger m-5 text-center">
+        Video không tồn tại hoặc chưa được duyệt.
+        <br />
+        <a href="/ielts/nghe-dien" class="btn btn-outline-primary mt-3">Quay lại danh sách</a>
+    </div>
+}
+else
+{
+    <div class="listen-detail-container">
+        <!-- Nút Back -->
+        <a href="/ielts/nghe-dien" class="back-link mb-3 d-inline-block">
+            <i class="bi bi-arrow-left"></i> Về danh sách bài luyện
+        </a>
+
+        <!-- Header Info -->
+        <div class="video-header mb-4">
+            <h1 class="video-title">@video.Title</h1>
+            <div class="video-meta">
+                <span class="badge bg-warning text-dark me-2">@video.Level</span>
+                <span class="text-muted"><i class="bi bi-clock"></i> @video.Duration</span>
+                <span class="text-muted ms-3"><i class="bi bi-file-word"></i> ~@video.WordCount từ</span>
+            </div>
+            <p class="subtitle mt-2 text-muted">Nghe video rồi điền từ còn thiếu</p>
+        </div>
+
+        <!-- Layout 2 cột: Trái Video, Phải Script (hoặc xếp chồng nếu màn hình nhỏ) -->
+        <div class="row">
+            <div class="col-lg-6 mb-4">
+                <div class="video-player-wrapper">
+                    <!-- Trích xuất ID YouTube -->
+                    @{
+                        var ytId = "";
+                        if (video.YoutubeUrl.Contains("v=")) ytId = video.YoutubeUrl.Split("v=")[1].Split("&")[0];
+                        else if (video.YoutubeUrl.Contains("youtu.be/")) ytId = video.YoutubeUrl.Split("youtu.be/")[1].Split("?")[0];
+                    }
+                    <iframe src="https://www.youtube.com/embed/@ytId" 
+                            frameborder="0" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                            allowfullscreen>
+                    </iframe>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <!-- Toolbar Cấu hình -->
+                <div class="practice-toolbar mb-4">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <span class="fw-bold me-2">@hiddenIndices.Count chỗ trống</span>
+                            <span class="text-muted small">Nghe video rồi điền từ còn thiếu, sau đó bấm "Nộp bài".</span>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <select class="form-select form-select-sm" style="width: auto;" @bind="blankCountStr">
+                                <option value="10">10 từ</option>
+                                <option value="15">15 từ</option>
+                                <option value="20">20 từ</option>
+                                <option value="30">30 từ</option>
+                                <option value="40">40 từ</option>
+                                <option value="50">50 từ</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="ChangeBlanks">
+                                <i class="bi bi-shuffle"></i> Đổi bộ từ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vùng hiển thị Script điền từ -->
+                <div class="transcript-box mb-4">
+                    @if (transcriptWords == null)
+                    {
+                        <div class="text-center p-3 text-muted">Không tải được phụ đề</div>
+                    }
+                    else
+                    {
+                        <div class="transcript-content">
+                            @for (int i = 0; i < transcriptWords.Count; i++)
+                            {
+                                var index = i; // capture index
+                                var word = transcriptWords[index];
+                                
+                                if (hiddenIndices.Contains(index))
+                                {
+                                    // Tách dấu câu ra khỏi từ gốc
+                                    var parts = SplitWordPunctuation(word.Text);
+                                    
+                                    // Ô nhập liệu
+                                    var stateClass = "";
+                                    if (isSubmitted)
+                                    {
+                                        var isCorrect = IsCorrect(parts.Core, userAnswers.GetValueOrDefault(index));
+                                        stateClass = isCorrect ? "correct" : "incorrect";
+                                    }
+
+                                    if (!string.IsNullOrEmpty(parts.Prefix)) { <span class="transcript-word">@parts.Prefix</span> }
+                                    <input type="text" 
+                                           class="blank-input @stateClass" 
+                                           style="width: @(Math.Max(parts.Core.Length * 12, 40))px;" 
+                                           value="@userAnswers.GetValueOrDefault(index)"
+                                           @onchange="@(e => UpdateAnswer(index, e.Value?.ToString() ?? ""))"
+                                           disabled="@isSubmitted" />
+                                    if (!string.IsNullOrEmpty(parts.Suffix)) { <span class="transcript-word" style="margin-left: -4px;">@parts.Suffix</span> }
+                                }
+                                else
+                                {
+                                    // Hiển thị từ bình thường
+                                    <span class="transcript-word">@word.Text</span>
+                                }
+                                <text> </text>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <!-- Action Button -->
+                <div class="action-footer d-flex justify-content-between align-items-center">
+                    @if (isSubmitted)
+                    {
+                        <div class="score-display">
+                            <span class="fw-bold">Kết quả:</span> 
+                            <span class="text-success fw-bold">@correctCount</span> / @hiddenIndices.Count đúng
+                        </div>
+                        <button class="btn btn-primary" @onclick="ResetPractice">
+                            <i class="bi bi-arrow-repeat"></i> Làm lại
+                        </button>
+                    }
+                    else
+                    {
+                        <div></div>
+                        <button class="btn btn-success" @onclick="SubmitPractice" disabled="@(transcriptWords == null)">
+                            <i class="bi bi-check2-circle"></i> Nộp bài
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string HashId { get; set; } = "";
+    
+    public int Id => Frontend.App.Utils.UrlHasher.Decode(HashId);
+
+    private ListenVideoDto? video;
+    private bool isLoading = true;
+
+    private List<TranscriptWordDto>? transcriptWords;
+    private HashSet<int> hiddenIndices = new();
+    private Dictionary<int, string> userAnswers = new();
+    
+    private string blankCountStr = "20";
+    private bool isSubmitted = false;
+    private int correctCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        video = await IeltsService.GetListenFillVideoByIdAsync(Id);
+        
+        if (video != null && !string.IsNullOrEmpty(video.TranscriptUrl))
+        {
+            await LoadTranscript();
+        }
+        
+        isLoading = false;
+    }
+
+    private async Task LoadTranscript()
+    {
+        try
+        {
+            // Lấy JSON trực tiếp từ Cloudflare R2
+            var transcriptData = await Http.GetFromJsonAsync<TranscriptRoot>(video!.TranscriptUrl!);
+            if (transcriptData != null && transcriptData.Words != null)
+            {
+                transcriptWords = transcriptData.Words;
+                GenerateBlanks();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading transcript JSON from {video?.TranscriptUrl}: {ex.Message}");
+        }
+    }
+
+    private void GenerateBlanks()
+    {
+        if (transcriptWords == null || transcriptWords.Count == 0) return;
+
+        int targetBlanks = int.Parse(blankCountStr);
+        if (targetBlanks > transcriptWords.Count / 3) 
+            targetBlanks = transcriptWords.Count / 3; // Không đục lỗ quá 33% số từ
+
+        hiddenIndices.Clear();
+        userAnswers.Clear();
+        isSubmitted = false;
+
+        var rand = new Random();
+        int attempts = 0;
+        
+        while (hiddenIndices.Count < targetBlanks && attempts < targetBlanks * 10)
+        {
+            attempts++;
+            int idx = rand.Next(0, transcriptWords.Count);
+            
+            // Lọc các từ quá ngắn, hoặc chứa ký tự đặc biệt nhiều
+            var word = transcriptWords[idx].Text;
+            if (word.Length <= 1) continue;
+            
+            // Thuật toán: không đục lỗ 2 từ sát nhau (khoảng cách tối thiểu 2 từ)
+            bool isTooClose = false;
+            foreach (var hIdx in hiddenIndices)
+            {
+                if (Math.Abs(hIdx - idx) <= 2)
+                {
+                    isTooClose = true;
+                    break;
+                }
+            }
+            
+            if (!isTooClose)
+            {
+                hiddenIndices.Add(idx);
+            }
+        }
+    }
+
+    private void ChangeBlanks()
+    {
+        GenerateBlanks();
+    }
+
+    private void UpdateAnswer(int index, string val)
+    {
+        userAnswers[index] = val;
+    }
+
+    private void SubmitPractice()
+    {
+        if (transcriptWords == null) return;
+        
+        isSubmitted = true;
+        correctCount = 0;
+
+        foreach (var idx in hiddenIndices)
+        {
+            var actualWord = transcriptWords[idx].Text;
+            var parts = SplitWordPunctuation(actualWord);
+            var user = userAnswers.GetValueOrDefault(idx, "");
+            
+            if (IsCorrect(parts.Core, user))
+            {
+                correctCount++;
+            }
+        }
+    }
+
+    private void ResetPractice()
+    {
+        isSubmitted = false;
+        userAnswers.Clear();
+        correctCount = 0;
+    }
+
+    // Logic chấm điểm: Viết thường, bỏ qua dấu câu ở đầu/cuối
+    private bool IsCorrect(string coreOriginal, string? answer)
+    {
+        if (string.IsNullOrWhiteSpace(coreOriginal) || string.IsNullOrWhiteSpace(answer)) return false;
+        
+        // Loại bỏ khoảng trắng và in thường
+        var cleanOriginal = coreOriginal.Trim().ToLowerInvariant();
+        var cleanAnswer = answer.Trim().ToLowerInvariant();
+        
+        return cleanOriginal == cleanAnswer;
+    }
+
+    private (string Prefix, string Core, string Suffix) SplitWordPunctuation(string word)
+    {
+        if (string.IsNullOrEmpty(word)) return ("", "", "");
+        
+        int start = 0;
+        // Các ký tự được coi là chữ cái/số trong tiếng Anh, hoặc dấu nháy đơn giữa từ (như don't) thì bỏ qua
+        // Ở đây ta tìm dấu câu ở đầu từ
+        while (start < word.Length && !char.IsLetterOrDigit(word[start]))
+        {
+            start++;
+        }
+        
+        int end = word.Length - 1;
+        while (end >= start && !char.IsLetterOrDigit(word[end]))
+        {
+            end--;
+        }
+        
+        if (start > end) return ("", word, ""); // Trường hợp từ toàn là dấu câu (rất hiếm)
+        
+        string prefix = word.Substring(0, start);
+        string core = word.Substring(start, end - start + 1);
+        string suffix = word.Substring(end + 1);
+        
+        return (prefix, core, suffix);
+    }
+
+    // DTO model cho JSON lấy từ R2
+    public class TranscriptRoot
+    {
+        public List<TranscriptWordDto> Words { get; set; } = new();
+    }
+
+    public class TranscriptWordDto
+    {
+        public string Text { get; set; } = string.Empty;
+        public double Start { get; set; }
+        public double Duration { get; set; }
+    }
+}

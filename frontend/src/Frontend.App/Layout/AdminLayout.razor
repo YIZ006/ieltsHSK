@@ -18,6 +18,9 @@
             <button class="nav-tab @(activeDomain == "HSK" ? "active" : "")" @onclick='() => SwitchDomain("HSK")'>
                 <span class="tab-icon">🇨🇳</span> HSK
             </button>
+            <a href="http://localhost:5101/swagger" target="_blank" class="nav-tab" style="text-decoration: none; color: inherit;">
+                <span class="tab-icon">⚙️</span> API Swagger
+            </a>
         </nav>
         <div class="topbar-user">
             <span class="user-avatar">A</span>
@@ -37,6 +40,11 @@
                     <li class="menu-item @(IsActive("/admin/mock-tests") ? "active" : "")">
                         <a href="/admin/mock-tests">
                             <i class="bi bi-journal-text"></i> Quản lý đề thi (Mock Tests)
+                        </a>
+                    </li>
+                    <li class="menu-item @(IsActive("/admin/listen-videos") ? "active" : "")">
+                        <a href="/admin/listen-videos">
+                            <i class="bi bi-camera-video"></i> Duyệt Video Nghe Điền
                         </a>
                     </li>
                     <li class="menu-item">

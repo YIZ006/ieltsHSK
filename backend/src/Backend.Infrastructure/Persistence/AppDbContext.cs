@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Category> Categories { get; set; }
     public DbSet<Website> Websites { get; set; }
     public DbSet<LearningSection> LearningSections { get; set; }
+    public DbSet<ListenVideo> ListenVideos { get; set; }
     public DbSet<Exam> Exams { get; set; }
     public DbSet<MockTest> MockTests { get; set; }
     public DbSet<TestSubmission> TestSubmissions { get; set; }
