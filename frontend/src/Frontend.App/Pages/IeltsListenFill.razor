@@ -1,0 +1,152 @@
+@page "/ielts/nghe-dien"
+@layout Frontend.App.Layout.IeltsLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject IeltsService IeltsService
+
+<PageTitle>Nghe & điền từ - IELTS</PageTitle>
+
+<div class="listen-container">
+    <!-- Header -->
+    <div class="header-section">
+        <h1>Nghe & điền từ</h1>
+        <p class="subtitle">Nghe video rồi điền từ còn thiếu — cuối bài biết bạn nghe được bao nhiêu %.</p>
+    </div>
+
+    <!-- Tự thêm bài từ YouTube -->
+    <div class="add-video-section">
+        <div class="add-video-card">
+            <div class="add-icon">
+                <i class="bi bi-plus"></i>
+            </div>
+            <div class="add-content">
+                <h3>Tự thêm bài từ YouTube</h3>
+                <p>Dán link video tiếng Anh là luyện được ngay — phụ đề lấy tự động.</p>
+                <form class="add-form" @onsubmit="SubmitVideo">
+                    <input type="text" 
+                           placeholder="Dán link YouTube... (vd https://youtube.com/watch?v=...)" 
+                           @bind="youtubeLink" 
+                           required />
+                    <button type="submit" class="btn-load" disabled="@isSubmitting">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-play-fill"></i> <span>Load Video</span>
+                        }
+                    </button>
+                </form>
+                @if (!string.IsNullOrEmpty(submitMessage))
+                {
+                    <div class="alert @(submitSuccess ? "alert-success" : "alert-danger") mt-3 mb-0">
+                        @submitMessage
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Danh sách Video -->
+    <div class="videos-section">
+        <h2>Tất cả bài luyện <span class="count-badge">(@videos.Count)</span></h2>
+        
+        <div class="filters">
+            <button class="filter-btn active">Video</button>
+            <button class="filter-btn">Audio</button>
+            <span class="filter-divider">|</span>
+            <button class="filter-tag">Hợp trình độ B2</button>
+            <button class="filter-tag">&lt; 5 phút</button>
+            <button class="filter-tag">Giao tiếp</button>
+            <button class="filter-tag">IELTS</button>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        }
+        else if (videos.Count == 0)
+        {
+            <div class="empty-state">
+                <i class="bi bi-camera-video-off"></i>
+                <p>Chưa có video nào. Hãy là người đầu tiên thêm video từ YouTube!</p>
+            </div>
+        }
+        else
+        {
+            <div class="video-grid">
+                @foreach (var video in videos)
+                {
+                    <a href="/ielts/nghe-dien/@(Frontend.App.Utils.UrlHasher.Encode(video.Id))" class="video-card-link" style="text-decoration: none; color: inherit;">
+                        <div class="video-card">
+                            <div class="video-thumbnail">
+                                <img src="@(string.IsNullOrEmpty(video.ThumbnailUrl) ? "https://placehold.co/400x225/e9ecef/495057?text=No+Thumbnail" : video.ThumbnailUrl)" alt="@video.Title" />
+                                <div class="video-duration">@video.Duration</div>
+                                <div class="video-badges">
+                                    <span class="badge level">@video.Level</span>
+                                    <span class="badge category">@video.Category</span>
+                                </div>
+                                <div class="play-overlay">
+                                    <i class="bi bi-play-circle-fill"></i>
+                                </div>
+                            </div>
+                            <div class="video-info">
+                                <h3 class="video-title">@video.Title</h3>
+                                <p class="video-channel">@video.ChannelName</p>
+                            </div>
+                        </div>
+                    </a>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<ListenVideoDto> videos = new();
+    private bool isLoading = true;
+    private string youtubeLink = "";
+    private bool isSubmitting = false;
+    private string submitMessage = "";
+    private bool submitSuccess = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVideos();
+    }
+
+    private async Task LoadVideos()
+    {
+        isLoading = true;
+        videos = await IeltsService.GetListenFillVideosAsync();
+        isLoading = false;
+    }
+
+    private async Task SubmitVideo()
+    {
+        if (string.IsNullOrWhiteSpace(youtubeLink)) return;
+
+        isSubmitting = true;
+        submitMessage = "";
+        
+        var success = await IeltsService.SubmitListenVideoAsync(youtubeLink);
+        
+        isSubmitting = false;
+        submitSuccess = success;
+        
+        if (success)
+        {
+            submitMessage = "Video của bạn đã được gửi thành công và đang chờ Admin duyệt!";
+            youtubeLink = ""; // Clear input
+        }
+        else
+        {
+            submitMessage = "Có lỗi xảy ra khi gửi video. Vui lòng thử lại.";
+        }
+    }
+}

@@ -112,6 +112,348 @@ app.MapGet("/api/ielts/sections", async (Backend.Infrastructure.Persistence.AppD
     return Results.Ok(sections);
 });
 
+// LISTEN VIDEOS API
+app.MapGet("/api/listen-videos", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var videos = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.ListenVideos
+            .Where(v => v.IsApproved)
+            .OrderByDescending(v => v.SubmittedAt)
+            .Select(v => new Backend.Application.DTOs.ListenVideoDto
+            {
+                Id = v.Id,
+                YoutubeUrl = v.YoutubeUrl,
+                Title = v.Title,
+                ChannelName = v.ChannelName,
+                Duration = v.Duration,
+                ThumbnailUrl = v.ThumbnailUrl,
+                Level = v.Level,
+                Category = v.Category,
+                IsApproved = v.IsApproved,
+                TranscriptUrl = v.TranscriptUrl,
+                WordCount = v.WordCount,
+                SubmittedAt = v.SubmittedAt
+            }), cancellationToken);
+    return Results.Ok(videos);
+});
+
+app.MapGet("/api/listen-videos/{id}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var video = await dbContext.ListenVideos.FindAsync(new object[] { id }, cancellationToken);
+    if (video == null || !video.IsApproved) return Results.NotFound();
+
+    return Results.Ok(new Backend.Application.DTOs.ListenVideoDto
+    {
+        Id = video.Id,
+        YoutubeUrl = video.YoutubeUrl,
+        Title = video.Title,
+        ChannelName = video.ChannelName,
+        Duration = video.Duration,
+        ThumbnailUrl = video.ThumbnailUrl,
+        Level = video.Level,
+        Category = video.Category,
+        IsApproved = video.IsApproved,
+        TranscriptUrl = video.TranscriptUrl,
+        WordCount = video.WordCount,
+        SubmittedAt = video.SubmittedAt
+    });
+});
+
+app.MapPost("/api/listen-videos/submit", async (Backend.Application.DTOs.ListenVideoSubmitRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService ytService, CancellationToken cancellationToken) =>
+{
+    var videoIdToCheck = "";
+    if (req.YoutubeUrl.Contains("v=")) videoIdToCheck = req.YoutubeUrl.Split("v=")[1].Split("&")[0];
+    else if (req.YoutubeUrl.Contains("youtu.be/")) videoIdToCheck = req.YoutubeUrl.Split("youtu.be/")[1].Split("?")[0];
+    
+    if (!string.IsNullOrEmpty(videoIdToCheck))
+    {
+        bool exists = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
+            dbContext.ListenVideos, v => v.YoutubeUrl.Contains(videoIdToCheck), cancellationToken);
+        // Nếu người dùng nhập trùng, giả vờ báo thành công để khỏi hiện lỗi, nhưng không lưu vào DB
+        if (exists) return Results.Ok(new { Message = "Video submitted and pending approval" });
+    }
+
+    var title = "Unknown Title";
+    var channel = "Unknown Channel";
+    var duration = "00:00";
+    var thumbnail = "";
+    
+    try
+    {
+        var info = await ytService.GetVideoInfoAsync(req.YoutubeUrl);
+        title = info.Title;
+        channel = info.ChannelName;
+        duration = info.Duration.ToString(@"mm\:ss");
+        thumbnail = info.ThumbnailUrl;
+    }
+    catch (Exception ex)
+    {
+        // Nếu không lấy được info, fallback lại parse ID cơ bản
+        var videoId = "";
+        if (req.YoutubeUrl.Contains("v="))
+            videoId = req.YoutubeUrl.Split("v=")[1].Split("&")[0];
+        else if (req.YoutubeUrl.Contains("youtu.be/"))
+            videoId = req.YoutubeUrl.Split("youtu.be/")[1].Split("?")[0];
+            
+        thumbnail = string.IsNullOrEmpty(videoId) ? "" : $"https://img.youtube.com/vi/{videoId}/hqdefault.jpg";
+    }
+
+    var newVideo = new Backend.Domain.Entities.ListenVideo
+    {
+        YoutubeUrl = req.YoutubeUrl,
+        Title = title, 
+        ChannelName = channel,
+        Duration = duration,
+        ThumbnailUrl = thumbnail,
+        Level = "B2",
+        Category = "Giao tiếp",
+        IsApproved = false,
+        SubmittedAt = DateTime.UtcNow,
+        SubmittedByUserId = "User"
+    };
+
+    dbContext.ListenVideos.Add(newVideo);
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new { Message = "Video submitted and pending approval" });
+});
+
+app.MapGet("/api/admin/listen-videos", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var videos = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.ListenVideos
+            .OrderByDescending(v => v.SubmittedAt)
+            .Select(v => new Backend.Application.DTOs.ListenVideoDto
+            {
+                Id = v.Id,
+                YoutubeUrl = v.YoutubeUrl,
+                Title = v.Title,
+                ChannelName = v.ChannelName,
+                Duration = v.Duration,
+                ThumbnailUrl = v.ThumbnailUrl,
+                Level = v.Level,
+                Category = v.Category,
+                IsApproved = v.IsApproved,
+                TranscriptUrl = v.TranscriptUrl,
+                WordCount = v.WordCount,
+                SubmittedAt = v.SubmittedAt
+            }), cancellationToken);
+    return Results.Ok(videos);
+});
+
+app.MapPut("/api/admin/listen-videos/{id}/approve", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var video = await dbContext.ListenVideos.FindAsync(new object[] { id }, cancellationToken);
+    if (video == null) return Results.NotFound();
+
+    video.IsApproved = true;
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { Message = "Đã duyệt video thành công" });
+});
+
+app.MapPut("/api/admin/listen-videos/{id}/transcript", async (int id, Backend.Application.DTOs.ManualTranscriptRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService transcriptService, Backend.Application.Abstractions.IR2StorageService r2Storage, CancellationToken cancellationToken) =>
+{
+    var video = await dbContext.ListenVideos.FindAsync(new object[] { id }, cancellationToken);
+    if (video == null) return Results.NotFound();
+
+    if (string.IsNullOrWhiteSpace(req.TranscriptText))
+        return Results.BadRequest(new { Message = "Văn bản phụ đề không được để trống." });
+
+    try
+    {
+        var (jsonContent, wordCount) = transcriptService.ParseRawTextToTranscriptJson(req.TranscriptText);
+        
+        // Xóa file cũ trên R2 nếu có để tránh rác
+        if (!string.IsNullOrEmpty(video.TranscriptUrl))
+        {
+            await r2Storage.DeleteFileAsync(video.TranscriptUrl, cancellationToken);
+        }
+
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(jsonContent));
+        
+        // Tạo tên file an toàn (chứa tiêu đề video)
+        var safeTitle = new string(video.Title.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray());
+        safeTitle = System.Text.RegularExpressions.Regex.Replace(safeTitle, @"\s+", "-").ToLower();
+        if (safeTitle.Length > 30) safeTitle = safeTitle.Substring(0, 30);
+        
+        var fileName = $"listen-videos/transcript_{video.Id}_{safeTitle}_{Guid.NewGuid().ToString().Substring(0, 4)}.json";
+        var r2Url = await r2Storage.UploadFileAsync(stream, fileName, "application/json", cancellationToken);
+        
+        video.TranscriptUrl = r2Url;
+        video.WordCount = wordCount;
+        video.IsApproved = true;
+        
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.Ok(new { Message = "Cập nhật phụ đề thành công", TranscriptUrl = r2Url, WordCount = wordCount });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { Message = "Lỗi khi xử lý phụ đề thủ công: " + ex.Message });
+    }
+});
+
+app.MapDelete("/api/admin/listen-videos/{id}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Application.Abstractions.IR2StorageService r2Storage, CancellationToken cancellationToken) =>
+{
+    var video = await dbContext.ListenVideos.FindAsync(new object[] { id }, cancellationToken);
+    if (video == null) return Results.NotFound();
+
+    if (!string.IsNullOrEmpty(video.TranscriptUrl))
+    {
+        try
+        {
+            await r2Storage.DeleteFileAsync(video.TranscriptUrl, cancellationToken);
+        }
+        catch { } // Ignore delete errors
+    }
+
+    dbContext.ListenVideos.Remove(video);
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new { Message = "Video removed successfully" });
+});
+
+app.MapGet("/api/admin/listen-videos/template-excel", () =>
+{
+    using var workbook = new ClosedXML.Excel.XLWorkbook();
+    var worksheet = workbook.Worksheets.Add("ListenVideos");
+    
+    // Header
+    worksheet.Cell(1, 1).Value = "Youtube Link";
+    worksheet.Cell(1, 2).Value = "Transcript (Tiếng Anh)";
+    
+    // Header styling
+    var headerRange = worksheet.Range("A1:B1");
+    headerRange.Style.Font.Bold = true;
+    headerRange.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+    
+    // Sample data
+    worksheet.Cell(2, 1).Value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+    worksheet.Cell(2, 2).Value = "Never gonna give you up, never gonna let you down...";
+    
+    worksheet.Column(1).Width = 50;
+    worksheet.Column(2).Width = 100;
+    
+    using var stream = new MemoryStream();
+    workbook.SaveAs(stream);
+    stream.Position = 0;
+    
+    return Results.File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "ListenVideos_Template.xlsx");
+});
+
+app.MapPost("/api/admin/listen-videos/import-excel", async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService transcriptService, Backend.Application.Abstractions.IR2StorageService r2Storage, CancellationToken cancellationToken) =>
+{
+    if (file == null || file.Length == 0)
+        return Results.BadRequest(new { Message = "File không hợp lệ hoặc trống." });
+
+    if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        return Results.BadRequest(new { Message = "Vui lòng upload file định dạng Excel (.xlsx)" });
+
+    int successCount = 0;
+    int failCount = 0;
+    int duplicateCount = 0;
+    var errorDetails = new List<string>();
+
+    using var stream = file.OpenReadStream();
+    using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+    var worksheet = workbook.Worksheet(1);
+    var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+    
+    for (int i = 2; i <= lastRow; i++)
+    {
+        try
+        {
+            var row = worksheet.Row(i);
+            var urlCell = row.Cell(1);
+            var transcriptCell = row.Cell(2);
+            
+            var url = urlCell.GetString()?.Trim();
+            if (string.IsNullOrEmpty(url) && urlCell.HasHyperlink)
+                url = urlCell.GetHyperlink().ExternalAddress?.ToString()?.Trim();
+                
+            var transcript = transcriptCell.GetString()?.Trim();
+            
+            if (string.IsNullOrEmpty(url)) continue;
+
+            var videoIdToCheck = "";
+            if (url.Contains("v=")) videoIdToCheck = url.Split("v=")[1].Split("&")[0];
+            else if (url.Contains("youtu.be/")) videoIdToCheck = url.Split("youtu.be/")[1].Split("?")[0];
+            
+            if (!string.IsNullOrEmpty(videoIdToCheck))
+            {
+                bool exists = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
+                    dbContext.ListenVideos, v => v.YoutubeUrl.Contains(videoIdToCheck), cancellationToken);
+                if (exists) 
+                {
+                    duplicateCount++;
+                    continue;
+                }
+            }
+
+            // Lấy thông tin video từ YouTube
+            var (title, channel, duration, thumbnail) = await transcriptService.GetVideoInfoAsync(url);
+            
+            // Nếu có phụ đề thì parse và upload R2
+            string? r2Url = null;
+            int wordCount = 0;
+            
+            if (!string.IsNullOrEmpty(transcript))
+            {
+                var (jsonContent, words) = transcriptService.ParseRawTextToTranscriptJson(transcript);
+                wordCount = words;
+                
+                using var jsonStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(jsonContent));
+                var safeTitle = new string(title.Where(c => char.IsLetterOrDigit(c) || c == ' ').ToArray());
+                safeTitle = System.Text.RegularExpressions.Regex.Replace(safeTitle, @"\s+", "-").ToLower();
+                if (safeTitle.Length > 30) safeTitle = safeTitle.Substring(0, 30);
+                
+                var fileName = $"listen-videos/transcript_{Guid.NewGuid().ToString().Substring(0, 4)}_{safeTitle}.json";
+                r2Url = await r2Storage.UploadFileAsync(jsonStream, fileName, "application/json", cancellationToken);
+            }
+
+            // Lưu vào DB
+            var video = new Backend.Domain.Entities.ListenVideo
+            {
+                YoutubeUrl = url,
+                Title = title,
+                ChannelName = channel,
+                Duration = duration.ToString(@"hh\:mm\:ss"),
+                ThumbnailUrl = thumbnail,
+                Level = "Intermediate",
+                Category = "General",
+                IsApproved = true,
+                TranscriptUrl = r2Url,
+                WordCount = wordCount,
+                SubmittedAt = DateTime.UtcNow
+            };
+
+            dbContext.ListenVideos.Add(video);
+            successCount++;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Row {i} error: {ex.Message}");
+            errorDetails.Add($"Dòng {i}: {ex.Message}");
+            failCount++;
+        }
+    }
+    
+    await dbContext.SaveChangesAsync(cancellationToken);
+    
+    var finalMessage = $"Import thành công {successCount}, thất bại {failCount}, bỏ qua {duplicateCount} bị trùng.";
+    if (errorDetails.Any()) {
+        finalMessage += " Chi tiết lỗi: " + string.Join(" | ", errorDetails.Take(3));
+        if (errorDetails.Count > 3) finalMessage += "...";
+    }
+
+    return Results.Ok(new { 
+        Message = finalMessage,
+        SuccessCount = successCount,
+        FailCount = failCount,
+        DuplicateCount = duplicateCount,
+        Errors = errorDetails
+    });
+}).DisableAntiforgery();
+
 
 
 app.MapPost("/api/ielts/exams", async (CreateExamRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>

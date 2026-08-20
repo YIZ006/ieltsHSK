@@ -68,4 +68,174 @@ public class IeltsService
             return false;
         }
     }
+
+    public async Task<List<ListenVideoDto>> GetListenFillVideosAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetFromJsonAsync<List<ListenVideoDto>>("api/listen-videos");
+            return response ?? new List<ListenVideoDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching listen videos: {ex.Message}");
+            return new List<ListenVideoDto>();
+        }
+    }
+
+    public async Task<ListenVideoDto?> GetListenFillVideoByIdAsync(int id)
+    {
+        try
+        {
+            return await _httpClient.GetFromJsonAsync<ListenVideoDto>($"api/listen-videos/{id}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching video: {ex.Message}");
+            return null;
+        }
+    }
+
+    public async Task<bool> SubmitListenVideoAsync(string youtubeUrl)
+    {
+        try
+        {
+            var request = new ListenVideoSubmitRequest { YoutubeUrl = youtubeUrl };
+            var response = await _httpClient.PostAsJsonAsync("api/listen-videos/submit", request);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error submitting video: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<List<ListenVideoDto>> GetAllListenVideosAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetFromJsonAsync<List<ListenVideoDto>>("api/admin/listen-videos");
+            return response ?? new List<ListenVideoDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching all videos: {ex.Message}");
+            return new List<ListenVideoDto>();
+        }
+    }
+
+    public async Task<(bool Success, string Message)> ApproveListenVideoAsync(int id)
+    {
+        try
+        {
+            var response = await _httpClient.PutAsync($"api/admin/listen-videos/{id}/approve", null);
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, "Phê duyệt thành công.");
+            }
+            else
+            {
+                var errorText = await response.Content.ReadAsStringAsync();
+                try 
+                {
+                    var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(errorText, options);
+                    return (false, dict?.GetValueOrDefault("message") ?? dict?.GetValueOrDefault("Message") ?? errorText);
+                }
+                catch
+                {
+                    return (false, errorText);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error approving video: {ex.Message}");
+            return (false, $"Lỗi mạng hoặc server: {ex.Message}");
+        }
+    }
+
+    public async Task<(bool Success, string Message)> UpdateManualTranscriptAsync(int id, string transcriptText)
+    {
+        try
+        {
+            var response = await _httpClient.PutAsJsonAsync($"api/admin/listen-videos/{id}/transcript", new { TranscriptText = transcriptText });
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, "Cập nhật phụ đề thủ công thành công.");
+            }
+            else
+            {
+                var errorText = await response.Content.ReadAsStringAsync();
+                try 
+                {
+                    var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(errorText, options);
+                    return (false, dict?.GetValueOrDefault("message") ?? dict?.GetValueOrDefault("Message") ?? errorText);
+                }
+                catch
+                {
+                    return (false, errorText);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating manual transcript: {ex.Message}");
+            return (false, $"Lỗi mạng hoặc server: {ex.Message}");
+        }
+    }
+
+    public async Task<bool> DeleteListenVideoAsync(int id)
+    {
+        try
+        {
+            var response = await _httpClient.DeleteAsync($"api/admin/listen-videos/{id}");
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting video: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<(bool Success, string Message)> ImportListenVideosExcelAsync(Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
+    {
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            var fileContent = new StreamContent(file.OpenReadStream(10 * 1024 * 1024)); // Max 10MB
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+            content.Add(fileContent, "file", file.Name);
+
+            var response = await _httpClient.PostAsync("api/admin/listen-videos/import-excel", content);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+                return (true, result?.GetValueOrDefault("message")?.ToString() ?? "Import thành công");
+            }
+            else
+            {
+                var errorText = await response.Content.ReadAsStringAsync();
+                try 
+                {
+                    var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(errorText, options);
+                    return (false, dict?.GetValueOrDefault("message") ?? dict?.GetValueOrDefault("Message") ?? errorText);
+                }
+                catch
+                {
+                    return (false, "Lỗi server: " + errorText);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error importing excel: {ex.Message}");
+            return (false, $"Lỗi kết nối: {ex.Message}");
+        }
+    }
 }
