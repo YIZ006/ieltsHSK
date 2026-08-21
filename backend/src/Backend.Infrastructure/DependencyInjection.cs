@@ -33,10 +33,27 @@ public static class DependencyInjection
             {
                 Username = "Admin System",
                 Email = "admin@ielts.hsk",
-                PasswordHash = "dummy_hash",
-                Role = "admin"
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123456"),
+                Role = "admin",
+                Level = "C2",
+                IsActive = true,
+                LastLoginAt = DateTime.UtcNow
             };
             dbContext.Users.Add(adminUser);
+            await dbContext.SaveChangesAsync();
+        }
+
+        // Seed Sample Students across IELTS, TOEIC, HSK
+        if (!dbContext.Users.Any(u => u.Email == "chienpham@example.com"))
+        {
+            dbContext.Users.AddRange(new[]
+            {
+                new User { Username = "chienpham", Email = "chienpham@example.com", PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456@Aa"), Role = "user", Level = "B2", IsActive = true, LastLoginAt = DateTime.UtcNow.AddHours(-2) },
+                new User { Username = "nguyenvanan", Email = "nguyenvanan@gmail.com", PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456@Aa"), Role = "user", Level = "A2", IsActive = true, LastLoginAt = DateTime.UtcNow.AddDays(-1) },
+                new User { Username = "tranthibich", Email = "tranthibich@gmail.com", PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456@Aa"), Role = "user", Level = "C1", IsActive = true, LastLoginAt = DateTime.UtcNow.AddHours(-5) },
+                new User { Username = "lequocviet", Email = "lequocviet@gmail.com", PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456@Aa"), Role = "user", Level = "B1", IsActive = false, LastLoginAt = DateTime.UtcNow.AddDays(-14) },
+                new User { Username = "hoangthimai", Email = "hoangthimai@gmail.com", PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456@Aa"), Role = "user", Level = "A1", IsActive = true, LastLoginAt = DateTime.UtcNow.AddMinutes(-30) }
+            });
             await dbContext.SaveChangesAsync();
         }
 
