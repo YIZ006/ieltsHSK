@@ -3,7 +3,8 @@
 
 <nav class="navbar">
     <div class="navbar-brand">
-        <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+        <NavLink class="brand-logo" href="" Match="NavLinkMatch.All">
+            <i class="bi bi-box-fill"></i>
             <span class="brand-text">ieltsHSK</span>
         </NavLink>
     </div>
@@ -69,6 +70,6 @@
     private async Task Logout()
     {
         await AuthService.LogoutAsync();
-        NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: false);
+        NavigationManager.NavigateTo("/", true);
     }
 }
