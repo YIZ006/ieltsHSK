@@ -40,12 +40,16 @@ public static class DependencyInjection
             await dbContext.SaveChangesAsync();
         }
 
-        // Seed Language
+        // Seed Languages
         if (!dbContext.Languages.Any(l => l.Code == "EN"))
         {
             dbContext.Languages.Add(new Language { Name = "Tiếng Anh", Code = "EN" });
-            await dbContext.SaveChangesAsync();
         }
+        if (!dbContext.Languages.Any(l => l.Code == "ZH"))
+        {
+            dbContext.Languages.Add(new Language { Name = "Tiếng Trung", Code = "ZH" });
+        }
+        await dbContext.SaveChangesAsync();
 
         // Seed Category
         if (!dbContext.Categories.Any(c => c.Name == "Luyện thi IELTS"))
@@ -112,6 +116,20 @@ public static class DependencyInjection
                 new LearningSection { Name = "Đọc truyện", Description = "222 truyện theo trình độ đang chờ", Icon = "bi-book", Route = "/ielts/doc-truyen", Language = "IELTS", OrderIndex = 4 },
                 new LearningSection { Name = "Từ vựng", Description = "Kho 15.000 từ A1->C2", Icon = "bi-spellcheck", Route = "/ielts/tu-vung", Language = "IELTS", OrderIndex = 5 },
                 new LearningSection { Name = "Ưu tiên ôn tập", Description = "Chưa có dữ liệu — làm để ra lỗ hổng", Icon = "bi-bar-chart-steps", Route = "/ielts/uu-tien", Language = "IELTS", OrderIndex = 6 }
+            );
+            await dbContext.SaveChangesAsync();
+        }
+
+        // Seed HSK LearningSections
+        if (!dbContext.LearningSections.Any(s => s.Language == "HSK"))
+        {
+            dbContext.LearningSections.AddRange(
+                new LearningSection { Name = "Luyện đề HSK", Description = "Luyện đề thi HSK các cấp", Icon = "bi-journal-text", Route = "/hsk/luyen-de", Language = "HSK", OrderIndex = 1 },
+                new LearningSection { Name = "Nghe HSK", Description = "Luyện nghe HSK", Icon = "bi-headphones", Route = "/hsk/listening", Language = "HSK", OrderIndex = 2 },
+                new LearningSection { Name = "Đọc HSK", Description = "Luyện đọc HSK", Icon = "bi-book", Route = "/hsk/reading", Language = "HSK", OrderIndex = 3 },
+                new LearningSection { Name = "Viết HSK", Description = "Luyện viết HSK", Icon = "bi-pencil", Route = "/hsk/writing", Language = "HSK", OrderIndex = 4 },
+                new LearningSection { Name = "Nói HSK", Description = "Luyện nói HSK", Icon = "bi-mic", Route = "/hsk/speaking", Language = "HSK", OrderIndex = 5 },
+                new LearningSection { Name = "Từ vựng HSK", Description = "Từ vựng HSK 1-9", Icon = "bi-spellcheck", Route = "/hsk/tu-vung", Language = "HSK", OrderIndex = 6 }
             );
             await dbContext.SaveChangesAsync();
         }

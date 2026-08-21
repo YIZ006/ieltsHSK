@@ -1,0 +1,331 @@
+@page "/admin/hsk-mock-tests"
+@layout AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject MockTestService MockTestService
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+
+<PageTitle>Quản lý Đề thi HSK - Admin</PageTitle>
+
+<div class="admin-container">
+    <div class="admin-header">
+        <h1>Quản lý đề thi HSK (Mock Tests)</h1>
+        <button class="btn-create" @onclick="() => OpenForm(null)">+ Thêm Đề Mới</button>
+    </div>
+
+    @if (isFormOpen)
+    {
+        <div class="admin-card create-form">
+            <h2>@(editId.HasValue ? "Cập nhật bài thi" : "Tạo bài thi mới")</h2>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger" style="color: red; margin-bottom: 15px;">
+                    @errorMessage
+                </div>
+            }
+
+            <div class="form-group">
+                <label>Bộ đề (Collection Name, vd: "HSK Mock Test 2025 December")</label>
+                <input @bind="formTest.CollectionName" class="form-control" />
+            </div>
+
+            <div class="form-group">
+                <label>Tên bài thi (vd: "Practise Test 1")</label>
+                <input @bind="formTest.Title" class="form-control" />
+            </div>
+
+            <div class="form-group">
+                <label>Đề Listening (JSON URL)</label>
+                <input @bind="formTest.ListeningUrl" class="form-control mb-2" placeholder="Nhập link JSON hoặc upload file bên dưới..." />
+                <div class="upload-box">
+                    <InputFile OnChange="@(e => HandleFileUpload(e, "Listening"))" accept=".json" class="file-input" />
+                    @if (uploadingSkill == "Listening")
+                    {
+                        <span class="upload-status">Đang tải lên Cloudflare R2...</span>
+                    }
+                </div>
+                <label class="answer-url-label">Đáp án Listening (JSON URL public R2)</label>
+                <input @bind="formTest.ListeningAnswerUrl" class="form-control mb-2" placeholder="Nhập link đáp án hoặc upload file..." />
+                <div class="upload-box">
+                    <InputFile OnChange="@(e => HandleFileUpload(e, "ListeningAnswer"))" accept=".json" class="file-input" />
+                    @if (uploadingSkill == "ListeningAnswer")
+                    {
+                        <span class="upload-status">Đang tải đáp án lên Cloudflare R2...</span>
+                    }
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Đề Reading (JSON URL)</label>
+                <input @bind="formTest.ReadingUrl" class="form-control mb-2" placeholder="Nhập link JSON hoặc upload file..." />
+                <div class="upload-box">
+                    <InputFile OnChange="@(e => HandleFileUpload(e, "Reading"))" accept=".json" class="file-input" />
+                    @if (uploadingSkill == "Reading")
+                    {
+                        <span class="upload-status">Đang tải lên Cloudflare R2...</span>
+                    }
+                </div>
+                <label class="answer-url-label">Đáp án Reading (JSON URL public R2)</label>
+                <input @bind="formTest.ReadingAnswerUrl" class="form-control mb-2" placeholder="Nhập link đáp án hoặc upload file..." />
+                <div class="upload-box">
+                    <InputFile OnChange="@(e => HandleFileUpload(e, "ReadingAnswer"))" accept=".json" class="file-input" />
+                    @if (uploadingSkill == "ReadingAnswer")
+                    {
+                        <span class="upload-status">Đang tải đáp án lên Cloudflare R2...</span>
+                    }
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Đề Writing (JSON URL)</label>
+                <input @bind="formTest.WritingUrl" class="form-control mb-2" placeholder="Nhập link JSON hoặc upload file..." />
+                <div class="upload-box">
+                    <InputFile OnChange="@(e => HandleFileUpload(e, "Writing"))" accept=".json" class="file-input" />
+                    @if (uploadingSkill == "Writing")
+                    {
+                        <span class="upload-status">Đang tải lên Cloudflare R2...</span>
+                    }
+                </div>
+                <label class="answer-url-label">Đáp án / rubric Writing (JSON URL public R2)</label>
+                <input @bind="formTest.WritingAnswerUrl" class="form-control mb-2" placeholder="Nhập link rubric/đáp án hoặc upload file..." />
+                <div class="upload-box">
+                    <InputFile OnChange="@(e => HandleFileUpload(e, "WritingAnswer"))" accept=".json" class="file-input" />
+                    @if (uploadingSkill == "WritingAnswer")
+                    {
+                        <span class="upload-status">Đang tải rubric/đáp án lên Cloudflare R2...</span>
+                    }
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Đề Speaking (JSON URL)</label>
+                <input @bind="formTest.SpeakingUrl" class="form-control mb-2" placeholder="Nhập link JSON hoặc upload file..." />
+                <div class="upload-box">
+                    <InputFile OnChange="@(e => HandleFileUpload(e, "Speaking"))" accept=".json" class="file-input" />
+                    @if (uploadingSkill == "Speaking")
+                    {
+                        <span class="upload-status">Đang tải lên Cloudflare R2...</span>
+                    }
+                </div>
+                <label class="answer-url-label">Đáp án / rubric Speaking (JSON URL public R2)</label>
+                <input @bind="formTest.SpeakingAnswerUrl" class="form-control mb-2" placeholder="Nhập link rubric/đáp án hoặc upload file..." />
+                <div class="upload-box">
+                    <InputFile OnChange="@(e => HandleFileUpload(e, "SpeakingAnswer"))" accept=".json" class="file-input" />
+                    @if (uploadingSkill == "SpeakingAnswer")
+                    {
+                        <span class="upload-status">Đang tải rubric/đáp án lên Cloudflare R2...</span>
+                    }
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn-secondary" @onclick="() => isFormOpen = false">Hủy</button>
+                <button class="btn-primary" @onclick="SaveTest" disabled="@isSaving">
+                    @(isSaving ? "Đang lưu..." : "Lưu Bài Thi")
+                </button>
+            </div>
+        </div>
+    }
+
+    <div class="admin-card list-container">
+        <h2>Danh sách đề thi HSK</h2>
+        @if (isLoading)
+        {
+            <p>Đang tải dữ liệu...</p>
+        }
+        else if (tests.Count == 0)
+        {
+            <p>Chưa có đề thi HSK nào. Hãy tạo mới!</p>
+        }
+        else
+        {
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Bộ Đề</th>
+                        <th>Tên Bài Thi</th>
+                        <th>L</th><th>L Ans</th>
+                        <th>R</th><th>R Ans</th>
+                        <th>W</th><th>W Rubric</th>
+                        <th>S</th><th>S Rubric</th>
+                        <th>Hành động</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in tests)
+                    {
+                        <tr>
+                            <td>@t.Id</td>
+                            <td>@t.CollectionName</td>
+                            <td>@t.Title</td>
+                            <td>@(string.IsNullOrEmpty(t.ListeningUrl) ? "❌" : "✅")</td>
+                            <td>@(string.IsNullOrEmpty(t.ListeningAnswerUrl) ? "❌" : "✅")</td>
+                            <td>@(string.IsNullOrEmpty(t.ReadingUrl) ? "❌" : "✅")</td>
+                            <td>@(string.IsNullOrEmpty(t.ReadingAnswerUrl) ? "❌" : "✅")</td>
+                            <td>@(string.IsNullOrEmpty(t.WritingUrl) ? "❌" : "✅")</td>
+                            <td>@(string.IsNullOrEmpty(t.WritingAnswerUrl) ? "❌" : "✅")</td>
+                            <td>@(string.IsNullOrEmpty(t.SpeakingUrl) ? "❌" : "✅")</td>
+                            <td>@(string.IsNullOrEmpty(t.SpeakingAnswerUrl) ? "❌" : "✅")</td>
+                            <td>
+                                <button class="btn-sm btn-edit" @onclick="() => OpenForm(t)">Sửa</button>
+                                <button class="btn-sm btn-delete" @onclick="() => DeleteTest(t.Id, t.Title)">Xóa</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    private List<MockTestDto> tests = new();
+    private bool isLoading = true;
+    private bool isFormOpen = false;
+    private bool isSaving = false;
+    private string uploadingSkill = "";
+    private string errorMessage = "";
+
+    private CreateMockTestRequest formTest = new();
+    private int? editId = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTests();
+    }
+
+    private async Task LoadTests()
+    {
+        isLoading = true;
+        var allTests = await MockTestService.GetMockTestsAsync();
+        tests = allTests.Where(t => !string.IsNullOrEmpty(t.HskUrl)).ToList();
+        isLoading = false;
+    }
+
+    private void OpenForm(MockTestDto? testToEdit)
+    {
+        if (testToEdit == null)
+        {
+            editId = null;
+            formTest = new CreateMockTestRequest();
+        }
+        else
+        {
+            editId = testToEdit.Id;
+            formTest = new CreateMockTestRequest
+            {
+                CollectionName = testToEdit.CollectionName,
+                Title = testToEdit.Title,
+                ListeningUrl = testToEdit.ListeningUrl,
+                ReadingUrl = testToEdit.ReadingUrl,
+                WritingUrl = testToEdit.WritingUrl,
+                SpeakingUrl = testToEdit.SpeakingUrl,
+                ListeningAnswerUrl = testToEdit.ListeningAnswerUrl,
+                ReadingAnswerUrl = testToEdit.ReadingAnswerUrl,
+                WritingAnswerUrl = testToEdit.WritingAnswerUrl,
+                SpeakingAnswerUrl = testToEdit.SpeakingAnswerUrl
+            };
+        }
+        isFormOpen = true;
+    }
+
+    private async Task HandleFileUpload(InputFileChangeEventArgs e, string skill)
+    {
+        uploadingSkill = skill;
+        errorMessage = "";
+        StateHasChanged();
+
+        try
+        {
+            var file = e.File;
+            var url = await MockTestService.UploadFileAsync(file);
+
+            if (!string.IsNullOrEmpty(url))
+            {
+                switch (skill)
+                {
+                    case "Reading": formTest.ReadingUrl = url; break;
+                    case "Listening": formTest.ListeningUrl = url; break;
+                    case "Writing": formTest.WritingUrl = url; break;
+                    case "Speaking": formTest.SpeakingUrl = url; break;
+                    case "ReadingAnswer": formTest.ReadingAnswerUrl = url; break;
+                    case "ListeningAnswer": formTest.ListeningAnswerUrl = url; break;
+                    case "WritingAnswer": formTest.WritingAnswerUrl = url; break;
+                    case "SpeakingAnswer": formTest.SpeakingAnswerUrl = url; break;
+                }
+            }
+            else
+            {
+                errorMessage = "Tải file thất bại. Máy chủ không trả về URL hợp lệ.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi upload: {ex.Message}";
+        }
+
+        uploadingSkill = "";
+        StateHasChanged();
+    }
+
+    private async Task SaveTest()
+    {
+        errorMessage = "";
+        if (string.IsNullOrWhiteSpace(formTest.CollectionName) || string.IsNullOrWhiteSpace(formTest.Title))
+        {
+            errorMessage = "Vui lòng nhập Bộ đề và Tên bài thi.";
+            return;
+        }
+
+        isSaving = true;
+        bool success;
+
+        try
+        {
+            if (editId.HasValue)
+            {
+                success = await MockTestService.UpdateMockTestAsync(editId.Value, formTest);
+            }
+            else
+            {
+                success = await MockTestService.CreateMockTestAsync(formTest);
+            }
+
+            if (success)
+            {
+                isFormOpen = false;
+                await LoadTests();
+            }
+            else
+            {
+                errorMessage = "Lỗi khi lưu bài thi. Vui lòng thử lại.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi hệ thống: {ex.Message}";
+        }
+
+        isSaving = false;
+    }
+
+    private async Task DeleteTest(int id, string title)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"Bạn có chắc chắn muốn xóa bài thi '{title}' không?");
+        if (confirmed)
+        {
+            var success = await MockTestService.DeleteMockTestAsync(id);
+            if (success)
+            {
+                await LoadTests();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Lỗi: Không thể xóa bài thi này.");
+            }
+        }
+    }
+}

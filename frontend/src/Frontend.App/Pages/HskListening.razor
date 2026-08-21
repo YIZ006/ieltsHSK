@@ -1,0 +1,516 @@
+@page "/hsk/listening/preview"
+@page "/hsk/listening/{ExamUrl}"
+@page "/hsk/listening"
+@layout Frontend.App.Layout.ExamLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Microsoft.JSInterop
+@inject HskService HskService
+@inject AnswerKeyService answerKeyService
+@inject IJSRuntime JS
+@inject ExamSessionService ExamSession
+@inject ExamSubmissionService SubmissionService
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<PageTitle>@(exam?.Title ?? "HSK Listening") - IeltsHSK</PageTitle>
+
+@if (isLoading)
+{
+    <div class="reading-loading">
+        <div class="loading-ring"></div>
+        <p>Đang tải đề thi...</p>
+    </div>
+}
+else if (exam == null)
+{
+    <div class="reading-error">
+        <div class="error-icon">📭</div>
+        <h3>Không tải được đề thi</h3>
+        <p>Vui lòng thử lại hoặc chọn đề khác.</p>
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(_statusMessage))
+{
+    <div class="reading-error">
+        <div class="error-icon">⚠️</div>
+        <h3>Không thể chấm bài</h3>
+        <p>@_statusMessage</p>
+    </div>
+}
+else
+{
+    var activePart = exam.Parts[activePartIndex];
+    int qStart = exam.Parts.Take(activePartIndex).Sum(p => p.Questions.Count) + 1;
+    int qEnd   = qStart + activePart.Questions.Count - 1;
+
+    @* ── TOP BAR ── *@
+    @if (!isFinished || showReview)
+    {
+        <div class="reading-topbar">
+            <div class="topbar-left">
+                <span class="exam-title-short">@exam.Title</span>
+            </div>
+            <div class="topbar-center">
+                <div class="timer-box @(secondsLeft < 600 ? "timer-warning" : "")">
+                    <span class="timer-icon">⏱</span>
+                    <span class="timer-text">@TimerDisplay remaining</span>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <button class="btn-exit-exam" @onclick="ExitExam">Exit test</button>
+                @if (isFinished)
+                {
+                    <span class="test-session-status">@(timedOut ? "Time is up" : "Submitted")</span>
+                }
+                <button class="btn-submit-exam" @onclick="SubmitExam">Submit ➤</button>
+            </div>
+        </div>
+    }
+
+    @* ── PART TABS ── *@
+    <div class="part-tabs-bar">
+        @for (int i = 0; i < exam.Parts.Count; i++)
+        {
+            var idx  = i;
+            var part = exam.Parts[i];
+            int answered = AnsweredCount(part);
+            <button class="part-tab-btn @(activePartIndex == idx ? "active" : "")"
+                    @onclick="() => ChangePart(idx)">
+                Part @part.PartNumber
+                <span class="part-tab-score">@answered/@part.Questions.Count</span>
+            </button>
+        }
+        <div class="part-tabs-spacer"></div>
+        <span class="total-progress">
+            Tổng: @exam.Parts.Sum(p => AnsweredCount(p))/@exam.Parts.Sum(p => p.Questions.Count) câu
+        </span>
+    </div>
+
+    @* ── AUDIO PLAYER AND QUESTIONS LAYOUT ── *@
+    <div class="listening-layout">
+
+        <div class="custom-audio-player">
+            @if (!string.IsNullOrEmpty(exam.AudioUrl))
+            {
+                <div id="yt-hidden-player" style="position:absolute; width:1px; height:1px; top:-9999px;"></div>
+
+                <button class="player-btn" @onclick="TogglePlay">
+                    @if(isPlaying)
+                    {
+                        <i class="bi bi-pause-fill"></i>
+                    }
+                    else
+                    {
+                        <i class="bi bi-play-fill"></i>
+                    }
+                </button>
+
+                <div class="progress-container" @onclick="SeekAudio">
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" style="width: @(ProgressPercent)%"></div>
+                    </div>
+                </div>
+
+                <div class="time-display">
+                    @FormatTime(currentTime) / @FormatTime(totalDuration)
+                </div>
+            }
+            else
+            {
+                <div class="audio-placeholder">Không tìm thấy file nghe cho đề này.</div>
+            }
+        </div>
+
+        <div class="questions-col listening-questions" id="questions-scroll">
+            <div class="part-header-label">PART @activePart.PartNumber</div>
+            <p class="part-time-note">
+                Questions <strong>@qStart–@qEnd</strong>.
+            </p>
+
+            @if (!string.IsNullOrWhiteSpace(activePart.Instruction))
+            {
+                <div class="q-group-instruction">
+                    @((MarkupString)activePart.Instruction.Replace("\n", "<br/>"))
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(activePart.InstructionHtml))
+            {
+                <div class="q-html-block">
+                    @((MarkupString)activePart.InstructionHtml)
+                </div>
+            }
+
+            @foreach (var q in activePart.Questions)
+            {
+                bool isActive = q.Id == activeQuestionId;
+                <div class="question-block @(IsAnswered(q) ? "answered" : "") @(isActive ? "q-focused" : "")"
+                     id="q-block-@q.Id"
+                     @onclick="() => activeQuestionId = q.Id">
+
+                    <div class="q-text">@((MarkupString)q.Text)</div>
+
+                    @if (q.Options != null && q.Options.Count > 0)
+                    {
+                        <ul class="q-option-list">
+                            @foreach (var opt in q.Options)
+                            {
+                                <li class="q-option @(q.SelectedOptionId == opt.Id ? "selected" : "")"
+                                    @onclick="() => SelectOption(q, opt.Id)">
+                                    <span class="opt-badge">@opt.Label</span>
+                                    <span class="opt-body">@opt.Text</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+
+                    @if (q.Type == "fill" || q.Type == "pinyin-write" || q.Type == "char-write")
+                    {
+                        <div class="q-fill-input">
+                            <input type="text" class="form-control fill-answer"
+                                   value="@q.FillAnswer"
+                                   @oninput="(e) => { q.FillAnswer = e.Value?.ToString(); }"
+                                   placeholder="Nhập câu trả lời..." />
+                        </div>
+                    }
+                </div>
+            }
+
+            @* ── NAVIGATION BUTTONS ── *@
+            <div class="part-nav-buttons">
+                @if (activePartIndex > 0)
+                {
+                    <button class="nav-part-btn prev" @onclick="() => ChangePart(activePartIndex - 1)">
+                        ← Part @(exam.Parts[activePartIndex - 1].PartNumber)
+                    </button>
+                }
+                @if (activePartIndex < exam.Parts.Count - 1)
+                {
+                    <button class="nav-part-btn next" @onclick="() => ChangePart(activePartIndex + 1)">
+                        Part @(exam.Parts[activePartIndex + 1].PartNumber) →
+                    </button>
+                }
+                else
+                {
+                    <button class="nav-part-btn submit" @onclick="SubmitExam">Nộp bài ✓</button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── BOTTOM: QUESTION NAVIGATOR ── *@
+    <div class="q-navigator-bar">
+        <div class="q-navigator-label">Part @activePart.PartNumber</div>
+        <div class="q-navigator-nums">
+            @foreach (var q in activePart.Questions)
+            {
+                <button class="q-nav-num @(IsAnswered(q) ? "nav-answered" : "") @(q.Id == activeQuestionId ? "nav-active" : "")"
+                        @onclick='async () => { activeQuestionId = q.Id; await ScrollToQuestion(q.Id); }'>
+                    @q.Id
+                </button>
+            }
+        </div>
+    </div>
+}
+
+@* ── RESULT PANEL (shown after submit) ── *@
+@if (isFinished && gradingResult != null)
+{
+    <div class="result-panel">
+        <div class="result-header">
+            <h2>📊 Kết quả HSK Listening</h2>
+            <div class="result-score-row">
+                <div class="result-score-card correct">
+                    <span class="rs-label">Đúng</span>
+                    <span class="rs-value">@gradingResult.CorrectCount / @gradingResult.TotalCount</span>
+                </div>
+                <div class="result-score-card wrong">
+                    <span class="rs-label">Sai</span>
+                    <span class="rs-value">@(gradingResult.TotalCount - gradingResult.CorrectCount - gradingResult.Questions.Values.Count(q => q.IsBlank))</span>
+                </div>
+                <div class="result-score-card blank">
+                    <span class="rs-label">Bỏ trống</span>
+                    <span class="rs-value">@gradingResult.Questions.Values.Count(q => q.IsBlank)</span>
+                </div>
+            </div>
+        </div>
+        <div class="result-answer-grid">
+            @foreach (var kv in gradingResult.Questions.OrderBy(x => x.Key))
+            {
+                var qr = kv.Value;
+                <div class="result-answer-item @(qr.IsCorrect ? "correct" : qr.IsBlank ? "blank" : "wrong")">
+                    <span class="ra-num">@qr.QuestionNumber</span>
+                    <span class="ra-student">@(string.IsNullOrEmpty(qr.StudentAnswer) ? "—" : qr.StudentAnswer)</span>
+                    @if (!qr.IsCorrect && !qr.IsBlank)
+                    {
+                        <span class="ra-correct">✓ @qr.CorrectAnswer</span>
+                    }
+                    else if (qr.IsCorrect)
+                    {
+                        <span class="ra-tick">✓</span>
+                    }
+                </div>
+            }
+        </div>
+        @if (!showReview)
+        {
+            <div style="text-align: center; margin-top: 24px;">
+                <button class="nav-part-btn submit" @onclick="() => showReview = true">🔍 Xem lại bài làm</button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "ExamUrl")]
+    public string? QueryExamUrl { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "AnswerUrl")]
+    public string? QueryAnswerUrl { get; set; }
+
+    [Parameter]
+    public string? ExamUrl { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "Session")]
+    public string? TestSessionId { get; set; }
+
+    private HskExamData? exam;
+    private bool isLoading = true;
+    private int activePartIndex = 0;
+    private string activeQuestionId = string.Empty;
+
+    // Timer: default 35 minutes for HSK listening (can vary)
+    private int secondsLeft = 35 * 60;
+    private System.Threading.Timer? _timer;
+    private DotNetObjectReference<HskListening>? _dotNetRef;
+    private IDisposable? _navigationRegistration;
+    private string? _sessionKey;
+    private bool isFinished;
+    private bool showReview = false;
+    private bool timedOut;
+    private GradingResult? gradingResult;
+    private string? _examUrlLoaded;
+    private string? _answerUrlLoaded;
+    private string? _statusMessage;
+
+    private const string DefaultExamUrl = "sample-data/HSK3-Sample-Listening.json";
+
+    // Player state
+    private bool isPlaying = false;
+    private double currentTime = 0;
+    private double totalDuration = 1;
+
+    private double ProgressPercent => totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0;
+
+    private string TimerDisplay
+    {
+        get
+        {
+            int m = secondsLeft / 60, s = secondsLeft % 60;
+            return $"{m:D2}:{s:D2}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+
+        string actualUrl = ExamUrl;
+        if (string.IsNullOrWhiteSpace(actualUrl)) actualUrl = QueryExamUrl;
+
+        string url = string.IsNullOrWhiteSpace(actualUrl) ? DefaultExamUrl : Uri.UnescapeDataString(actualUrl);
+        _examUrlLoaded = url;
+        _answerUrlLoaded = string.IsNullOrWhiteSpace(QueryAnswerUrl) ? null : Uri.UnescapeDataString(QueryAnswerUrl);
+        exam = await HskService.LoadExamAsync(url);
+        if (exam?.Parts?.Count > 0)
+            activeQuestionId = exam.Parts[0].Questions.FirstOrDefault()?.Id ?? string.Empty;
+        isLoading = false;
+
+        _sessionKey = ExamSessionService.CreateStorageKey("hsk-listening", TestSessionId, url);
+        var session = await ExamSession.StartAsync(_sessionKey, secondsLeft);
+        secondsLeft = session.SecondsRemaining;
+        isFinished = session.IsCompleted || session.IsExpired;
+        timedOut = session.IsTimedOut || session.IsExpired;
+        if (isFinished) return;
+
+        _navigationRegistration = Navigation.RegisterLocationChangingHandler(ConfirmLeave);
+        await ExamSession.SetUnloadWarningAsync(true);
+        _timer = new System.Threading.Timer(_ => _ = UpdateTimerAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && isFinished)
+            await ExamSession.LockTestContentAsync(".listening-layout");
+
+        if (exam != null && !isLoading && !string.IsNullOrEmpty(exam.AudioUrl) && _dotNetRef == null)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            string videoId = exam.AudioUrl.Split('/').Last().Split('?').First();
+            await JS.InvokeVoidAsync("initYouTubePlayer", videoId, _dotNetRef);
+            await JS.InvokeVoidAsync("bindListeningInputs", _dotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public void OnPlayerReady(double duration)
+    {
+        totalDuration = duration;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnPlayerStateChanged(bool playing)
+    {
+        isPlaying = playing;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnPlayerProgress(double time)
+    {
+        currentTime = time;
+        StateHasChanged();
+    }
+
+    private async Task TogglePlay()
+    {
+        if (isPlaying)
+            await JS.InvokeVoidAsync("pauseYouTube");
+        else
+            await JS.InvokeVoidAsync("playYouTube");
+    }
+
+    private async Task SeekAudio(MouseEventArgs e)
+    {
+        // Implement via JS if needed
+    }
+
+    private string FormatTime(double seconds)
+    {
+        int m = (int)(seconds / 60);
+        int s = (int)(seconds % 60);
+        return $"{m:D2}:{s:D2}";
+    }
+
+    [JSInvokable]
+    public void OnHtmlInputChange(int questionId, string value)
+    {
+        if (exam == null || isFinished) return;
+        var q = exam.Parts.SelectMany(p => p.Questions).FirstOrDefault(x => x.Id == questionId.ToString());
+        if (q != null)
+        {
+            q.FillAnswer = value;
+            StateHasChanged();
+        }
+    }
+
+    private void ChangePart(int index)
+    {
+        activePartIndex = index;
+        activeQuestionId = exam!.Parts[index].Questions.FirstOrDefault()?.Id ?? string.Empty;
+    }
+
+    private void SelectOption(HskQuestion q, string optionId)
+    {
+        if (!isFinished) q.SelectedOptionId = q.SelectedOptionId == optionId ? null : optionId;
+    }
+
+    private bool IsAnswered(HskQuestion q)
+        => q.SelectedOptionId != null || !string.IsNullOrEmpty(q.FillAnswer) || !string.IsNullOrEmpty(q.UserAnswer);
+
+    private int AnsweredCount(HskPart part)
+        => part.Questions.Count(IsAnswered);
+
+    private async Task ScrollToQuestion(string qId)
+    {
+        await Task.Delay(50);
+        try
+        {
+            await JS.InvokeVoidAsync("scrollToElementId", $"q-{qId}");
+        }
+        catch { }
+    }
+
+    private Task SubmitExam() => FinishExamAsync(false);
+
+    private async Task UpdateTimerAsync()
+    {
+        if (isFinished || string.IsNullOrEmpty(_sessionKey)) return;
+        var session = await ExamSession.GetAsync(_sessionKey);
+        if (session == null) return;
+        secondsLeft = session.SecondsRemaining;
+        if (session.IsExpired) await InvokeAsync(() => FinishExamAsync(true));
+        else await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task FinishExamAsync(bool timeExpired)
+    {
+        if (isFinished) return;
+        isFinished = true;
+        timedOut = timeExpired;
+        _timer?.Dispose();
+        if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
+        await ExamSession.LockTestContentAsync(".listening-layout");
+        await ExamSession.SetUnloadWarningAsync(false);
+
+        if (!string.IsNullOrEmpty(_examUrlLoaded))
+        {
+            var answerKey = !string.IsNullOrWhiteSpace(_answerUrlLoaded)
+                ? await answerKeyService.LoadAsync(_answerUrlLoaded)
+                : await answerKeyService.LoadFromExamUrlAsync(_examUrlLoaded);
+            if (answerKey != null)
+            {
+                var studentAnswers = CollectStudentAnswers();
+                gradingResult = AnswerKeyService.Grade(answerKey, studentAnswers);
+
+                // Save to DB with skill "hsk-listening"
+                await SubmissionService.SaveToDbAsync("hsk-listening", _examUrlLoaded, _sessionKey ?? "", gradingResult.BandScore, gradingResult.CorrectCount, gradingResult.TotalCount);
+            }
+            else
+            {
+                _statusMessage = "Không tải được file đáp án HSK Listening. Hãy kiểm tra link AnswerUrl trong admin.";
+            }
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Dictionary<int, string> CollectStudentAnswers()
+    {
+        var result = new Dictionary<int, string>();
+        if (exam == null) return result;
+        int qNum = 1;
+        foreach (var part in exam.Parts)
+            foreach (var q in part.Questions)
+            {
+                var answer = q.FillAnswer?.Trim();
+                if (!string.IsNullOrEmpty(q.SelectedOptionId))
+                {
+                    var opt = q.Options?.FirstOrDefault(o => o.Id == q.SelectedOptionId);
+                    answer = opt?.Label ?? q.SelectedOptionId;
+                }
+                result[qNum++] = answer ?? "";
+            }
+        return result;
+    }
+
+    private async ValueTask ConfirmLeave(LocationChangingContext context)
+    {
+        if (!isFinished && !await ExamSession.ConfirmLeaveAsync()) context.PreventNavigation();
+    }
+
+    private void ExitExam() => Navigation.NavigateTo("/hsk/luyen-de");
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _dotNetRef?.Dispose();
+        _navigationRegistration?.Dispose();
+        _ = ExamSession.SetUnloadWarningAsync(false);
+    }
+}

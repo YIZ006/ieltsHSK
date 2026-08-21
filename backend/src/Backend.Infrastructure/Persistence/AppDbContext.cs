@@ -21,6 +21,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     // LMS Block
     public DbSet<Course> Courses { get; set; }
     public DbSet<Lesson> Lessons { get; set; }
+    public DbSet<HskVocabulary> HskVocabularies { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -66,6 +67,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(c => c.Websites)
                 .HasForeignKey(w => w.CategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // HskVocabulary
+        modelBuilder.Entity<HskVocabulary>(entity =>
+        {
+            entity.HasIndex(v => v.HskLevel);
+            entity.HasIndex(v => new { v.HskLevel, v.Hanzi }).IsUnique();
         });
     }
 }
