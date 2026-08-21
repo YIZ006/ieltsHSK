@@ -17,6 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Exam> Exams { get; set; }
     public DbSet<MockTest> MockTests { get; set; }
     public DbSet<TestSubmission> TestSubmissions { get; set; }
+    public DbSet<Story> Stories { get; set; }
     
     // LMS Block
     public DbSet<Course> Courses { get; set; }
@@ -25,6 +26,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // Story
+        modelBuilder.Entity<Story>(entity =>
+        {
+            entity.HasIndex(s => s.Slug).IsUnique();
+        });
 
         // User
         modelBuilder.Entity<User>(entity =>

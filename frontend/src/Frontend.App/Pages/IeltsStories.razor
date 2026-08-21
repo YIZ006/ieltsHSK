@@ -1,0 +1,229 @@
+@page "/ielts/doc-truyen"
+@layout Frontend.App.Layout.IeltsLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject StoryService StoryService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Đọc truyện tiếng Anh theo trình độ - IELTS</PageTitle>
+
+<div class="stories-container">
+    <!-- Hero Banner -->
+    <div class="stories-hero">
+        <div class="hero-content">
+            <span class="hero-badge">
+                <i class="bi bi-book-half"></i> GRADED READERS · IELTS
+            </span>
+            <h1 class="hero-title">Đọc truyện tiếng Anh theo trình độ</h1>
+            <p class="hero-desc">
+                Mỗi mẩu truyện ngắn ~5 phút vừa đúng sức của bạn: chạm từ mới là hiện nghĩa ngay, hỗ trợ phát âm và câu hỏi chẩn đoán từ vựng cuối truyện.
+            </p>
+        </div>
+        <div class="hero-stats">
+            <div class="stat-box">
+                <span class="stat-number">A1 → C2</span>
+                <span class="stat-label">6 Cấp độ chuẩn</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-number">~5 min</span>
+                <span class="stat-label">Thời gian mỗi truyện</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-number">100%</span>
+                <span class="stat-label">Chạm tra nghĩa tức thì</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters & Search Toolbar -->
+    <div class="filter-toolbar">
+        <div class="level-tabs">
+            @foreach (var lvl in levels)
+            {
+                <button class="level-tab-btn @(selectedLevel == lvl ? "active" : "")" 
+                        @onclick="() => FilterByLevel(lvl)">
+                    @lvl
+                </button>
+            }
+        </div>
+
+        <div class="search-and-category">
+            <div class="search-input-wrapper">
+                <i class="bi bi-search"></i>
+                <input type="text" 
+                       placeholder="Tìm kiếm tiêu đề hoặc chủ đề truyện..." 
+                       @bind="searchQuery" 
+                       @bind:event="oninput" 
+                       @bind:after="ApplyFilter" />
+                @if (!string.IsNullOrEmpty(searchQuery))
+                {
+                    <button class="btn-clear-search" @onclick="ClearSearch">
+                        <i class="bi bi-x"></i>
+                    </button>
+                }
+            </div>
+
+            <div class="category-select-wrapper">
+                <select class="form-select category-select" @bind="selectedCategory" @bind:after="ApplyFilter">
+                    <option value="All">Tất cả chủ đề</option>
+                    <option value="Đời sống">Đời sống & Gia đình</option>
+                    <option value="Phiêu lưu">Phiêu lưu & Bí ẩn</option>
+                    <option value="Khoa học & Tự nhiên">Khoa học & Tự nhiên</option>
+                    <option value="Công nghệ & Tương lai">Công nghệ & Tương lai</option>
+                    <option value="Xã hội & Văn hóa">Xã hội & Văn hóa</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stories List / Grid -->
+    <div class="stories-content">
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p>Đang tải danh sách truyện phù hợp...</p>
+            </div>
+        }
+        else if (filteredStories.Count == 0)
+        {
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <i class="bi bi-journal-x"></i>
+                </div>
+                <h3>Chưa có truyện nào phù hợp</h3>
+                <p>Thử đổi bộ lọc cấp độ hoặc tìm kiếm từ khóa khác.</p>
+                <button class="btn btn-outline-primary mt-2" @onclick="ResetFilters">Xóa bộ lọc</button>
+            </div>
+        }
+        else
+        {
+            <div class="stories-grid">
+                @foreach (var story in filteredStories)
+                {
+                    <div class="story-card" @onclick="() => ReadStory(story.Slug)">
+                        <div class="story-thumbnail-wrapper">
+                            <img src="@(string.IsNullOrEmpty(story.ThumbnailUrl) ? "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=800" : story.ThumbnailUrl)" 
+                                 alt="@story.Title" 
+                                 class="story-thumbnail" 
+                                 loading="lazy" />
+                            <div class="story-badges-overlay">
+                                <span class="badge-level level-@story.Level.ToLower()">@story.Level</span>
+                                <span class="badge-band">Band @story.IeltsBand</span>
+                            </div>
+                            <span class="story-read-time">
+                                <i class="bi bi-clock"></i> ~@story.EstimatedMinutes phút
+                            </span>
+                        </div>
+
+                        <div class="story-info">
+                            <div class="story-meta-top">
+                                <span class="story-category">@story.Category</span>
+                                <span class="story-word-count"><i class="bi bi-file-text"></i> @story.WordCount từ</span>
+                            </div>
+
+                            <h3 class="story-title">@story.Title</h3>
+                            
+                            @if (!string.IsNullOrEmpty(story.Summary))
+                            {
+                                <p class="story-summary">@story.Summary</p>
+                            }
+
+                            <div class="story-footer">
+                                <div class="story-features">
+                                    <span class="feature-item" title="Số từ vựng mục tiêu">
+                                        <i class="bi bi-spellcheck"></i> @story.TargetVocabCount từ mới
+                                    </span>
+                                    <span class="feature-item" title="Số câu hỏi đọc hiểu">
+                                        <i class="bi bi-question-circle"></i> @story.QuestionsCount câu quiz
+                                    </span>
+                                </div>
+
+                                <button class="btn-read-now" @onclick:stopPropagation="true" @onclick="() => ReadStory(story.Slug)">
+                                    Đọc ngay <i class="bi bi-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<StoryListItemModel> allStories = new();
+    private List<StoryListItemModel> filteredStories = new();
+    private bool isLoading = true;
+
+    private string selectedLevel = "Tất cả";
+    private string selectedCategory = "All";
+    private string searchQuery = "";
+
+    private readonly string[] levels = { "Tất cả", "A1", "A2", "B1", "B2", "C1", "C2" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStories();
+    }
+
+    private async Task LoadStories()
+    {
+        isLoading = true;
+        allStories = await StoryService.GetStoriesAsync();
+        ApplyFilter();
+        isLoading = false;
+    }
+
+    private void FilterByLevel(string level)
+    {
+        selectedLevel = level;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        var query = allStories.AsEnumerable();
+
+        if (selectedLevel != "Tất cả")
+        {
+            query = query.Where(s => s.Level.Equals(selectedLevel, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (selectedCategory != "All")
+        {
+            query = query.Where(s => s.Category.Equals(selectedCategory, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var search = searchQuery.Trim();
+            query = query.Where(s => 
+                s.Title.Contains(search, StringComparison.OrdinalIgnoreCase) || 
+                (s.Summary != null && s.Summary.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
+                s.Category.Contains(search, StringComparison.OrdinalIgnoreCase)
+            );
+        }
+
+        filteredStories = query.ToList();
+    }
+
+    private void ClearSearch()
+    {
+        searchQuery = "";
+        ApplyFilter();
+    }
+
+    private void ResetFilters()
+    {
+        selectedLevel = "Tất cả";
+        selectedCategory = "All";
+        searchQuery = "";
+        ApplyFilter();
+    }
+
+    private void ReadStory(string slug)
+    {
+        NavigationManager.NavigateTo($"/ielts/doc-truyen/{slug}");
+    }
+}

@@ -17,12 +17,16 @@ Tài liệu này liệt kê toàn bộ các đường dẫn (routes) hiện có 
 - `/ielts/listening`, `/ielts/listening/preview`, `/ielts/listening/{ExamUrl}` - Trang làm bài thi Nghe IELTS
 - `/ielts/writing`, `/ielts/writing/preview`, `/ielts/writing/{ExamUrl}` - Trang làm bài thi Viết IELTS
 - `/ielts/speaking`, `/ielts/speaking/preview`, `/ielts/speaking/{ExamUrl}` - Trang làm bài thi Nói IELTS
+- `/ielts/doc-truyen` - Danh sách truyện đọc tiếng Anh theo trình độ (Graded Readers)
+- `/ielts/doc-truyen/{Slug}` - Giao diện đọc truyện tương tác (Chạm tra từ, Song ngữ, Phát âm, Quiz)
 - `/toeic/test`, `/toeic/test/{*ExamUrl}` - Trang làm bài thi TOEIC
 
 ### ⚙️ Dành cho Quản trị viên (Admin)
 - `/admin` - Bảng điều khiển dành cho Admin
 - `/admin/mock-tests` - Trang quản lý các bộ đề thi IELTS
 - `/admin/reading-tool` - Công cụ tạo/sửa đề thi Đọc IELTS
+- `/admin/listen-videos` - Trang duyệt video luyện nghe điền từ
+- `/admin/stories` - Quản lý kho truyện tiếng Anh (Thêm/Sửa/Xóa, Import JSON, Tải mẫu)
 - `/admin/toeic-mock-tests` - Trang quản lý các bộ đề thi TOEIC
 - `/admin/toeic-builder` - Công cụ tạo/sửa/soạn đề thi TOEIC trực quan
 
@@ -43,6 +47,17 @@ Tài liệu này liệt kê toàn bộ các đường dẫn (routes) hiện có 
 - `GET /api/ielts/sections` - Lấy danh sách các khu vực/góc học tập
 - `GET /api/ielts/exams` - Lấy danh sách bài thi IELTS
 - `POST /api/ielts/exams` - Tạo mới bài thi IELTS
+
+### 📖 Truyện tiếng Anh Graded Readers (User & Admin)
+- `GET /api/stories` - Lấy danh sách truyện đã xuất bản (hỗ trợ lọc `level`, `category`, `search`)
+- `GET /api/stories/{idOrSlug}` - Lấy chi tiết truyện (tự động tăng lượt đọc)
+- `POST /api/stories/{id}/quiz-submit` - Chấm điểm bài kiểm tra đọc hiểu & từ vựng cuối truyện
+- `GET /api/admin/stories` - Lấy toàn bộ truyện (bao gồm bản nháp) cho Admin
+- `POST /api/admin/stories` - Tạo truyện mới
+- `PUT /api/admin/stories/{id}` - Cập nhật thông tin truyện
+- `DELETE /api/admin/stories/{id}` - Xóa truyện khỏi hệ thống
+- `GET /api/admin/stories/template-json` - Lấy dữ liệu cấu trúc mẫu JSON chuẩn
+- `POST /api/admin/stories/import-json` - Import truyện nhanh chóng từ JSON trực tiếp hoặc upload file
 
 ### 📝 Quản lý Đề thi Mock Test (IELTS/Chung)
 - `GET /api/mock-tests` - Lấy danh sách toàn bộ đề thi (Mock Tests)

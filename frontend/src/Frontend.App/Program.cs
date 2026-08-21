@@ -77,4 +77,11 @@ builder.Services.AddScoped(sp =>
     return new ToeicBuilderService(httpClient);
 });
 
+// StoryService: quản lý và đọc truyện tiếng Anh (Graded Readers)
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) };
+    return new StoryService(httpClient);
+});
+
 await builder.Build().RunAsync();

@@ -1,0 +1,908 @@
+@page "/admin/stories"
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject StoryService StoryService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Quản lý Đọc Truyện - Admin</PageTitle>
+
+<div class="admin-stories-container">
+    <!-- Header -->
+    <div class="admin-page-header">
+        <div>
+            <h1>Quản lý Truyện tiếng Anh (Cloudflare R2 & Graded Readers)</h1>
+            <p class="subtitle">Tải file JSON đề truyện lên Cloudflare R2, quản lý danh sách hoặc chỉnh sửa trực quan.</p>
+        </div>
+        <div class="header-action-buttons">
+            <button class="btn btn-outline-secondary" @onclick="DownloadTemplateJson">
+                <i class="bi bi-file-earmark-code"></i> Tải mẫu JSON
+            </button>
+            <button class="btn btn-info text-white" @onclick="OpenImportModal">
+                <i class="bi bi-file-earmark-arrow-up"></i> Import JSON lên R2
+            </button>
+            <button class="btn btn-primary" @onclick="() => OpenEditorModal(null)">
+                <i class="bi bi-plus-lg"></i> + Soạn Truyện Mới
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(alertMessage))
+    {
+        <div class="alert @(alertSuccess ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+            @alertMessage
+            <button type="button" class="btn-close" @onclick="() => alertMessage = null"></button>
+        </div>
+    }
+
+    <!-- Filter Bar -->
+    <div class="admin-table-filters">
+        <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input type="text" placeholder="Tìm theo tiêu đề hoặc chủ đề..." @bind="filterSearch" @bind:event="oninput" />
+        </div>
+        <div class="filter-dropdowns">
+            <select class="form-select" @bind="filterLevel">
+                <option value="All">Tất cả trình độ</option>
+                <option value="A1">A1</option>
+                <option value="A2">A2</option>
+                <option value="B1">B1</option>
+                <option value="B2">B2</option>
+                <option value="C1">C1</option>
+                <option value="C2">C2</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Stories Table -->
+    <div class="admin-card table-card">
+        @if (isLoading)
+        {
+            <div class="text-center p-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2 text-muted">Đang tải danh sách truyện...</p>
+            </div>
+        }
+        else if (FilteredStories.Count == 0)
+        {
+            <div class="text-center p-5 text-muted">
+                <i class="bi bi-journal-x fs-1"></i>
+                <p class="mt-2">Chưa có truyện nào hoặc không khớp với bộ lọc.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle custom-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 70px;">Bìa</th>
+                            <th>Tiêu đề & Tóm tắt</th>
+                            <th style="width: 90px;">Cấp độ</th>
+                            <th style="width: 100px;">IELTS Band</th>
+                            <th style="width: 120px;">Chủ đề</th>
+                            <th style="width: 90px;">Số từ</th>
+                            <th style="width: 110px;">Từ / Quiz</th>
+                            <th style="width: 110px;">File R2</th>
+                            <th style="width: 80px;">Lượt đọc</th>
+                            <th style="width: 95px;">Trạng thái</th>
+                            <th style="width: 130px;" class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in FilteredStories)
+                        {
+                            <tr>
+                                <td>
+                                    <img src="@(string.IsNullOrEmpty(s.ThumbnailUrl) ? "https://placehold.co/100x70?text=Story" : s.ThumbnailUrl)" 
+                                         alt="@s.Title" 
+                                         class="table-thumb" />
+                                </td>
+                                <td>
+                                    <div class="fw-bold text-primary title-link" @onclick="() => PreviewStory(s.Slug)">
+                                        @s.Title
+                                    </div>
+                                    <small class="text-muted d-block text-truncate" style="max-width: 280px;">
+                                        @(string.IsNullOrEmpty(s.Summary) ? "Chưa có tóm tắt" : s.Summary)
+                                    </small>
+                                </td>
+                                <td>
+                                    <span class="badge level-badge level-@s.Level.ToLower()">@s.Level</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">Band @s.IeltsBand</span>
+                                </td>
+                                <td>
+                                    <span class="category-tag">@s.Category</span>
+                                </td>
+                                <td>
+                                    <span class="text-muted">@s.WordCount từ</span>
+                                </td>
+                                <td>
+                                    <div class="small">
+                                        <span class="badge bg-info-subtle text-info border border-info-subtle me-1">@s.Vocabulary.Count từ</span>
+                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">@s.Questions.Count quiz</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(s.JsonUrl))
+                                    {
+                                        <a href="@s.JsonUrl" target="_blank" class="badge bg-success-subtle text-success border border-success-subtle text-decoration-none" title="@s.JsonUrl">
+                                            <i class="bi bi-cloud-check-fill"></i> Link R2
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary-subtle text-secondary">Local</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="text-muted"><i class="bi bi-eye"></i> @s.ViewsCount</span>
+                                </td>
+                                <td>
+                                    @if (s.IsPublished)
+                                    {
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle">Đã đăng</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Bản nháp</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-secondary" @onclick="() => PreviewStory(s.Slug)" title="Xem trước bài đọc">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                        </button>
+                                        <button class="btn btn-outline-primary" @onclick="() => OpenEditorModal(s)" title="Chỉnh sửa">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger" @onclick="() => ConfirmDelete(s)" title="Xóa">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- ================= MODAL IMPORT JSON LÊN R2 ================= -->
+@if (isImportModalOpen)
+{
+    <div class="modal-backdrop-custom">
+        <div class="modal-dialog-custom modal-lg">
+            <div class="modal-content-custom">
+                <div class="modal-header-custom">
+                    <h3><i class="bi bi-cloud-arrow-up-fill text-primary"></i> Import Truyện & Lưu lên Cloudflare R2</h3>
+                    <button class="btn-close" @onclick="CloseImportModal"></button>
+                </div>
+                <div class="modal-body-custom">
+                    <p class="text-muted small">
+                        Hệ thống sẽ tự động lưu file JSON lên <b>Cloudflare R2 Storage</b> và cập nhật vào danh sách bài đọc cho học viên.
+                    </p>
+
+                    <div class="upload-zone mb-3 p-3 bg-light border rounded">
+                        <label class="form-label fw-bold"><i class="bi bi-upload"></i> Chọn file .json từ máy tính để tải lên R2:</label>
+                        <InputFile OnChange="HandleJsonFileUploadAndAutoUploadR2" accept=".json" class="form-control" />
+                        @if (isUploadingFileToR2)
+                        {
+                            <div class="text-primary small mt-2">
+                                <span class="spinner-border spinner-border-sm"></span> Đang tải lên Cloudflare R2...
+                            </div>
+                        }
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Hoặc dán trực tiếp mã JSON vào đây:</label>
+                        <textarea class="form-control font-monospace" rows="10" @bind="importJsonContent" placeholder='{ "title": "The School Race", "level": "A1", ... }'></textarea>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(importError))
+                    {
+                        <div class="alert alert-danger py-2 small">@importError</div>
+                    }
+                </div>
+                <div class="modal-footer-custom">
+                    <button class="btn btn-secondary" @onclick="CloseImportModal">Hủy</button>
+                    <button class="btn btn-primary" @onclick="SubmitImportJson" disabled="@isImporting">
+                        @if (isImporting)
+                        {
+                            <span class="spinner-border spinner-border-sm"></span>
+                            <span>Đang lưu lên R2...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-cloud-check"></i>
+                            <span>Lưu Lên R2 & Tạo Truyện</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ================= MODAL SOẠN TRUYỆN / CHỈNH SỬA ================= -->
+@if (isEditorModalOpen && editingStory != null)
+{
+    <div class="modal-backdrop-custom">
+        <div class="modal-dialog-custom modal-xl">
+            <div class="modal-content-custom">
+                <div class="modal-header-custom">
+                    <h3>@(editingStory.Id > 0 ? $"Cập nhật truyện: {editingStory.Title}" : "Soạn truyện mới (Lưu lên R2)")</h3>
+                    <button class="btn-close" @onclick="CloseEditorModal"></button>
+                </div>
+                <div class="modal-body-custom">
+                    <!-- Nav Tabs -->
+                    <ul class="nav nav-tabs mb-4">
+                        <li class="nav-item">
+                            <button class="nav-link @(editorTab == "info" ? "active fw-bold" : "")" @onclick='() => editorTab = "info"'>
+                                1. Thông tin chung & R2 URL
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link @(editorTab == "content" ? "active fw-bold" : "")" @onclick='() => editorTab = "content"'>
+                                2. Nội dung đoạn văn (@editingStory.Paragraphs.Count)
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link @(editorTab == "vocab" ? "active fw-bold" : "")" @onclick='() => editorTab = "vocab"'>
+                                3. Từ vựng mục tiêu (@editingStory.Vocabulary.Count)
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link @(editorTab == "quiz" ? "active fw-bold" : "")" @onclick='() => editorTab = "quiz"'>
+                                4. Câu hỏi trắc nghiệm (@editingStory.Questions.Count)
+                            </button>
+                        </li>
+                    </ul>
+
+                    @if (editorTab == "info")
+                    {
+                        <div class="row g-3">
+                            <!-- Cloudflare R2 Upload Box (Tương tự AdminMockTests) -->
+                            <div class="col-md-12">
+                                <div class="card p-3 border-primary bg-primary-subtle rounded-3">
+                                    <label class="form-label fw-bold text-primary mb-1">
+                                        <i class="bi bi-cloud-arrow-up-fill"></i> Tải file JSON truyện lên Cloudflare R2
+                                    </label>
+                                    <div class="input-group">
+                                        <InputFile OnChange="HandleEditorJsonUploadToR2" accept=".json" class="form-control" />
+                                    </div>
+                                    @if (isEditorUploadingR2)
+                                    {
+                                        <div class="text-primary small mt-1">
+                                            <span class="spinner-border spinner-border-sm"></span> Đang tải lên Cloudflare R2...
+                                        </div>
+                                    }
+                                    <small class="text-muted mt-1">
+                                        Khi tải file lên, hệ thống sẽ tự động bắt link Cloudflare R2 và điền tự động toàn bộ nội dung, từ vựng và câu hỏi vào form.
+                                    </small>
+                                </div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold">Link File JSON trên Cloudflare R2 (JsonUrl)</label>
+                                <input type="text" class="form-control font-monospace" @bind="editingStory.JsonUrl" placeholder="https://pub-...r2.dev/stories/xxx.json" />
+                            </div>
+
+                            <div class="col-md-8">
+                                <label class="form-label fw-bold">Tiêu đề truyện (English Title) *</label>
+                                <input type="text" class="form-control" @bind="editingStory.Title" placeholder="vd: The School Race" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Slug (URL)</label>
+                                <input type="text" class="form-control" @bind="editingStory.Slug" placeholder="tự động tạo nếu để trống" />
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">Trình độ chuẩn</label>
+                                <select class="form-select" @bind="editingStory.Level">
+                                    <option value="A1">A1 - Sơ cấp</option>
+                                    <option value="A2">A2 - Tiền trung cấp</option>
+                                    <option value="B1">B1 - Trung cấp</option>
+                                    <option value="B2">B2 - Trung cao cấp</option>
+                                    <option value="C1">C1 - Cao cấp</option>
+                                    <option value="C2">C2 - Thành thạo</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">IELTS Band tương đương</label>
+                                <input type="text" class="form-control" @bind="editingStory.IeltsBand" placeholder="vd: 5.0 - 6.0" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">Chủ đề (Category)</label>
+                                <input type="text" class="form-control" @bind="editingStory.Category" placeholder="vd: Đời sống, Khoa học, Phiêu lưu..." />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">Thời gian đọc ước tính</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" @bind="editingStory.EstimatedMinutes" min="1" max="60" />
+                                    <span class="input-group-text">phút</span>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Link ảnh bìa Thumbnail URL</label>
+                                <input type="text" class="form-control" @bind="editingStory.ThumbnailUrl" placeholder="https://..." />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Link Audio bài đọc (Tùy chọn R2/mp3)</label>
+                                <input type="text" class="form-control" @bind="editingStory.AudioUrl" placeholder="https://..." />
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label fw-bold">Tóm tắt ngắn gọn (Tiếng Việt) *</label>
+                                <textarea class="form-control" rows="2" @bind="editingStory.Summary" placeholder="Tóm tắt 1-2 câu để người học hiểu khái quát nội dung..."></textarea>
+                            </div>
+
+                            <div class="col-md-12">
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" id="publishCheck" @bind="editingStory.IsPublished">
+                                    <label class="form-check-label fw-bold" for="publishCheck">Xuất bản công khai ngay cho học viên</label>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else if (editorTab == "content")
+                    {
+                        <div class="paragraphs-editor">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="text-muted small">Mỗi đoạn văn gồm câu tiếng Anh và bản dịch tiếng Việt tương ứng.</span>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="AddParagraph">
+                                    <i class="bi bi-plus-lg"></i> Thêm đoạn mới
+                                </button>
+                            </div>
+
+                            @for (int i = 0; i < editingStory.Paragraphs.Count; i++)
+                            {
+                                var pIdx = i;
+                                var p = editingStory.Paragraphs[pIdx];
+                                <div class="card p-3 mb-3 border bg-light">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge bg-secondary">Đoạn @(pIdx + 1)</span>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveParagraph(pIdx)" title="Xóa đoạn này">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label small fw-bold">Tiếng Anh (English):</label>
+                                        <textarea class="form-control" rows="2" @bind="p.En" placeholder="Nhập câu/đoạn tiếng Anh..."></textarea>
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold">Dịch Tiếng Việt (Vietnamese translation):</label>
+                                        <textarea class="form-control" rows="2" @bind="p.Vi" placeholder="Nhập câu dịch tiếng Việt..."></textarea>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (editorTab == "vocab")
+                    {
+                        <div class="vocab-editor">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="text-muted small">Từ vựng mục tiêu sẽ được gạch chân trong bài và mở popup tra nghĩa khi chạm vào.</span>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="AddVocab">
+                                    <i class="bi bi-plus-lg"></i> Thêm từ mới
+                                </button>
+                            </div>
+
+                            @for (int i = 0; i < editingStory.Vocabulary.Count; i++)
+                            {
+                                var vIdx = i;
+                                var v = editingStory.Vocabulary[vIdx];
+                                <div class="card p-3 mb-3 border">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge bg-info text-dark">Từ vựng #@(vIdx + 1)</span>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveVocab(vIdx)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label class="small fw-bold">Từ vựng (Word):</label>
+                                            <input type="text" class="form-control form-control-sm" @bind="v.Word" placeholder="vd: whisper" />
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="small fw-bold">Phiên âm (Phonetic):</label>
+                                            <input type="text" class="form-control form-control-sm" @bind="v.Phonetic" placeholder="vd: /ˈwɪs.pər/" />
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="small fw-bold">Loại từ (Part of Speech):</label>
+                                            <input type="text" class="form-control form-control-sm" @bind="v.Pos" placeholder="vd: verb, noun, adj..." />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="small fw-bold">Nghĩa tiếng Việt:</label>
+                                            <input type="text" class="form-control form-control-sm" @bind="v.Meaning" placeholder="vd: thì thầm, nói nhỏ" />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="small fw-bold">Ví dụ trong câu:</label>
+                                            <input type="text" class="form-control form-control-sm" @bind="v.Example" placeholder="vd: The waves seemed to whisper stories." />
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (editorTab == "quiz")
+                    {
+                        <div class="quiz-editor">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="text-muted small">Các câu hỏi trắc nghiệm đọc hiểu (3-4 câu) để học viên tự kiểm tra.</span>
+                                <button class="btn btn-sm btn-outline-primary" @onclick="AddQuestion">
+                                    <i class="bi bi-plus-lg"></i> Thêm câu hỏi
+                                </button>
+                            </div>
+
+                            @for (int i = 0; i < editingStory.Questions.Count; i++)
+                            {
+                                var qIdx = i;
+                                var q = editingStory.Questions[qIdx];
+                                <div class="card p-3 mb-3 border">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge bg-warning text-dark">Câu hỏi #@(qIdx + 1)</span>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveQuestion(qIdx)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="small fw-bold">Nội dung câu hỏi (English):</label>
+                                        <input type="text" class="form-control" @bind="q.Question" placeholder="vd: Why did Tom want to stop running?" />
+                                    </div>
+
+                                    <label class="small fw-bold mb-1">Các lựa chọn đáp án & Chọn đáp án đúng:</label>
+                                    <div class="row g-2 mb-2">
+                                        @for (int oIdx = 0; oIdx < q.Options.Count; oIdx++)
+                                        {
+                                            var optIndex = oIdx;
+                                            <div class="col-md-6">
+                                                <div class="input-group input-group-sm">
+                                                    <div class="input-group-text">
+                                                        <input class="form-check-input mt-0" type="radio" name="correct_@qIdx" 
+                                                               checked="@(q.CorrectIndex == optIndex)" 
+                                                               @onchange="() => q.CorrectIndex = optIndex">
+                                                    </div>
+                                                    <span class="input-group-text fw-bold">@((char)('A' + optIndex))</span>
+                                                    <input type="text" class="form-control" @bind="q.Options[optIndex]" placeholder="Lựa chọn @((char)('A' + optIndex))" />
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <div>
+                                        <label class="small fw-bold">Giải thích đáp án (Explanation):</label>
+                                        <textarea class="form-control form-control-sm" rows="1" @bind="q.Explanation" placeholder="Giải thích lý do chọn đáp án này..."></textarea>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer-custom">
+                    <button class="btn btn-secondary" @onclick="CloseEditorModal">Hủy</button>
+                    <button class="btn btn-primary" @onclick="SaveStory" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm"></span>
+                            <span>Đang lưu lên Cloudflare R2...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-cloud-arrow-up"></i>
+                            <span>Lưu Lên R2</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<StoryModel> stories = new();
+    private bool isLoading = true;
+
+    private string filterSearch = "";
+    private string filterLevel = "All";
+
+    private string? alertMessage;
+    private bool alertSuccess = true;
+
+    // Import Modal State
+    private bool isImportModalOpen = false;
+    private string importJsonContent = "";
+    private string? importError;
+    private bool isImporting = false;
+    private bool isUploadingFileToR2 = false;
+
+    // Editor Modal State
+    private bool isEditorModalOpen = false;
+    private StoryModel? editingStory;
+    private string editorTab = "info";
+    private bool isSaving = false;
+    private bool isEditorUploadingR2 = false;
+
+    private List<StoryModel> FilteredStories
+    {
+        get
+        {
+            var query = stories.AsEnumerable();
+            if (filterLevel != "All")
+            {
+                query = query.Where(s => s.Level.Equals(filterLevel, StringComparison.OrdinalIgnoreCase));
+            }
+            if (!string.IsNullOrWhiteSpace(filterSearch))
+            {
+                var s = filterSearch.Trim();
+                query = query.Where(x => x.Title.Contains(s, StringComparison.OrdinalIgnoreCase) || 
+                                         x.Category.Contains(s, StringComparison.OrdinalIgnoreCase));
+            }
+            return query.ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStories();
+    }
+
+    private async Task LoadStories()
+    {
+        isLoading = true;
+        stories = await StoryService.AdminGetAllStoriesAsync();
+        isLoading = false;
+    }
+
+    private void PreviewStory(string slug)
+    {
+        NavigationManager.NavigateTo($"/ielts/doc-truyen/{slug}");
+    }
+
+    private async Task DownloadTemplateJson()
+    {
+        var json = await StoryService.AdminGetTemplateJsonAsync();
+        var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+        var base64 = Convert.ToBase64String(bytes);
+        await JSRuntime.InvokeVoidAsync("eval", $"const a = document.createElement('a'); a.href = 'data:application/json;base64,{base64}'; a.download = 'story_template.json'; a.click();");
+    }
+
+    // Import Logic
+    private void OpenImportModal()
+    {
+        importJsonContent = "";
+        importError = null;
+        isImportModalOpen = true;
+    }
+
+    private void CloseImportModal()
+    {
+        isImportModalOpen = false;
+    }
+
+    private async Task HandleJsonFileUploadAndAutoUploadR2(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file == null) return;
+
+            isUploadingFileToR2 = true;
+            importError = null;
+
+            var (success, r2Url, jsonContent, msg) = await StoryService.UploadStoryJsonAsync(file);
+            isUploadingFileToR2 = false;
+
+            if (success && !string.IsNullOrEmpty(jsonContent))
+            {
+                importJsonContent = jsonContent;
+            }
+            else
+            {
+                importError = msg;
+            }
+        }
+        catch (Exception ex)
+        {
+            isUploadingFileToR2 = false;
+            importError = "Không thể đọc file: " + ex.Message;
+        }
+    }
+
+    private async Task SubmitImportJson()
+    {
+        if (string.IsNullOrWhiteSpace(importJsonContent))
+        {
+            importError = "Vui lòng dán hoặc chọn file JSON hợp lệ.";
+            return;
+        }
+
+        isImporting = true;
+        importError = null;
+
+        var (success, msg) = await StoryService.AdminImportJsonAsync(importJsonContent);
+        isImporting = false;
+
+        if (success)
+        {
+            alertMessage = msg;
+            alertSuccess = true;
+            isImportModalOpen = false;
+            await LoadStories();
+        }
+        else
+        {
+            importError = msg;
+        }
+    }
+
+    // Editor Logic
+    private void OpenEditorModal(StoryModel? story)
+    {
+        editorTab = "info";
+        if (story != null)
+        {
+            // Clone story for editing
+            editingStory = new StoryModel
+            {
+                Id = story.Id,
+                Title = story.Title,
+                Slug = story.Slug,
+                Level = story.Level,
+                IeltsBand = story.IeltsBand,
+                Category = story.Category,
+                Summary = story.Summary,
+                ThumbnailUrl = story.ThumbnailUrl,
+                AudioUrl = story.AudioUrl,
+                JsonUrl = story.JsonUrl,
+                WordCount = story.WordCount,
+                EstimatedMinutes = story.EstimatedMinutes,
+                IsPublished = story.IsPublished,
+                Paragraphs = story.Paragraphs.Select(p => new StoryParagraph { En = p.En, Vi = p.Vi }).ToList(),
+                Vocabulary = story.Vocabulary.Select(v => new StoryVocabulary 
+                { 
+                    Word = v.Word, 
+                    Phonetic = v.Phonetic, 
+                    Pos = v.Pos, 
+                    Meaning = v.Meaning, 
+                    Example = v.Example, 
+                    Collocations = v.Collocations?.ToList() ?? new() 
+                }).ToList(),
+                Questions = story.Questions.Select(q => new StoryQuestion 
+                { 
+                    Question = q.Question, 
+                    Options = q.Options.ToList(), 
+                    CorrectIndex = q.CorrectIndex, 
+                    Explanation = q.Explanation 
+                }).ToList()
+            };
+        }
+        else
+        {
+            editingStory = new StoryModel
+            {
+                Level = "B1",
+                IeltsBand = "5.0 - 6.0",
+                Category = "Đời sống",
+                EstimatedMinutes = 5,
+                IsPublished = true,
+                Paragraphs = new List<StoryParagraph> { new() },
+                Vocabulary = new List<StoryVocabulary> { new() },
+                Questions = new List<StoryQuestion> 
+                { 
+                    new StoryQuestion 
+                    { 
+                        Options = new List<string> { "", "", "", "" }, 
+                        CorrectIndex = 0 
+                    } 
+                }
+            };
+        }
+
+        isEditorModalOpen = true;
+    }
+
+    private async Task HandleEditorJsonUploadToR2(InputFileChangeEventArgs e)
+    {
+        if (editingStory == null) return;
+        try
+        {
+            var file = e.File;
+            if (file == null) return;
+
+            isEditorUploadingR2 = true;
+            var (success, r2Url, jsonContent, msg) = await StoryService.UploadStoryJsonAsync(file);
+            isEditorUploadingR2 = false;
+
+            if (success)
+            {
+                editingStory.JsonUrl = r2Url;
+                if (!string.IsNullOrEmpty(jsonContent))
+                {
+                    PopulateStoryFromRawJson(jsonContent);
+                }
+                alertMessage = "Tải file lên Cloudflare R2 thành công!";
+                alertSuccess = true;
+            }
+            else
+            {
+                alertMessage = "Lỗi upload R2: " + msg;
+                alertSuccess = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            isEditorUploadingR2 = false;
+            alertMessage = "Lỗi khi upload: " + ex.Message;
+            alertSuccess = false;
+        }
+    }
+
+    private void PopulateStoryFromRawJson(string json)
+    {
+        if (editingStory == null) return;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("title", out var t)) editingStory.Title = t.GetString() ?? editingStory.Title;
+            if (root.TryGetProperty("level", out var l)) editingStory.Level = l.GetString() ?? editingStory.Level;
+            if (root.TryGetProperty("ieltsBand", out var ib)) editingStory.IeltsBand = ib.GetString() ?? editingStory.IeltsBand;
+            if (root.TryGetProperty("category", out var c)) editingStory.Category = c.GetString() ?? editingStory.Category;
+            if (root.TryGetProperty("summary", out var sm)) editingStory.Summary = sm.GetString() ?? editingStory.Summary;
+            if (root.TryGetProperty("thumbnailUrl", out var th)) editingStory.ThumbnailUrl = th.GetString() ?? editingStory.ThumbnailUrl;
+            if (root.TryGetProperty("audioUrl", out var au)) editingStory.AudioUrl = au.GetString() ?? editingStory.AudioUrl;
+            if (root.TryGetProperty("estimatedMinutes", out var em)) editingStory.EstimatedMinutes = em.GetInt32();
+
+            if (root.TryGetProperty("paragraphs", out var pp))
+            {
+                var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                editingStory.Paragraphs = System.Text.Json.JsonSerializer.Deserialize<List<StoryParagraph>>(pp.GetRawText(), options) ?? new();
+            }
+
+            if (root.TryGetProperty("targetVocabulary", out var tvp))
+            {
+                var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                editingStory.Vocabulary = System.Text.Json.JsonSerializer.Deserialize<List<StoryVocabulary>>(tvp.GetRawText(), options) ?? new();
+            }
+
+            if (root.TryGetProperty("questions", out var qp))
+            {
+                var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                editingStory.Questions = System.Text.Json.JsonSerializer.Deserialize<List<StoryQuestion>>(qp.GetRawText(), options) ?? new();
+            }
+        }
+        catch { }
+    }
+
+    private void CloseEditorModal()
+    {
+        isEditorModalOpen = false;
+        editingStory = null;
+    }
+
+    private void AddParagraph()
+    {
+        editingStory?.Paragraphs.Add(new StoryParagraph());
+    }
+
+    private void RemoveParagraph(int index)
+    {
+        if (editingStory != null && index >= 0 && index < editingStory.Paragraphs.Count)
+        {
+            editingStory.Paragraphs.RemoveAt(index);
+        }
+    }
+
+    private void AddVocab()
+    {
+        editingStory?.Vocabulary.Add(new StoryVocabulary());
+    }
+
+    private void RemoveVocab(int index)
+    {
+        if (editingStory != null && index >= 0 && index < editingStory.Vocabulary.Count)
+        {
+            editingStory.Vocabulary.RemoveAt(index);
+        }
+    }
+
+    private void AddQuestion()
+    {
+        editingStory?.Questions.Add(new StoryQuestion
+        {
+            Options = new List<string> { "", "", "", "" },
+            CorrectIndex = 0
+        });
+    }
+
+    private void RemoveQuestion(int index)
+    {
+        if (editingStory != null && index >= 0 && index < editingStory.Questions.Count)
+        {
+            editingStory.Questions.RemoveAt(index);
+        }
+    }
+
+    private async Task SaveStory()
+    {
+        if (editingStory == null) return;
+
+        if (string.IsNullOrWhiteSpace(editingStory.Title))
+        {
+            alertMessage = "Tiêu đề truyện không được để trống.";
+            alertSuccess = false;
+            return;
+        }
+
+        isSaving = true;
+
+        // Auto serialize JSON
+        editingStory.ContentJson = System.Text.Json.JsonSerializer.Serialize(editingStory.Paragraphs);
+        editingStory.VocabularyJson = System.Text.Json.JsonSerializer.Serialize(editingStory.Vocabulary);
+        editingStory.QuestionsJson = System.Text.Json.JsonSerializer.Serialize(editingStory.Questions);
+
+        // Auto compute word count
+        int totalWords = 0;
+        foreach (var p in editingStory.Paragraphs)
+        {
+            if (!string.IsNullOrWhiteSpace(p.En))
+            {
+                totalWords += p.En.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+            }
+        }
+        editingStory.WordCount = totalWords > 0 ? totalWords : 150;
+
+        bool success;
+        string message;
+
+        if (editingStory.Id > 0)
+        {
+            (success, message) = await StoryService.AdminUpdateStoryAsync(editingStory.Id, editingStory);
+        }
+        else
+        {
+            (success, message) = await StoryService.AdminCreateStoryAsync(editingStory);
+        }
+
+        isSaving = false;
+
+        if (success)
+        {
+            alertMessage = message;
+            alertSuccess = true;
+            isEditorModalOpen = false;
+            await LoadStories();
+        }
+        else
+        {
+            alertMessage = message;
+            alertSuccess = false;
+        }
+    }
+
+    private async Task ConfirmDelete(StoryModel story)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Bạn có chắc chắn muốn xóa truyện \"{story.Title}\" khỏi hệ thống và Cloudflare R2 không?");
+        if (confirmed)
+        {
+            var success = await StoryService.AdminDeleteStoryAsync(story.Id);
+            if (success)
+            {
+                alertMessage = "Đã xóa truyện thành công.";
+                alertSuccess = true;
+                await LoadStories();
+            }
+            else
+            {
+                alertMessage = "Có lỗi xảy ra khi xóa truyện.";
+                alertSuccess = false;
+            }
+        }
+    }
+}

@@ -94,6 +94,21 @@
             if (el) el.scrollTop = 0;
             else window.scrollTo(0, 0);
         };
+
+        // Web Speech API for Story Reading and Vocabulary pronunciation
+        window.speakText = function (text, lang = 'en-US', rate = 0.95) {
+            if (!('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = lang;
+            utterance.rate = rate;
+            window.speechSynthesis.speak(utterance);
+        };
+        window.stopSpeakText = function () {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+        };
     </script>
 </body>
 
