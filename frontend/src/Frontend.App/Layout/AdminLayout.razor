@@ -52,14 +52,9 @@
                             <i class="bi bi-book"></i> Quản lý Đọc truyện
                         </a>
                     </li>
-                    <li class="menu-item @(IsActive("/admin/ielts-users") ? "active" : "")">
-                        <a href="/admin/ielts-users">
-                            <i class="bi bi-people"></i> Quản lý học viên
-                        </a>
-                    </li>
-                    <li class="menu-item">
-                        <a href="/admin/ielts-reports" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
-                            <i class="bi bi-bar-chart"></i> Thống kê điểm số
+                    <li class="menu-item @(IsActive("/admin/users") || IsActive("/admin/ielts-users") ? "active" : "")">
+                        <a href="/admin/users">
+                            <i class="bi bi-people-fill"></i> Quản lý học viên
                         </a>
                     </li>
                 }
@@ -75,22 +70,32 @@
                             <i class="bi bi-pencil-square"></i> Tạo & Sửa đề TOEIC
                         </a>
                     </li>
-                    <li class="menu-item">
-                        <a href="/admin/toeic-users" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
-                            <i class="bi bi-people"></i> Quản lý học viên
+                    <li class="menu-item @(IsActive("/admin/users") || IsActive("/admin/toeic-users") ? "active" : "")">
+                        <a href="/admin/users">
+                            <i class="bi bi-people-fill"></i> Quản lý học viên
                         </a>
                     </li>
                 }
                 else if (activeDomain == "HSK")
                 {
-                    <li class="menu-item">
-                        <a href="/admin/hsk-mock-tests" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
-                            <i class="bi bi-journal-text"></i> Quản lý đề thi HSK
+                    <li class="menu-item @(IsActive("/admin/hsk") && !IsActive("/admin/hsk-mock-tests") && !IsActive("/admin/hsk-vocab") ? "active" : "")">
+                        <a href="/admin/hsk">
+                            <i class="bi bi-grid-fill"></i> Tổng quan HSK
                         </a>
                     </li>
-                    <li class="menu-item">
-                        <a href="/admin/hsk-vocab" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
-                            <i class="bi bi-translate"></i> Quản lý từ vựng
+                    <li class="menu-item @(IsActive("/admin/hsk-vocab") ? "active" : "")">
+                        <a href="/admin/hsk-vocab">
+                            <i class="bi bi-translate"></i> Ngân hàng Từ vựng HSK
+                        </a>
+                    </li>
+                    <li class="menu-item @(IsActive("/admin/hsk-mock-tests") ? "active" : "")">
+                        <a href="/admin/hsk-mock-tests">
+                            <i class="bi bi-journal-check"></i> Quản lý Đề thi HSK
+                        </a>
+                    </li>
+                    <li class="menu-item @(IsActive("/admin/users") ? "active" : "")">
+                        <a href="/admin/users">
+                            <i class="bi bi-people-fill"></i> Quản lý học viên
                         </a>
                     </li>
                 }
@@ -113,21 +118,30 @@
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
         
-        // Auto-detect domain based on URL
-        if (currentUrl.Contains("hsk-", StringComparison.OrdinalIgnoreCase))
-        {
-            activeDomain = "HSK";
-        }
-        else
-        {
-            activeDomain = "IELTS";
-        }
+        UpdateActiveDomain(currentUrl);
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        UpdateActiveDomain(currentUrl);
         StateHasChanged();
+    }
+
+    private void UpdateActiveDomain(string url)
+    {
+        if (url.Contains("hsk", StringComparison.OrdinalIgnoreCase))
+        {
+            activeDomain = "HSK";
+        }
+        else if (url.Contains("toeic", StringComparison.OrdinalIgnoreCase))
+        {
+            activeDomain = "TOEIC";
+        }
+        else
+        {
+            activeDomain = "IELTS";
+        }
     }
 
     private void SwitchDomain(string domain)
@@ -138,7 +152,7 @@
         else if (domain == "TOEIC")
             NavigationManager.NavigateTo("/admin/toeic-mock-tests");
         else
-            NavigationManager.NavigateTo("/hsk");
+            NavigationManager.NavigateTo("/admin/hsk");
     }
 
     private bool IsActive(string path)

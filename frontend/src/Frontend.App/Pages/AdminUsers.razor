@@ -1,160 +1,327 @@
+@page "/admin/users"
 @page "/admin/ielts-users"
+@layout Frontend.App.Layout.AdminLayout
 @inject HttpClient Http
 @inject IJSRuntime JS
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
-<div class="admin-users-container">
-    <div class="header-actions">
-        <h2><i class="bi bi-people"></i> Quản lý Học viên</h2>
-        <div class="search-box">
-            <input type="text" placeholder="Tìm kiếm (Username, Email)..." @bind="searchTerm" @bind:event="oninput" />
-            <i class="bi bi-search"></i>
+<PageTitle>Quản lý Học viên & Người dùng - Admin Dashboard</PageTitle>
+
+<div class="admin-users-page">
+    <!-- Top Header Title & Actions -->
+    <div class="page-header">
+        <div class="header-left">
+            <div class="header-icon-badge">
+                <i class="bi bi-people-fill"></i>
+            </div>
+            <div>
+                <h1 class="page-title">Quản lý Học viên & Người dùng</h1>
+                <p class="page-subtitle">Quản lý thông tin tài khoản, phân quyền quản trị, trạng thái hoạt động và lịch sử học tập.</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="btn-refresh" @onclick="LoadUsers" disabled="@isLoading" title="Tải lại danh sách">
+                <i class="bi bi-arrow-clockwise @(isLoading ? "spin-icon" : "")"></i>
+                <span>Làm mới</span>
+            </button>
         </div>
     </div>
 
-    @if (isLoading)
-    {
-        <div class="loading-spinner">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
+    <!-- Quick Stats Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon total"><i class="bi bi-person-lines-fill"></i></div>
+            <div class="stat-content">
+                <span class="stat-label">Tổng người dùng</span>
+                <h3 class="stat-number">@(users?.Count ?? 0)</h3>
             </div>
         </div>
-    }
-    else if (filteredUsers != null)
-    {
-        <div class="table-responsive">
-            <table class="table custom-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Username</th>
-                        <th>Email</th>
-                        <th>Role</th>
-                        <th>Level</th>
-                        <th>Trạng thái</th>
-                        <th>Đăng nhập cuối</th>
-                        <th>Hành động</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var user in filteredUsers)
-                    {
-                        <tr class="@(user.IsActive ? "" : "disabled-row")">
-                            <td>#@user.Id</td>
-                            <td>
-                                <strong>@user.Username</strong>
-                            </td>
-                            <td>@user.Email</td>
-                            <td>
-                                <span class="badge @(user.Role == "admin" ? "bg-danger" : "bg-primary")">@user.Role</span>
-                            </td>
-                            <td><span class="badge bg-secondary">@user.Level</span></td>
-                            <td>
-                                @if (user.IsActive)
-                                {
-                                    <span class="status-indicator active"><i class="bi bi-check-circle-fill"></i> Active</span>
-                                }
-                                else
-                                {
-                                    <span class="status-indicator disabled"><i class="bi bi-x-circle-fill"></i> Disabled</span>
-                                }
-                            </td>
-                            <td>@(user.LastLoginAt?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa đăng nhập")</td>
-                            <td class="actions">
-                                <button class="btn btn-sm btn-outline-primary" @onclick="() => EditUser(user)" title="Sửa">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                                <button class="btn btn-sm @(user.IsActive ? "btn-outline-warning" : "btn-outline-success")" 
-                                        @onclick="() => ToggleStatus(user.Id)" 
-                                        title="@(user.IsActive ? "Vô hiệu hóa" : "Kích hoạt")">
-                                    <i class="bi @(user.IsActive ? "bi-lock" : "bi-unlock")"></i>
-                                </button>
-                                <button class="btn btn-sm btn-outline-info" @onclick="() => ResetPassword(user.Id)" title="Reset Password">
-                                    <i class="bi bi-key"></i>
-                                </button>
-                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => ViewLogs(user.Id, user.Username)" title="Xem Log">
-                                    <i class="bi bi-clock-history"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+        <div class="stat-card">
+            <div class="stat-icon active"><i class="bi bi-check-circle-fill"></i></div>
+            <div class="stat-content">
+                <span class="stat-label">Đang hoạt động</span>
+                <h3 class="stat-number">@(users?.Count(u => u.IsActive) ?? 0)</h3>
+            </div>
         </div>
-    }
+        <div class="stat-card">
+            <div class="stat-icon admin"><i class="bi bi-shield-lock-fill"></i></div>
+            <div class="stat-content">
+                <span class="stat-label">Quản trị viên</span>
+                <h3 class="stat-number">@(users?.Count(u => u.Role == "admin") ?? 0)</h3>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon locked"><i class="bi bi-lock-fill"></i></div>
+            <div class="stat-content">
+                <span class="stat-label">Bị khóa</span>
+                <h3 class="stat-number">@(users?.Count(u => !u.IsActive) ?? 0)</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="toolbar-card">
+        <div class="filter-tabs">
+            <button class="filter-tab-btn @(currentFilter == "all" ? "active" : "")" @onclick='() => SetFilter("all")'>
+                Tất cả <span class="tab-badge">@(users?.Count ?? 0)</span>
+            </button>
+            <button class="filter-tab-btn @(currentFilter == "user" ? "active" : "")" @onclick='() => SetFilter("user")'>
+                Học viên <span class="tab-badge">@(users?.Count(u => u.Role == "user") ?? 0)</span>
+            </button>
+            <button class="filter-tab-btn @(currentFilter == "admin" ? "active" : "")" @onclick='() => SetFilter("admin")'>
+                Admin <span class="tab-badge">@(users?.Count(u => u.Role == "admin") ?? 0)</span>
+            </button>
+            <button class="filter-tab-btn @(currentFilter == "active" ? "active" : "")" @onclick='() => SetFilter("active")'>
+                Đang hoạt động <span class="tab-badge">@(users?.Count(u => u.IsActive) ?? 0)</span>
+            </button>
+            <button class="filter-tab-btn @(currentFilter == "disabled" ? "active" : "")" @onclick='() => SetFilter("disabled")'>
+                Đã khóa <span class="tab-badge">@(users?.Count(u => !u.IsActive) ?? 0)</span>
+            </button>
+        </div>
+
+        <div class="search-box-wrapper">
+            <i class="bi bi-search search-icon"></i>
+            <input type="text" placeholder="Tìm kiếm theo Username, Email..." @bind="searchTerm" @bind:event="oninput" />
+            @if (!string.IsNullOrEmpty(searchTerm))
+            {
+                <button class="btn-clear-search" @onclick='() => searchTerm = ""'><i class="bi bi-x-lg"></i></button>
+            }
+        </div>
+    </div>
+
+    <!-- Main Users Table Card -->
+    <div class="table-card">
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="custom-spinner"></div>
+                <p>Đang tải danh sách người dùng...</p>
+            </div>
+        }
+        else if (filteredUsers == null || !filteredUsers.Any())
+        {
+            <div class="empty-state">
+                <i class="bi bi-person-x"></i>
+                <h4>Không tìm thấy người dùng phù hợp</h4>
+                <p>Thử thay đổi từ khóa tìm kiếm hoặc bộ lọc trạng thái.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="users-table">
+                    <thead>
+                        <tr>
+                            <th>Học viên / Tài khoản</th>
+                            <th>Email</th>
+                            <th>Phân quyền</th>
+                            <th>Trình độ</th>
+                            <th>Trạng thái</th>
+                            <th>Lần đăng nhập cuối</th>
+                            <th class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var user in filteredUsers)
+                        {
+                            <tr class="@(user.IsActive ? "" : "row-disabled")">
+                                <td>
+                                    <div class="user-identity">
+                                        <div class="user-avatar @(user.Role == "admin" ? "avatar-admin" : "avatar-user")">
+                                            @(string.IsNullOrEmpty(user.Username) ? "U" : user.Username.Substring(0, 1).ToUpper())
+                                        </div>
+                                        <div class="user-name-box">
+                                            <strong class="user-username">@user.Username</strong>
+                                            <span class="user-id-tag">ID: #@user.Id</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="user-email">@user.Email</span>
+                                </td>
+                                <td>
+                                    @if (user.Role == "admin")
+                                    {
+                                        <span class="badge-role role-admin"><i class="bi bi-shield-fill-check"></i> Admin</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-role role-user"><i class="bi bi-person-fill"></i> Học viên</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge-level">@(string.IsNullOrEmpty(user.Level) ? "A1" : user.Level)</span>
+                                </td>
+                                <td>
+                                    @if (user.IsActive)
+                                    {
+                                        <span class="status-pill active"><i class="bi bi-check-circle-fill"></i> Hoạt động</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-pill disabled"><i class="bi bi-dash-circle-fill"></i> Đã khóa</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="last-login-text">
+                                        <i class="bi bi-clock"></i> @(user.LastLoginAt?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa đăng nhập")
+                                    </span>
+                                </td>
+                                <td class="text-end">
+                                    <div class="action-buttons-group">
+                                        <button class="action-btn btn-edit" @onclick="() => EditUser(user)" title="Chỉnh sửa thông tin">
+                                            <i class="bi bi-pencil-fill"></i>
+                                        </button>
+                                        <button class="action-btn @(user.IsActive ? "btn-lock" : "btn-unlock")" 
+                                                @onclick="() => ToggleStatus(user.Id)" 
+                                                title="@(user.IsActive ? "Khóa tài khoản" : "Mở khóa tài khoản")">
+                                            <i class="bi @(user.IsActive ? "bi-lock-fill" : "bi-unlock-fill")"></i>
+                                        </button>
+                                        <button class="action-btn btn-reset" @onclick="() => ResetPassword(user.Id, user.Username)" title="Reset mật khẩu">
+                                            <i class="bi bi-key-fill"></i>
+                                        </button>
+                                        <button class="action-btn btn-logs" @onclick="() => ViewLogs(user.Id, user.Username)" title="Xem lịch sử hoạt động">
+                                            <i class="bi bi-clock-history"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="table-footer">
+                <span>Hiển thị <b>@filteredUsers.Count()</b> / @(users?.Count ?? 0) tài khoản</span>
+            </div>
+        }
+    </div>
 </div>
 
+<!-- ========================================================================= -->
+<!-- EDIT USER MODAL                                                           -->
+<!-- ========================================================================= -->
 @if (isEditModalOpen && editingUser != null)
 {
-    <div class="modal-backdrop" @onclick="CloseEditModal">
-        <div class="modal-content" @onclick:stopPropagation>
-            <h3>Sửa thông tin học viên</h3>
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" class="form-control" @bind="editingUser.Username" />
+    <div class="modal-overlay" @onclick="CloseEditModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-person-gear text-primary fs-4"></i>
+                    <h3>Chỉnh sửa học viên #@editingUser.Id</h3>
+                </div>
+                <button class="btn-close-modal" @onclick="CloseEditModal"><i class="bi bi-x-lg"></i></button>
             </div>
-            <div class="form-group">
-                <label>Email</label>
-                <input type="email" class="form-control" @bind="editingUser.Email" />
+            
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Tên đăng nhập (Username)</label>
+                    <input type="text" class="form-input" @bind="editingUser.Username" placeholder="Nhập username..." />
+                </div>
+                <div class="form-group">
+                    <label>Email tài khoản</label>
+                    <input type="email" class="form-input" @bind="editingUser.Email" placeholder="Nhập email..." />
+                </div>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Phân quyền</label>
+                            <select class="form-input" @bind="editingUser.Role">
+                                <option value="user">Học viên (User)</option>
+                                <option value="admin">Quản trị viên (Admin)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Trình độ hiện tại</label>
+                            <select class="form-input" @bind="editingUser.Level">
+                                <option value="A1">A1 - Sơ cấp</option>
+                                <option value="A2">A2 - Cơ bản</option>
+                                <option value="B1">B1 - Trung cấp</option>
+                                <option value="B2">B2 - Khá</option>
+                                <option value="C1">C1 - Nâng cao</option>
+                                <option value="C2">C2 - Thành thạo</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="form-group">
-                <label>Role</label>
-                <select class="form-control" @bind="editingUser.Role">
-                    <option value="user">User</option>
-                    <option value="admin">Admin</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Level</label>
-                <select class="form-control" @bind="editingUser.Level">
-                    <option value="A1">A1</option>
-                    <option value="A2">A2</option>
-                    <option value="B1">B1</option>
-                    <option value="B2">B2</option>
-                    <option value="C1">C1</option>
-                    <option value="C2">C2</option>
-                </select>
-            </div>
-            <div class="modal-actions">
-                <button class="btn btn-secondary" @onclick="CloseEditModal">Hủy</button>
-                <button class="btn btn-primary" @onclick="SaveUser">Lưu thay đổi</button>
+
+            <div class="modal-footer">
+                <button class="btn-modal-cancel" @onclick="CloseEditModal">Hủy bỏ</button>
+                <button class="btn-modal-save" @onclick="SaveUser" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <span class="mini-spinner"></span>
+                        <span>Đang lưu...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-check2"></i>
+                        <span>Lưu thay đổi</span>
+                    }
+                </button>
             </div>
         </div>
     </div>
 }
 
+<!-- ========================================================================= -->
+<!-- ACTIVITY LOGS MODAL                                                       -->
+<!-- ========================================================================= -->
 @if (isLogModalOpen)
 {
-    <div class="modal-backdrop" @onclick="CloseLogModal">
-        <div class="modal-content log-modal" @onclick:stopPropagation>
+    <div class="modal-overlay" @onclick="CloseLogModal">
+        <div class="modal-card log-modal-card" @onclick:stopPropagation="true">
             <div class="modal-header">
-                <h3>Activity Logs: @currentLogUsername</h3>
-                <button class="btn-close" @onclick="CloseLogModal"><i class="bi bi-x-lg"></i></button>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-clock-history text-primary fs-4"></i>
+                    <div>
+                        <h3 class="m-0">Lịch sử hoạt động</h3>
+                        <span class="text-muted small">Tài khoản: <b>@currentLogUsername</b></span>
+                    </div>
+                </div>
+                <button class="btn-close-modal" @onclick="CloseLogModal"><i class="bi bi-x-lg"></i></button>
             </div>
-            <div class="log-container">
+
+            <div class="modal-body log-modal-body">
                 @if (isLoadingLogs)
                 {
-                    <p>Đang tải log...</p>
+                    <div class="text-center py-4">
+                        <div class="custom-spinner"></div>
+                        <p class="mt-2 text-muted">Đang tải lịch sử...</p>
+                    </div>
                 }
                 else if (userLogs != null && userLogs.Any())
                 {
-                    <ul class="log-list">
+                    <div class="log-timeline">
                         @foreach (var log in userLogs)
                         {
-                            <li>
-                                <div class="log-time">@log.CreatedAt.ToString("dd/MM/yyyy HH:mm:ss")</div>
-                                <div class="log-action">
-                                    <span class="badge bg-dark">@log.Action</span>
+                            <div class="timeline-item">
+                                <div class="timeline-dot"></div>
+                                <div class="timeline-content">
+                                    <div class="timeline-header">
+                                        <span class="log-action-badge">@log.Action</span>
+                                        <span class="log-time">@log.CreatedAt.ToString("dd/MM/yyyy HH:mm:ss")</span>
+                                    </div>
+                                    <div class="log-detail-text">@log.Detail</div>
                                 </div>
-                                <div class="log-detail">@log.Detail</div>
-                            </li>
+                            </div>
                         }
-                    </ul>
+                    </div>
                 }
                 else
                 {
-                    <p>Chưa có dữ liệu hoạt động.</p>
+                    <div class="empty-state py-4">
+                        <i class="bi bi-inbox fs-1 text-muted"></i>
+                        <p class="mt-2 text-muted">Chưa có lịch sử ghi nhận cho học viên này.</p>
+                    </div>
                 }
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-modal-cancel" @onclick="CloseLogModal">Đóng</button>
             </div>
         </div>
     </div>
@@ -163,7 +330,9 @@
 @code {
     private List<UserDto>? users;
     private string searchTerm = "";
+    private string currentFilter = "all";
     private bool isLoading = true;
+    private bool isSaving = false;
 
     // Edit Modal
     private bool isEditModalOpen = false;
@@ -175,11 +344,6 @@
     private List<UserLogDto>? userLogs;
     private string currentLogUsername = "";
 
-    private IEnumerable<UserDto>? filteredUsers => string.IsNullOrWhiteSpace(searchTerm)
-        ? users
-        : users?.Where(u => u.Username.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) || 
-                            u.Email.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
-
     protected override async Task OnInitializedAsync()
     {
         await LoadUsers();
@@ -190,8 +354,7 @@
         isLoading = true;
         try
         {
-            var apiBase = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101";
-            users = await Http.GetFromJsonAsync<List<UserDto>>($"{apiBase}/api/admin/users");
+            users = await Http.GetFromJsonAsync<List<UserDto>>("api/admin/users");
         }
         catch (Exception ex)
         {
@@ -203,43 +366,38 @@
         }
     }
 
-    private async Task ToggleStatus(int id)
+    private void SetFilter(string filter)
     {
-        try
-        {
-            var apiBase = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101";
-            var response = await Http.PutAsync($"{apiBase}/api/admin/users/{id}/toggle-active", null);
-            if (response.IsSuccessStatusCode)
-            {
-                await LoadUsers(); // Reload
-            }
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("alert", $"Lỗi: {ex.Message}");
-        }
+        currentFilter = filter;
     }
 
-    private async Task ResetPassword(int id)
+    private IEnumerable<UserDto>? filteredUsers
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn reset password của học viên này không?")) return;
+        get
+        {
+            if (users == null) return null;
+            var list = users.AsEnumerable();
 
-        try
-        {
-            var apiBase = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101";
-            var response = await Http.PostAsync($"{apiBase}/api/admin/users/{id}/reset-password", null);
-            if (response.IsSuccessStatusCode)
+            // Filter by tab
+            list = currentFilter switch
             {
-                var result = await response.Content.ReadFromJsonAsync<ResetPasswordResult>();
-                if (result != null)
-                {
-                    await JS.InvokeVoidAsync("alert", $"Reset mật khẩu thành công!\n\nMật khẩu mới: {result.TempPassword}\n\nVui lòng gửi mật khẩu này cho học viên.");
-                }
+                "user" => list.Where(u => u.Role == "user"),
+                "admin" => list.Where(u => u.Role == "admin"),
+                "active" => list.Where(u => u.IsActive),
+                "disabled" => list.Where(u => !u.IsActive),
+                _ => list
+            };
+
+            // Filter by search
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                list = list.Where(u => 
+                    (u.Username != null && u.Username.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                    (u.Email != null && u.Email.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                    (u.Level != null && u.Level.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)));
             }
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("alert", $"Lỗi: {ex.Message}");
+
+            return list;
         }
     }
 
@@ -251,7 +409,8 @@
             Username = user.Username,
             Email = user.Email,
             Role = user.Role,
-            Level = user.Level
+            Level = user.Level,
+            IsActive = user.IsActive
         };
         isEditModalOpen = true;
     }
@@ -265,45 +424,93 @@
     private async Task SaveUser()
     {
         if (editingUser == null) return;
-        
+        isSaving = true;
+
         try
         {
-            var apiBase = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101";
-            var response = await Http.PutAsJsonAsync($"{apiBase}/api/admin/users/{editingUser.Id}", new
-            {
+            var updateReq = new {
                 Username = editingUser.Username,
                 Email = editingUser.Email,
                 Role = editingUser.Role,
                 Level = editingUser.Level
-            });
+            };
 
+            var response = await Http.PutAsJsonAsync($"api/admin/users/{editingUser.Id}", updateReq);
             if (response.IsSuccessStatusCode)
             {
                 await LoadUsers();
                 CloseEditModal();
-                await JS.InvokeVoidAsync("alert", "Cập nhật thành công!");
+                await JS.InvokeVoidAsync("alert", "Cập nhật thông tin học viên thành công!");
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Có lỗi xảy ra khi lưu học viên.");
             }
         }
         catch (Exception ex)
         {
-            await JS.InvokeVoidAsync("alert", $"Lỗi lưu thông tin: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", "Lỗi kết nối: " + ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
         }
     }
 
-    private async Task ViewLogs(int id, string username)
+    private async Task ToggleStatus(int userId)
+    {
+        try
+        {
+            var response = await Http.PutAsync($"api/admin/users/{userId}/toggle-active", null);
+            if (response.IsSuccessStatusCode)
+            {
+                var target = users?.FirstOrDefault(u => u.Id == userId);
+                if (target != null)
+                {
+                    target.IsActive = !target.IsActive;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", "Lỗi: " + ex.Message);
+        }
+    }
+
+    private async Task ResetPassword(int userId, string username)
+    {
+        bool confirm = await JS.InvokeAsync<bool>("confirm", $"Bạn có chắc chắn muốn đặt lại mật khẩu cho '{username}'?");
+        if (!confirm) return;
+
+        try
+        {
+            var response = await Http.PostAsync($"api/admin/users/{userId}/reset-password", null);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<ResetPasswordResult>();
+                await JS.InvokeVoidAsync("alert", $"Đặt lại mật khẩu thành công!\n\nMật khẩu tạm thời mới là:\n{result?.TempPassword}\n\nHãy gửi mật khẩu này cho học viên.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", "Lỗi reset mật khẩu: " + ex.Message);
+        }
+    }
+
+    private async Task ViewLogs(int userId, string username)
     {
         currentLogUsername = username;
         isLogModalOpen = true;
         isLoadingLogs = true;
-        
+
         try
         {
-            var apiBase = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101";
-            userLogs = await Http.GetFromJsonAsync<List<UserLogDto>>($"{apiBase}/api/admin/users/{id}/logs");
+            userLogs = await Http.GetFromJsonAsync<List<UserLogDto>>($"api/admin/users/{userId}/logs");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading logs: {ex.Message}");
+            userLogs = new List<UserLogDto>();
         }
         finally
         {
@@ -322,9 +529,9 @@
         public int Id { get; set; }
         public string Username { get; set; } = "";
         public string Email { get; set; } = "";
-        public string Role { get; set; } = "";
-        public string Level { get; set; } = "";
-        public bool IsActive { get; set; }
+        public string Role { get; set; } = "user";
+        public string Level { get; set; } = "A1";
+        public bool IsActive { get; set; } = true;
         public DateTime? LastLoginAt { get; set; }
         public DateTime CreatedAt { get; set; }
     }

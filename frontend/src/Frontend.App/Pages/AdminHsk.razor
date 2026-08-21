@@ -1,0 +1,299 @@
+@page "/admin/hsk"
+@page "/admin/hsk-mock-tests"
+@page "/admin/hsk-vocab"
+@layout Frontend.App.Layout.AdminLayout
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+<PageTitle>Quản lý HSK (Từ vựng & Đề thi) - Admin Dashboard</PageTitle>
+
+<div class="admin-hsk-page">
+    <!-- Top Header -->
+    <div class="page-header">
+        <div class="header-left">
+            <div class="header-icon-badge">
+                <span class="hsk-flag">🇨🇳</span>
+            </div>
+            <div>
+                <h1 class="page-title">Quản lý Tiếng Trung HSK</h1>
+                <p class="page-subtitle">Hệ thống quản trị từ vựng HSK 1-6, ngân hàng đề thi thử mô phỏng và theo dõi tiến độ học tập.</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="btn-primary-action" @onclick="OpenAddVocabModal">
+                <i class="bi bi-plus-lg"></i>
+                <span>Thêm Từ vựng HSK</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Quick Stats Grid -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon vocab"><i class="bi bi-translate"></i></div>
+            <div class="stat-content">
+                <span class="stat-label">Tổng Từ vựng HSK</span>
+                <h3 class="stat-number">5,000+</h3>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon tests"><i class="bi bi-journal-check"></i></div>
+            <div class="stat-content">
+                <span class="stat-label">Bộ đề thi thử</span>
+                <h3 class="stat-number">24 đề</h3>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon levels"><i class="bi bi-layers-fill"></i></div>
+            <div class="stat-content">
+                <span class="stat-label">Cấp độ chuẩn</span>
+                <h3 class="stat-number">HSK 1 - 6</h3>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon active-learners"><i class="bi bi-person-check-fill"></i></div>
+            <div class="stat-content">
+                <span class="stat-label">Lượt làm bài thi</span>
+                <h3 class="stat-number">1,280</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="nav-tabs-wrapper">
+        <button class="tab-btn @(currentTab == "vocab" ? "active" : "")" @onclick='() => SetTab("vocab")'>
+            <i class="bi bi-book-half"></i>
+            <span>Ngân hàng Từ vựng HSK</span>
+        </button>
+        <button class="tab-btn @(currentTab == "tests" ? "active" : "")" @onclick='() => SetTab("tests")'>
+            <i class="bi bi-file-earmark-text"></i>
+            <span>Quản lý Đề thi Mô phỏng</span>
+        </button>
+        <button class="tab-btn @(currentTab == "stats" ? "active" : "")" @onclick='() => SetTab("stats")'>
+            <i class="bi bi-graph-up-arrow"></i>
+            <span>Thống kê Điểm số Học viên</span>
+        </button>
+    </div>
+
+    <!-- TAB 1: VOCABULARY MANAGEMENT -->
+    @if (currentTab == "vocab")
+    {
+        <div class="tab-content-area">
+            <!-- HSK Level Filter Pills -->
+            <div class="toolbar-card">
+                <div class="hsk-level-pills">
+                    <button class="hsk-pill @(selectedHskLevel == 0 ? "active" : "")" @onclick="() => SetHskLevel(0)">
+                        Tất cả cấp độ
+                    </button>
+                    @for (int i = 1; i <= 6; i++)
+                    {
+                        var lvl = i;
+                        <button class="hsk-pill hsk-lvl-@lvl @(selectedHskLevel == lvl ? "active" : "")" @onclick="() => SetHskLevel(lvl)">
+                            HSK @lvl
+                        </button>
+                    }
+                </div>
+
+                <div class="search-box-wrapper">
+                    <i class="bi bi-search search-icon"></i>
+                    <input type="text" placeholder="Tìm Chữ Hán, Pinyin, Nghĩa..." @bind="vocabSearchTerm" @bind:event="oninput" />
+                </div>
+            </div>
+
+            <!-- Vocab Table -->
+            <div class="table-card">
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Chữ Hán (Hanzi)</th>
+                                <th>Pinyin (Phiên âm)</th>
+                                <th>Nghĩa tiếng Việt</th>
+                                <th>Loại từ</th>
+                                <th>Cấp độ</th>
+                                <th>Ví dụ mẫu</th>
+                                <th class="text-end">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in FilteredVocabList)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="hanzi-cell">
+                                            <span class="hanzi-text">@item.Hanzi</span>
+                                            <button class="btn-audio-mini" @onclick="() => SpeakChinese(item.Hanzi)" title="Phát âm">
+                                                <i class="bi bi-volume-up-fill"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td><span class="pinyin-text">@item.Pinyin</span></td>
+                                    <td><strong class="meaning-text">@item.Meaning</strong></td>
+                                    <td><span class="pos-badge">@item.Pos</span></td>
+                                    <td>
+                                        <span class="hsk-badge hsk-badge-@item.Level">HSK @item.Level</span>
+                                    </td>
+                                    <td>
+                                        <span class="example-text">@item.Example</span>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="action-buttons-group">
+                                            <button class="action-btn btn-edit" title="Sửa từ vựng"><i class="bi bi-pencil-fill"></i></button>
+                                            <button class="action-btn btn-delete" title="Xóa từ vựng"><i class="bi bi-trash-fill"></i></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="table-footer">
+                    <span>Hiển thị <b>@FilteredVocabList.Count</b> từ vựng HSK</span>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- TAB 2: MOCK TESTS MANAGEMENT -->
+    else if (currentTab == "tests")
+    {
+        <div class="tab-content-area">
+            <div class="toolbar-card">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="fw-bold">Bộ đề thi thử HSK 1 - 6</span>
+                </div>
+                <button class="btn-primary-action" @onclick="OpenAddTestModal">
+                    <i class="bi bi-plus-circle"></i>
+                    <span>Tạo Đề thi HSK mới</span>
+                </button>
+            </div>
+
+            <div class="tests-grid">
+                @foreach (var test in mockTests)
+                {
+                    <div class="test-card">
+                        <div class="test-card-header">
+                            <span class="hsk-badge hsk-badge-@test.Level">HSK @test.Level</span>
+                            <span class="test-status @(test.IsPublished ? "published" : "draft")">
+                                @(test.IsPublished ? "Đã xuất bản" : "Bản nháp")
+                            </span>
+                        </div>
+                        <h3 class="test-title">@test.Title</h3>
+                        <div class="test-meta">
+                            <span><i class="bi bi-clock"></i> @test.DurationMinutes phút</span>
+                            <span><i class="bi bi-question-circle"></i> @test.QuestionCount câu hỏi</span>
+                            <span><i class="bi bi-eye"></i> @test.AttemptsCount lượt thi</span>
+                        </div>
+                        <div class="test-card-actions">
+                            <button class="btn-test-edit"><i class="bi bi-pencil"></i> Soạn đề</button>
+                            <button class="btn-test-preview"><i class="bi bi-play-circle"></i> Thi thử</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- TAB 3: STATS -->
+    else if (currentTab == "stats")
+    {
+        <div class="tab-content-area">
+            <div class="table-card p-4 text-center">
+                <i class="bi bi-bar-chart-line fs-1 text-primary mb-3 d-block"></i>
+                <h3>Báo cáo Thống kê Kết quả HSK</h3>
+                <p class="text-muted">Học viên đạt tỷ lệ đỗ trung bình <b>84.5%</b> trên các cấp độ HSK 1 - 4.</p>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string currentTab = "vocab";
+    private int selectedHskLevel = 0;
+    private string vocabSearchTerm = "";
+
+    public class HskVocabItem
+    {
+        public int Id { get; set; }
+        public string Hanzi { get; set; } = "";
+        public string Pinyin { get; set; } = "";
+        public string Meaning { get; set; } = "";
+        public string Pos { get; set; } = "";
+        public int Level { get; set; } = 1;
+        public string Example { get; set; } = "";
+    }
+
+    public class HskMockTestItem
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = "";
+        public int Level { get; set; } = 1;
+        public int DurationMinutes { get; set; } = 35;
+        public int QuestionCount { get; set; } = 40;
+        public int AttemptsCount { get; set; } = 0;
+        public bool IsPublished { get; set; } = true;
+    }
+
+    private List<HskVocabItem> sampleVocab = new()
+    {
+        new() { Id = 1, Hanzi = "你好", Pinyin = "nǐ hǎo", Meaning = "Xin chào", Pos = "Thán từ", Level = 1, Example = "你好！很高兴认识你。" },
+        new() { Id = 2, Hanzi = "谢谢", Pinyin = "xièxie", Meaning = "Cảm ơn", Pos = "Động từ", Level = 1, Example = "太谢谢你了！" },
+        new() { Id = 3, Hanzi = "再见", Pinyin = "zàijiàn", Meaning = "Tạm biệt", Pos = "Động từ", Level = 1, Example = "明天见，再见！" },
+        new() { Id = 4, Hanzi = "苹果", Pinyin = "píngguǒ", Meaning = "Quả táo", Pos = "Danh từ", Level = 1, Example = "我想吃一个红苹果。" },
+        new() { Id = 5, Hanzi = "学习", Pinyin = "xuéxí", Meaning = "Học tập", Pos = "Động từ", Level = 2, Example = "我们要努力学习汉语。" },
+        new() { Id = 6, Hanzi = "高兴", Pinyin = "gāoxìng", Meaning = "Vui vẻ", Pos = "Tính từ", Level = 2, Example = "今天大家都很高兴。" },
+        new() { Id = 7, Hanzi = "准备", Pinyin = "zhǔnbèi", Meaning = "Chuẩn bị", Pos = "Động từ", Level = 3, Example = "你准备好参加HSK考试了吗？" },
+        new() { Id = 8, Hanzi = "环境", Pinyin = "huánjìng", Meaning = "Môi trường", Pos = "Danh từ", Level = 3, Example = "这里的学习环境很好。" },
+        new() { Id = 9, Hanzi = "成功", Pinyin = "chénggōng", Meaning = "Thành công", Pos = "Động từ / Danh từ", Level = 4, Example = "坚持就是成功的关键。" },
+        new() { Id = 10, Hanzi = "流利", Pinyin = "liúlì", Meaning = "Lưu loát, trôi chảy", Pos = "Tính từ", Level = 5, Example = "他的中文说得非常流利。" },
+        new() { Id = 11, Hanzi = "瞻前顾后", Pinyin = "zhān qián gù hòu", Meaning = "Do dự, nhìn trước ngó sau", Pos = "Thành ngữ", Level = 6, Example = "做事不要瞻前顾后，要有决断力。" }
+    };
+
+    private List<HskMockTestItem> mockTests = new()
+    {
+        new() { Id = 1, Title = "Đề thi thử HSK 1 - Đề số 01 (Mô phỏng 2026)", Level = 1, DurationMinutes = 35, QuestionCount = 40, AttemptsCount = 420, IsPublished = true },
+        new() { Id = 2, Title = "Đề thi thử HSK 2 - Đề số 01 (Chuẩn cấu trúc mới)", Level = 2, DurationMinutes = 50, QuestionCount = 60, AttemptsCount = 310, IsPublished = true },
+        new() { Id = 3, Title = "Đề thi thử HSK 3 - Đề số 01 (Nghe & Đọc hiểu)", Level = 3, DurationMinutes = 85, QuestionCount = 80, AttemptsCount = 280, IsPublished = true },
+        new() { Id = 4, Title = "Đề thi thử HSK 4 - Đề số 01 (Tổng hợp 3 kỹ năng)", Level = 4, DurationMinutes = 100, QuestionCount = 100, AttemptsCount = 195, IsPublished = true },
+        new() { Id = 5, Title = "Đề thi thử HSK 5 - Đề số 01 (Nâng cao)", Level = 5, DurationMinutes = 120, QuestionCount = 100, AttemptsCount = 75, IsPublished = true }
+    };
+
+    private List<HskVocabItem> FilteredVocabList
+    {
+        get
+        {
+            var list = sampleVocab.AsEnumerable();
+            if (selectedHskLevel > 0)
+            {
+                list = list.Where(v => v.Level == selectedHskLevel);
+            }
+            if (!string.IsNullOrWhiteSpace(vocabSearchTerm))
+            {
+                list = list.Where(v => 
+                    v.Hanzi.Contains(vocabSearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    v.Pinyin.Contains(vocabSearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    v.Meaning.Contains(vocabSearchTerm, StringComparison.OrdinalIgnoreCase));
+            }
+            return list.ToList();
+        }
+    }
+
+    private void SetTab(string tab) => currentTab = tab;
+    private void SetHskLevel(int level) => selectedHskLevel = level;
+
+    private async Task SpeakChinese(string text)
+    {
+        await JS.InvokeVoidAsync("speakText", text, "zh-CN", 0.9);
+    }
+
+    private void OpenAddVocabModal()
+    {
+        // Add vocab placeholder
+    }
+
+    private void OpenAddTestModal()
+    {
+        // Add test placeholder
+    }
+}
