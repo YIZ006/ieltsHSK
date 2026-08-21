@@ -5,11 +5,11 @@ namespace Backend.Infrastructure.Persistence;
 
 public static class StorySeedData
 {
-    public static async Task SeedStoriesAsync(AppDbContext dbContext)
+    public static async Task SeedStoriesAsync(AppDbContext dbContext, Backend.Application.Abstractions.IR2StorageService? r2Storage = null)
     {
-        if (dbContext.Stories.Any()) return;
-
-        var stories = new List<Story>
+        if (!dbContext.Stories.Any())
+        {
+            var seedStories = new List<Story>
         {
             new Story
             {
@@ -387,7 +387,51 @@ public static class StorySeedData
             }
         };
 
-        dbContext.Stories.AddRange(stories);
-        await dbContext.SaveChangesAsync();
+            dbContext.Stories.AddRange(seedStories);
+            await dbContext.SaveChangesAsync();
+        }
+
+        // Upload any stories missing JsonUrl to Cloudflare R2 in dedicated folder "stories/"
+        if (r2Storage != null)
+        {
+            var unuploadedStories = dbContext.Stories.Where(s => string.IsNullOrEmpty(s.JsonUrl)).ToList();
+            foreach (var s in unuploadedStories)
+            {
+                try
+                {
+                    var exportObj = new
+                    {
+                        title = s.Title,
+                        level = s.Level,
+                        ieltsBand = s.IeltsBand,
+                        category = s.Category,
+                        summary = s.Summary,
+                        thumbnailUrl = s.ThumbnailUrl,
+                        audioUrl = s.AudioUrl,
+                        wordCount = s.WordCount,
+                        estimatedMinutes = s.EstimatedMinutes,
+                        paragraphs = !string.IsNullOrEmpty(s.ContentJson) ? JsonSerializer.Deserialize<JsonElement>(s.ContentJson) : default,
+                        targetVocabulary = !string.IsNullOrEmpty(s.VocabularyJson) ? JsonSerializer.Deserialize<JsonElement>(s.VocabularyJson) : default,
+                        questions = !string.IsNullOrEmpty(s.QuestionsJson) ? JsonSerializer.Deserialize<JsonElement>(s.QuestionsJson) : default
+                    };
+
+                    var jsonString = JsonSerializer.Serialize(exportObj, new JsonSerializerOptions { WriteIndented = true });
+                    var jsonBytes = System.Text.Encoding.UTF8.GetBytes(jsonString);
+                    using var ms = new MemoryStream(jsonBytes);
+                    
+                    var r2Url = await r2Storage.UploadFileAsync(ms, $"stories/{s.Slug}.json", "application/json");
+                    s.JsonUrl = r2Url;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[StorySeedData] Error uploading seed story '{s.Slug}' to R2: {ex.Message}");
+                }
+            }
+
+            if (unuploadedStories.Any(s => !string.IsNullOrEmpty(s.JsonUrl)))
+            {
+                await dbContext.SaveChangesAsync();
+            }
+        }
     }
 }
