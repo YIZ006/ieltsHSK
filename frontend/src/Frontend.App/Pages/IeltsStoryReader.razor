@@ -11,23 +11,23 @@
 @if (isLoading)
 {
     <div class="reader-loading">
-        <div class="spinner-border text-primary" role="status"></div>
+        <div class="custom-spinner"></div>
         <p class="mt-3">Đang mở truyện...</p>
     </div>
 }
 else if (story == null)
 {
     <div class="reader-error">
-        <div class="alert alert-danger text-center">
+        <div class="custom-alert alert-error text-center">
             <h3>Không tìm thấy truyện</h3>
             <p>Truyện này không tồn tại hoặc đã được gỡ xuống.</p>
-            <a href="/ielts/doc-truyen" class="btn btn-outline-primary mt-2">Về danh sách truyện</a>
+            <a href="/ielts/doc-truyen" class="btn btn-primary-outline mt-2">Về danh sách truyện</a>
         </div>
     </div>
 }
 else
 {
-    <div class="story-reader-wrapper theme-@currentTheme">
+    <div class="story-reader-wrapper theme-@currentTheme font-@fontFamily">
         <!-- Top Sticky Control Bar -->
         <div class="reader-topbar">
             <div class="topbar-left">
@@ -42,7 +42,7 @@ else
             <div class="topbar-controls">
                 <!-- Audio Speech Narration -->
                 <div class="speech-controls">
-                    <button class="ctrl-btn @(isPlayingAudio ? "active" : "")" @onclick="TogglePlayStory" title="Đọc toàn bài">
+                    <button class="ctrl-btn btn-audio @(isPlayingAudio ? "active" : "")" @onclick="TogglePlayStory" title="Đọc toàn bài">
                         <i class="bi @(isPlayingAudio ? "bi-stop-fill" : "bi-volume-up-fill")"></i>
                         <span>@(isPlayingAudio ? "Dừng đọc" : "Nghe đọc")</span>
                     </button>
@@ -56,9 +56,14 @@ else
                 <span class="topbar-divider">|</span>
 
                 <!-- Bilingual Translation Toggle -->
-                <button class="ctrl-btn @(showBilingual ? "active" : "")" @onclick="ToggleBilingual" title="Bật/tắt dịch song ngữ">
+                <button class="ctrl-btn btn-bilingual @(showBilingual ? "active" : "")" @onclick="ToggleBilingual" title="Bật/tắt dịch song ngữ">
                     <i class="bi bi-translate"></i>
                     <span>Song ngữ</span>
+                </button>
+
+                <!-- Font Family Toggle -->
+                <button class="ctrl-btn-icon btn-font-family" @onclick="ToggleFontFamily" title="Đổi kiểu font (Sans / Serif)">
+                    @(fontFamily == "sans" ? "Aa" : "𝒯")
                 </button>
 
                 <!-- Font Size -->
@@ -81,10 +86,10 @@ else
             <!-- Story Header -->
             <header class="story-header">
                 <div class="story-meta-line">
-                    <span class="meta-item"><i class="bi bi-award"></i> Band @story.IeltsBand</span>
-                    <span class="meta-item"><i class="bi bi-file-earmark-text"></i> @story.WordCount từ</span>
-                    <span class="meta-item"><i class="bi bi-clock"></i> ~@story.EstimatedMinutes phút đọc</span>
-                    <span class="meta-item"><i class="bi bi-eye"></i> @story.ViewsCount lượt đọc</span>
+                    <span class="meta-item"><i class="bi bi-award-fill text-primary"></i> Band @story.IeltsBand</span>
+                    <span class="meta-item"><i class="bi bi-file-earmark-text-fill"></i> @story.WordCount từ</span>
+                    <span class="meta-item"><i class="bi bi-clock-fill"></i> ~@story.EstimatedMinutes phút đọc</span>
+                    <span class="meta-item"><i class="bi bi-eye-fill"></i> @story.ViewsCount lượt đọc</span>
                 </div>
                 <h1 class="story-main-title">@story.Title</h1>
                 @if (!string.IsNullOrEmpty(story.Summary))
@@ -93,8 +98,8 @@ else
                 }
 
                 <div class="reading-guide-tip">
-                    <i class="bi bi-info-circle-fill"></i>
-                    <span>Chạm vào từ <b class="highlight-hint">in đậm gạch chân</b> để xem nghĩa, phiên âm và phát âm. Bật <b>Song ngữ</b> ở trên để xem bản dịch.</span>
+                    <i class="bi bi-lightbulb-fill tip-icon"></i>
+                    <span>Chạm vào từ <span class="tip-highlight">nổi bật</span> để tra nghĩa, phiên âm và phát âm. Bật <b>Song ngữ</b> ở trên để xem bản dịch tiếng Việt.</span>
                 </div>
             </header>
 
@@ -107,7 +112,7 @@ else
                         <div class="paragraph-en">
                             @RenderParagraphEn(para.En)
                             <button class="btn-read-sentence" @onclick="() => SpeakSentence(para.En)" title="Nghe đọc đoạn này">
-                                <i class="bi bi-volume-up"></i>
+                                <i class="bi bi-volume-up-fill"></i>
                             </button>
                         </div>
 
@@ -139,7 +144,7 @@ else
                                 }
                             </div>
                             <div class="vocab-popup-actions">
-                                <button class="btn-audio-speak" @onclick="() => SpeakWord(activeVocab.Word)" title="Phát âm">
+                                <button class="btn-audio-speak" @onclick="() => SpeakWord(activeVocab.Word)" title="Phát âm từ vựng">
                                     <i class="bi bi-volume-up-fill"></i>
                                 </button>
                                 <button class="btn-close-popup" @onclick="CloseVocabPopup">
@@ -176,7 +181,7 @@ else
 
                         <div class="vocab-popup-footer">
                             <button class="btn-save-vocab @(isWordSaved ? "saved" : "")" @onclick="ToggleSaveWord">
-                                <i class="bi @(isWordSaved ? "bi-check-circle-fill" : "bi-bookmark-plus")"></i>
+                                <i class="bi @(isWordSaved ? "bi-check-circle-fill" : "bi-bookmark-plus-fill")"></i>
                                 <span>@(isWordSaved ? "Đã lưu vào sổ từ" : "Lưu vào sổ từ vựng")</span>
                             </button>
                         </div>
@@ -187,7 +192,7 @@ else
             <!-- Post-Reading Section: Quiz & Diagnostic -->
             <section class="post-reading-section">
                 <div class="section-title-wrapper">
-                    <span class="section-badge"><i class="bi bi-patch-check"></i> BÀI TẬP CUỐI TRUYỆN</span>
+                    <span class="section-badge"><i class="bi bi-patch-check-fill"></i> BÀI TẬP CUỐI TRUYỆN</span>
                     <h2>Kiểm tra Đọc hiểu & Từ vựng</h2>
                     <p class="section-desc">Làm bài tập ngắn để củng cố nội dung và phát hiện các từ vựng bạn chưa nắm vững.</p>
                 </div>
@@ -235,7 +240,7 @@ else
                                 @if (isGraded && !string.IsNullOrEmpty(question.Explanation))
                                 {
                                     <div class="quiz-explanation">
-                                        <strong><i class="bi bi-lightbulb"></i> Giải thích:</strong> @question.Explanation
+                                        <strong><i class="bi bi-lightbulb-fill"></i> Giải thích:</strong> @question.Explanation
                                     </div>
                                 }
                             </div>
@@ -247,12 +252,12 @@ else
                                 <button class="btn-submit-quiz" @onclick="SubmitQuiz" disabled="@isSubmittingQuiz">
                                     @if (isSubmittingQuiz)
                                     {
-                                        <span class="spinner-border spinner-border-sm"></span>
+                                        <span class="mini-spinner"></span>
                                         <span>Đang chấm điểm...</span>
                                     }
                                     else
                                     {
-                                        <i class="bi bi-send-check"></i>
+                                        <i class="bi bi-send-check-fill"></i>
                                         <span>Nộp bài & Chấm điểm</span>
                                     }
                                 </button>
@@ -268,7 +273,7 @@ else
                                         <h4>@(quizResult.ScorePercentage >= 80 ? "Xuất sắc! 🎉" : (quizResult.ScorePercentage >= 50 ? "Khá tốt! 👍" : "Cần cố gắng thêm! 💪"))</h4>
                                         <p>Bạn đã hoàn thành bài kiểm tra đọc hiểu với độ chính xác <b>@quizResult.ScorePercentage%</b>.</p>
                                     </div>
-                                    <button class="btn btn-outline-secondary ms-auto" @onclick="RetryQuiz">
+                                    <button class="btn btn-secondary-outline ms-auto" @onclick="RetryQuiz">
                                         <i class="bi bi-arrow-repeat"></i> Làm lại
                                     </button>
                                 </div>
@@ -282,7 +287,7 @@ else
                 {
                     <div class="target-vocab-recap">
                         <div class="recap-header">
-                            <h3><i class="bi bi-journal-bookmark-fill"></i> Từ vựng trọng tâm trong bài (@story.Vocabulary.Count từ)</h3>
+                            <h3><i class="bi bi-journal-bookmark-fill text-primary"></i> Từ vựng trọng tâm trong bài (@story.Vocabulary.Count từ)</h3>
                             <p>Chạm vào từ để phát âm hoặc ôn tập lại nghĩa.</p>
                         </div>
                         <div class="recap-vocab-grid">
@@ -307,54 +312,53 @@ else
 
 @code {
     [Parameter]
-    public string Slug { get; set; } = string.Empty;
+    public string Slug { get; set; } = "";
 
     private StoryModel? story;
     private bool isLoading = true;
 
-    // Reading settings
-    private int fontSize = 18;
-    private string currentTheme = "paper"; // "light", "paper", "dark"
+    // Reader UI state
     private bool showBilingual = false;
-
-    // Web Speech Narration
+    private int fontSize = 18; // default 18px for optimal reading
+    private string currentTheme = "light"; // "light" | "paper" | "dark"
+    private string fontFamily = "sans"; // "sans" | "serif"
     private bool isPlayingAudio = false;
     private double audioSpeed = 1.0;
 
-    // Vocab Popup
+    // Active vocab popup
     private StoryVocabulary? activeVocab;
     private bool isWordSaved = false;
 
-    // Quiz
+    // Quiz state
     private Dictionary<int, int> selectedAnswers = new();
     private StoryQuizResultModel? quizResult;
     private bool isSubmittingQuiz = false;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadStory();
-    }
-
     protected override async Task OnParametersSetAsync()
     {
-        if (story == null || story.Slug != Slug)
-        {
-            await LoadStory();
-        }
+        await LoadStory();
     }
 
     private async Task LoadStory()
     {
         isLoading = true;
         story = await StoryService.GetStoryAsync(Slug);
-        selectedAnswers.Clear();
-        quizResult = null;
         isLoading = false;
+    }
+
+    private void ToggleBilingual()
+    {
+        showBilingual = !showBilingual;
+    }
+
+    private void ToggleFontFamily()
+    {
+        fontFamily = fontFamily == "sans" ? "serif" : "sans";
     }
 
     private void IncreaseFontSize()
     {
-        if (fontSize < 26) fontSize += 2;
+        if (fontSize < 28) fontSize += 2;
     }
 
     private void DecreaseFontSize()
@@ -367,11 +371,6 @@ else
         currentTheme = theme;
     }
 
-    private void ToggleBilingual()
-    {
-        showBilingual = !showBilingual;
-    }
-
     private async Task TogglePlayStory()
     {
         if (isPlayingAudio)
@@ -382,15 +381,15 @@ else
         else
         {
             if (story == null || story.Paragraphs.Count == 0) return;
-            var fullText = string.Join(" ", story.Paragraphs.Select(p => p.En));
             isPlayingAudio = true;
+            var fullText = string.Join(". ", story.Paragraphs.Select(p => p.En));
             await JSRuntime.InvokeVoidAsync("speakText", fullText, "en-US", audioSpeed);
         }
     }
 
-    private async Task SpeakSentence(string sentence)
+    private async Task SpeakSentence(string text)
     {
-        await JSRuntime.InvokeVoidAsync("speakText", sentence, "en-US", audioSpeed);
+        await JSRuntime.InvokeVoidAsync("speakText", text, "en-US", audioSpeed);
     }
 
     private async Task SpeakWord(string word)
@@ -416,7 +415,7 @@ else
 
     private void SelectOption(int questionIndex, int optionIndex)
     {
-        if (quizResult != null) return; // Không cho sửa khi đã nộp
+        if (quizResult != null) return;
         selectedAnswers[questionIndex] = optionIndex;
     }
 
@@ -449,14 +448,12 @@ else
             return;
         }
 
-        // Split paragraph into tokens while preserving target vocabulary matching
         var words = text.Split(' ');
         for (int i = 0; i < words.Length; i++)
         {
             var rawWord = words[i];
             var cleanWord = rawWord.Trim(',', '.', '!', '?', '"', '“', '”', ':', ';', '(', ')');
 
-            // Find matching target vocabulary
             var target = story.Vocabulary.FirstOrDefault(v => 
                 v.Word.Equals(cleanWord, StringComparison.OrdinalIgnoreCase) ||
                 (v.Word.Contains(' ') && text.Contains(v.Word, StringComparison.OrdinalIgnoreCase)));
