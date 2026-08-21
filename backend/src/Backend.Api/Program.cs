@@ -12,6 +12,7 @@ var frontendUrl = builder.Configuration["Frontend:BaseUrl"] ?? "https://localhos
 const string frontendHttpUrl = "http://localhost:5102";
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
