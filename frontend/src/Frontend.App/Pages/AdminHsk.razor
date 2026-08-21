@@ -1,22 +1,20 @@
 @page "/admin/hsk"
-@page "/admin/hsk-mock-tests"
 @page "/admin/hsk-vocab"
 @layout Frontend.App.Layout.AdminLayout
-@inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 
-<PageTitle>Quản lý HSK (Từ vựng & Đề thi) - Admin Dashboard</PageTitle>
+<PageTitle>Quản lý Tiếng Trung HSK - Admin Hub</PageTitle>
 
 <div class="admin-hsk-page">
     <!-- Top Header -->
     <div class="page-header">
         <div class="header-left">
             <div class="header-icon-badge">
-                <span class="hsk-flag">🇨🇳</span>
+                <span>🇨🇳</span>
             </div>
             <div>
                 <h1 class="page-title">Quản lý Tiếng Trung HSK</h1>
-                <p class="page-subtitle">Hệ thống quản trị từ vựng HSK 1-6, ngân hàng đề thi thử mô phỏng và theo dõi tiến độ học tập.</p>
+                <p class="page-subtitle">Hệ thống quản trị từ vựng HSK 1–6, ngân hàng đề thi thử mô phỏng và theo dõi tiến độ học tập.</p>
             </div>
         </div>
         <div class="header-right">
@@ -44,14 +42,14 @@
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon levels"><i class="bi bi-layers-fill"></i></div>
+            <div class="stat-icon levels"><i class="bi bi-mortarboard-fill"></i></div>
             <div class="stat-content">
                 <span class="stat-label">Cấp độ chuẩn</span>
                 <h3 class="stat-number">HSK 1 - 6</h3>
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon active-learners"><i class="bi bi-person-check-fill"></i></div>
+            <div class="stat-icon active-learners"><i class="bi bi-people-fill"></i></div>
             <div class="stat-content">
                 <span class="stat-label">Lượt làm bài thi</span>
                 <h3 class="stat-number">1,280</h3>
@@ -61,21 +59,20 @@
 
     <!-- Tab Navigation -->
     <div class="nav-tabs-wrapper">
-        <button class="tab-btn @(currentTab == "vocab" ? "active" : "")" @onclick='() => SetTab("vocab")'>
-            <i class="bi bi-book-half"></i>
-            <span>Ngân hàng Từ vựng HSK</span>
+        <button class="tab-btn @(currentTab == "vocab" ? "active" : "")" @onclick='() => currentTab = "vocab"'>
+            <i class="bi bi-book-half"></i> Ngân hàng Từ vựng HSK
         </button>
-        <button class="tab-btn @(currentTab == "tests" ? "active" : "")" @onclick='() => SetTab("tests")'>
-            <i class="bi bi-file-earmark-text"></i>
-            <span>Quản lý Đề thi Mô phỏng</span>
+        <button class="tab-btn @(currentTab == "tests" ? "active" : "")" @onclick='() => currentTab = "tests"'>
+            <i class="bi bi-card-checklist"></i> Quản lý Đề thi Mô phỏng
         </button>
-        <button class="tab-btn @(currentTab == "stats" ? "active" : "")" @onclick='() => SetTab("stats")'>
-            <i class="bi bi-graph-up-arrow"></i>
-            <span>Thống kê Điểm số Học viên</span>
+        <button class="tab-btn @(currentTab == "stats" ? "active" : "")" @onclick='() => currentTab = "stats"'>
+            <i class="bi bi-graph-up"></i> Thống kê Điểm số Học viên
         </button>
     </div>
 
-    <!-- TAB 1: VOCABULARY MANAGEMENT -->
+    @* ========================================================================= *@
+    @* TAB 1: VOCABULARY MANAGEMENT                                              *@
+    @* ========================================================================= *@
     @if (currentTab == "vocab")
     {
         <div class="tab-content-area">
@@ -155,8 +152,10 @@
         </div>
     }
 
-    <!-- TAB 2: MOCK TESTS MANAGEMENT -->
-    else if (currentTab == "tests")
+    @* ========================================================================= *@
+    @* TAB 2: MOCK TESTS MANAGEMENT                                              *@
+    @* ========================================================================= *@
+    @if (currentTab == "tests")
     {
         <div class="tab-content-area">
             <div class="toolbar-card">
@@ -195,8 +194,10 @@
         </div>
     }
 
-    <!-- TAB 3: STATS -->
-    else if (currentTab == "stats")
+    @* ========================================================================= *@
+    @* TAB 3: STATS                                                              *@
+    @* ========================================================================= *@
+    @if (currentTab == "stats")
     {
         <div class="tab-content-area">
             <div class="table-card p-4 text-center">
@@ -259,6 +260,11 @@
         new() { Id = 5, Title = "Đề thi thử HSK 5 - Đề số 01 (Nâng cao)", Level = 5, DurationMinutes = 120, QuestionCount = 100, AttemptsCount = 75, IsPublished = true }
     };
 
+    private void SetHskLevel(int level)
+    {
+        selectedHskLevel = level;
+    }
+
     private List<HskVocabItem> FilteredVocabList
     {
         get
@@ -270,7 +276,7 @@
             }
             if (!string.IsNullOrWhiteSpace(vocabSearchTerm))
             {
-                list = list.Where(v => 
+                list = list.Where(v =>
                     v.Hanzi.Contains(vocabSearchTerm, StringComparison.OrdinalIgnoreCase) ||
                     v.Pinyin.Contains(vocabSearchTerm, StringComparison.OrdinalIgnoreCase) ||
                     v.Meaning.Contains(vocabSearchTerm, StringComparison.OrdinalIgnoreCase));
@@ -279,21 +285,18 @@
         }
     }
 
-    private void SetTab(string tab) => currentTab = tab;
-    private void SetHskLevel(int level) => selectedHskLevel = level;
-
     private async Task SpeakChinese(string text)
     {
-        await JS.InvokeVoidAsync("speakText", text, "zh-CN", 0.9);
+        await JS.InvokeVoidAsync("eval", $"if ('speechSynthesis' in window) {{ const u = new SpeechSynthesisUtterance('{text}'); u.lang = 'zh-CN'; window.speechSynthesis.speak(u); }}");
     }
 
-    private void OpenAddVocabModal()
+    private async Task OpenAddVocabModal()
     {
-        // Add vocab placeholder
+        await JS.InvokeVoidAsync("alert", "Tính năng thêm từ vựng HSK trực tiếp sẽ được mở trong bản cập nhật kế tiếp.");
     }
 
-    private void OpenAddTestModal()
+    private async Task OpenAddTestModal()
     {
-        // Add test placeholder
+        await JS.InvokeVoidAsync("alert", "Tính năng tạo đề thi HSK mô phỏng sẽ được mở trong bản cập nhật kế tiếp.");
     }
 }
