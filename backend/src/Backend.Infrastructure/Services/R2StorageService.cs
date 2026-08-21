@@ -56,10 +56,20 @@ public class R2StorageService : IR2StorageService
         if (string.IsNullOrEmpty(fileUrl)) return false;
 
         var publicUrlBase = _config["CloudflareR2:PublicUrlBase"];
-        if (string.IsNullOrEmpty(publicUrlBase) || !fileUrl.StartsWith(publicUrlBase)) return false;
+        string fileName = "";
+        if (!string.IsNullOrEmpty(publicUrlBase) && fileUrl.StartsWith(publicUrlBase, StringComparison.OrdinalIgnoreCase))
+        {
+            fileName = fileUrl.Substring(publicUrlBase.Length).TrimStart('/');
+        }
+        else if (Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri))
+        {
+            fileName = uri.AbsolutePath.TrimStart('/');
+        }
+        else
+        {
+            fileName = fileUrl.TrimStart('/');
+        }
 
-        // Extract fileName from URL
-        var fileName = fileUrl.Substring(publicUrlBase.Length).TrimStart('/');
         if (string.IsNullOrEmpty(fileName)) return false;
 
         var accessKey = _config["CloudflareR2:AccessKey"];

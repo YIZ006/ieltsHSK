@@ -116,7 +116,8 @@ public static class DependencyInjection
             await dbContext.SaveChangesAsync();
         }
 
-        // Seed Stories
-        await StorySeedData.SeedStoriesAsync(dbContext);
+        // Seed Stories and upload seed JSON to Cloudflare R2 in stories/ folder
+        var r2Storage = scope.ServiceProvider.GetService<Backend.Application.Abstractions.IR2StorageService>();
+        await StorySeedData.SeedStoriesAsync(dbContext, r2Storage);
     }
 }

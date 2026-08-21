@@ -227,6 +227,26 @@ public class StoryService
         }
     }
 
+    public async Task<(bool Success, string Message)> SyncAllStoriesToR2Async()
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync("api/admin/stories/sync-to-r2", null);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>(JsonOptions);
+                var msg = result?.GetValueOrDefault("message")?.ToString() ?? result?.GetValueOrDefault("Message")?.ToString() ?? "Đồng bộ R2 thành công!";
+                return (true, msg);
+            }
+            var err = await response.Content.ReadAsStringAsync();
+            return (false, err);
+        }
+        catch (Exception ex)
+        {
+            return (false, "Lỗi khi đồng bộ R2: " + ex.Message);
+        }
+    }
+
     public async Task<string> AdminGetTemplateJsonAsync()
     {
         try
