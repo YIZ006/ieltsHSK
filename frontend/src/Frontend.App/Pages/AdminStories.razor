@@ -19,6 +19,18 @@
             <button class="btn btn-secondary-outline" @onclick="DownloadTemplateJson">
                 <i class="bi bi-download"></i> Tải file mẫu JSON
             </button>
+            <button class="btn btn-secondary-outline" @onclick="SyncAllStoriesToR2" disabled="@isSyncingR2" title="Đẩy toàn bộ truyện trong database lên Cloudflare R2 trong thư mục stories/">
+                @if (isSyncingR2)
+                {
+                    <span class="mini-spinner"></span>
+                    <span>Đang đồng bộ R2...</span>
+                }
+                else
+                {
+                    <i class="bi bi-cloud-arrow-up-fill text-primary"></i>
+                    <span>Đồng bộ lên R2</span>
+                }
+            </button>
             <button class="btn btn-primary-outline" @onclick="OpenImportModal">
                 <i class="bi bi-cloud-arrow-up-fill"></i> Import Truyện (Dễ dùng)
             </button>
@@ -634,6 +646,7 @@
     private string editorTab = "info";
     private bool isSaving = false;
     private bool isEditorUploadingR2 = false;
+    private bool isSyncingR2 = false;
 
     private List<StoryModel> FilteredStories
     {
@@ -677,6 +690,21 @@
         var bytes = System.Text.Encoding.UTF8.GetBytes(json);
         var base64 = Convert.ToBase64String(bytes);
         await JSRuntime.InvokeVoidAsync("eval", $"const a = document.createElement('a'); a.href = 'data:application/json;base64,{base64}'; a.download = 'story_template.json'; a.click();");
+    }
+
+    private async Task SyncAllStoriesToR2()
+    {
+        isSyncingR2 = true;
+        alertMessage = null;
+        var (success, msg) = await StoryService.SyncAllStoriesToR2Async();
+        isSyncingR2 = false;
+
+        alertMessage = msg;
+        alertSuccess = success;
+        if (success)
+        {
+            await LoadStories();
+        }
     }
 
     // ================= Import Modal Logic =================

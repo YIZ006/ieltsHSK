@@ -1108,7 +1108,12 @@ app.MapPut("/api/admin/stories/{id}", async (
         var fullJson = System.Text.Json.JsonSerializer.Serialize(exportObj, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
         var jsonBytes = System.Text.Encoding.UTF8.GetBytes(fullJson);
         using var ms = new MemoryStream(jsonBytes);
+        var oldJsonUrl = story.JsonUrl;
         jsonUrl = await r2Service.UploadFileAsync(ms, $"stories/{story.Slug}_{Guid.NewGuid().ToString("N").Substring(0, 6)}.json", "application/json", cancellationToken);
+        if (!string.IsNullOrEmpty(oldJsonUrl) && oldJsonUrl != jsonUrl)
+        {
+            try { await r2Service.DeleteFileAsync(oldJsonUrl, cancellationToken); } catch { }
+        }
     }
     catch { }
 
@@ -1148,6 +1153,48 @@ app.MapDelete("/api/admin/stories/{id}", async (
     dbContext.Stories.Remove(story);
     await dbContext.SaveChangesAsync(cancellationToken);
     return Results.Ok(new { Message = "Đã xóa truyện và tệp tin trên Cloudflare R2." });
+});
+
+app.MapPost("/api/admin/stories/sync-to-r2", async (
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    Backend.Application.Abstractions.IR2StorageService r2Service,
+    CancellationToken cancellationToken) =>
+{
+    var stories = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(dbContext.Stories, cancellationToken);
+    int count = 0;
+    foreach (var s in stories)
+    {
+        try
+        {
+            var exportObj = new
+            {
+                title = s.Title,
+                level = s.Level,
+                ieltsBand = s.IeltsBand,
+                category = s.Category,
+                summary = s.Summary,
+                thumbnailUrl = s.ThumbnailUrl,
+                audioUrl = s.AudioUrl,
+                wordCount = s.WordCount,
+                estimatedMinutes = s.EstimatedMinutes,
+                paragraphs = !string.IsNullOrEmpty(s.ContentJson) ? System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(s.ContentJson) : default,
+                targetVocabulary = !string.IsNullOrEmpty(s.VocabularyJson) ? System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(s.VocabularyJson) : default,
+                questions = !string.IsNullOrEmpty(s.QuestionsJson) ? System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(s.QuestionsJson) : default
+            };
+            var fullJson = System.Text.Json.JsonSerializer.Serialize(exportObj, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var jsonBytes = System.Text.Encoding.UTF8.GetBytes(fullJson);
+            using var ms = new MemoryStream(jsonBytes);
+            var r2Url = await r2Service.UploadFileAsync(ms, $"stories/{s.Slug}.json", "application/json", cancellationToken);
+            s.JsonUrl = r2Url;
+            count++;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error syncing story {s.Slug} to R2: {ex.Message}");
+        }
+    }
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { Count = count, Message = $"Đã đồng bộ {count} truyện lên Cloudflare R2 trong thư mục stories/" });
 });
 
 app.MapGet("/api/admin/stories/template-json", () =>
