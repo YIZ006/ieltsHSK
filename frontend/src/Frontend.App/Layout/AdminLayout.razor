@@ -52,8 +52,8 @@
                             <i class="bi bi-book"></i> Quản lý Đọc truyện
                         </a>
                     </li>
-                    <li class="menu-item">
-                        <a href="/admin/ielts-users" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
+                    <li class="menu-item @(IsActive("/admin/ielts-users") ? "active" : "")">
+                        <a href="/admin/ielts-users">
                             <i class="bi bi-people"></i> Quản lý học viên
                         </a>
                     </li>
@@ -138,7 +138,7 @@
         else if (domain == "TOEIC")
             NavigationManager.NavigateTo("/admin/toeic-mock-tests");
         else
-            NavigationManager.NavigateTo("/admin");
+            NavigationManager.NavigateTo("/hsk");
     }
 
     private bool IsActive(string path)

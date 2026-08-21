@@ -1365,6 +1365,96 @@ app.MapPost("/api/admin/stories/import-json", async (
     }
 });
 
+// --- ADMIN USER MANAGEMENT ENDPOINTS ---
+
+app.MapGet("/api/admin/users", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var users = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.Users.OrderByDescending(u => u.CreatedAt), cancellationToken);
+    
+    return Results.Ok(users.Select(u => new {
+        u.Id,
+        u.Username,
+        u.Email,
+        u.Role,
+        u.Level,
+        u.IsActive,
+        u.LastLoginAt,
+        u.CreatedAt
+    }));
+});
+
+app.MapPut("/api/admin/users/{id}/toggle-active", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var user = await dbContext.Users.FindAsync(new object[] { id }, cancellationToken);
+    if (user == null) return Results.NotFound();
+
+    user.IsActive = !user.IsActive;
+    
+    dbContext.UserActivityLogs.Add(new Backend.Domain.Entities.UserActivityLog
+    {
+        UserId = user.Id,
+        Action = user.IsActive ? "enabled" : "disabled",
+        Detail = "Toggled by Admin"
+    });
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { user.IsActive });
+});
+
+app.MapPut("/api/admin/users/{id}", async (int id, Backend.Application.DTOs.UpdateUserRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var user = await dbContext.Users.FindAsync(new object[] { id }, cancellationToken);
+    if (user == null) return Results.NotFound();
+
+    user.Username = request.Username;
+    user.Email = request.Email;
+    user.Role = request.Role;
+    user.Level = request.Level;
+
+    dbContext.UserActivityLogs.Add(new Backend.Domain.Entities.UserActivityLog
+    {
+        UserId = user.Id,
+        Action = "profile_update",
+        Detail = "Admin updated profile"
+    });
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok();
+});
+
+app.MapPost("/api/admin/users/{id}/reset-password", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var user = await dbContext.Users.FindAsync(new object[] { id }, cancellationToken);
+    if (user == null) return Results.NotFound();
+
+    var tempPassword = Guid.NewGuid().ToString("N").Substring(0, 8) + "@1Aa";
+    user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(tempPassword);
+    user.PasswordChangedAt = DateTime.UtcNow;
+
+    dbContext.UserActivityLogs.Add(new Backend.Domain.Entities.UserActivityLog
+    {
+        UserId = user.Id,
+        Action = "password_reset",
+        Detail = "Manual reset by Admin"
+    });
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { TempPassword = tempPassword });
+});
+
+app.MapGet("/api/admin/users/{id}/logs", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var logs = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.UserActivityLogs
+            .Where(l => l.UserId == id)
+            .OrderByDescending(l => l.CreatedAt)
+            .Take(50), 
+        cancellationToken);
+    
+    return Results.Ok(logs);
+});
+
 app.Run();
 
 public record CreateExamRequest(string Title, string DataUrl, string Category = "IELTS");

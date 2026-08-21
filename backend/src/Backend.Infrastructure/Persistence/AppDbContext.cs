@@ -7,6 +7,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<LearningResource> LearningResources { get; set; }
     public DbSet<User> Users { get; set; }
+    public DbSet<UserActivityLog> UserActivityLogs { get; set; }
     
     // Directory Block
     public DbSet<Language> Languages { get; set; }
@@ -37,6 +38,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasIndex(u => u.Email).IsUnique();
+        });
+
+        // UserActivityLog
+        modelBuilder.Entity<UserActivityLog>(entity =>
+        {
+            entity.HasOne(l => l.User)
+                .WithMany()
+                .HasForeignKey(l => l.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // Course
