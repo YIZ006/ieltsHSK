@@ -814,7 +814,7 @@ app.MapGet("/api/stories", async (string? level, string? category, string? searc
     return Results.Ok(dtos);
 });
 
-app.MapGet("/api/stories/{idOrSlug}", async (string idOrSlug, Backend.Infrastructure.Persistence.AppDbContext dbContext, HttpClient httpClient, CancellationToken cancellationToken) =>
+app.MapGet("/api/stories/{idOrSlug}", async (string idOrSlug, Backend.Infrastructure.Persistence.AppDbContext dbContext, IHttpClientFactory httpClientFactory, CancellationToken cancellationToken) =>
 {
     Backend.Domain.Entities.Story? story = null;
     if (int.TryParse(idOrSlug, out int id))
@@ -841,6 +841,7 @@ app.MapGet("/api/stories/{idOrSlug}", async (string idOrSlug, Backend.Infrastruc
     {
         try
         {
+            var httpClient = httpClientFactory.CreateClient();
             var json = await httpClient.GetStringAsync(story.JsonUrl, cancellationToken);
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             var root = doc.RootElement;
