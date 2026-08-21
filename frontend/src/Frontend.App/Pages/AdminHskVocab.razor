@@ -1,0 +1,363 @@
+@page "/admin/hsk-vocab"
+@layout AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject HskService HskService
+@inject IJSRuntime JS
+@inject NavigationManager NavManager
+
+<PageTitle>Quản lý Từ vựng HSK - Admin</PageTitle>
+
+<div class="admin-container">
+    <div class="admin-header">
+        <h1>Quản lý Từ vựng HSK</h1>
+        <div class="header-actions">
+            <button class="btn-create" @onclick="() => OpenForm(null)">+ Thêm từ mới</button>
+            <button class="btn-secondary" @onclick="DownloadTemplate">📥 Tải template Excel</button>
+            <label class="btn-secondary" style="cursor: pointer;">
+                📤 Import Excel
+                <InputFile OnChange="@(e => ImportExcel(e))" accept=".xlsx,.xls" style="display: none;" />
+            </label>
+        </div>
+    </div>
+
+    <div class="admin-card filter-bar">
+        <label>Lọc theo cấp độ:</label>
+        <select @bind="selectedLevel" @bind:event="onchange" class="form-control" style="width:auto; display:inline-block;">
+            <option value="">Tất cả</option>
+            @foreach (var lvl in new[] { "HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6", "HSK7", "HSK8", "HSK9" })
+            {
+                <option value="@lvl">@lvl</option>
+            }
+        </select>
+        <button class="btn-sm btn-refresh" @onclick="LoadVocabulary">⟳</button>
+    </div>
+
+    @if (isFormOpen)
+    {
+        <div class="admin-card create-form">
+            <h2>@(editId.HasValue ? "Cập nhật từ vựng" : "Thêm từ vựng mới")</h2>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger" style="color: red; margin-bottom: 15px;">
+                    @errorMessage
+                </div>
+            }
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Cấp độ HSK</label>
+                    <select @bind="formItem.HskLevel" class="form-control">
+                        <option value="">Chọn cấp độ</option>
+                        @foreach (var lvl in new[] { "HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6", "HSK7", "HSK8", "HSK9" })
+                        {
+                            <option value="@lvl">@lvl</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Hanzi</label>
+                    <input @bind="formItem.Hanzi" class="form-control" placeholder="VD: 你好" />
+                </div>
+                <div class="form-group">
+                    <label>Pinyin</label>
+                    <input @bind="formItem.Pinyin" class="form-control" placeholder="VD: nǐ hǎo" />
+                </div>
+                <div class="form-group">
+                    <label>Nghĩa (tiếng Việt/Anh)</label>
+                    <input @bind="formItem.Meaning" class="form-control" placeholder="VD: hello" />
+                </div>
+                <div class="form-group">
+                    <label>Loại từ</label>
+                    <input @bind="formItem.WordType" class="form-control" placeholder="VD: 动词, 名词, 形容词" />
+                </div>
+                <div class="form-group">
+                    <label>Thứ tự hiển thị</label>
+                    <input @bind="formItem.DisplayOrder" type="number" class="form-control" placeholder="0" />
+                </div>
+                <div class="form-group full-width">
+                    <label>Câu ví dụ (Hanzi)</label>
+                    <input @bind="formItem.ExampleSentence" class="form-control" placeholder="VD: 你好吗？" />
+                </div>
+                <div class="form-group">
+                    <label>Pinyin câu ví dụ</label>
+                    <input @bind="formItem.ExamplePinyin" class="form-control" placeholder="VD: nǐ hǎo ma?" />
+                </div>
+                <div class="form-group">
+                    <label>Nghĩa câu ví dụ</label>
+                    <input @bind="formItem.ExampleMeaning" class="form-control" placeholder="VD: How are you?" />
+                </div>
+                <div class="form-group">
+                    <label>Audio URL (tùy chọn)</label>
+                    <input @bind="formItem.AudioUrl" class="form-control" placeholder="https://..." />
+                </div>
+                <div class="form-group checkbox">
+                    <label>
+                        <input type="checkbox" @bind="formItem.IsActive" />
+                        Kích hoạt
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn-secondary" @onclick="() => isFormOpen = false">Hủy</button>
+                <button class="btn-primary" @onclick="SaveItem" disabled="@isSaving">
+                    @(isSaving ? "Đang lưu..." : "Lưu")
+                </button>
+            </div>
+        </div>
+    }
+
+    <div class="admin-card list-container">
+        <h2>Danh sách từ vựng</h2>
+        @if (isLoading)
+        {
+            <p>Đang tải dữ liệu...</p>
+        }
+        else if (vocabItems.Count == 0)
+        {
+            <p>Không có từ vựng nào.</p>
+        }
+        else
+        {
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Cấp độ</th>
+                        <th>Hanzi</th>
+                        <th>Pinyin</th>
+                        <th>Nghĩa</th>
+                        <th>Loại</th>
+                        <th>Trạng thái</th>
+                        <th>Hành động</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in vocabItems)
+                    {
+                        <tr>
+                            <td>@item.Id</td>
+                            <td>@item.HskLevel</td>
+                            <td>@item.Hanzi</td>
+                            <td>@item.Pinyin</td>
+                            <td>@item.Meaning</td>
+                            <td>@item.WordType</td>
+                            <td>@(item.IsActive ? "✅" : "❌")</td>
+                            <td>
+                                <button class="btn-sm btn-edit" @onclick="() => OpenForm(item)">Sửa</button>
+                                <button class="btn-sm btn-delete" @onclick="() => DeleteItem(item.Id, item.Hanzi)">Xóa</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+<style>
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+    .form-group.full-width {
+        grid-column: 1 / -1;
+    }
+    .form-group.checkbox {
+        display: flex;
+        align-items: center;
+    }
+    .form-group.checkbox label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+    .header-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .filter-bar {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        background: #1e1e1e;
+        border-radius: 8px;
+    }
+    .filter-bar label {
+        color: #ccc;
+        font-weight: 500;
+    }
+    .filter-bar .form-control {
+        background: #2a2a2a;
+        color: #eee;
+        border: 1px solid #444;
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+    .btn-refresh {
+        background: #333;
+        border: none;
+        color: #fff;
+        padding: 4px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    private List<HskVocabularyItem> vocabItems = new();
+    private string selectedLevel = "";
+    private bool isLoading = true;
+    private bool isFormOpen = false;
+    private bool isSaving = false;
+    private string errorMessage = "";
+
+    private HskVocabularyItem formItem = new();
+    private int? editId = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVocabulary();
+    }
+
+    private async Task LoadVocabulary()
+    {
+        isLoading = true;
+        StateHasChanged();
+        vocabItems = await HskService.GetVocabularyAsync(string.IsNullOrEmpty(selectedLevel) ? null : selectedLevel);
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void OpenForm(HskVocabularyItem? item)
+    {
+        if (item == null)
+        {
+            editId = null;
+            formItem = new HskVocabularyItem { IsActive = true, DisplayOrder = 0 };
+        }
+        else
+        {
+            editId = item.Id;
+            formItem = new HskVocabularyItem
+            {
+                Id = item.Id,
+                HskLevel = item.HskLevel,
+                Hanzi = item.Hanzi,
+                Pinyin = item.Pinyin,
+                Meaning = item.Meaning,
+                WordType = item.WordType,
+                ExampleSentence = item.ExampleSentence,
+                ExamplePinyin = item.ExamplePinyin,
+                ExampleMeaning = item.ExampleMeaning,
+                AudioUrl = item.AudioUrl,
+                DisplayOrder = item.DisplayOrder,
+                IsActive = item.IsActive
+            };
+        }
+        isFormOpen = true;
+        errorMessage = "";
+    }
+
+    private async Task SaveItem()
+    {
+        errorMessage = "";
+        if (string.IsNullOrWhiteSpace(formItem.HskLevel) || string.IsNullOrWhiteSpace(formItem.Hanzi) || string.IsNullOrWhiteSpace(formItem.Pinyin) || string.IsNullOrWhiteSpace(formItem.Meaning))
+        {
+            errorMessage = "Vui lòng điền đầy đủ Cấp độ, Hanzi, Pinyin và Nghĩa.";
+            return;
+        }
+
+        isSaving = true;
+        bool success;
+
+        try
+        {
+            if (editId.HasValue)
+            {
+                success = await HskService.UpdateVocabularyAsync(editId.Value, formItem);
+            }
+            else
+            {
+                success = await HskService.CreateVocabularyAsync(formItem);
+            }
+
+            if (success)
+            {
+                isFormOpen = false;
+                await LoadVocabulary();
+            }
+            else
+            {
+                errorMessage = "Lỗi khi lưu từ vựng. Vui lòng thử lại.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi hệ thống: {ex.Message}";
+        }
+
+        isSaving = false;
+    }
+
+    private async Task DeleteItem(int id, string hanzi)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"Bạn có chắc chắn muốn xóa từ '{hanzi}' không?");
+        if (confirmed)
+        {
+            var success = await HskService.DeleteVocabularyAsync(id);
+            if (success)
+            {
+                await LoadVocabulary();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Lỗi: Không thể xóa từ này.");
+            }
+        }
+    }
+
+    private async Task DownloadTemplate()
+    {
+        // Navigate to API endpoint that returns Excel template
+        NavManager.NavigateTo("/api/hsk/vocab/template-excel");
+    }
+
+    private async Task ImportExcel(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+
+            var content = new MultipartFormDataContent();
+            content.Add(new StreamContent(ms), "file", file.Name);
+
+            var response = await HskService.Client.PostAsync("/api/hsk/vocab/import-excel", content);
+            if (response.IsSuccessStatusCode)
+            {
+                await JS.InvokeVoidAsync("alert", "Import thành công!");
+                await LoadVocabulary();
+            }
+            else
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                await JS.InvokeVoidAsync("alert", $"Import thất bại: {err}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Lỗi import: {ex.Message}");
+        }
+    }
+}

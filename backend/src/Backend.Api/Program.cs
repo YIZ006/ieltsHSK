@@ -4,6 +4,7 @@ using Backend.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -754,7 +755,298 @@ app.MapPost("/api/toeic/save-exam", async (
     return Results.Ok(new { Url = jsonUrl, Id = test.Id });
 });
 
+// ─── HSK: Learning Sections ───
+app.MapGet("/api/hsk/sections", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var sections = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.LearningSections
+            .Where(s => s.Language == "HSK")
+            .OrderBy(s => s.OrderIndex)
+            .Select(s => new Backend.Application.DTOs.LearningSectionDto
+            {
+                Id = s.Id,
+                Name = s.Name,
+                Description = s.Description,
+                Icon = s.Icon,
+                Route = s.Route,
+                Language = s.Language,
+                OrderIndex = s.OrderIndex
+            }), cancellationToken);
+    return Results.Ok(sections);
+});
+
+// ─── HSK: Upload media (image/audio) ───
+app.MapPost("/api/hsk/upload-media", async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Application.Abstractions.IR2StorageService r2Service, CancellationToken cancellationToken) =>
+{
+    if (file == null || file.Length == 0)
+        return Results.BadRequest("No file uploaded.");
+    bool isImage = file.ContentType.StartsWith("image/");
+    long maxSize = isImage ? 10 * 1024 * 1024 : 80 * 1024 * 1024;
+    if (file.Length > maxSize)
+        return Results.BadRequest($"File too large. Max {(isImage ? "10MB" : "80MB")}.");
+    var folder = isImage ? "hsk/images" : "hsk/audio";
+    var ext = Path.GetExtension(file.FileName);
+    var fileName = $"{folder}/{Guid.NewGuid()}{ext}";
+    using var stream = file.OpenReadStream();
+    try
+    {
+        var url = await r2Service.UploadFileAsync(stream, fileName, file.ContentType, cancellationToken);
+        return Results.Ok(new { Url = url, Type = isImage ? "image" : "audio" });
+    }
+    catch (Exception ex) { return Results.BadRequest(ex.Message); }
+}).DisableAntiforgery();
+
+// ─── HSK: Save exam JSON ───
+app.MapPost("/api/hsk/save-exam", async (
+        HskSaveExamRequest req,
+        Backend.Application.Abstractions.IR2StorageService r2Service,
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(req.CollectionName) || string.IsNullOrWhiteSpace(req.Title))
+        return Results.BadRequest("CollectionName and Title are required.");
+
+    var json = System.Text.Json.JsonSerializer.Serialize(req.ExamData,
+        new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
+    var jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
+    var fileId = Guid.NewGuid().ToString("N");
+    var fileName = $"hsk/exams/{fileId}.json";
+
+    string jsonUrl;
+    try
+    {
+        using var ms = new MemoryStream(jsonBytes);
+        jsonUrl = await r2Service.UploadFileAsync(ms, fileName, "application/json", cancellationToken);
+    }
+    catch
+    {
+        var dir = Path.Combine("wwwroot", "exports");
+        Directory.CreateDirectory(dir);
+        var localPath = Path.Combine(dir, $"{fileId}.json");
+        await File.WriteAllBytesAsync(localPath, jsonBytes, cancellationToken);
+        jsonUrl = $"/exports/{fileId}.json";
+    }
+
+    Backend.Domain.Entities.MockTest? test = null;
+    if (req.MockTestId.HasValue)
+        test = await dbContext.MockTests.FindAsync(new object[] { req.MockTestId.Value }, cancellationToken);
+
+    if (test == null)
+    {
+        test = new Backend.Domain.Entities.MockTest
+        {
+            CollectionName = req.CollectionName,
+            Title = req.Title,
+            HskUrl = jsonUrl
+        };
+        dbContext.MockTests.Add(test);
+    }
+    else
+    {
+        test.CollectionName = req.CollectionName;
+        test.Title = req.Title;
+        test.HskUrl = jsonUrl;
+    }
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new { Url = jsonUrl, Id = test.Id });
+});
+
+// ─── HSK: Vocabulary CRUD ───
+app.MapGet("/api/hsk/vocab", async (string? level, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var query = dbContext.HskVocabularies.AsQueryable();
+    if (!string.IsNullOrEmpty(level))
+        query = query.Where(v => v.HskLevel == level);
+    var items = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        query.OrderBy(v => v.HskLevel).ThenBy(v => v.DisplayOrder), cancellationToken);
+    return Results.Ok(items.Select(v => new
+    {
+        v.Id,
+        v.HskLevel,
+        v.Hanzi,
+        v.Pinyin,
+        v.Meaning,
+        v.WordType,
+        v.ExampleSentence,
+        v.ExamplePinyin,
+        v.ExampleMeaning,
+        v.AudioUrl,
+        v.DisplayOrder,
+        v.IsActive,
+        v.CreatedAt
+    }));
+});
+
+app.MapPost("/api/hsk/vocab", async (HskVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var existing = await dbContext.HskVocabularies
+        .FirstOrDefaultAsync(v => v.HskLevel == req.HskLevel && v.Hanzi == req.Hanzi, cancellationToken);
+    if (existing != null)
+        return Results.BadRequest("Từ này đã tồn tại ở cấp độ này.");
+
+    var vocab = new Backend.Domain.Entities.HskVocabulary
+    {
+        HskLevel = req.HskLevel,
+        Hanzi = req.Hanzi,
+        Pinyin = req.Pinyin,
+        Meaning = req.Meaning,
+        WordType = req.WordType,
+        ExampleSentence = req.ExampleSentence,
+        ExamplePinyin = req.ExamplePinyin,
+        ExampleMeaning = req.ExampleMeaning,
+        AudioUrl = req.AudioUrl,
+        DisplayOrder = req.DisplayOrder ?? 0,
+        IsActive = req.IsActive ?? true
+    };
+    dbContext.HskVocabularies.Add(vocab);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { Id = vocab.Id });
+});
+
+app.MapPut("/api/hsk/vocab/{id}", async (int id, HskVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var vocab = await dbContext.HskVocabularies.FindAsync(new object[] { id }, cancellationToken);
+    if (vocab == null) return Results.NotFound();
+
+    // Check duplicate if level or hanzi changed
+    if (vocab.HskLevel != req.HskLevel || vocab.Hanzi != req.Hanzi)
+    {
+        var existing = await dbContext.HskVocabularies
+            .FirstOrDefaultAsync(v => v.HskLevel == req.HskLevel && v.Hanzi == req.Hanzi && v.Id != id, cancellationToken);
+        if (existing != null)
+            return Results.BadRequest("Từ này đã tồn tại ở cấp độ này.");
+    }
+
+    vocab.HskLevel = req.HskLevel;
+    vocab.Hanzi = req.Hanzi;
+    vocab.Pinyin = req.Pinyin;
+    vocab.Meaning = req.Meaning;
+    vocab.WordType = req.WordType;
+    vocab.ExampleSentence = req.ExampleSentence;
+    vocab.ExamplePinyin = req.ExamplePinyin;
+    vocab.ExampleMeaning = req.ExampleMeaning;
+    vocab.AudioUrl = req.AudioUrl;
+    vocab.DisplayOrder = req.DisplayOrder ?? 0;
+    vocab.IsActive = req.IsActive ?? true;
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok();
+});
+
+app.MapDelete("/api/hsk/vocab/{id}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var vocab = await dbContext.HskVocabularies.FindAsync(new object[] { id }, cancellationToken);
+    if (vocab == null) return Results.NotFound();
+    dbContext.HskVocabularies.Remove(vocab);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok();
+});
+
+// ─── HSK Vocabulary Excel Import ───
+app.MapGet("/api/hsk/vocab/template-excel", () =>
+{
+    using var workbook = new ClosedXML.Excel.XLWorkbook();
+    var worksheet = workbook.Worksheets.Add("HSK Vocabulary");
+    // Header
+    worksheet.Cell(1, 1).Value = "HskLevel";
+    worksheet.Cell(1, 2).Value = "Hanzi";
+    worksheet.Cell(1, 3).Value = "Pinyin";
+    worksheet.Cell(1, 4).Value = "Meaning";
+    worksheet.Cell(1, 5).Value = "WordType";
+    worksheet.Cell(1, 6).Value = "ExampleSentence";
+    worksheet.Cell(1, 7).Value = "ExamplePinyin";
+    worksheet.Cell(1, 8).Value = "ExampleMeaning";
+    worksheet.Cell(1, 9).Value = "AudioUrl";
+    worksheet.Cell(1, 10).Value = "DisplayOrder";
+    var headerRange = worksheet.Range("A1:J1");
+    headerRange.Style.Font.Bold = true;
+    headerRange.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+    worksheet.Cell(2, 1).Value = "HSK3";
+    worksheet.Cell(2, 2).Value = "图书馆";
+    worksheet.Cell(2, 3).Value = "tú shū guǎn";
+    worksheet.Cell(2, 4).Value = "thư viện";
+    worksheet.Cell(2, 5).Value = "noun";
+    worksheet.Cell(2, 6).Value = "我去图书馆看书。";
+    worksheet.Cell(2, 7).Value = "wǒ qù tú shū guǎn kàn shū。";
+    worksheet.Cell(2, 8).Value = "Tôi đi thư viện đọc sách.";
+    worksheet.Column(1).Width = 12;
+    worksheet.Column(2).Width = 15;
+    worksheet.Column(3).Width = 18;
+    worksheet.Column(4).Width = 20;
+    worksheet.Column(5).Width = 12;
+    worksheet.Column(6).Width = 30;
+    worksheet.Column(7).Width = 25;
+    worksheet.Column(8).Width = 25;
+    worksheet.Column(9).Width = 30;
+    worksheet.Column(10).Width = 12;
+    using var stream = new MemoryStream();
+    workbook.SaveAs(stream);
+    stream.Position = 0;
+    return Results.File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "HSK_Vocabulary_Template.xlsx");
+});
+
+app.MapPost("/api/hsk/vocab/import-excel", async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    if (file == null || file.Length == 0)
+        return Results.BadRequest("File không hợp lệ hoặc trống.");
+    if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        return Results.BadRequest("Vui lòng upload file Excel (.xlsx)");
+
+    int success = 0, fail = 0, duplicate = 0;
+    var errors = new List<string>();
+
+    using var stream = file.OpenReadStream();
+    using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+    var worksheet = workbook.Worksheet(1);
+    var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+
+    for (int i = 2; i <= lastRow; i++)
+    {
+        try
+        {
+            var row = worksheet.Row(i);
+            var level = row.Cell(1).GetString()?.Trim();
+            var hanzi = row.Cell(2).GetString()?.Trim();
+            if (string.IsNullOrEmpty(level) || string.IsNullOrEmpty(hanzi)) continue;
+
+            // Check duplicate
+            bool exists = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
+                dbContext.HskVocabularies, v => v.HskLevel == level && v.Hanzi == hanzi, cancellationToken);
+            if (exists) { duplicate++; continue; }
+
+            var vocab = new Backend.Domain.Entities.HskVocabulary
+            {
+                HskLevel = level,
+                Hanzi = hanzi,
+                Pinyin = row.Cell(3).GetString()?.Trim() ?? "",
+                Meaning = row.Cell(4).GetString()?.Trim() ?? "",
+                WordType = row.Cell(5).GetString()?.Trim(),
+                ExampleSentence = row.Cell(6).GetString()?.Trim(),
+                ExamplePinyin = row.Cell(7).GetString()?.Trim(),
+                ExampleMeaning = row.Cell(8).GetString()?.Trim(),
+                AudioUrl = row.Cell(9).GetString()?.Trim(),
+                DisplayOrder = int.TryParse(row.Cell(10).GetString(), out int order) ? order : 0,
+                IsActive = true
+            };
+            dbContext.HskVocabularies.Add(vocab);
+            success++;
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"Dòng {i}: {ex.Message}");
+            fail++;
+        }
+    }
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    var msg = $"Nhập thành công {success}, thất bại {fail}, bỏ qua {duplicate} bị trùng.";
+    if (errors.Any()) msg += " Chi tiết: " + string.Join(" | ", errors.Take(3));
+    return Results.Ok(new { Success = success, Fail = fail, Duplicate = duplicate, Errors = errors });
+}).DisableAntiforgery();
+
 app.Run();
 
 public record CreateExamRequest(string Title, string DataUrl, string Category = "IELTS");
 public record SaveToeicExamRequest(string CollectionName, string Title, int? MockTestId, System.Text.Json.JsonElement ExamData);
+public record HskSaveExamRequest(string CollectionName, string Title, int? MockTestId, System.Text.Json.JsonElement ExamData);
+public record HskVocabularyRequest(string HskLevel, string Hanzi, string Pinyin, string Meaning, string? WordType, string? ExampleSentence, string? ExamplePinyin, string? ExampleMeaning, string? AudioUrl, int? DisplayOrder, bool? IsActive);

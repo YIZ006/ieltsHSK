@@ -1,0 +1,316 @@
+@page "/hsk/writing/preview"
+@page "/hsk/writing/{ExamUrl}"
+@page "/hsk/writing"
+@layout Frontend.App.Layout.ExamLayout
+@using Frontend.App.Models
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject ExamSessionService ExamSession
+@inject ExamSubmissionService Submissions
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<PageTitle>@(exam?.Title ?? "HSK Writing") - IeltsHSK</PageTitle>
+
+@if (isLoading)
+{
+    <div class="writing-loading">
+        <div class="loading-ring"></div>
+        <p>Đang tải đề thi...</p>
+    </div>
+}
+else if (exam == null)
+{
+    <div class="writing-error">
+        <div class="error-icon">📭</div>
+        <h3>Không tải được đề thi</h3>
+        <p>Vui lòng thử lại hoặc chọn đề khác.</p>
+    </div>
+}
+else
+{
+    var activeTask = exam.Tasks[activeTaskIndex];
+
+    @* ── TOP BAR ── *@
+    <div class="writing-topbar">
+        <div class="topbar-left">
+            <span class="exam-title-short">@exam.Title</span>
+        </div>
+        <div class="topbar-center">
+            <div class="timer-box @(secondsLeft < 600 ? "timer-warning" : "")">
+                <span class="timer-icon">⏱</span>
+                <span>@TimerDisplay remaining</span>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <button class="btn-exit-exam" @onclick="ExitExam">Exit test</button>
+            @if (isFinished)
+            {
+                <span class="test-session-status">@(timedOut ? "Time is up" : "Submitted")</span>
+            }
+            <button class="btn-submit-exam" disabled="@(isFinished || isSubmitting)" @onclick="SubmitExam">
+                @(isSubmitting ? "Saving..." : "Submit ➤")
+            </button>
+        </div>
+    </div>
+
+    @* ── TASK TABS ── *@
+    <div class="writing-task-tabs">
+        @for (int i = 0; i < exam.Tasks.Count; i++)
+        {
+            var idx = i;
+            var task = exam.Tasks[i];
+            <button class="task-tab-btn @(activeTaskIndex == idx ? "active" : "")"
+                    @onclick="() => SwitchTask(idx)">
+                @task.TaskTitle
+                <span class="word-count-badge">@task.WordCount / @task.MinWords words</span>
+            </button>
+        }
+    </div>
+
+    @* ── SPLIT LAYOUT ── *@
+    <div class="writing-split">
+        @* LEFT: Prompt + Image *@
+        <div class="prompt-col" id="prompt-scroll">
+            <div class="task-instruction">
+                <h2 class="task-title">@activeTask.TaskTitle</h2>
+                <p class="task-meta">@((MarkupString)activeTask.Instruction)</p>
+                <div class="task-prompt">@((MarkupString)activeTask.Prompt)</div>
+                <p class="task-word-req">You should write <strong>@activeTask.RequireWords.</strong></p>
+                <div class="hsk-ime-note">💡 Sử dụng IME tiếng Trung để nhập chữ Hán</div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(activeTask.ImageUrl))
+            {
+                <div class="task-image-wrap">
+                    <img src="@activeTask.ImageUrl" alt="@activeTask.ImageAlt" class="task-image" />
+                </div>
+            }
+        </div>
+
+        @* DIVIDER *@
+        <div class="split-divider"></div>
+
+        @* RIGHT: Essay Editor *@
+        <div class="editor-col">
+            <textarea class="essay-textarea"
+                      placeholder="Viết bài của bạn ở đây..."
+                      disabled="@isFinished"
+                      @bind="activeTask.Answer"
+                      @bind:event="oninput"
+                      spellcheck="false"></textarea>
+            <div class="editor-footer">
+                <span class="word-count @(activeTask.WordCount >= activeTask.MinWords ? "count-ok" : "count-low")">
+                    Số chữ: <strong>@activeTask.WordCount</strong> / @activeTask.MinWords yêu cầu
+                </span>
+                @if (activeTask.WordCount >= activeTask.MinWords)
+                {
+                    <span class="count-check">✓ Đạt yêu cầu</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (savedSubmission != null)
+    {
+        <section class="writing-score-panel">
+            <div>
+                <span class="score-label">Saved result</span>
+                <strong>@savedSubmission.Id</strong>
+            </div>
+            @if (scoreReport == null)
+            {
+                <p>Scoring your writing...</p>
+            }
+            else
+            {
+                <div class="score-overall">
+                    <span>Band</span>
+                    <strong>@scoreReport.Overall.ToString("F1")</strong>
+                </div>
+                <p>@scoreReport.Summary</p>
+                <div class="score-criteria">
+                    @foreach (var criterion in scoreReport.Criteria)
+                    {
+                        <div>
+                            <span>@criterion.Name</span>
+                            <strong>@criterion.Score.ToString("F1")</strong>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    }
+}
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "ExamUrl")]
+    public string? QueryExamUrl { get; set; }
+
+    [Parameter]
+    public string? ExamUrl { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "Session")]
+    public string? TestSessionId { get; set; }
+
+    private WritingExamData? exam;
+    private bool isLoading = true;
+    private int activeTaskIndex = 0;
+
+    // Timer: default 45 minutes for HSK writing (adjustable)
+    private int secondsLeft = 45 * 60;
+    private System.Threading.Timer? _timer;
+    private IDisposable? _navigationRegistration;
+    private string? _sessionKey;
+    private bool isFinished;
+    private bool timedOut;
+    private bool isSubmitting;
+    private string currentExamUrl = DefaultExamUrl;
+    private IeltsSubmissionRecord? savedSubmission;
+    private IeltsScoreReport? scoreReport;
+
+    private const string DefaultExamUrl = "sample-data/HSK3-Sample-Writing.json";
+
+    private string TimerDisplay
+    {
+        get
+        {
+            int m = secondsLeft / 60, s = secondsLeft % 60;
+            return $"{m:D2}:{s:D2}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+
+        string? actualUrl = ExamUrl;
+        if (string.IsNullOrWhiteSpace(actualUrl)) actualUrl = QueryExamUrl;
+        string url = string.IsNullOrWhiteSpace(actualUrl) ? DefaultExamUrl : Uri.UnescapeDataString(actualUrl);
+        currentExamUrl = url;
+
+        try
+        {
+            exam = await Http.GetFromJsonAsync<WritingExamData>(url);
+        }
+        catch
+        {
+            exam = null;
+        }
+
+        isLoading = false;
+
+        _sessionKey = ExamSessionService.CreateStorageKey("hsk-writing", TestSessionId, url);
+        var session = await ExamSession.StartAsync(_sessionKey, secondsLeft);
+        secondsLeft = session.SecondsRemaining;
+        isFinished = session.IsCompleted || session.IsExpired;
+        timedOut = session.IsTimedOut || session.IsExpired;
+        if (isFinished) return;
+
+        _navigationRegistration = Navigation.RegisterLocationChangingHandler(ConfirmLeave);
+        await ExamSession.SetUnloadWarningAsync(true);
+        _timer = new System.Threading.Timer(_ => _ = UpdateTimerAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void SwitchTask(int index)
+    {
+        if (!isFinished) activeTaskIndex = index;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && isFinished) await ExamSession.LockTestContentAsync(".writing-split");
+    }
+
+    private void OnInput()
+    {
+        // triggers StateHasChanged via @bind:event="oninput"
+        StateHasChanged();
+    }
+
+    private async Task SubmitExam()
+    {
+        if (isFinished || isSubmitting) return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            "Nộp bài viết HSK? Bài làm sẽ được lưu và chấm.");
+        if (!confirmed) return;
+
+        await FinishExamAsync(false);
+    }
+
+    private async Task UpdateTimerAsync()
+    {
+        if (isFinished || string.IsNullOrEmpty(_sessionKey)) return;
+        var session = await ExamSession.GetAsync(_sessionKey);
+        if (session == null) return;
+        secondsLeft = session.SecondsRemaining;
+        if (session.IsExpired) await InvokeAsync(() => FinishExamAsync(true));
+        else await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task FinishExamAsync(bool timeExpired)
+    {
+        if (isFinished || isSubmitting) return;
+        isSubmitting = true;
+        await InvokeAsync(StateHasChanged);
+
+        savedSubmission = BuildSubmission(timeExpired);
+        await Submissions.SaveAsync(savedSubmission);
+        savedSubmission = await Submissions.ScoreAndSaveWritingAsync(savedSubmission);
+        scoreReport = savedSubmission.Score;
+
+        isFinished = true;
+        timedOut = timeExpired;
+        isSubmitting = false;
+        _timer?.Dispose();
+        if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
+        await ExamSession.LockTestContentAsync(".writing-split");
+        await ExamSession.SetUnloadWarningAsync(false);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private IeltsSubmissionRecord BuildSubmission(bool timeExpired)
+    {
+        var durationSeconds = Math.Max((exam?.TotalMinutes ?? 45) * 60 - secondsLeft, 0);
+        return new IeltsSubmissionRecord
+        {
+            Skill = "hsk-writing",
+            ExamTitle = exam?.Title ?? "HSK Writing",
+            ExamUrl = currentExamUrl,
+            SessionId = TestSessionId,
+            TimedOut = timeExpired,
+            DurationSeconds = durationSeconds,
+            Writing = new WritingSubmissionData
+            {
+                Tasks = exam?.Tasks.Select(task => new WritingTaskSubmission
+                {
+                    TaskNumber = task.TaskNumber,
+                    TaskTitle = task.TaskTitle,
+                    Prompt = task.Prompt,
+                    Answer = task.Answer,
+                    WordCount = task.WordCount,
+                    MinWords = task.MinWords
+                }).ToList() ?? new()
+            }
+        };
+    }
+
+    private async ValueTask ConfirmLeave(LocationChangingContext context)
+    {
+        if (!isFinished && !await ExamSession.ConfirmLeaveAsync()) context.PreventNavigation();
+    }
+
+    private void ExitExam() => Navigation.NavigateTo("/hsk/luyen-de");
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _navigationRegistration?.Dispose();
+        _ = ExamSession.SetUnloadWarningAsync(false);
+    }
+}

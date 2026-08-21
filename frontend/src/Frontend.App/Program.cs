@@ -77,4 +77,10 @@ builder.Services.AddScoped(sp =>
     return new ToeicBuilderService(httpClient);
 });
 
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
+    return new HskService(httpClient);
+});
+
 await builder.Build().RunAsync();
