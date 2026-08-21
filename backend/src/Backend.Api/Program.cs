@@ -12,6 +12,7 @@ var frontendUrl = builder.Configuration["Frontend:BaseUrl"] ?? "https://localhos
 const string frontendHttpUrl = "http://localhost:5102";
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
@@ -813,7 +814,7 @@ app.MapGet("/api/stories", async (string? level, string? category, string? searc
     return Results.Ok(dtos);
 });
 
-app.MapGet("/api/stories/{idOrSlug}", async (string idOrSlug, Backend.Infrastructure.Persistence.AppDbContext dbContext, HttpClient httpClient, CancellationToken cancellationToken) =>
+app.MapGet("/api/stories/{idOrSlug}", async (string idOrSlug, Backend.Infrastructure.Persistence.AppDbContext dbContext, IHttpClientFactory httpClientFactory, CancellationToken cancellationToken) =>
 {
     Backend.Domain.Entities.Story? story = null;
     if (int.TryParse(idOrSlug, out int id))
@@ -840,6 +841,7 @@ app.MapGet("/api/stories/{idOrSlug}", async (string idOrSlug, Backend.Infrastruc
     {
         try
         {
+            var httpClient = httpClientFactory.CreateClient();
             var json = await httpClient.GetStringAsync(story.JsonUrl, cancellationToken);
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             var root = doc.RootElement;
