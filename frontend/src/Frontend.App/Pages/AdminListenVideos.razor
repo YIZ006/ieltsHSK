@@ -326,7 +326,7 @@
     private async Task LoadVideos()
     {
         isLoading = true;
-        allVideos = await IeltsService.GetAllListenVideosAdminAsync();
+        allVideos = await IeltsService.GetAllListenVideosAsync();
         isLoading = false;
     }
 
@@ -342,7 +342,7 @@
         isApproving = true;
         approvingId = id;
         
-        var success = await IeltsService.ApproveListenVideoAsync(id);
+        var (success, msg) = await IeltsService.ApproveListenVideoAsync(id);
         isApproving = false;
         approvingId = null;
 
@@ -356,7 +356,7 @@
         else
         {
             alertType = "danger";
-            alertMessage = "Có lỗi xảy ra khi duyệt video.";
+            alertMessage = msg ?? "Có lỗi xảy ra khi duyệt video.";
         }
     }
 
@@ -395,26 +395,17 @@
 
         try
         {
-            using var content = new MultipartFormDataContent();
-            var fileContent = new StreamContent(file.OpenReadStream(10 * 1024 * 1024)); // 10MB
-            content.Add(fileContent, "file", file.Name);
-
-            var apiBase = Configuration["ApiBaseUrl"] ?? "https://localhost:7101";
-            var response = await Http.PostAsync($"{apiBase}/api/listen-videos/import-excel", content);
-
-            if (response.IsSuccessStatusCode)
+            var (success, msg) = await IeltsService.ImportListenVideosExcelAsync(file);
+            if (success)
             {
-                var result = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-                int count = result.TryGetProperty("count", out var c) ? c.GetInt32() : 0;
                 alertType = "success";
-                alertMessage = $"Nhập dữ liệu thành công! Đã thêm {count} video mới.";
+                alertMessage = "Nhập dữ liệu thành công! " + msg;
                 await LoadVideos();
             }
             else
             {
-                var err = await response.Content.ReadAsStringAsync();
                 alertType = "danger";
-                alertMessage = $"Lỗi khi nhập Excel: {err}";
+                alertMessage = "Lỗi khi nhập Excel: " + msg;
             }
         }
         catch (Exception ex)
@@ -457,7 +448,7 @@
         isSavingTranscript = true;
         modalError = null;
 
-        var success = await IeltsService.UpdateListenVideoTranscriptAsync(selectedVideo.Id, manualText);
+        var (success, msg) = await IeltsService.UpdateManualTranscriptAsync(selectedVideo.Id, manualText);
         isSavingTranscript = false;
 
         if (success)
@@ -469,7 +460,7 @@
         }
         else
         {
-            modalError = "Có lỗi xảy ra khi lưu phụ đề.";
+            modalError = msg ?? "Có lỗi xảy ra khi lưu phụ đề.";
         }
     }
 }
