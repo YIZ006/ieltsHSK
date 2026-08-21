@@ -14,6 +14,9 @@ public class User
     public int Xp { get; set; } = 0;
     public int Streak { get; set; } = 0;
     public DateTime? LastActive { get; set; }
+    public DateTime? LastLoginAt { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTime PasswordChangedAt { get; set; } = DateTime.UtcNow;
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }

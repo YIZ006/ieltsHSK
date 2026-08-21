@@ -1,0 +1,344 @@
+@page "/admin/ielts-users"
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
+<div class="admin-users-container">
+    <div class="header-actions">
+        <h2><i class="bi bi-people"></i> Quản lý Học viên</h2>
+        <div class="search-box">
+            <input type="text" placeholder="Tìm kiếm (Username, Email)..." @bind="searchTerm" @bind:event="oninput" />
+            <i class="bi bi-search"></i>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-spinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (filteredUsers != null)
+    {
+        <div class="table-responsive">
+            <table class="table custom-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Level</th>
+                        <th>Trạng thái</th>
+                        <th>Đăng nhập cuối</th>
+                        <th>Hành động</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in filteredUsers)
+                    {
+                        <tr class="@(user.IsActive ? "" : "disabled-row")">
+                            <td>#@user.Id</td>
+                            <td>
+                                <strong>@user.Username</strong>
+                            </td>
+                            <td>@user.Email</td>
+                            <td>
+                                <span class="badge @(user.Role == "admin" ? "bg-danger" : "bg-primary")">@user.Role</span>
+                            </td>
+                            <td><span class="badge bg-secondary">@user.Level</span></td>
+                            <td>
+                                @if (user.IsActive)
+                                {
+                                    <span class="status-indicator active"><i class="bi bi-check-circle-fill"></i> Active</span>
+                                }
+                                else
+                                {
+                                    <span class="status-indicator disabled"><i class="bi bi-x-circle-fill"></i> Disabled</span>
+                                }
+                            </td>
+                            <td>@(user.LastLoginAt?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa đăng nhập")</td>
+                            <td class="actions">
+                                <button class="btn btn-sm btn-outline-primary" @onclick="() => EditUser(user)" title="Sửa">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-sm @(user.IsActive ? "btn-outline-warning" : "btn-outline-success")" 
+                                        @onclick="() => ToggleStatus(user.Id)" 
+                                        title="@(user.IsActive ? "Vô hiệu hóa" : "Kích hoạt")">
+                                    <i class="bi @(user.IsActive ? "bi-lock" : "bi-unlock")"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-info" @onclick="() => ResetPassword(user.Id)" title="Reset Password">
+                                    <i class="bi bi-key"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => ViewLogs(user.Id, user.Username)" title="Xem Log">
+                                    <i class="bi bi-clock-history"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@if (isEditModalOpen && editingUser != null)
+{
+    <div class="modal-backdrop" @onclick="CloseEditModal">
+        <div class="modal-content" @onclick:stopPropagation>
+            <h3>Sửa thông tin học viên</h3>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" class="form-control" @bind="editingUser.Username" />
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" class="form-control" @bind="editingUser.Email" />
+            </div>
+            <div class="form-group">
+                <label>Role</label>
+                <select class="form-control" @bind="editingUser.Role">
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Level</label>
+                <select class="form-control" @bind="editingUser.Level">
+                    <option value="A1">A1</option>
+                    <option value="A2">A2</option>
+                    <option value="B1">B1</option>
+                    <option value="B2">B2</option>
+                    <option value="C1">C1</option>
+                    <option value="C2">C2</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" @onclick="CloseEditModal">Hủy</button>
+                <button class="btn btn-primary" @onclick="SaveUser">Lưu thay đổi</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (isLogModalOpen)
+{
+    <div class="modal-backdrop" @onclick="CloseLogModal">
+        <div class="modal-content log-modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h3>Activity Logs: @currentLogUsername</h3>
+                <button class="btn-close" @onclick="CloseLogModal"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="log-container">
+                @if (isLoadingLogs)
+                {
+                    <p>Đang tải log...</p>
+                }
+                else if (userLogs != null && userLogs.Any())
+                {
+                    <ul class="log-list">
+                        @foreach (var log in userLogs)
+                        {
+                            <li>
+                                <div class="log-time">@log.CreatedAt.ToString("dd/MM/yyyy HH:mm:ss")</div>
+                                <div class="log-action">
+                                    <span class="badge bg-dark">@log.Action</span>
+                                </div>
+                                <div class="log-detail">@log.Detail</div>
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p>Chưa có dữ liệu hoạt động.</p>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<UserDto>? users;
+    private string searchTerm = "";
+    private bool isLoading = true;
+
+    // Edit Modal
+    private bool isEditModalOpen = false;
+    private UserDto? editingUser = null;
+
+    // Log Modal
+    private bool isLogModalOpen = false;
+    private bool isLoadingLogs = false;
+    private List<UserLogDto>? userLogs;
+    private string currentLogUsername = "";
+
+    private IEnumerable<UserDto>? filteredUsers => string.IsNullOrWhiteSpace(searchTerm)
+        ? users
+        : users?.Where(u => u.Username.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) || 
+                            u.Email.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        isLoading = true;
+        try
+        {
+            var apiBase = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101";
+            users = await Http.GetFromJsonAsync<List<UserDto>>($"{apiBase}/api/admin/users");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading users: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ToggleStatus(int id)
+    {
+        try
+        {
+            var apiBase = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101";
+            var response = await Http.PutAsync($"{apiBase}/api/admin/users/{id}/toggle-active", null);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadUsers(); // Reload
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Lỗi: {ex.Message}");
+        }
+    }
+
+    private async Task ResetPassword(int id)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn reset password của học viên này không?")) return;
+
+        try
+        {
+            var apiBase = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101";
+            var response = await Http.PostAsync($"{apiBase}/api/admin/users/{id}/reset-password", null);
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<ResetPasswordResult>();
+                if (result != null)
+                {
+                    await JS.InvokeVoidAsync("alert", $"Reset mật khẩu thành công!\n\nMật khẩu mới: {result.TempPassword}\n\nVui lòng gửi mật khẩu này cho học viên.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Lỗi: {ex.Message}");
+        }
+    }
+
+    private void EditUser(UserDto user)
+    {
+        editingUser = new UserDto
+        {
+            Id = user.Id,
+            Username = user.Username,
+            Email = user.Email,
+            Role = user.Role,
+            Level = user.Level
+        };
+        isEditModalOpen = true;
+    }
+
+    private void CloseEditModal()
+    {
+        isEditModalOpen = false;
+        editingUser = null;
+    }
+
+    private async Task SaveUser()
+    {
+        if (editingUser == null) return;
+        
+        try
+        {
+            var apiBase = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101";
+            var response = await Http.PutAsJsonAsync($"{apiBase}/api/admin/users/{editingUser.Id}", new
+            {
+                Username = editingUser.Username,
+                Email = editingUser.Email,
+                Role = editingUser.Role,
+                Level = editingUser.Level
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadUsers();
+                CloseEditModal();
+                await JS.InvokeVoidAsync("alert", "Cập nhật thành công!");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Lỗi lưu thông tin: {ex.Message}");
+        }
+    }
+
+    private async Task ViewLogs(int id, string username)
+    {
+        currentLogUsername = username;
+        isLogModalOpen = true;
+        isLoadingLogs = true;
+        
+        try
+        {
+            var apiBase = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101";
+            userLogs = await Http.GetFromJsonAsync<List<UserLogDto>>($"{apiBase}/api/admin/users/{id}/logs");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading logs: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingLogs = false;
+        }
+    }
+
+    private void CloseLogModal()
+    {
+        isLogModalOpen = false;
+        userLogs = null;
+    }
+
+    public class UserDto
+    {
+        public int Id { get; set; }
+        public string Username { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Role { get; set; } = "";
+        public string Level { get; set; } = "";
+        public bool IsActive { get; set; }
+        public DateTime? LastLoginAt { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class UserLogDto
+    {
+        public int Id { get; set; }
+        public string Action { get; set; } = "";
+        public string Detail { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class ResetPasswordResult
+    {
+        public string TempPassword { get; set; } = "";
+    }
+}
