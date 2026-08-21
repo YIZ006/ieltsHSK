@@ -115,5 +115,8 @@ public static class DependencyInjection
             );
             await dbContext.SaveChangesAsync();
         }
+
+        // Seed Stories
+        await StorySeedData.SeedStoriesAsync(dbContext);
     }
 }
