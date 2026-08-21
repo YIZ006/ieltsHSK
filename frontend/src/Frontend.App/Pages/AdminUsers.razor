@@ -5,7 +5,7 @@
 @inject IJSRuntime JS
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
-<PageTitle>Quản lý Học viên & Người dùng - Admin Dashboard</PageTitle>
+<PageTitle>Quản lý Học viên & Người dùng - Admin Hub</PageTitle>
 
 <div class="admin-users-page">
     <!-- Top Header Title & Actions -->
@@ -15,8 +15,8 @@
                 <i class="bi bi-people-fill"></i>
             </div>
             <div>
-                <h1 class="page-title">Quản lý Học viên & Người dùng</h1>
-                <p class="page-subtitle">Quản lý thông tin tài khoản, phân quyền quản trị, trạng thái hoạt động và lịch sử học tập.</p>
+                <h1 class="page-title">Quản lý Học viên & Tài khoản</h1>
+                <p class="page-subtitle">Quản lý toàn diện học viên các phân hệ IELTS, TOEIC, HSK, phân quyền quản trị và trạng thái tài khoản.</p>
             </div>
         </div>
         <div class="header-right">
@@ -25,6 +25,22 @@
                 <span>Làm mới</span>
             </button>
         </div>
+    </div>
+
+    <!-- Domain Category Pills -->
+    <div class="domain-tabs-row">
+        <button class="domain-tab-btn @(currentDomainFilter == "all" ? "active" : "")" @onclick='() => SetDomainFilter("all")'>
+            <i class="bi bi-grid-fill"></i> Tất cả phân hệ
+        </button>
+        <button class="domain-tab-btn domain-ielts @(currentDomainFilter == "ielts" ? "active" : "")" @onclick='() => SetDomainFilter("ielts")'>
+            <span>🇬🇧</span> Học viên IELTS
+        </button>
+        <button class="domain-tab-btn domain-toeic @(currentDomainFilter == "toeic" ? "active" : "")" @onclick='() => SetDomainFilter("toeic")'>
+            <span>🏆</span> Học viên TOEIC
+        </button>
+        <button class="domain-tab-btn domain-hsk @(currentDomainFilter == "hsk" ? "active" : "")" @onclick='() => SetDomainFilter("hsk")'>
+            <span>🇨🇳</span> Học viên HSK
+        </button>
     </div>
 
     <!-- Quick Stats Cards -->
@@ -63,19 +79,19 @@
     <div class="toolbar-card">
         <div class="filter-tabs">
             <button class="filter-tab-btn @(currentFilter == "all" ? "active" : "")" @onclick='() => SetFilter("all")'>
-                Tất cả <span class="tab-badge">@(users?.Count ?? 0)</span>
+                Tất cả vai trò <span class="tab-badge">@(FilteredDomainUsers?.Count() ?? 0)</span>
             </button>
             <button class="filter-tab-btn @(currentFilter == "user" ? "active" : "")" @onclick='() => SetFilter("user")'>
-                Học viên <span class="tab-badge">@(users?.Count(u => u.Role == "user") ?? 0)</span>
+                Học viên <span class="tab-badge">@(FilteredDomainUsers?.Count(u => u.Role == "user") ?? 0)</span>
             </button>
             <button class="filter-tab-btn @(currentFilter == "admin" ? "active" : "")" @onclick='() => SetFilter("admin")'>
-                Admin <span class="tab-badge">@(users?.Count(u => u.Role == "admin") ?? 0)</span>
+                Admin <span class="tab-badge">@(FilteredDomainUsers?.Count(u => u.Role == "admin") ?? 0)</span>
             </button>
             <button class="filter-tab-btn @(currentFilter == "active" ? "active" : "")" @onclick='() => SetFilter("active")'>
-                Đang hoạt động <span class="tab-badge">@(users?.Count(u => u.IsActive) ?? 0)</span>
+                Đang hoạt động <span class="tab-badge">@(FilteredDomainUsers?.Count(u => u.IsActive) ?? 0)</span>
             </button>
             <button class="filter-tab-btn @(currentFilter == "disabled" ? "active" : "")" @onclick='() => SetFilter("disabled")'>
-                Đã khóa <span class="tab-badge">@(users?.Count(u => !u.IsActive) ?? 0)</span>
+                Đã khóa <span class="tab-badge">@(FilteredDomainUsers?.Count(u => !u.IsActive) ?? 0)</span>
             </button>
         </div>
 
@@ -103,7 +119,7 @@
             <div class="empty-state">
                 <i class="bi bi-person-x"></i>
                 <h4>Không tìm thấy người dùng phù hợp</h4>
-                <p>Thử thay đổi từ khóa tìm kiếm hoặc bộ lọc trạng thái.</p>
+                <p>Thử thay đổi từ khóa tìm kiếm hoặc bộ lọc phân hệ.</p>
             </div>
         }
         else
@@ -328,9 +344,13 @@
 }
 
 @code {
+    [SupplyParameterFromQuery(Name = "domain")]
+    public string? DomainParam { get; set; }
+
     private List<UserDto>? users;
     private string searchTerm = "";
     private string currentFilter = "all";
+    private string currentDomainFilter = "all";
     private bool isLoading = true;
     private bool isSaving = false;
 
@@ -347,6 +367,14 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadUsers();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrEmpty(DomainParam))
+        {
+            currentDomainFilter = DomainParam.ToLowerInvariant();
+        }
     }
 
     private async Task LoadUsers()
@@ -366,9 +394,23 @@
         }
     }
 
-    private void SetFilter(string filter)
+    private void SetFilter(string filter) => currentFilter = filter;
+    private void SetDomainFilter(string domain) => currentDomainFilter = domain;
+
+    private IEnumerable<UserDto>? FilteredDomainUsers
     {
-        currentFilter = filter;
+        get
+        {
+            if (users == null) return null;
+            var list = users.AsEnumerable();
+
+            if (currentDomainFilter == "admin")
+            {
+                list = list.Where(u => u.Role == "admin");
+            }
+
+            return list;
+        }
     }
 
     private IEnumerable<UserDto>? filteredUsers
@@ -378,7 +420,7 @@
             if (users == null) return null;
             var list = users.AsEnumerable();
 
-            // Filter by tab
+            // Filter by role/state tab
             list = currentFilter switch
             {
                 "user" => list.Where(u => u.Role == "user"),
