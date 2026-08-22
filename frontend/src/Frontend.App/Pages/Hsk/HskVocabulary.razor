@@ -9,6 +9,7 @@
 @inject NavigationManager Navigation
 @inject ILocalStorageService LocalStorage
 @inject IJSRuntime JS
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Từ vựng Tiếng Trung HSK 1–6 - ieltsHSK</PageTitle>
 
@@ -44,8 +45,36 @@
             <i class="bi bi-search search-icon"></i>
             <input type="text" placeholder="Tìm Chữ Hán, Pinyin, Nghĩa tiếng Việt..." @bind="searchTerm" @bind:event="oninput" />
         </div>
+
+        <div class="toolbar-actions">
+            <label class="hide-learned-toggle" title="Từ đã thuộc sẽ không còn hiển thị trong danh sách">
+                <input type="checkbox" @bind="hideLearned" />
+                <span>Ẩn từ đã thuộc</span>
+            </label>
+
+            <button class="btn-shuffle @(isShuffled ? "active" : "")" @onclick="ToggleShuffle"
+                    title="Xáo trộn thứ tự danh sách từ">
+                <i class="bi bi-shuffle"></i>
+                <span>@(isShuffled ? "Đang xáo trộn" : "Xáo trộn")</span>
+            </button>
+
+            <div class="flashcard-starter">
+                <select class="session-size-select" @bind="flashcardSize" title="Số từ mỗi phiên học">
+                    <option value="10">10 từ</option>
+                    <option value="20">20 từ</option>
+                    <option value="30">30 từ</option>
+                    <option value="40">40 từ</option>
+                    <option value="50">50 từ</option>
+                </select>
+                <button class="btn-flashcard-start" @onclick="StartFlashcardSession">
+                    <i class="bi bi-collection-play-fill"></i>
+                    <span>Học Flashcard</span>
+                </button>
+            </div>
+        </div>
+
         <div class="stats-counter">
-            <span>Tiến độ đã thuộc: <b>@learnedIds.Count</b> / @FilteredItems.Count từ</span>
+            <span>Tiến độ đã thuộc: <b>@learnedIds.Count</b> / @vocabItems.Count từ</span>
         </div>
     </div>
 
@@ -125,19 +154,181 @@
     }
 </div>
 
+<!-- Flashcard Study Overlay -->
+@if (flashcardActive)
+{
+    <div class="flashcard-overlay">
+        <div class="flashcard-panel">
+            <div class="fc-topbar">
+                @if (!showSessionSummary)
+                {
+                    <span class="fc-counter"><b>@(sessionIndex + 1)</b> / @sessionQueue.Count</span>
+                }
+                else
+                {
+                    <span class="fc-counter">Tổng kết phiên học</span>
+                }
+                <button class="fc-close" @onclick="EndFlashcardSession" title="Kết thúc phiên học">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="fc-progress-track">
+                <div class="fc-progress-fill" style="width:@FlashcardProgressPercent%"></div>
+            </div>
+
+            @if (showSessionSummary)
+            {
+                <!-- ===== Summary Screen ===== -->
+                <div class="fc-summary">
+                    <div class="fc-summary-head">
+                        <i class="bi bi-trophy-fill"></i>
+                        <h3>Hoàn thành @(sessionQueue.Count - notRememberedThisSession.Count)/@sessionQueue.Count từ!</h3>
+                    </div>
+                    <div class="fc-summary-stats">
+                        <div class="stat-chip remember">
+                            <i class="bi bi-check-circle-fill"></i>
+                            <div><b>@rememberedThisSession.Count</b><span>nhớ rồi</span></div>
+                        </div>
+                        <div class="stat-chip forget">
+                            <i class="bi bi-x-circle-fill"></i>
+                            <div><b>@notRememberedThisSession.Count</b><span>chưa nhớ</span></div>
+                        </div>
+                    </div>
+
+                    @if (notRememberedThisSession.Any())
+                    {
+                        <p class="fc-unlearned-title"><i class="bi bi-exclamation-triangle-fill"></i> Các từ CHƯA NHỚ cần ôn lại:</p>
+                        <div class="fc-unlearned-list">
+                            @foreach (var w in notRememberedThisSession)
+                            {
+                                <div class="fc-unlearned-item">
+                                    <div class="ul-word">
+                                        <span class="ul-hanzi">@w.Hanzi</span>
+                                        <span class="ul-pinyin">@w.Pinyin</span>
+                                        <span class="ul-meaning">@w.Meaning</span>
+                                    </div>
+                                    <button class="ul-mark-btn" @onclick="() => MarkLearnedFromSummary(w.Id)" title="Đánh dấu đã thuộc">
+                                        <i class="bi bi-check-lg"></i> Nhớ rồi
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                        <div class="fc-summary-actions">
+                            <button class="fc-btn retry" @onclick="RetryUnremembered">
+                                <i class="bi bi-arrow-repeat"></i> Học lại từ chưa nhớ
+                            </button>
+                            <button class="fc-btn finish" @onclick="EndFlashcardSession">
+                                Kết thúc phiên
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="fc-perfect">
+                            <i class="bi bi-emoji-smile-fill"></i>
+                            <p>Xuất sắc! Bạn đã nhớ toàn bộ các từ trong phiên này.</p>
+                        </div>
+                        <div class="fc-summary-actions center">
+                            <button class="fc-btn finish" @onclick="EndFlashcardSession">Kết thúc phiên</button>
+                        </div>
+                    }
+                </div>
+            }
+            else if (sessionQueue.Any())
+            {
+                <!-- ===== Flashcard Stage ===== -->
+                var word = sessionQueue[sessionIndex];
+                <div class="fc-stage">
+                    <div class="fc-card-scene" @onclick="FlipCard">
+                        <div class="fc-card-inner @(cardFlipped ? "flipped" : "")">
+                            <!-- Front -->
+                            <div class="fc-face fc-front">
+                                <span class="fc-level-tag">@word.HskLevel</span>
+                                <button class="btn-audio fc-audio" @onclick="() => SpeakChinese(word.Hanzi)"
+                                        @onclick:stopPropagation="true" title="Phát âm">
+                                    <i class="bi bi-volume-up-fill"></i>
+                                </button>
+                                <div class="fc-hanzi">@word.Hanzi</div>
+                                <div class="fc-pinyin">@word.Pinyin</div>
+                                <div class="fc-tap-hint"><i class="bi bi-hand-index-thumb"></i> Chạm để lật thẻ</div>
+                            </div>
+                            <!-- Back -->
+                            <div class="fc-face fc-back">
+                                <div class="fc-back-meaning">@word.Meaning</div>
+                                @if (!string.IsNullOrEmpty(word.WordType))
+                                {
+                                    <span class="fc-word-type">@word.WordType</span>
+                                }
+                                @if (!string.IsNullOrEmpty(word.ExampleSentence))
+                                {
+                                    <div class="fc-example">
+                                        <div class="ex-hanzi">@word.ExampleSentence</div>
+                                        @if (!string.IsNullOrEmpty(word.ExamplePinyin))
+                                        {
+                                            <div class="ex-pinyin">@word.ExamplePinyin</div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(word.ExampleMeaning))
+                                        {
+                                            <div class="ex-meaning">@word.ExampleMeaning</div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fc-actions">
+                    <button class="fc-btn no" @onclick="MarkNotRemembered">
+                        <i class="bi bi-x-circle"></i> Chưa nhớ
+                    </button>
+                    <button class="fc-btn yes" @onclick="MarkRemembered">
+                        <i class="bi bi-check-circle-fill"></i> Nhớ rồi
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 @code {
     private string selectedLevel = "HSK1";
+    private bool isAuthenticated = false;
     private string searchTerm = "";
     private List<HskVocabularyItem> vocabItems = new();
     private bool isLoading = true;
     private HashSet<int> learnedIds = new();
 
+    // Danh sách xáo trộn + ẩn từ đã thuộc
+    private bool isShuffled = false;
+    private bool hideLearned = false;
+    private List<HskVocabularyItem>? shuffledItems;
+
+    // Phiên học Flashcard
+    private bool flashcardActive = false;
+    private bool showSessionSummary = false;
+    private int flashcardSize = 10;
+    private List<HskVocabularyItem> sessionQueue = new();
+    private int sessionIndex = 0;
+    private bool cardFlipped = false;
+    private List<HskVocabularyItem> rememberedThisSession = new();
+    private List<HskVocabularyItem> notRememberedThisSession = new();
+
+    private int FlashcardProgressPercent =>
+        sessionQueue.Count == 0 ? 0 : (int)((double)sessionIndex / sessionQueue.Count * 100);
+
+    private List<HskVocabularyItem> BaseItems =>
+        isShuffled ? (shuffledItems ?? vocabItems) : vocabItems;
+
     private List<HskVocabularyItem> FilteredItems =>
-        string.IsNullOrWhiteSpace(searchTerm)
-            ? vocabItems
-            : vocabItems.Where(x => (x.Hanzi != null && x.Hanzi.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
-                                    (x.Pinyin != null && x.Pinyin.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
-                                    (x.Meaning != null && x.Meaning.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))).ToList();
+        BaseItems
+            .Where(x => !hideLearned || !IsLearned(x.Id))
+            .Where(x => string.IsNullOrWhiteSpace(searchTerm) ||
+                        (x.Hanzi != null && x.Hanzi.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                        (x.Pinyin != null && x.Pinyin.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                        (x.Meaning != null && x.Meaning.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -164,11 +355,15 @@
 
         try
         {
-            vocabItems = await HskService.GetVocabularyAsync(selectedLevel);
-            if (vocabItems == null || !vocabItems.Any())
+            var result = await HskService.GetVocabularyAsync(selectedLevel);
+            if (result == null)
             {
-                // Sample fallback vocabulary for immediate rich display
+                // Lỗi kết nối API -> dùng bộ từ mẫu demo (chỉ có HSK 1-3)
                 vocabItems = GetSampleVocab(selectedLevel);
+            }
+            else
+            {
+                vocabItems = result;
             }
             await LoadLearnedState();
         }
@@ -178,12 +373,33 @@
             vocabItems = GetSampleVocab(selectedLevel);
         }
 
+        if (isShuffled)
+            shuffledItems = ShuffleList(vocabItems);
+
         isLoading = false;
         StateHasChanged();
     }
 
+    private void ToggleShuffle()
+    {
+        isShuffled = !isShuffled;
+        shuffledItems = isShuffled ? ShuffleList(vocabItems) : null;
+    }
+
+    private static List<HskVocabularyItem> ShuffleList(List<HskVocabularyItem> source)
+    {
+        var list = source.ToList();
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int j = Random.Shared.Next(i + 1);
+            (list[i], list[j]) = (list[j], list[i]);
+        }
+        return list;
+    }
+
     private async Task LoadLearnedState()
     {
+        // Luôn đọc localStorage trước (dùng cho khách)
         var key = $"hsk_learned_{selectedLevel}";
         var stored = await LocalStorage.GetItemAsync<string>(key);
         if (!string.IsNullOrEmpty(stored))
@@ -199,21 +415,147 @@
         {
             learnedIds = new();
         }
+
+        // Đã đăng nhập -> tiến độ theo tài khoản là chuẩn
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
+        if (isAuthenticated)
+        {
+            var serverIds = await HskService.GetVocabProgressAsync();
+            if (serverIds != null)
+            {
+                var vocabIdSet = vocabItems.Select(v => v.Id).ToHashSet();
+                learnedIds = serverIds.Where(id => vocabIdSet.Contains(id)).ToHashSet();
+            }
+        }
+    }
+
+    private async Task PersistLearnedState()
+    {
+        var key = $"hsk_learned_{selectedLevel}";
+        await LocalStorage.SetItemAsync(key, JsonSerializer.Serialize(learnedIds.ToList()));
     }
 
     private async Task ToggleLearned(int id)
     {
-        if (learnedIds.Contains(id))
-            learnedIds.Remove(id);
-        else
-            learnedIds.Add(id);
+        bool nowLearned = !learnedIds.Contains(id);
+        if (nowLearned) learnedIds.Add(id);
+        else learnedIds.Remove(id);
 
-        var key = $"hsk_learned_{selectedLevel}";
-        await LocalStorage.SetItemAsync(key, JsonSerializer.Serialize(learnedIds.ToList()));
+        await PersistLearnedState();
+
+        // Đăng nhập thì đồng bộ lên tài khoản
+        if (isAuthenticated)
+        {
+            await HskService.UpdateVocabProgressAsync(id, nowLearned);
+        }
         StateHasChanged();
     }
 
     private bool IsLearned(int id) => learnedIds.Contains(id);
+
+    // ===== Flashcard session =====
+
+    private async Task StartFlashcardSession()
+    {
+        // Pool: chỉ những từ CHƯA được đánh dấu là đã thuộc, xáo trộn ngẫu nhiên
+        var pool = ShuffleList(vocabItems.Where(x => !IsLearned(x.Id)).ToList());
+
+        if (pool.Count == 0)
+        {
+            await JS.InvokeVoidAsync("alert", "Tuyệt vời! Tất cả từ vựng ở cấp độ này đều đã thuộc.");
+            return;
+        }
+
+        sessionQueue = pool.Take(flashcardSize).ToList();
+        sessionIndex = 0;
+        cardFlipped = false;
+        rememberedThisSession = new();
+        notRememberedThisSession = new();
+        showSessionSummary = false;
+        flashcardActive = true;
+    }
+
+    private void FlipCard() => cardFlipped = !cardFlipped;
+
+    private async Task MarkRemembered()
+    {
+        var word = sessionQueue[sessionIndex];
+        rememberedThisSession.Add(word);
+        notRememberedThisSession.RemoveAll(x => x.Id == word.Id);
+        if (!learnedIds.Contains(word.Id))
+        {
+            learnedIds.Add(word.Id);
+            await PersistLearnedState();
+            if (isAuthenticated)
+                _ = HskService.UpdateVocabProgressAsync(word.Id, true);
+        }
+        AdvanceSession();
+    }
+
+    private void MarkNotRemembered()
+    {
+        var word = sessionQueue[sessionIndex];
+        notRememberedThisSession.RemoveAll(x => x.Id == word.Id);
+        notRememberedThisSession.Add(word);
+        bool wasLearned = learnedIds.Remove(word.Id);
+        if (wasLearned)
+        {
+            _ = PersistLearnedState();
+            if (isAuthenticated)
+                _ = HskService.UpdateVocabProgressAsync(word.Id, false);
+        }
+        AdvanceSession();
+    }
+
+    private void AdvanceSession()
+    {
+        if (sessionIndex >= sessionQueue.Count - 1)
+        {
+            // Hết thẻ → tổng kết
+            showSessionSummary = true;
+        }
+        else
+        {
+            sessionIndex++;
+            cardFlipped = false;
+        }
+    }
+
+    private void RetryUnremembered()
+    {
+        if (!notRememberedThisSession.Any()) return;
+        sessionQueue = ShuffleList(notRememberedThisSession);
+        sessionIndex = 0;
+        cardFlipped = false;
+        rememberedThisSession = new();
+        showSessionSummary = false;
+    }
+
+    private async Task MarkLearnedFromSummary(int id)
+    {
+        if (!learnedIds.Contains(id))
+        {
+            learnedIds.Add(id);
+            await PersistLearnedState();
+            if (isAuthenticated)
+                _ = HskService.UpdateVocabProgressAsync(id, true);
+        }
+        var w = notRememberedThisSession.FirstOrDefault(x => x.Id == id);
+        if (w != null)
+        {
+            notRememberedThisSession.Remove(w);
+            rememberedThisSession.Add(w);
+        }
+    }
+
+    private void EndFlashcardSession()
+    {
+        flashcardActive = false;
+        showSessionSummary = false;
+        sessionQueue = new();
+        StateHasChanged();
+    }
 
     private async Task SpeakChinese(string text)
     {
@@ -241,7 +583,9 @@
             };
         }
 
-        // HSK 1 default sample
+        // Chỉ dùng bộ mẫu cho HSK1 khi API lỗi. Các cấp khác (HSK4-6...)
+        // trả về rỗng để hiển thị empty-state thay vì từ của cấp độ khác.
+        if (level != "HSK1") return new List<HskVocabularyItem>();
         return new List<HskVocabularyItem>
         {
             new() { Id = 101, HskLevel = "HSK1", Hanzi = "你好", Pinyin = "nǐ hǎo", Meaning = "Xin chào", WordType = "Chào hỏi", ExampleSentence = "你好！很高兴认识你。", ExampleMeaning = "Xin chào! Rất vui được quen biết bạn." },

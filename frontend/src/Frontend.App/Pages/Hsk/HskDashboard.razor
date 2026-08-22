@@ -9,6 +9,7 @@
 @inject HskService HskService
 @inject ILocalStorageService LocalStorage
 @inject NavigationManager NavigationManager
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>HSK Dashboard - Học tập hôm nay</PageTitle>
 
@@ -147,7 +148,7 @@
 
 @code {
     private List<HskLearningSection>? sections;
-    private string? currentLevel;
+    private string currentLevel = "HSK1";
     private List<HskVocabularyItem> vocabItems = new();
     private int vocabTotalCount = 0;
     private int vocabLearnedCount = 0;
@@ -161,7 +162,7 @@
         currentLevel = await LocalStorage.GetItemAsync<string>("hsk_level") ?? "HSK1";
 
         // Load vocabulary for current level
-        vocabItems = await HskService.GetVocabularyAsync(currentLevel);
+        vocabItems = await HskService.GetVocabularyAsync(currentLevel) ?? new List<HskVocabularyItem>();
         vocabTotalCount = vocabItems.Count > 0 ? vocabItems.Count : (currentLevel == "HSK1" ? 150 : 300);
 
         // Load learned state from localStorage
@@ -193,6 +194,19 @@
         else
         {
             learnedIds = new();
+        }
+
+        // Đã đăng nhập -> tiến độ theo tài khoản là chuẩn
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        bool isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
+        if (isAuthenticated)
+        {
+            var serverIds = await HskService.GetVocabProgressAsync();
+            if (serverIds != null)
+            {
+                var vocabIdSet = vocabItems.Select(v => v.Id).ToHashSet();
+                learnedIds = serverIds.Where(id => vocabIdSet.Contains(id)).ToHashSet();
+            }
         }
         vocabLearnedCount = learnedIds.Count;
     }

@@ -58,7 +58,8 @@ public class HskService
     }
 
     // === Vocabulary ===
-    public async Task<List<HskVocabularyItem>> GetVocabularyAsync(string? level = null)
+    // Trả về null khi lỗi kết nối API; trả về list (có thể rỗng) khi gọi thành công.
+    public async Task<List<HskVocabularyItem>?> GetVocabularyAsync(string? level = null)
     {
         try
         {
@@ -69,7 +70,7 @@ public class HskService
         }
         catch
         {
-            return new List<HskVocabularyItem>();
+            return null;
         }
     }
 
@@ -106,6 +107,54 @@ public class HskService
         catch
         {
             return null;
+        }
+    }
+
+    // === Admin: Import vocabulary from Excel/CSV (mode: "skip" | "upsert") ===
+    public async Task<HskImportExcelResponse?> ImportVocabularyExcelAsync(Microsoft.AspNetCore.Components.Forms.IBrowserFile file, string mode = "skip")
+    {
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            var fileContent = new StreamContent(file.OpenReadStream(20 * 1024 * 1024));
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+            content.Add(fileContent, "file", file.Name);
+            content.Add(new StringContent(mode), "mode");
+
+            var response = await _http.PostAsync("/api/hsk/vocab/import-excel", content);
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadFromJsonAsync<HskImportExcelResponse>();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // === Vocabulary Progress (theo tài khoản) ===
+    public async Task<List<int>?> GetVocabProgressAsync()
+    {
+        try
+        {
+            var result = await _http.GetFromJsonAsync<HskVocabProgressResponse>("/api/hsk/vocab/progress");
+            return result?.VocabularyIds ?? new List<int>();
+        }
+        catch
+        {
+            return null; // chưa đăng nhập / lỗi -> dùng localStorage
+        }
+    }
+
+    public async Task<bool> UpdateVocabProgressAsync(int vocabularyId, bool learned)
+    {
+        try
+        {
+            var response = await _http.PostAsJsonAsync($"/api/hsk/vocab/progress/{vocabularyId}", new { learned });
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -154,3 +203,5 @@ public class HskService
 public record HskSaveExamRequest(string CollectionName, string Title, int? MockTestId, object ExamData);
 public record HskSaveExamResponse(string Url, int Id);
 public record HskUploadMediaResponse(string Url, string Type);
+public record HskImportExcelResponse(int Success, int Fail, int Duplicate, int Updated, string? JsonUrl, List<string>? Errors);
+public record HskVocabProgressResponse(List<int> VocabularyIds);

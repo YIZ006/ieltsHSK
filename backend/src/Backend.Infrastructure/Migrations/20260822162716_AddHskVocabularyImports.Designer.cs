@@ -4,6 +4,7 @@ using Backend.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Backend.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260822162716_AddHskVocabularyImports")]
+    partial class AddHskVocabularyImports
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -221,37 +224,9 @@ namespace Backend.Infrastructure.Migrations
                     b.Property<int>("TotalRows")
                         .HasColumnType("int");
 
-                    b.Property<int>("UpdatedCount")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
 
                     b.ToTable("HskVocabularyImports");
-                });
-
-            modelBuilder.Entity("Backend.Domain.Entities.HskVocabularyProgress", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("LearnedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("VocabularyId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "VocabularyId")
-                        .IsUnique();
-
-                    b.ToTable("HskVocabularyProgresses");
                 });
 
             modelBuilder.Entity("Backend.Domain.Entities.Language", b =>
@@ -793,17 +768,6 @@ namespace Backend.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("CreatedBy");
-                });
-
-            modelBuilder.Entity("Backend.Domain.Entities.HskVocabularyProgress", b =>
-                {
-                    b.HasOne("Backend.Domain.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Backend.Domain.Entities.Lesson", b =>

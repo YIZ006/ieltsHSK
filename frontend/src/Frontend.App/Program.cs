@@ -84,11 +84,22 @@ builder.Services.AddScoped(sp =>
     return new StoryService(httpClient);
 });
 
-// HskService: tải dữ liệu HSK
+// HskService: tải dữ liệu HSK (gắn JWT tự động qua AuthHeaderHandler)
+builder.Services.AddScoped<AuthHeaderHandler>();
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    return new HskService(httpClient);
+});
+
+// SpeakAlongService: IELTS Nói Theo (Shadowing)
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
-    return new HskService(httpClient);
+    return new SpeakAlongService(httpClient);
 });
 
 await builder.Build().RunAsync();
