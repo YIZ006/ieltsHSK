@@ -25,7 +25,7 @@
 
     <div class="filter-bar">
         <label>Level:</label>
-        <select @bind="filterLevel" @onchange="() => LoadData()">
+        <select @bind="filterLevel" @bind:after="LoadData">
             <option value="">All</option>
             <option value="HSK1">HSK1</option>
             <option value="HSK2">HSK2</option>
