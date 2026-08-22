@@ -1,0 +1,281 @@
+@page "/admin/hsk-vocab"
+@attribute [Authorize(Roles = "admin")]
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using System.IO
+@inject HskService HskService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject HttpClient Http
+
+<PageTitle>HSK Vocabulary Manager - Admin</PageTitle>
+
+<div class="admin-hsk-vocab">
+    <div class="admin-header">
+        <h1>📚 HSK Vocabulary Manager</h1>
+        <div class="admin-actions">
+            <button class="btn btn-primary" @onclick="() => ShowAddModal()">+ Add Word</button>
+            <button class="btn btn-secondary" @onclick="ImportExcel">📥 Import Excel</button>
+            <button class="btn btn-secondary" @onclick="DownloadTemplate">📄 Download Template</button>
+        </div>
+    </div>
+
+    <div class="filter-bar">
+        <label>Level:</label>
+        <select @bind="filterLevel" @onchange="() => LoadData()">
+            <option value="">All</option>
+            <option value="HSK1">HSK1</option>
+            <option value="HSK2">HSK2</option>
+            <option value="HSK3">HSK3</option>
+            <option value="HSK4">HSK4</option>
+            <option value="HSK5">HSK5</option>
+            <option value="HSK6">HSK6</option>
+            <option value="HSK7">HSK7</option>
+            <option value="HSK8">HSK8</option>
+            <option value="HSK9">HSK9</option>
+        </select>
+        <input type="text" placeholder="Search..." @bind="searchTerm" @oninput="() => LoadData()" />
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading">Loading...</div>
+    }
+    else
+    {
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Level</th>
+                    <th>Hanzi</th>
+                    <th>Pinyin</th>
+                    <th>Meaning</th>
+                    <th>Word Type</th>
+                    <th>Example</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in vocabItems)
+                {
+                    <tr>
+                        <td>@item.Id</td>
+                        <td>@item.HskLevel</td>
+                        <td>@item.Hanzi</td>
+                        <td>@item.Pinyin</td>
+                        <td>@item.Meaning</td>
+                        <td>@item.WordType</td>
+                        <td>@(item.ExampleSentence?.Length > 30 ? item.ExampleSentence[..30] + "…" : item.ExampleSentence)</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" @onclick="() => ShowEditModal(item)">Edit</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteItem(item.Id)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="pagination">
+            <span>Total: @totalCount</span>
+        </div>
+    }
+</div>
+
+<!-- Add/Edit Modal -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <h3>@(editingItem == null ? "Add New Word" : "Edit Word")</h3>
+            <div class="form-group">
+                <label>HSK Level</label>
+                <select @bind="form.HskLevel">
+                    <option value="HSK1">HSK1</option>
+                    <option value="HSK2">HSK2</option>
+                    <option value="HSK3">HSK3</option>
+                    <option value="HSK4">HSK4</option>
+                    <option value="HSK5">HSK5</option>
+                    <option value="HSK6">HSK6</option>
+                    <option value="HSK7">HSK7</option>
+                    <option value="HSK8">HSK8</option>
+                    <option value="HSK9">HSK9</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Hanzi</label>
+                <input type="text" @bind="form.Hanzi" />
+            </div>
+            <div class="form-group">
+                <label>Pinyin</label>
+                <input type="text" @bind="form.Pinyin" />
+            </div>
+            <div class="form-group">
+                <label>Meaning</label>
+                <input type="text" @bind="form.Meaning" />
+            </div>
+            <div class="form-group">
+                <label>Word Type</label>
+                <input type="text" @bind="form.WordType" />
+            </div>
+            <div class="form-group">
+                <label>Example Sentence</label>
+                <input type="text" @bind="form.ExampleSentence" />
+            </div>
+            <div class="form-group">
+                <label>Example Pinyin</label>
+                <input type="text" @bind="form.ExamplePinyin" />
+            </div>
+            <div class="form-group">
+                <label>Example Meaning</label>
+                <input type="text" @bind="form.ExampleMeaning" />
+            </div>
+            <div class="form-group">
+                <label>Audio URL</label>
+                <input type="text" @bind="form.AudioUrl" />
+            </div>
+            <div class="form-group">
+                <label>Display Order</label>
+                <input type="number" @bind="form.DisplayOrder" />
+            </div>
+            <div class="form-group">
+                <label>Is Active</label>
+                <input type="checkbox" @bind="form.IsActive" />
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" @onclick="SaveItem">Save</button>
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .admin-hsk-vocab { padding: 20px; max-width: 1400px; margin: 0 auto; }
+    .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+    .admin-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .filter-bar { display: flex; gap: 15px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+    .filter-bar select, .filter-bar input { padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; }
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-content { background: #1e1e1e; padding: 24px; border-radius: 8px; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto; color: #eee; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: 4px; }
+    .form-group input, .form-group select { width: 100%; padding: 6px 10px; border: 1px solid #444; border-radius: 4px; background: #2a2a2a; color: #eee; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; }
+    .btn { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #1a7f5a; color: #fff; }
+    .btn-secondary { background: #444; color: #fff; }
+    .btn-warning { background: #d4a017; color: #fff; }
+    .btn-danger { background: #c0392b; color: #fff; }
+    .btn-sm { padding: 3px 8px; font-size: 12px; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { padding: 8px 12px; border: 1px solid #333; text-align: left; }
+    .table th { background: #2a2a2a; }
+    .loading { text-align: center; padding: 40px; color: #888; }
+    .pagination { margin-top: 16px; text-align: right; color: #888; }
+</style>
+
+@code {
+    private List<HskVocabularyItem> vocabItems = new();
+    private bool isLoading = true;
+    private string filterLevel = "";
+    private string searchTerm = "";
+    private int totalCount = 0;
+
+    private bool showModal = false;
+    private HskVocabularyItem? editingItem = null;
+    private HskVocabularyItem form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+        var items = await HskService.GetVocabularyAsync(filterLevel);
+        if (!string.IsNullOrEmpty(searchTerm))
+        {
+            items = items.Where(x => x.Hanzi.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                                    x.Pinyin.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                                    x.Meaning.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+        vocabItems = items;
+        totalCount = items.Count;
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void ShowAddModal()
+    {
+        editingItem = null;
+        form = new HskVocabularyItem { HskLevel = "HSK1", IsActive = true, DisplayOrder = 0 };
+        showModal = true;
+    }
+
+    private void ShowEditModal(HskVocabularyItem item)
+    {
+        editingItem = item;
+        form = new HskVocabularyItem
+        {
+            Id = item.Id,
+            HskLevel = item.HskLevel,
+            Hanzi = item.Hanzi,
+            Pinyin = item.Pinyin,
+            Meaning = item.Meaning,
+            WordType = item.WordType,
+            ExampleSentence = item.ExampleSentence,
+            ExamplePinyin = item.ExamplePinyin,
+            ExampleMeaning = item.ExampleMeaning,
+            AudioUrl = item.AudioUrl,
+            DisplayOrder = item.DisplayOrder,
+            IsActive = item.IsActive
+        };
+        showModal = true;
+    }
+
+    private async Task SaveItem()
+    {
+        if (editingItem == null)
+        {
+            // Add new
+            await HskService.CreateVocabularyAsync(form);
+        }
+        else
+        {
+            // Update
+            await HskService.UpdateVocabularyAsync(form.Id, form);
+        }
+        showModal = false;
+        await LoadData();
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+    }
+
+    private async Task DeleteItem(int id)
+    {
+        var confirm = await JS.InvokeAsync<bool>("confirm", "Delete this vocabulary entry?");
+        if (!confirm) return;
+        await HskService.DeleteVocabularyAsync(id);
+        await LoadData();
+    }
+
+    private async Task ImportExcel()
+    {
+        // TODO: implement file upload and call import API
+        await JS.InvokeVoidAsync("alert", "Excel import coming soon. Use template to prepare data.");
+    }
+
+    private async Task DownloadTemplate()
+    {
+        var url = "/api/hsk/vocab/template-excel";
+        await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+}

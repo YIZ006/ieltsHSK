@@ -1,0 +1,160 @@
+@page "/hsk/dashboard"
+@layout Frontend.App.Layout.HskLayout
+@using Microsoft.AspNetCore.Authorization
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Blazored.LocalStorage
+@using System.Text.Json
+@attribute [Authorize]
+@inject HskService HskService
+@inject ILocalStorageService LocalStorage
+
+<PageTitle>HSK Dashboard</PageTitle>
+
+<div class="dashboard-header">
+    <h1 class="page-title">Hôm nay</h1>
+    <div style="display: flex; gap: 15px; align-items: center;">
+        <p class="date-subtitle">@DateTime.Now.ToString("dddd, d MMMM, yyyy", new System.Globalization.CultureInfo("vi-VN"))</p>
+        @if (!string.IsNullOrEmpty(currentLevel))
+        {
+            <span class="level-badge" style="background-color: #e8f0fe; color: #1a73e8; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">
+                HSK @currentLevel.Replace("HSK", "")
+            </span>
+        }
+    </div>
+</div>
+
+<!-- Banner Block -->
+<div class="hero-banner">
+    <div class="banner-content">
+        <span class="banner-badge">VIỆC HÔM NAY — 20 PHÚT</span>
+        <h2>Luyện HSK mỗi ngày</h2>
+        <p>Học từ vựng, làm đề thi, nâng trình độ</p>
+    </div>
+    <button class="btn-banner" @onclick='() => NavigationManager.NavigateTo("/hsk/tu-vung")'>Học từ vựng &rarr;</button>
+</div>
+
+<div class="dashboard-grid-layout">
+    <!-- Vocabulary Progress Widget -->
+    <section class="vocab-progress-section">
+        <h3>Từ vựng HSK</h3>
+        <p class="section-desc">Tiến độ học từ vựng cấp độ hiện tại</p>
+        <div class="vocab-stats">
+            <div class="vocab-progress-bar">
+                <div class="vocab-progress-fill" style="width: @vocabProgressPercent%;"></div>
+            </div>
+            <div class="vocab-progress-text">
+                <span>@vocabLearnedCount / @vocabTotalCount từ</span>
+                <span>@vocabProgressPercent%</span>
+            </div>
+        </div>
+        <button class="btn-secondary" @onclick='() => NavigationManager.NavigateTo("/hsk/tu-vung")'>Xem tất cả từ vựng</button>
+    </section>
+
+    <!-- Latest Result Section -->
+    <section class="latest-result">
+        <span class="subtitle-small">BÀI CHẤM GẦN NHẤT</span>
+        @if (recentResults.Any())
+        {
+            <div class="result-list">
+                @foreach (var result in recentResults.Take(3))
+                {
+                    <div class="result-item">
+                        <span class="result-skill">@result.Skill</span>
+                        <span class="result-score">@result.Score% @(result.Passed ? "✅" : "❌")</span>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <p class="result-text">Chưa có kết quả — làm bài thi để bắt đầu nhé.</p>
+        }
+    </section>
+</div>
+
+<!-- Learning Modules Grid -->
+<div class="learning-modules-section">
+    <h3>Góc học tập HSK</h3>
+    <p class="section-desc">Mỗi góc một kiểu học — ghé qua khi có hứng.</p>
+
+    @if (sections == null)
+    {
+        <div class="loading-spinner">Đang tải góc học tập...</div>
+    }
+    else
+    {
+        <div class="modules-grid">
+            @foreach (var section in sections)
+            {
+                <a href="@section.Route" class="module-card">
+                    <div class="module-icon">
+                        <i class="bi @section.Icon"></i>
+                    </div>
+                    <div class="module-info">
+                        <h4>@section.Name</h4>
+                        <p>@section.Description</p>
+                    </div>
+                    <div class="module-action">
+                        <i class="bi bi-arrow-right"></i>
+                    </div>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<HskLearningSection>? sections;
+    private string? currentLevel;
+    private List<HskVocabularyItem> vocabItems = new();
+    private int vocabTotalCount = 0;
+    private int vocabLearnedCount = 0;
+    private HashSet<int> learnedIds = new();
+    private int vocabProgressPercent => vocabTotalCount > 0 ? (int)((double)vocabLearnedCount / vocabTotalCount * 100) : 0;
+    private List<HskRecentResult> recentResults = new();
+
+    [Inject] protected NavigationManager NavigationManager { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        sections = await HskService.GetSectionsAsync();
+        currentLevel = await LocalStorage.GetItemAsync<string>("hsk_level") ?? "HSK3";
+
+        // Load vocabulary for current level
+        vocabItems = await HskService.GetVocabularyAsync(currentLevel);
+        vocabTotalCount = vocabItems.Count;
+
+        // Load learned state from localStorage
+        await LoadLearnedState();
+
+        // Load recent results from local storage (placeholder)
+        recentResults = new List<HskRecentResult>();
+        try
+        {
+            var stored = await LocalStorage.GetItemAsync<List<HskRecentResult>>("hsk_recent_results");
+            if (stored != null) recentResults = stored;
+        }
+        catch { }
+    }
+
+    private async Task LoadLearnedState()
+    {
+        var key = $"hsk_learned_{currentLevel}";
+        var stored = await LocalStorage.GetItemAsync<string>(key);
+        if (!string.IsNullOrEmpty(stored))
+        {
+            try
+            {
+                var ids = JsonSerializer.Deserialize<List<int>>(stored);
+                learnedIds = new HashSet<int>(ids ?? new List<int>());
+            }
+            catch { learnedIds = new(); }
+        }
+        else
+        {
+            learnedIds = new();
+        }
+        vocabLearnedCount = learnedIds.Count;
+    }
+}

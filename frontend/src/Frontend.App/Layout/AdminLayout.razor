@@ -101,19 +101,14 @@
                 }
                 else if (activeDomain == "HSK")
                 {
-                    <li class="menu-item @(IsActive("/admin/hsk") && !IsActive("/admin/hsk-mock-tests") && !IsActive("/admin/hsk-vocab") ? "active" : "")">
-                        <a href="/admin/hsk">
-                            <i class="bi bi-grid-fill"></i> Tổng quan HSK
+                    <li class="menu-item @(IsActive("/admin/hsk-mock-tests") ? "active" : "")">
+                        <a href="/admin/hsk-mock-tests">
+                            <i class="bi bi-journal-check"></i> Quản lý Đề thi HSK
                         </a>
                     </li>
                     <li class="menu-item @(IsActive("/admin/hsk-vocab") ? "active" : "")">
                         <a href="/admin/hsk-vocab">
                             <i class="bi bi-translate"></i> Ngân hàng Từ vựng HSK
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/hsk-mock-tests") ? "active" : "")">
-                        <a href="/admin/hsk-mock-tests">
-                            <i class="bi bi-journal-check"></i> Quản lý Đề thi HSK
                         </a>
                     </li>
                     <li class="menu-item @(IsActive("/admin/users") && NavigationManager.Uri.Contains("hsk") ? "active" : "")">
@@ -215,7 +210,7 @@
         else if (domain == "TOEIC")
             NavigationManager.NavigateTo("/admin/toeic-mock-tests");
         else if (domain == "HSK")
-            NavigationManager.NavigateTo("/admin/hsk");
+            NavigationManager.NavigateTo("/admin/hsk-mock-tests");
         else
             NavigationManager.NavigateTo("/admin/users");
     }
