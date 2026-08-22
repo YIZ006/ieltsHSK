@@ -2,39 +2,75 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using Frontend.App.Models
 @using Frontend.App.Services
+@using Blazored.LocalStorage
 @inject NavigationManager NavigationManager
 @inject AuthService AuthService
 @inject HskService HskService
+@inject ILocalStorageService LocalStorage
 
 <div class="dashboard-wrapper hsk-theme">
-    <!-- Sidebar -->
+    <!-- Sidebar Thanh Dọc Màu Chủ Đạo Đỏ Á Đông -->
     <aside class="sidebar">
         <div class="sidebar-header">
-            <a href="/" class="brand-logo" style="text-decoration: none; color: inherit;">
-                <i class="bi bi-box-fill"></i> ieltsHSK
+            <a href="/" class="brand-logo" title="Trang chủ">
+                <i class="bi bi-box-fill brand-icon"></i>
+                <span class="brand-name">ieltsHSK</span>
             </a>
-            <div class="hsk-badge">HSK 3.0</div>
+            <span class="hsk-badge-gold">HSK 3.0</span>
         </div>
+
+        <!-- HSK Level Expandable Selector (Chấm tròn xòe ra các cấp độ khi hover) -->
+        <div class="level-selector-dock" title="Rê chuột để đổi cấp độ HSK">
+            <div class="dock-header">
+                <div class="dot-pulse-wrap">
+                    <span class="dot-pulse"></span>
+                    <span class="dot-center"></span>
+                </div>
+                <span class="dock-current-level">Cấp độ: <b>@(currentLevel)</b></span>
+                <i class="bi bi-chevron-right dock-arrow"></i>
+            </div>
+            
+            <!-- Xòe ra các cấp độ HSK 1 - 6 khi hover -->
+            <div class="dock-expand-menu">
+                <div class="expand-menu-title">Chọn cấp độ mục tiêu:</div>
+                <div class="level-pills-row">
+                    @for (int i = 1; i <= 6; i++)
+                    {
+                        var lvlStr = $"HSK{i}";
+                        var lvlNum = i;
+                        <button class="level-pill @(currentLevel == lvlStr ? "active" : "") lvl-@lvlNum"
+                                @onclick="() => ChangeHskLevel(lvlStr)">
+                            HSK @lvlNum
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Menu -->
         <nav class="sidebar-nav">
             <NavLink class="nav-item" href="/hsk/dashboard" Match="NavLinkMatch.All">
-                <i class="bi bi-house-door"></i> Hôm nay
+                <span class="nav-dot"></span>
+                <i class="bi bi-house-door-fill nav-icon"></i>
+                <span class="nav-label">Hôm nay</span>
+                <i class="bi bi-chevron-right nav-arrow"></i>
             </NavLink>
 
-            @if (sections == null)
-            {
-                <div style="padding: 15px; color: #888;">Loading...</div>
-            }
-            else
+            @if (sections != null)
             {
                 @foreach (var section in sections)
                 {
                     <NavLink class="nav-item" href="@section.Route">
-                        <i class="bi @section.Icon"></i> @section.Name
+                        <span class="nav-dot"></span>
+                        <i class="bi @section.Icon nav-icon"></i>
+                        <span class="nav-label">@section.Name</span>
+                        <i class="bi bi-chevron-right nav-arrow"></i>
                     </NavLink>
                 }
             }
         </nav>
 
+        <!-- Sidebar Footer -->
         <div class="sidebar-footer">
             <div class="user-info">
                 <AuthorizeView>
@@ -45,10 +81,17 @@
                         }
                         <div class="user-avatar">@avatarChar</div>
                         <div class="user-details">
-                            <span class="user-email">@userName</span>
-                            <span class="user-role">Học viên</span>
+                            <span class="user-email" title="@userName">@userName</span>
+                            <span class="user-role"><i class="bi bi-shield-check"></i> Học viên HSK</span>
                         </div>
                     </Authorized>
+                    <NotAuthorized>
+                        <div class="user-avatar guest"><i class="bi bi-person"></i></div>
+                        <div class="user-details">
+                            <span class="user-email">Khách</span>
+                            <span class="user-role">Chưa đăng nhập</span>
+                        </div>
+                    </NotAuthorized>
                 </AuthorizeView>
             </div>
             <button class="btn-logout" @onclick="Logout" title="Đăng xuất">
@@ -63,9 +106,13 @@
         <header class="topbar">
             <div class="search-bar">
                 <i class="bi bi-search"></i>
-                <input type="text" placeholder="Tìm kiếm..." />
+                <input type="text" placeholder="Tìm kiếm từ vựng, ngữ pháp, đề thi HSK..." />
             </div>
             <div class="topbar-actions">
+                <div class="topbar-level-indicator">
+                    <span class="mini-dot"></span>
+                    <span>Mục tiêu: <b>@currentLevel</b></span>
+                </div>
                 <AuthorizeView>
                     <Authorized>
                         @{
@@ -81,7 +128,7 @@
             </div>
         </header>
 
-        <!-- Content -->
+        <!-- Content Body -->
         <main class="content-area">
             @Body
         </main>
@@ -90,15 +137,24 @@
 
 @code {
     private List<HskLearningSection>? sections;
+    private string currentLevel = "HSK1";
 
     protected override async Task OnInitializedAsync()
     {
         sections = await HskService.GetSectionsAsync();
+        currentLevel = await LocalStorage.GetItemAsync<string>("hsk_level") ?? "HSK1";
+    }
+
+    private async Task ChangeHskLevel(string level)
+    {
+        currentLevel = level;
+        await LocalStorage.SetItemAsync("hsk_level", level);
+        NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: true);
     }
 
     private async Task Logout()
     {
         await AuthService.LogoutAsync();
-        NavigationManager.NavigateTo("/", forceLoad: true);
+        NavigationManager.NavigateTo("/", true);
     }
 }
