@@ -24,6 +24,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Course> Courses { get; set; }
     public DbSet<Lesson> Lessons { get; set; }
     public DbSet<HskVocabulary> HskVocabularies { get; set; }
+    public DbSet<HskVocabularyImport> HskVocabularyImports { get; set; }
+    public DbSet<HskVocabularyProgress> HskVocabularyProgresses { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -91,6 +93,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.HasIndex(v => v.HskLevel);
             entity.HasIndex(v => new { v.HskLevel, v.Hanzi }).IsUnique();
+        });
+
+        // HskVocabularyProgress: mỗi user chỉ có 1 dòng tiến độ cho 1 từ
+        modelBuilder.Entity<HskVocabularyProgress>(entity =>
+        {
+            entity.HasIndex(p => new { p.UserId, p.VocabularyId }).IsUnique();
+            entity.HasOne(p => p.User)
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

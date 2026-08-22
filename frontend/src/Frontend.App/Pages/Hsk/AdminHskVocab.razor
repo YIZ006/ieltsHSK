@@ -28,9 +28,13 @@
                 <i class="bi bi-plus-circle-fill"></i>
                 <span>Thêm Từ mới</span>
             </button>
-            <button class="btn-secondary-action" @onclick="ImportExcel">
+            <select class="import-mode-select" @bind="importMode" title="Cách xử lý từ đã tồn tại khi import">
+                <option value="skip">Trùng: bỏ qua</option>
+                <option value="upsert">Trùng: cập nhật (ghi đè)</option>
+            </select>
+            <button class="btn-secondary-action" @onclick="TriggerImportExcel" disabled="@isImporting">
                 <i class="bi bi-file-earmark-excel-fill text-success"></i>
-                <span>Nhập Excel</span>
+                <span>@(isImporting ? "Đang nhập..." : "Nhập Excel/CSV")</span>
             </button>
             <button class="btn-secondary-action" @onclick="DownloadTemplate">
                 <i class="bi bi-file-earmark-arrow-down"></i>
@@ -38,6 +42,16 @@
             </button>
         </div>
     </div>
+
+    <InputFile id="vocabExcelInput" OnChange="HandleExcelImport" accept=".xlsx,.csv" style="display: none;" />
+
+    @if (!string.IsNullOrEmpty(importMessage))
+    {
+        <div style="@(!importSuccess ? "background:#fdecea;color:#b71c1c;" : "background:#e8f5e9;color:#1b5e20;")padding:10px 16px;border-radius:8px;margin-bottom:14px;font-size:14px;">
+            <i class="bi @(!importSuccess ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill")"></i>
+            @importMessage
+        </div>
+    }
 
     <!-- Filter Toolbar -->
     <div class="toolbar-card">
@@ -259,7 +273,7 @@
     {
         isLoading = true;
         StateHasChanged();
-        var items = await HskService.GetVocabularyAsync(filterLevel);
+        var items = await HskService.GetVocabularyAsync(filterLevel) ?? new List<HskVocabularyItem>();
         if (!string.IsNullOrEmpty(searchTerm))
         {
             items = items.Where(x => x.Hanzi.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
@@ -341,9 +355,54 @@
         return 1;
     }
 
-    private async Task ImportExcel()
+    private bool isImporting = false;
+    private string? importMessage;
+    private bool importSuccess;
+    private string importMode = "upsert";
+
+    private async Task TriggerImportExcel()
     {
-        await JS.InvokeVoidAsync("alert", "Tính năng Import Excel sẽ được mở trong bản cập nhật kế tiếp.");
+        await JS.InvokeVoidAsync("eval", "document.getElementById('vocabExcelInput').click()");
+    }
+
+    private async Task HandleExcelImport(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+        var ext = System.IO.Path.GetExtension(file.Name).ToLowerInvariant();
+        if (ext != ".xlsx" && ext != ".csv")
+        {
+            importMessage = "Vui lòng chọn file Excel (.xlsx) hoặc CSV (.csv).";
+            importSuccess = false;
+            StateHasChanged();
+            return;
+        }
+
+        isImporting = true;
+        importMessage = null;
+        StateHasChanged();
+
+        var result = await HskService.ImportVocabularyExcelAsync(file, importMode);
+
+        isImporting = false;
+        if (result == null)
+        {
+            importMessage = "Nhập Excel thất bại. Vui lòng kiểm tra định dạng file rồi thử lại.";
+            importSuccess = false;
+        }
+        else
+        {
+            var parts = new List<string>();
+            if (result.Success > 0) parts.Add($"thêm mới {result.Success} từ");
+            if (result.Updated > 0) parts.Add($"cập nhật {result.Updated} từ");
+            if (result.Duplicate > 0) parts.Add($"bỏ qua {result.Duplicate} trùng");
+            if (result.Fail > 0) parts.Add($"lỗi {result.Fail} dòng");
+            if (parts.Count == 0) parts.Add("Không có dữ liệu hợp lệ nào trong file");
+            if (!string.IsNullOrEmpty(result.JsonUrl)) parts.Add($"File JSON đã lưu tại: {result.JsonUrl}");
+            importMessage = string.Join(", ", parts) + ".";
+            importSuccess = result.Fail == 0;
+        }
+        await LoadData();
     }
 
     private async Task DownloadTemplate()

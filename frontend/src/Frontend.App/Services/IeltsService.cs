@@ -45,13 +45,24 @@ public class IeltsService
         try
         {
             var response = await _httpClient.GetFromJsonAsync<List<LearningSectionDto>>("api/ielts/sections");
-            return response ?? new List<LearningSectionDto>();
+            if (response != null && response.Count > 0)
+                return response;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error fetching sections: {ex.Message}");
-            return new List<LearningSectionDto>();
         }
+
+        // Fallback sections if API returns empty or fails
+        return new List<LearningSectionDto>
+        {
+            new LearningSectionDto { Name = "Luyện nghe", Route = "/ielts/listening", Icon = "bi-headphones", Description = "Luyện kỹ năng nghe với các bài tập đa dạng" },
+            new LearningSectionDto { Name = "Luyện đọc", Route = "/ielts/reading", Icon = "bi-book", Description = "Đọc hiểu và phân tích văn bản" },
+            new LearningSectionDto { Name = "Luyện viết", Route = "/ielts/writing", Icon = "bi-pencil", Description = "Thực hành viết luận và báo cáo" },
+            new LearningSectionDto { Name = "Luyện nói", Route = "/ielts/speaking", Icon = "bi-mic", Description = "Luyện nói với các chủ đề thường gặp" },
+            new LearningSectionDto { Name = "Nói theo", Route = "/ielts/speak-along", Icon = "bi-chat-dots", Description = "Shadowing - luyện phát âm và ngữ điệu" },
+            new LearningSectionDto { Name = "Truyện song ngữ", Route = "/ielts/stories", Icon = "bi-journal-text", Description = "Đọc truyện song ngữ Anh-Việt" }
+        };
     }
 
     public async Task<bool> UpdateUserLevelAsync(string level)
