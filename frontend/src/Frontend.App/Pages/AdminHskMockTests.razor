@@ -1,196 +1,206 @@
 @page "/admin/hsk-mock-tests"
-@layout AdminLayout
+@attribute [Authorize(Roles = "admin")]
+@layout Frontend.App.Layout.AdminLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
-@inject MockTestService MockTestService
-@inject NavigationManager NavManager
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Text.Json
+@inject HskService HskService
+@inject HttpClient Http
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 
-<PageTitle>Quản lý Đề thi HSK - Admin</PageTitle>
+<PageTitle>HSK Mock Tests - Admin</PageTitle>
 
-<div class="admin-container">
+<div class="admin-hsk-tests">
     <div class="admin-header">
-        <h1>Quản lý đề thi HSK (Mock Tests)</h1>
-        <button class="btn-create" @onclick="() => OpenForm(null)">+ Thêm Đề Mới</button>
+        <h1>📝 HSK Mock Tests</h1>
+        <button class="btn btn-primary" @onclick="() => ShowCreateModal()">+ Create New Test</button>
     </div>
 
-    @if (isFormOpen)
+    <div class="filter-bar">
+        <label>Level:</label>
+        <select @bind="filterLevel" @onchange="() => LoadTests()">
+            <option value="">All</option>
+            <option value="HSK1">HSK1</option>
+            <option value="HSK2">HSK2</option>
+            <option value="HSK3">HSK3</option>
+            <option value="HSK4">HSK4</option>
+            <option value="HSK5">HSK5</option>
+            <option value="HSK6">HSK6</option>
+            <option value="HSK7">HSK7</option>
+            <option value="HSK8">HSK8</option>
+            <option value="HSK9">HSK9</option>
+        </select>
+        <input type="text" placeholder="Search..." @bind="searchTerm" @oninput="() => LoadTests()" />
+    </div>
+
+    @if (isLoading)
     {
-        <div class="admin-card create-form">
-            <h2>@(editId.HasValue ? "Cập nhật bài thi" : "Tạo bài thi mới")</h2>
+        <div class="loading">Loading...</div>
+    }
+    else
+    {
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Level</th>
+                    <th>Title</th>
+                    <th>Collection</th>
+                    <th>Skill</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var test in tests)
+                {
+                    <tr>
+                        <td>@test.Id</td>
+                        <td>@(ExtractLevel(test.Title))</td>
+                        <td>@test.Title</td>
+                        <td>@test.CollectionName</td>
+                        <td>@(test.HskUrl != null ? GetSkillFromUrl(test.HskUrl) : "—")</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" @onclick="() => EditTest(test)">Edit</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteTest(test.Id)">Delete</button>
+                            <a href="@(test.HskUrl)" target="_blank" class="btn btn-sm btn-secondary">View JSON</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
 
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger" style="color: red; margin-bottom: 15px;">
-                    @errorMessage
-                </div>
-            }
-
+<!-- Create/Edit Modal -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <h3>@(editingTest == null ? "Create HSK Test" : "Edit HSK Test")</h3>
             <div class="form-group">
-                <label>Bộ đề (Collection Name, vd: "HSK Mock Test 2025 December")</label>
-                <input @bind="formTest.CollectionName" class="form-control" />
+                <label>Title</label>
+                <input type="text" @bind="form.Title" placeholder="e.g. HSK3 Listening Practice" />
             </div>
-
             <div class="form-group">
-                <label>Tên bài thi (vd: "Practise Test 1")</label>
-                <input @bind="formTest.Title" class="form-control" />
+                <label>Collection Name</label>
+                <input type="text" @bind="form.CollectionName" placeholder="e.g. HSK3" />
             </div>
-
             <div class="form-group">
-                <label>Đề Listening (JSON URL)</label>
-                <input @bind="formTest.ListeningUrl" class="form-control mb-2" placeholder="Nhập link JSON hoặc upload file bên dưới..." />
-                <div class="upload-box">
-                    <InputFile OnChange="@(e => HandleFileUpload(e, "Listening"))" accept=".json" class="file-input" />
-                    @if (uploadingSkill == "Listening")
-                    {
-                        <span class="upload-status">Đang tải lên Cloudflare R2...</span>
-                    }
-                </div>
-                <label class="answer-url-label">Đáp án Listening (JSON URL public R2)</label>
-                <input @bind="formTest.ListeningAnswerUrl" class="form-control mb-2" placeholder="Nhập link đáp án hoặc upload file..." />
-                <div class="upload-box">
-                    <InputFile OnChange="@(e => HandleFileUpload(e, "ListeningAnswer"))" accept=".json" class="file-input" />
-                    @if (uploadingSkill == "ListeningAnswer")
-                    {
-                        <span class="upload-status">Đang tải đáp án lên Cloudflare R2...</span>
-                    }
-                </div>
+                <label>HSK Level (for display)</label>
+                <select @bind="form.DisplayLevel">
+                    <option value="HSK1">HSK1</option>
+                    <option value="HSK2">HSK2</option>
+                    <option value="HSK3">HSK3</option>
+                    <option value="HSK4">HSK4</option>
+                    <option value="HSK5">HSK5</option>
+                    <option value="HSK6">HSK6</option>
+                    <option value="HSK7">HSK7</option>
+                    <option value="HSK8">HSK8</option>
+                    <option value="HSK9">HSK9</option>
+                </select>
             </div>
-
             <div class="form-group">
-                <label>Đề Reading (JSON URL)</label>
-                <input @bind="formTest.ReadingUrl" class="form-control mb-2" placeholder="Nhập link JSON hoặc upload file..." />
-                <div class="upload-box">
-                    <InputFile OnChange="@(e => HandleFileUpload(e, "Reading"))" accept=".json" class="file-input" />
-                    @if (uploadingSkill == "Reading")
-                    {
-                        <span class="upload-status">Đang tải lên Cloudflare R2...</span>
-                    }
-                </div>
-                <label class="answer-url-label">Đáp án Reading (JSON URL public R2)</label>
-                <input @bind="formTest.ReadingAnswerUrl" class="form-control mb-2" placeholder="Nhập link đáp án hoặc upload file..." />
-                <div class="upload-box">
-                    <InputFile OnChange="@(e => HandleFileUpload(e, "ReadingAnswer"))" accept=".json" class="file-input" />
-                    @if (uploadingSkill == "ReadingAnswer")
-                    {
-                        <span class="upload-status">Đang tải đáp án lên Cloudflare R2...</span>
-                    }
-                </div>
+                <label>Exam JSON URL</label>
+                <input type="text" @bind="form.HskUrl" placeholder="/exports/xxxx.json or R2 URL" />
+                <small>Upload JSON via R2 or place in wwwroot/exports/</small>
             </div>
-
             <div class="form-group">
-                <label>Đề Writing (JSON URL)</label>
-                <input @bind="formTest.WritingUrl" class="form-control mb-2" placeholder="Nhập link JSON hoặc upload file..." />
-                <div class="upload-box">
-                    <InputFile OnChange="@(e => HandleFileUpload(e, "Writing"))" accept=".json" class="file-input" />
-                    @if (uploadingSkill == "Writing")
-                    {
-                        <span class="upload-status">Đang tải lên Cloudflare R2...</span>
-                    }
-                </div>
-                <label class="answer-url-label">Đáp án / rubric Writing (JSON URL public R2)</label>
-                <input @bind="formTest.WritingAnswerUrl" class="form-control mb-2" placeholder="Nhập link rubric/đáp án hoặc upload file..." />
-                <div class="upload-box">
-                    <InputFile OnChange="@(e => HandleFileUpload(e, "WritingAnswer"))" accept=".json" class="file-input" />
-                    @if (uploadingSkill == "WritingAnswer")
-                    {
-                        <span class="upload-status">Đang tải rubric/đáp án lên Cloudflare R2...</span>
-                    }
-                </div>
+                <label>Upload JSON file</label>
+                <InputFile OnChange="HandleFileSelected" accept=".json" />
+                @if (!string.IsNullOrEmpty(uploadStatus))
+                {
+                    <small style="color: @(uploadStatus.StartsWith("Error") ? "#e74c3c" : "#2ecc71")">@uploadStatus</small>
+                }
+                @if (isUploading)
+                {
+                    <small>Uploading...</small>
+                }
             </div>
-
             <div class="form-group">
-                <label>Đề Speaking (JSON URL)</label>
-                <input @bind="formTest.SpeakingUrl" class="form-control mb-2" placeholder="Nhập link JSON hoặc upload file..." />
-                <div class="upload-box">
-                    <InputFile OnChange="@(e => HandleFileUpload(e, "Speaking"))" accept=".json" class="file-input" />
-                    @if (uploadingSkill == "Speaking")
-                    {
-                        <span class="upload-status">Đang tải lên Cloudflare R2...</span>
-                    }
-                </div>
-                <label class="answer-url-label">Đáp án / rubric Speaking (JSON URL public R2)</label>
-                <input @bind="formTest.SpeakingAnswerUrl" class="form-control mb-2" placeholder="Nhập link rubric/đáp án hoặc upload file..." />
-                <div class="upload-box">
-                    <InputFile OnChange="@(e => HandleFileUpload(e, "SpeakingAnswer"))" accept=".json" class="file-input" />
-                    @if (uploadingSkill == "SpeakingAnswer")
-                    {
-                        <span class="upload-status">Đang tải rubric/đáp án lên Cloudflare R2...</span>
-                    }
-                </div>
+                <label>Listening URL (optional)</label>
+                <input type="text" @bind="form.ListeningUrl" />
             </div>
-
-            <div class="form-actions">
-                <button class="btn-secondary" @onclick="() => isFormOpen = false">Hủy</button>
-                <button class="btn-primary" @onclick="SaveTest" disabled="@isSaving">
-                    @(isSaving ? "Đang lưu..." : "Lưu Bài Thi")
-                </button>
+            <div class="form-group">
+                <label>Reading URL (optional)</label>
+                <input type="text" @bind="form.ReadingUrl" />
+            </div>
+            <div class="form-group">
+                <label>Writing URL (optional)</label>
+                <input type="text" @bind="form.WritingUrl" />
+            </div>
+            <div class="form-group">
+                <label>Speaking URL (optional)</label>
+                <input type="text" @bind="form.SpeakingUrl" />
+            </div>
+            <div class="form-group">
+                <label>Listening Answer URL (optional)</label>
+                <input type="text" @bind="form.ListeningAnswerUrl" />
+            </div>
+            <div class="form-group">
+                <label>Reading Answer URL (optional)</label>
+                <input type="text" @bind="form.ReadingAnswerUrl" />
+            </div>
+            <div class="form-group">
+                <label>Writing Answer URL (optional)</label>
+                <input type="text" @bind="form.WritingAnswerUrl" />
+            </div>
+            <div class="form-group">
+                <label>Speaking Answer URL (optional)</label>
+                <input type="text" @bind="form.SpeakingAnswerUrl" />
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" @onclick="SaveTest">Save</button>
+                @if (editingTest != null)
+                {
+                    <button class="btn btn-danger" @onclick="DeleteFromModal">Delete This Test</button>
+                }
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
             </div>
         </div>
-    }
-
-    <div class="admin-card list-container">
-        <h2>Danh sách đề thi HSK</h2>
-        @if (isLoading)
-        {
-            <p>Đang tải dữ liệu...</p>
-        }
-        else if (tests.Count == 0)
-        {
-            <p>Chưa có đề thi HSK nào. Hãy tạo mới!</p>
-        }
-        else
-        {
-            <table class="admin-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Bộ Đề</th>
-                        <th>Tên Bài Thi</th>
-                        <th>L</th><th>L Ans</th>
-                        <th>R</th><th>R Ans</th>
-                        <th>W</th><th>W Rubric</th>
-                        <th>S</th><th>S Rubric</th>
-                        <th>Hành động</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var t in tests)
-                    {
-                        <tr>
-                            <td>@t.Id</td>
-                            <td>@t.CollectionName</td>
-                            <td>@t.Title</td>
-                            <td>@(string.IsNullOrEmpty(t.ListeningUrl) ? "❌" : "✅")</td>
-                            <td>@(string.IsNullOrEmpty(t.ListeningAnswerUrl) ? "❌" : "✅")</td>
-                            <td>@(string.IsNullOrEmpty(t.ReadingUrl) ? "❌" : "✅")</td>
-                            <td>@(string.IsNullOrEmpty(t.ReadingAnswerUrl) ? "❌" : "✅")</td>
-                            <td>@(string.IsNullOrEmpty(t.WritingUrl) ? "❌" : "✅")</td>
-                            <td>@(string.IsNullOrEmpty(t.WritingAnswerUrl) ? "❌" : "✅")</td>
-                            <td>@(string.IsNullOrEmpty(t.SpeakingUrl) ? "❌" : "✅")</td>
-                            <td>@(string.IsNullOrEmpty(t.SpeakingAnswerUrl) ? "❌" : "✅")</td>
-                            <td>
-                                <button class="btn-sm btn-edit" @onclick="() => OpenForm(t)">Sửa</button>
-                                <button class="btn-sm btn-delete" @onclick="() => DeleteTest(t.Id, t.Title)">Xóa</button>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        }
     </div>
-</div>
+}
+
+<style>
+    .admin-hsk-tests { padding: 20px; max-width: 1400px; margin: 0 auto; }
+    .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+    .filter-bar { display: flex; gap: 15px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+    .filter-bar select, .filter-bar input { padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; background: #2a2a2a; color: #eee; }
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-content { background: #1e1e1e; padding: 24px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; color: #eee; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: 4px; }
+    .form-group input, .form-group select { width: 100%; padding: 6px 10px; border: 1px solid #444; border-radius: 4px; background: #2a2a2a; color: #eee; }
+    .form-group small { color: #888; font-size: 12px; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; }
+    .btn { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #1a7f5a; color: #fff; }
+    .btn-secondary { background: #444; color: #fff; }
+    .btn-danger { background: #c0392b; color: #fff; }
+    .btn-sm { padding: 3px 8px; font-size: 12px; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { padding: 8px 12px; border: 1px solid #333; text-align: left; }
+    .table th { background: #2a2a2a; }
+    .loading { text-align: center; padding: 40px; color: #888; }
+    .pagination { margin-top: 16px; text-align: right; color: #888; }
+</style>
 
 @code {
     private List<MockTestDto> tests = new();
     private bool isLoading = true;
-    private bool isFormOpen = false;
-    private bool isSaving = false;
-    private string uploadingSkill = "";
-    private string errorMessage = "";
+    private string filterLevel = "";
+    private string searchTerm = "";
+    private int totalCount = 0;
 
-    private CreateMockTestRequest formTest = new();
-    private int? editId = null;
+    private bool showModal = false;
+    private MockTestDto? editingTest = null;
+    private HskTestForm form = new();
+    private bool isUploading = false;
+    private string uploadStatus = "";
+    private string? uploadedFileUrl = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -200,132 +210,221 @@
     private async Task LoadTests()
     {
         isLoading = true;
-        var allTests = await MockTestService.GetMockTestsAsync();
-        tests = allTests.Where(t => !string.IsNullOrEmpty(t.HskUrl)).ToList();
-        isLoading = false;
-    }
-
-    private void OpenForm(MockTestDto? testToEdit)
-    {
-        if (testToEdit == null)
-        {
-            editId = null;
-            formTest = new CreateMockTestRequest();
-        }
-        else
-        {
-            editId = testToEdit.Id;
-            formTest = new CreateMockTestRequest
-            {
-                CollectionName = testToEdit.CollectionName,
-                Title = testToEdit.Title,
-                ListeningUrl = testToEdit.ListeningUrl,
-                ReadingUrl = testToEdit.ReadingUrl,
-                WritingUrl = testToEdit.WritingUrl,
-                SpeakingUrl = testToEdit.SpeakingUrl,
-                ListeningAnswerUrl = testToEdit.ListeningAnswerUrl,
-                ReadingAnswerUrl = testToEdit.ReadingAnswerUrl,
-                WritingAnswerUrl = testToEdit.WritingAnswerUrl,
-                SpeakingAnswerUrl = testToEdit.SpeakingAnswerUrl
-            };
-        }
-        isFormOpen = true;
-    }
-
-    private async Task HandleFileUpload(InputFileChangeEventArgs e, string skill)
-    {
-        uploadingSkill = skill;
-        errorMessage = "";
         StateHasChanged();
 
         try
         {
-            var file = e.File;
-            var url = await MockTestService.UploadFileAsync(file);
+            var all = await Http.GetFromJsonAsync<List<MockTestDto>>("/api/mock-tests");
+            var hskTests = all?.Where(t => !string.IsNullOrEmpty(t.HskUrl)).ToList() ?? new();
 
-            if (!string.IsNullOrEmpty(url))
-            {
-                switch (skill)
-                {
-                    case "Reading": formTest.ReadingUrl = url; break;
-                    case "Listening": formTest.ListeningUrl = url; break;
-                    case "Writing": formTest.WritingUrl = url; break;
-                    case "Speaking": formTest.SpeakingUrl = url; break;
-                    case "ReadingAnswer": formTest.ReadingAnswerUrl = url; break;
-                    case "ListeningAnswer": formTest.ListeningAnswerUrl = url; break;
-                    case "WritingAnswer": formTest.WritingAnswerUrl = url; break;
-                    case "SpeakingAnswer": formTest.SpeakingAnswerUrl = url; break;
-                }
-            }
-            else
-            {
-                errorMessage = "Tải file thất bại. Máy chủ không trả về URL hợp lệ.";
-            }
+            if (!string.IsNullOrEmpty(filterLevel))
+                hskTests = hskTests.Where(t => t.Title.Contains(filterLevel, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (!string.IsNullOrEmpty(searchTerm))
+                hskTests = hskTests.Where(t => t.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                                               t.CollectionName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            tests = hskTests;
+            totalCount = tests.Count;
         }
         catch (Exception ex)
         {
-            errorMessage = $"Lỗi upload: {ex.Message}";
+            Console.WriteLine($"[AdminHskMockTests] Load error: {ex.Message}");
         }
 
-        uploadingSkill = "";
+        isLoading = false;
         StateHasChanged();
+    }
+
+    private void ShowCreateModal()
+    {
+        editingTest = null;
+        form = new HskTestForm();
+        ResetUploadState();
+        showModal = true;
+    }
+
+    private void EditTest(MockTestDto test)
+    {
+        editingTest = test;
+        form = new HskTestForm
+        {
+            Title = test.Title,
+            CollectionName = test.CollectionName,
+            DisplayLevel = ExtractLevel(test.Title),
+            HskUrl = test.HskUrl,
+            ListeningUrl = test.ListeningUrl,
+            ReadingUrl = test.ReadingUrl,
+            WritingUrl = test.WritingUrl,
+            SpeakingUrl = test.SpeakingUrl,
+            ListeningAnswerUrl = test.ListeningAnswerUrl,
+            ReadingAnswerUrl = test.ReadingAnswerUrl,
+            WritingAnswerUrl = test.WritingAnswerUrl,
+            SpeakingAnswerUrl = test.SpeakingAnswerUrl
+        };
+        ResetUploadState();
+        showModal = true;
+    }
+
+    private void ResetUploadState()
+    {
+        isUploading = false;
+        uploadStatus = "";
+        uploadedFileUrl = null;
     }
 
     private async Task SaveTest()
     {
-        errorMessage = "";
-        if (string.IsNullOrWhiteSpace(formTest.CollectionName) || string.IsNullOrWhiteSpace(formTest.Title))
+        var request = new CreateMockTestRequest
         {
-            errorMessage = "Vui lòng nhập Bộ đề và Tên bài thi.";
-            return;
-        }
-
-        isSaving = true;
-        bool success;
+            CollectionName = form.CollectionName,
+            Title = form.Title,
+            HskUrl = form.HskUrl,
+            ListeningUrl = form.ListeningUrl,
+            ReadingUrl = form.ReadingUrl,
+            WritingUrl = form.WritingUrl,
+            SpeakingUrl = form.SpeakingUrl,
+            ListeningAnswerUrl = form.ListeningAnswerUrl,
+            ReadingAnswerUrl = form.ReadingAnswerUrl,
+            WritingAnswerUrl = form.WritingAnswerUrl,
+            SpeakingAnswerUrl = form.SpeakingAnswerUrl
+        };
 
         try
         {
-            if (editId.HasValue)
+            if (editingTest == null)
             {
-                success = await MockTestService.UpdateMockTestAsync(editId.Value, formTest);
+                await Http.PostAsJsonAsync("/api/mock-tests", request);
             }
             else
             {
-                success = await MockTestService.CreateMockTestAsync(formTest);
+                await Http.PutAsJsonAsync($"/api/mock-tests/{editingTest.Id}", request);
             }
-
-            if (success)
-            {
-                isFormOpen = false;
-                await LoadTests();
-            }
-            else
-            {
-                errorMessage = "Lỗi khi lưu bài thi. Vui lòng thử lại.";
-            }
+            showModal = false;
+            await LoadTests();
         }
         catch (Exception ex)
         {
-            errorMessage = $"Lỗi hệ thống: {ex.Message}";
+            await JS.InvokeVoidAsync("alert", $"Error saving test: {ex.Message}");
         }
-
-        isSaving = false;
     }
 
-    private async Task DeleteTest(int id, string title)
+    private async Task DeleteTest(int id)
     {
-        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"Bạn có chắc chắn muốn xóa bài thi '{title}' không?");
-        if (confirmed)
+        var confirm = await JS.InvokeAsync<bool>("confirm", "Delete this test? This will also remove associated JSON files from R2.");
+        if (!confirm) return;
+
+        try
         {
-            var success = await MockTestService.DeleteMockTestAsync(id);
-            if (success)
-            {
-                await LoadTests();
-            }
-            else
-            {
-                await JS.InvokeVoidAsync("alert", "Lỗi: Không thể xóa bài thi này.");
-            }
+            await Http.DeleteAsync($"/api/mock-tests/{id}");
+            await LoadTests();
         }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Error deleting test: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteFromModal()
+    {
+        if (editingTest == null) return;
+        var confirm = await JS.InvokeAsync<bool>("confirm", $"Delete test '{editingTest.Title}'? This will also remove associated JSON files from R2.");
+        if (!confirm) return;
+
+        try
+        {
+            await Http.DeleteAsync($"/api/mock-tests/{editingTest.Id}");
+            showModal = false;
+            await LoadTests();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Error deleting test: {ex.Message}");
+        }
+    }
+
+    private void CloseModal() => showModal = false;
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        try
+        {
+            isUploading = true;
+            uploadStatus = "";
+            StateHasChanged();
+
+            // Read file content
+            await using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            memoryStream.Position = 0;
+
+            // Validate JSON
+            var json = System.Text.Encoding.UTF8.GetString(memoryStream.ToArray());
+            var examData = JsonSerializer.Deserialize<object>(json);
+            if (examData == null)
+            {
+                uploadStatus = "Error: Invalid JSON format";
+                return;
+            }
+
+            // Upload to R2 via HskService
+            var fileName = $"{Guid.NewGuid()}.json";
+            var url = await HskService.UploadMediaAsync(memoryStream, fileName, "application/json");
+            if (string.IsNullOrEmpty(url))
+            {
+                uploadStatus = "Error: Failed to upload to R2";
+                return;
+            }
+
+            uploadedFileUrl = url;
+            form.HskUrl = url;
+            uploadStatus = $"Uploaded: {file.Name}";
+        }
+        catch (Exception ex)
+        {
+            uploadStatus = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string ExtractLevel(string title)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(title, @"HSK[1-9]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return match.Success ? match.Value.ToUpper() : "—";
+    }
+
+    private static string GetSkillFromUrl(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return "—";
+        var lower = url.ToLower();
+        if (lower.Contains("listening")) return "Listening";
+        if (lower.Contains("reading")) return "Reading";
+        if (lower.Contains("writing")) return "Writing";
+        if (lower.Contains("speaking")) return "Speaking";
+        return "Unknown";
+    }
+
+    private class HskTestForm
+    {
+        public string Title { get; set; } = "";
+        public string CollectionName { get; set; } = "";
+        public string DisplayLevel { get; set; } = "HSK3";
+        public string? HskUrl { get; set; }
+        public string? ListeningUrl { get; set; }
+        public string? ReadingUrl { get; set; }
+        public string? WritingUrl { get; set; }
+        public string? SpeakingUrl { get; set; }
+        public string? ListeningAnswerUrl { get; set; }
+        public string? ReadingAnswerUrl { get; set; }
+        public string? WritingAnswerUrl { get; set; }
+        public string? SpeakingAnswerUrl { get; set; }
     }
 }

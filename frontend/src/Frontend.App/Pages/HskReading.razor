@@ -13,7 +13,7 @@
 @inject NavigationManager Navigation
 @implements IDisposable
 
-<PageTitle>@(exam?.Title ?? "HSK Reading") - IeltsHSK</PageTitle>
+<PageTitle>@(exam?.Title ?? "HSK Reading") - @(exam?.HskLevel ?? "") - IeltsHSK</PageTitle>
 
 @if (isLoading)
 {
@@ -42,6 +42,10 @@ else
         <div class="reading-topbar">
             <div class="topbar-left">
                 <span class="exam-title-short">@exam.Title</span>
+                @if (!string.IsNullOrEmpty(exam?.HskLevel))
+                {
+                    <span class="hsk-level-badge">@exam.HskLevel</span>
+                }
             </div>
             <div class="topbar-center">
                 <div class="timer-box @(secondsLeft < 600 ? "timer-warning" : "")">

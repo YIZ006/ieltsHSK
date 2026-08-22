@@ -565,7 +565,8 @@ app.MapGet("/api/mock-tests", async (Backend.Infrastructure.Persistence.AppDbCon
         ReadingAnswerUrl = m.ReadingAnswerUrl,
         WritingAnswerUrl = m.WritingAnswerUrl,
         SpeakingAnswerUrl = m.SpeakingAnswerUrl,
-        ToeicUrl = m.ToeicUrl
+        ToeicUrl = m.ToeicUrl,
+        HskUrl = m.HskUrl
     }).ToList();
     
     return Results.Ok(dtos);
