@@ -1,5 +1,7 @@
 @inject AuthService AuthService
 @inject NavigationManager NavigationManager
+@inject ExamHeaderService ExamHeader
+@implements IDisposable
 
 <nav class="navbar">
     <div class="navbar-brand">
@@ -21,16 +23,31 @@
             </li>
         </ul>
 
-        <ul class="navbar-nav ms-auto auth-nav">
+        <div class="exam-toolbar exam-toolbar-desktop">
+            @if (ExamHeader.Visible)
+            {
+                <button class="exam-submit-btn" @onclick="() => ExamHeader.RequestSubmit()" @onclick:stopPropagation>NỘP BÀI</button>
+                <span class="exam-timer-chip @(ExamHeader.TimerUrgent ? "urgent" : "")">@ExamHeader.TimerText</span>
+            }
+        </div>
+
+        <ul class="navbar-nav auth-nav">
             <AuthorizeView>
                 <Authorized>
-                    <li class="nav-item">
-                        <span class="nav-link welcome-text">Xin chào, @(context.User.FindFirst(c => c.Type == "unique_name")?.Value ?? context.User.Identity?.Name ?? "User")!</span>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link btn-logout" @onclick="Logout" @onclick:stopPropagation>
-                            <i class="bi bi-box-arrow-right"></i> Logout
+                    <li class="nav-item user-menu">
+                        <button class="nav-link welcome-toggle" @onclick="ToggleUserMenu" @onclick:stopPropagation>
+                            Xin chào, @(context.User.FindFirst(c => c.Type == "unique_name")?.Value ?? context.User.Identity?.Name ?? "User")!
+                            <i class="bi bi-chevron-down"></i>
                         </button>
+                        @if (showUserMenu)
+                        {
+                            <div class="user-backdrop" @onclick="() => showUserMenu = false" @onclick:stopPropagation></div>
+                            <div class="user-dropdown">
+                                <button class="dropdown-item btn-logout" @onclick="Logout" @onclick:stopPropagation>
+                                    <i class="bi bi-box-arrow-right"></i> Logout
+                                </button>
+                            </div>
+                        }
                     </li>
                 </Authorized>
                 <NotAuthorized>
@@ -48,6 +65,14 @@
             </AuthorizeView>
         </ul>
     </div>
+
+    <div class="exam-toolbar exam-toolbar-mobile">
+        @if (ExamHeader.Visible)
+        {
+            <button class="exam-submit-btn" @onclick="() => ExamHeader.RequestSubmit()">NỘP BÀI</button>
+            <span class="exam-timer-chip @(ExamHeader.TimerUrgent ? "urgent" : "")">@ExamHeader.TimerText</span>
+        }
+    </div>
 </nav>
 
 @code {
@@ -58,6 +83,7 @@
     public EventCallback OnShowRegister { get; set; }
 
     private bool collapseNavMenu = true;
+    private bool showUserMenu = false;
 
     private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
 
@@ -66,8 +92,26 @@
         collapseNavMenu = !collapseNavMenu;
     }
 
+    private void ToggleUserMenu()
+    {
+        showUserMenu = !showUserMenu;
+    }
+
+    protected override void OnInitialized()
+    {
+        ExamHeader.OnChange += OnExamHeaderChanged;
+    }
+
+    private void OnExamHeaderChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        ExamHeader.OnChange -= OnExamHeaderChanged;
+    }
+
     private async Task Logout()
     {
+        showUserMenu = false;
         await AuthService.LogoutAsync();
         NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: false);
     }
