@@ -1,5 +1,9 @@
+@page "/hsk"
 @page "/hsk/overview"
-<PageTitle>HSK Master - Học tiếng Trung</PageTitle>
+@inject NavigationManager NavigationManager
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<PageTitle>HSK Master - Chinh phục Tiếng Trung HSK 1–6</PageTitle>
 
 <div class="hsk-page">
 
@@ -9,9 +13,9 @@
             <span>汉</span><span>语</span><span>水</span><span>平</span><span>考</span><span>试</span>
         </div>
         <div class="hero-content">
-            <div class="hero-badge">HSK — Hán ngữ Thủy bình Khảo thị</div>
+            <div class="hero-badge">HSK — Hán ngữ Thủy bình Khảo thị (HSK 3.0)</div>
             <h1 class="hero-title">Chinh phục <span class="highlight">tiếng Trung</span> từ cấp độ nào cũng được</h1>
-            <p class="hero-desc">Từ vựng chuẩn theo giáo trình HSK 1-6, luyện đọc, nghe và thi thử đầy đủ.</p>
+            <p class="hero-desc">Từ vựng chuẩn theo giáo trình HSK 1-6, luyện 4 kỹ năng Nghe, Đọc, Viết, Nói và thi thử mô phỏng toàn diện.</p>
             <div class="hero-stats">
                 <div class="stat-chip">
                     <span class="chip-num">5,000+</span>
@@ -65,10 +69,10 @@
                             <span class="tag">@tag</span>
                         }
                     </div>
-                    <a href="@(level.IsComingSoon ? "#" : $"/hsk/level/{level.Level}")"
-                       class="level-btn @(level.IsComingSoon ? "btn-disabled" : "")">
+                    <button class="level-btn @(level.IsComingSoon ? "btn-disabled" : "")"
+                            @onclick="() => SelectHskLevel(level.Level, level.IsComingSoon)">
                         @(level.IsComingSoon ? "Sắp ra mắt" : "Bắt đầu học →")
-                    </a>
+                    </button>
                 </div>
             }
         </div>
@@ -78,7 +82,7 @@
     <section class="modules-section">
         <div class="section-header">
             <h2>Góc học tập</h2>
-            <p>Nhiều phương pháp học — chọn cách phù hợp với bạn</p>
+            <p>Nhiều phương pháp học — chọn kỹ năng phù hợp với mục tiêu của bạn</p>
         </div>
         <div class="modules-grid">
             @foreach (var mod in learningModules)
@@ -110,7 +114,7 @@
     <section class="vocab-preview-section">
         <div class="section-header">
             <h2>Từ vựng nhanh — HSK 1</h2>
-            <p>Làm quen với một số từ cơ bản nhất</p>
+            <p>Làm quen với các từ vựng thông dụng cơ bản nhất</p>
         </div>
         <div class="vocab-grid">
             @foreach (var word in sampleVocab)
@@ -124,7 +128,7 @@
             }
         </div>
         <div class="see-more-wrap">
-            <a href="#" class="btn-see-more">Xem tất cả từ vựng HSK 1 →</a>
+            <a href="/hsk/vocabulary" class="btn-see-more">Xem tất cả từ vựng HSK →</a>
         </div>
     </section>
 
@@ -146,9 +150,9 @@
         new(2, "Sơ cấp 2", "好", "Mở rộng giao tiếp — diễn đạt được các tình huống quen thuộc đơn giản",
             300, 120, new[]{"Thời gian", "Mua sắm", "Thức ăn"}, IsComingSoon: false),
         new(3, "Trung cấp 1", "学", "Giao tiếp tự nhiên trong đời sống, du lịch, công việc cơ bản",
-            600, 200, new[]{"Du lịch", "Sức khỏe", "Nghề nghiệp"}, IsComingSoon: true),
+            600, 200, new[]{"Du lịch", "Sức khỏe", "Nghề nghiệp"}, IsComingSoon: false),
         new(4, "Trung cấp 2", "中", "Thảo luận được các chủ đề rộng hơn — tương đương B2 tiếng Anh",
-            1200, 360, new[]{"Văn hóa", "Môi trường", "Kinh doanh"}, IsComingSoon: true),
+            1200, 360, new[]{"Văn hóa", "Môi trường", "Kinh doanh"}, IsComingSoon: false),
         new(5, "Cao cấp 1", "难", "Đọc báo, xem phim, hội thoại chuyên nghiệp không cần từ điển",
             2500, 600, new[]{"Văn học", "Thời sự", "Học thuật"}, IsComingSoon: true),
         new(6, "Cao cấp 2", "精", "Thành thạo như người bản ngữ — ngưỡng cửa của C1/C2",
@@ -157,23 +161,23 @@
 
     private List<LearningModule> learningModules = new()
     {
-        new("Flashcard từ vựng", "Học từ mới qua thẻ lật — ghi nhớ hiệu quả bằng spaced repetition",
-            "bi-card-text", "#e63946", "rgba(230,57,70,0.12)", "/hsk/flashcard", IsAvailable: false),
-        new("Luyện viết chữ Hán", "Học nét bút, thứ tự nét — tập viết theo hướng dẫn trực tiếp trên màn hình",
-            "bi-pen", "#f4a261", "rgba(244,162,97,0.12)", "/hsk/writing", IsAvailable: false),
-        new("Luyện nghe tiếng Trung", "Nghe và điền từ — luyện tai với giọng đọc chuẩn phổ thông",
-            "bi-headphones", "#2a9d8f", "rgba(42,157,143,0.12)", "/hsk/listening", IsAvailable: false),
+        new("Từ vựng & Flashcard", "Tra cứu từ vựng chuẩn HSK 1-6, học qua thẻ lật phản xạ",
+            "bi-card-text", "#e63946", "rgba(230,57,70,0.12)", "/hsk/vocabulary", IsAvailable: true),
+        new("Luyện nghe tiếng Trung", "Nghe hội thoại, đoạn văn với giọng đọc chuẩn phổ thông",
+            "bi-headphones", "#2a9d8f", "rgba(42,157,143,0.12)", "/hsk/listening", IsAvailable: true),
+        new("Luyện đọc tiếng Trung", "Đọc hiểu đoạn văn, nối câu, sắp xếp câu chuẩn cấu trúc HSK",
+            "bi-book-half", "#457b9d", "rgba(69,123,157,0.12)", "/hsk/reading", IsAvailable: true),
+        new("Luyện viết chữ Hán", "Tập viết, điền từ, sắp xếp câu và viết đoạn văn HSK",
+            "bi-pen", "#f4a261", "rgba(244,162,97,0.12)", "/hsk/writing", IsAvailable: true),
+        new("Luyện nói HSKK", "Luyện phát âm, đọc to đoạn văn và miêu tả tranh tự động",
+            "bi-mic-fill", "#6a4c93", "rgba(106,76,147,0.12)", "/hsk/speaking", IsAvailable: true),
         new("Thi thử HSK", "Bộ đề thi thử theo chuẩn HSK chính thức — chấm điểm tự động",
-            "bi-journal-text", "#457b9d", "rgba(69,123,157,0.12)", "/hsk/mock-test", IsAvailable: false),
-        new("Bài tập ngữ pháp", "Giải thích ngữ pháp tiếng Trung kèm bài tập từng điểm ngữ pháp",
-            "bi-puzzle", "#6a4c93", "rgba(106,76,147,0.12)", "/hsk/grammar", IsAvailable: false),
-        new("Học qua câu chuyện", "Đọc truyện ngắn song ngữ Trung-Việt theo từng cấp độ HSK",
-            "bi-book-half", "#e9c46a", "rgba(233,196,106,0.12)", "/hsk/stories", IsAvailable: false),
+            "bi-journal-check", "#e63946", "rgba(230,57,70,0.12)", "/hsk/mock-tests", IsAvailable: true),
     };
 
     private List<VocabWord> sampleVocab = new()
     {
-        new("你好", "nǐ hǎo", "Xin chào", "你好！我叫小明。"),
+        new("你好", "nǐ hǎo", "Xin chào", "你好！很高兴认识你。"),
         new("谢谢", "xiè xiè", "Cảm ơn", "谢谢你的帮助。"),
         new("对不起", "duì bu qǐ", "Xin lỗi", "对不起，我来晚了。"),
         new("再见", "zài jiàn", "Tạm biệt", "明天见！再见！"),
@@ -182,4 +186,11 @@
         new("朋友", "péng yǒu", "Bạn bè", "他是我的好朋友。"),
         new("喜欢", "xǐ huān", "Thích", "我喜欢吃中国菜。"),
     };
+
+    private async Task SelectHskLevel(int level, bool isComingSoon)
+    {
+        if (isComingSoon) return;
+        await LocalStorage.SetItemAsync("hsk_level", $"HSK{level}");
+        NavigationManager.NavigateTo("/hsk/dashboard");
+    }
 }
