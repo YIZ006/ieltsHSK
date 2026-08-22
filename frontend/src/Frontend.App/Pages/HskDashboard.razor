@@ -4,6 +4,7 @@
 @using Frontend.App.Models
 @using Frontend.App.Services
 @using Blazored.LocalStorage
+@using System.Text.Json
 @attribute [Authorize]
 @inject HskService HskService
 @inject ILocalStorageService LocalStorage
@@ -109,6 +110,7 @@
     private List<HskVocabularyItem> vocabItems = new();
     private int vocabTotalCount = 0;
     private int vocabLearnedCount = 0;
+    private HashSet<int> learnedIds = new();
     private int vocabProgressPercent => vocabTotalCount > 0 ? (int)((double)vocabLearnedCount / vocabTotalCount * 100) : 0;
     private List<HskRecentResult> recentResults = new();
 
@@ -122,20 +124,37 @@
         // Load vocabulary for current level
         vocabItems = await HskService.GetVocabularyAsync(currentLevel);
         vocabTotalCount = vocabItems.Count;
-        // For now, learned count is based on some arbitrary logic: we could track learned words in local storage, but for now just show 0.
-        // We'll later implement a learned tracking system.
-        // For demo, we'll set learned to 0.
-        vocabLearnedCount = 0; // TODO: implement learned tracking
 
-        // Load recent results from local storage or API
-        // For now placeholder
+        // Load learned state from localStorage
+        await LoadLearnedState();
+
+        // Load recent results from local storage (placeholder)
         recentResults = new List<HskRecentResult>();
-        // Try to load from local storage
         try
         {
             var stored = await LocalStorage.GetItemAsync<List<HskRecentResult>>("hsk_recent_results");
             if (stored != null) recentResults = stored;
         }
         catch { }
+    }
+
+    private async Task LoadLearnedState()
+    {
+        var key = $"hsk_learned_{currentLevel}";
+        var stored = await LocalStorage.GetItemAsync<string>(key);
+        if (!string.IsNullOrEmpty(stored))
+        {
+            try
+            {
+                var ids = JsonSerializer.Deserialize<List<int>>(stored);
+                learnedIds = new HashSet<int>(ids ?? new List<int>());
+            }
+            catch { learnedIds = new(); }
+        }
+        else
+        {
+            learnedIds = new();
+        }
+        vocabLearnedCount = learnedIds.Count;
     }
 }

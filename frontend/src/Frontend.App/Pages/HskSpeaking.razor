@@ -13,7 +13,7 @@
 @inject NavigationManager Navigation
 @implements IDisposable
 
-<PageTitle>@(exam?.Title ?? "HSK Speaking") - IeltsHSK</PageTitle>
+<PageTitle>@(exam?.Title ?? "HSK Speaking") - @(exam?.HskLevel ?? "") - IeltsHSK</PageTitle>
 
 @* ══════════════════════════════════════════════
    SETUP SCREEN
@@ -137,6 +137,10 @@
     @* TOP BAR *@
     <div class="sp-topbar">
         <span class="sp-exam-title">HSK Speaking Test</span>
+        @if (!string.IsNullOrEmpty(exam?.HskLevel))
+        {
+            <span class="hsk-level-badge">@exam.HskLevel</span>
+        }
         <span class="sp-session-time">@FormatTimer(sessionSecondsLeft) total</span>
         <div class="sp-timer @GetTimerClass()">⏱ @part.TimerSeconds?.ToString() ?? "??": @FormatTimer(partSecondsLeft)</div>
         <div class="sp-topbar-actions">

@@ -2,8 +2,11 @@
 @layout Frontend.App.Layout.HskLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
+@using Blazored.LocalStorage
+@using System.Text.Json
 @inject HskService HskService
 @inject NavigationManager Navigation
+@inject ILocalStorageService LocalStorage
 
 <PageTitle>HSK Vocabulary - IeltsHSK</PageTitle>
 
@@ -60,6 +63,11 @@
                                 }
                             </div>
                         }
+                    </div>
+                    <div class="vocab-actions">
+                        <button class="learn-btn @(IsLearned(item.Id) ? "learned" : "")" @onclick="() => ToggleLearned(item.Id)">
+                            @(IsLearned(item.Id) ? "✅ Learned" : "📚 Learn")
+                        </button>
                     </div>
                 </div>
             }
@@ -173,12 +181,36 @@
         padding: 40px;
         color: #888;
     }
+    .vocab-actions {
+        margin-top: 12px;
+        display: flex;
+        justify-content: flex-end;
+    }
+    .learn-btn {
+        padding: 4px 12px;
+        border: 1px solid #444;
+        background: transparent;
+        color: #ccc;
+        border-radius: 16px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+    }
+    .learn-btn:hover {
+        background: #2a2a2a;
+    }
+    .learn-btn.learned {
+        background: #1a7f5a;
+        border-color: #1a7f5a;
+        color: #fff;
+    }
 </style>
 
 @code {
     private string selectedLevel = "HSK1";
     private List<HskVocabularyItem> vocabItems = new();
     private bool isLoading = true;
+    private HashSet<int> learnedIds = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -197,7 +229,47 @@
         isLoading = true;
         StateHasChanged();
         vocabItems = await HskService.GetVocabularyAsync(selectedLevel);
+        await LoadLearnedState();
         isLoading = false;
         StateHasChanged();
     }
+
+    private async Task LoadLearnedState()
+    {
+        var key = $"hsk_learned_{selectedLevel}";
+        var stored = await LocalStorage.GetItemAsync<string>(key);
+        if (!string.IsNullOrEmpty(stored))
+        {
+            try
+            {
+                var ids = JsonSerializer.Deserialize<List<int>>(stored);
+                learnedIds = new HashSet<int>(ids ?? new List<int>());
+            }
+            catch { learnedIds = new(); }
+        }
+        else
+        {
+            learnedIds = new();
+        }
+    }
+
+    private async Task SaveLearnedState()
+    {
+        var key = $"hsk_learned_{selectedLevel}";
+        var list = learnedIds.ToList();
+        var json = JsonSerializer.Serialize(list);
+        await LocalStorage.SetItemAsync(key, json);
+    }
+
+    private async Task ToggleLearned(int id)
+    {
+        if (learnedIds.Contains(id))
+            learnedIds.Remove(id);
+        else
+            learnedIds.Add(id);
+        await SaveLearnedState();
+        StateHasChanged();
+    }
+
+    private bool IsLearned(int id) => learnedIds.Contains(id);
 }
