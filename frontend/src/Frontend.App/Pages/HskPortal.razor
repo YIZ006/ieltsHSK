@@ -1,0 +1,62 @@
+@page "/hsk"
+@using Frontend.App.Services
+@using Blazored.LocalStorage
+@inject NavigationManager NavigationManager
+@inject ILocalStorageService LocalStorage
+@inject AuthService AuthService
+
+<div class="hsk-portal-container">
+    <div class="hsk-portal-card">
+        <div class="hsk-portal-header">
+            <h1>HSK 3.0</h1>
+            <p>Chọn cấp độ của bạn để bắt đầu hành trình chinh phục tiếng Trung</p>
+        </div>
+
+        <div class="hsk-level-grid">
+            <div class="level-tier">
+                <h3>Sơ cấp</h3>
+                <div class="level-buttons">
+                    <button class="level-btn hsk1" @onclick='() => SelectLevel("HSK1")'>HSK 1</button>
+                    <button class="level-btn hsk2" @onclick='() => SelectLevel("HSK2")'>HSK 2</button>
+                    <button class="level-btn hsk3" @onclick='() => SelectLevel("HSK3")'>HSK 3</button>
+                </div>
+            </div>
+            <div class="level-tier">
+                <h3>Trung cấp</h3>
+                <div class="level-buttons">
+                    <button class="level-btn hsk4" @onclick='() => SelectLevel("HSK4")'>HSK 4</button>
+                    <button class="level-btn hsk5" @onclick='() => SelectLevel("HSK5")'>HSK 5</button>
+                    <button class="level-btn hsk6" @onclick='() => SelectLevel("HSK6")'>HSK 6</button>
+                </div>
+            </div>
+            <div class="level-tier">
+                <h3>Cao cấp</h3>
+                <div class="level-buttons">
+                    <button class="level-btn hsk7" @onclick='() => SelectLevel("HSK7")'>HSK 7</button>
+                    <button class="level-btn hsk8" @onclick='() => SelectLevel("HSK8")'>HSK 8</button>
+                    <button class="level-btn hsk9" @onclick='() => SelectLevel("HSK9")'>HSK 9</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="hsk-portal-footer">
+            <p>HSK 3.0 là hệ thống 9 cấp độ mới, chia làm 3 bậc: Sơ cấp (1-3), Trung cấp (4-6), Cao cấp (7-9)</p>
+        </div>
+    </div>
+</div>
+
+@code {
+    private async Task SelectLevel(string level)
+    {
+        await LocalStorage.SetItemAsync("hsk_level", level);
+
+        // Update user level via API if logged in
+        // try
+        // {
+        //     await AuthService.UpdateLevelAsync(level);
+        // }
+        // catch { /* Ignore if not logged in */ }
+
+        NavigationManager.NavigateTo("/hsk/dashboard", forceLoad: true);
+    }
+}

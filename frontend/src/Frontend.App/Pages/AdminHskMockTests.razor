@@ -1,0 +1,430 @@
+@page "/admin/hsk-mock-tests"
+@attribute [Authorize(Roles = "admin")]
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Text.Json
+@inject HskService HskService
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>HSK Mock Tests - Admin</PageTitle>
+
+<div class="admin-hsk-tests">
+    <div class="admin-header">
+        <h1>📝 HSK Mock Tests</h1>
+        <button class="btn btn-primary" @onclick="() => ShowCreateModal()">+ Create New Test</button>
+    </div>
+
+    <div class="filter-bar">
+        <label>Level:</label>
+        <select @bind="filterLevel" @onchange="() => LoadTests()">
+            <option value="">All</option>
+            <option value="HSK1">HSK1</option>
+            <option value="HSK2">HSK2</option>
+            <option value="HSK3">HSK3</option>
+            <option value="HSK4">HSK4</option>
+            <option value="HSK5">HSK5</option>
+            <option value="HSK6">HSK6</option>
+            <option value="HSK7">HSK7</option>
+            <option value="HSK8">HSK8</option>
+            <option value="HSK9">HSK9</option>
+        </select>
+        <input type="text" placeholder="Search..." @bind="searchTerm" @oninput="() => LoadTests()" />
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading">Loading...</div>
+    }
+    else
+    {
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Level</th>
+                    <th>Title</th>
+                    <th>Collection</th>
+                    <th>Skill</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var test in tests)
+                {
+                    <tr>
+                        <td>@test.Id</td>
+                        <td>@(ExtractLevel(test.Title))</td>
+                        <td>@test.Title</td>
+                        <td>@test.CollectionName</td>
+                        <td>@(test.HskUrl != null ? GetSkillFromUrl(test.HskUrl) : "—")</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" @onclick="() => EditTest(test)">Edit</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteTest(test.Id)">Delete</button>
+                            <a href="@(test.HskUrl)" target="_blank" class="btn btn-sm btn-secondary">View JSON</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+<!-- Create/Edit Modal -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <h3>@(editingTest == null ? "Create HSK Test" : "Edit HSK Test")</h3>
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" @bind="form.Title" placeholder="e.g. HSK3 Listening Practice" />
+            </div>
+            <div class="form-group">
+                <label>Collection Name</label>
+                <input type="text" @bind="form.CollectionName" placeholder="e.g. HSK3" />
+            </div>
+            <div class="form-group">
+                <label>HSK Level (for display)</label>
+                <select @bind="form.DisplayLevel">
+                    <option value="HSK1">HSK1</option>
+                    <option value="HSK2">HSK2</option>
+                    <option value="HSK3">HSK3</option>
+                    <option value="HSK4">HSK4</option>
+                    <option value="HSK5">HSK5</option>
+                    <option value="HSK6">HSK6</option>
+                    <option value="HSK7">HSK7</option>
+                    <option value="HSK8">HSK8</option>
+                    <option value="HSK9">HSK9</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Exam JSON URL</label>
+                <input type="text" @bind="form.HskUrl" placeholder="/exports/xxxx.json or R2 URL" />
+                <small>Upload JSON via R2 or place in wwwroot/exports/</small>
+            </div>
+            <div class="form-group">
+                <label>Upload JSON file</label>
+                <InputFile OnChange="HandleFileSelected" accept=".json" />
+                @if (!string.IsNullOrEmpty(uploadStatus))
+                {
+                    <small style="color: @(uploadStatus.StartsWith("Error") ? "#e74c3c" : "#2ecc71")">@uploadStatus</small>
+                }
+                @if (isUploading)
+                {
+                    <small>Uploading...</small>
+                }
+            </div>
+            <div class="form-group">
+                <label>Listening URL (optional)</label>
+                <input type="text" @bind="form.ListeningUrl" />
+            </div>
+            <div class="form-group">
+                <label>Reading URL (optional)</label>
+                <input type="text" @bind="form.ReadingUrl" />
+            </div>
+            <div class="form-group">
+                <label>Writing URL (optional)</label>
+                <input type="text" @bind="form.WritingUrl" />
+            </div>
+            <div class="form-group">
+                <label>Speaking URL (optional)</label>
+                <input type="text" @bind="form.SpeakingUrl" />
+            </div>
+            <div class="form-group">
+                <label>Listening Answer URL (optional)</label>
+                <input type="text" @bind="form.ListeningAnswerUrl" />
+            </div>
+            <div class="form-group">
+                <label>Reading Answer URL (optional)</label>
+                <input type="text" @bind="form.ReadingAnswerUrl" />
+            </div>
+            <div class="form-group">
+                <label>Writing Answer URL (optional)</label>
+                <input type="text" @bind="form.WritingAnswerUrl" />
+            </div>
+            <div class="form-group">
+                <label>Speaking Answer URL (optional)</label>
+                <input type="text" @bind="form.SpeakingAnswerUrl" />
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" @onclick="SaveTest">Save</button>
+                @if (editingTest != null)
+                {
+                    <button class="btn btn-danger" @onclick="DeleteFromModal">Delete This Test</button>
+                }
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .admin-hsk-tests { padding: 20px; max-width: 1400px; margin: 0 auto; }
+    .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+    .filter-bar { display: flex; gap: 15px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+    .filter-bar select, .filter-bar input { padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; background: #2a2a2a; color: #eee; }
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-content { background: #1e1e1e; padding: 24px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; color: #eee; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: 4px; }
+    .form-group input, .form-group select { width: 100%; padding: 6px 10px; border: 1px solid #444; border-radius: 4px; background: #2a2a2a; color: #eee; }
+    .form-group small { color: #888; font-size: 12px; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; }
+    .btn { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #1a7f5a; color: #fff; }
+    .btn-secondary { background: #444; color: #fff; }
+    .btn-danger { background: #c0392b; color: #fff; }
+    .btn-sm { padding: 3px 8px; font-size: 12px; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { padding: 8px 12px; border: 1px solid #333; text-align: left; }
+    .table th { background: #2a2a2a; }
+    .loading { text-align: center; padding: 40px; color: #888; }
+    .pagination { margin-top: 16px; text-align: right; color: #888; }
+</style>
+
+@code {
+    private List<MockTestDto> tests = new();
+    private bool isLoading = true;
+    private string filterLevel = "";
+    private string searchTerm = "";
+    private int totalCount = 0;
+
+    private bool showModal = false;
+    private MockTestDto? editingTest = null;
+    private HskTestForm form = new();
+    private bool isUploading = false;
+    private string uploadStatus = "";
+    private string? uploadedFileUrl = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTests();
+    }
+
+    private async Task LoadTests()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var all = await Http.GetFromJsonAsync<List<MockTestDto>>("/api/mock-tests");
+            var hskTests = all?.Where(t => !string.IsNullOrEmpty(t.HskUrl)).ToList() ?? new();
+
+            if (!string.IsNullOrEmpty(filterLevel))
+                hskTests = hskTests.Where(t => t.Title.Contains(filterLevel, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (!string.IsNullOrEmpty(searchTerm))
+                hskTests = hskTests.Where(t => t.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                                               t.CollectionName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            tests = hskTests;
+            totalCount = tests.Count;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminHskMockTests] Load error: {ex.Message}");
+        }
+
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void ShowCreateModal()
+    {
+        editingTest = null;
+        form = new HskTestForm();
+        ResetUploadState();
+        showModal = true;
+    }
+
+    private void EditTest(MockTestDto test)
+    {
+        editingTest = test;
+        form = new HskTestForm
+        {
+            Title = test.Title,
+            CollectionName = test.CollectionName,
+            DisplayLevel = ExtractLevel(test.Title),
+            HskUrl = test.HskUrl,
+            ListeningUrl = test.ListeningUrl,
+            ReadingUrl = test.ReadingUrl,
+            WritingUrl = test.WritingUrl,
+            SpeakingUrl = test.SpeakingUrl,
+            ListeningAnswerUrl = test.ListeningAnswerUrl,
+            ReadingAnswerUrl = test.ReadingAnswerUrl,
+            WritingAnswerUrl = test.WritingAnswerUrl,
+            SpeakingAnswerUrl = test.SpeakingAnswerUrl
+        };
+        ResetUploadState();
+        showModal = true;
+    }
+
+    private void ResetUploadState()
+    {
+        isUploading = false;
+        uploadStatus = "";
+        uploadedFileUrl = null;
+    }
+
+    private async Task SaveTest()
+    {
+        var request = new CreateMockTestRequest
+        {
+            CollectionName = form.CollectionName,
+            Title = form.Title,
+            HskUrl = form.HskUrl,
+            ListeningUrl = form.ListeningUrl,
+            ReadingUrl = form.ReadingUrl,
+            WritingUrl = form.WritingUrl,
+            SpeakingUrl = form.SpeakingUrl,
+            ListeningAnswerUrl = form.ListeningAnswerUrl,
+            ReadingAnswerUrl = form.ReadingAnswerUrl,
+            WritingAnswerUrl = form.WritingAnswerUrl,
+            SpeakingAnswerUrl = form.SpeakingAnswerUrl
+        };
+
+        try
+        {
+            if (editingTest == null)
+            {
+                await Http.PostAsJsonAsync("/api/mock-tests", request);
+            }
+            else
+            {
+                await Http.PutAsJsonAsync($"/api/mock-tests/{editingTest.Id}", request);
+            }
+            showModal = false;
+            await LoadTests();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Error saving test: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteTest(int id)
+    {
+        var confirm = await JS.InvokeAsync<bool>("confirm", "Delete this test? This will also remove associated JSON files from R2.");
+        if (!confirm) return;
+
+        try
+        {
+            await Http.DeleteAsync($"/api/mock-tests/{id}");
+            await LoadTests();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Error deleting test: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteFromModal()
+    {
+        if (editingTest == null) return;
+        var confirm = await JS.InvokeAsync<bool>("confirm", $"Delete test '{editingTest.Title}'? This will also remove associated JSON files from R2.");
+        if (!confirm) return;
+
+        try
+        {
+            await Http.DeleteAsync($"/api/mock-tests/{editingTest.Id}");
+            showModal = false;
+            await LoadTests();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Error deleting test: {ex.Message}");
+        }
+    }
+
+    private void CloseModal() => showModal = false;
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        try
+        {
+            isUploading = true;
+            uploadStatus = "";
+            StateHasChanged();
+
+            // Read file content
+            await using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+            memoryStream.Position = 0;
+
+            // Validate JSON
+            var json = System.Text.Encoding.UTF8.GetString(memoryStream.ToArray());
+            var examData = JsonSerializer.Deserialize<object>(json);
+            if (examData == null)
+            {
+                uploadStatus = "Error: Invalid JSON format";
+                return;
+            }
+
+            // Upload to R2 via HskService
+            var fileName = $"{Guid.NewGuid()}.json";
+            var url = await HskService.UploadMediaAsync(memoryStream, fileName, "application/json");
+            if (string.IsNullOrEmpty(url))
+            {
+                uploadStatus = "Error: Failed to upload to R2";
+                return;
+            }
+
+            uploadedFileUrl = url;
+            form.HskUrl = url;
+            uploadStatus = $"Uploaded: {file.Name}";
+        }
+        catch (Exception ex)
+        {
+            uploadStatus = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string ExtractLevel(string title)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(title, @"HSK[1-9]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return match.Success ? match.Value.ToUpper() : "—";
+    }
+
+    private static string GetSkillFromUrl(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return "—";
+        var lower = url.ToLower();
+        if (lower.Contains("listening")) return "Listening";
+        if (lower.Contains("reading")) return "Reading";
+        if (lower.Contains("writing")) return "Writing";
+        if (lower.Contains("speaking")) return "Speaking";
+        return "Unknown";
+    }
+
+    private class HskTestForm
+    {
+        public string Title { get; set; } = "";
+        public string CollectionName { get; set; } = "";
+        public string DisplayLevel { get; set; } = "HSK3";
+        public string? HskUrl { get; set; }
+        public string? ListeningUrl { get; set; }
+        public string? ReadingUrl { get; set; }
+        public string? WritingUrl { get; set; }
+        public string? SpeakingUrl { get; set; }
+        public string? ListeningAnswerUrl { get; set; }
+        public string? ReadingAnswerUrl { get; set; }
+        public string? WritingAnswerUrl { get; set; }
+        public string? SpeakingAnswerUrl { get; set; }
+    }
+}

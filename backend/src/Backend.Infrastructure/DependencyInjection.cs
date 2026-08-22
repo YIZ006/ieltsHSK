@@ -57,12 +57,16 @@ public static class DependencyInjection
             await dbContext.SaveChangesAsync();
         }
 
-        // Seed Language
+        // Seed Languages
         if (!dbContext.Languages.Any(l => l.Code == "EN"))
         {
             dbContext.Languages.Add(new Language { Name = "Tiếng Anh", Code = "EN" });
-            await dbContext.SaveChangesAsync();
         }
+        if (!dbContext.Languages.Any(l => l.Code == "ZH"))
+        {
+            dbContext.Languages.Add(new Language { Name = "Tiếng Trung", Code = "ZH" });
+        }
+        await dbContext.SaveChangesAsync();
 
         // Seed Category
         if (!dbContext.Categories.Any(c => c.Name == "Luyện thi IELTS"))
@@ -133,8 +137,18 @@ public static class DependencyInjection
             await dbContext.SaveChangesAsync();
         }
 
-        // Seed Stories and upload seed JSON to Cloudflare R2 in stories/ folder
-        var r2Storage = scope.ServiceProvider.GetService<Backend.Application.Abstractions.IR2StorageService>();
-        await StorySeedData.SeedStoriesAsync(dbContext, r2Storage);
+        // Seed HSK LearningSections
+        if (!dbContext.LearningSections.Any(s => s.Language == "HSK"))
+        {
+            dbContext.LearningSections.AddRange(
+                new LearningSection { Name = "Luyện đề HSK", Description = "Luyện đề thi HSK các cấp", Icon = "bi-journal-text", Route = "/hsk/luyen-de", Language = "HSK", OrderIndex = 1 },
+                new LearningSection { Name = "Nghe HSK", Description = "Luyện nghe HSK", Icon = "bi-headphones", Route = "/hsk/listening", Language = "HSK", OrderIndex = 2 },
+                new LearningSection { Name = "Đọc HSK", Description = "Luyện đọc HSK", Icon = "bi-book", Route = "/hsk/reading", Language = "HSK", OrderIndex = 3 },
+                new LearningSection { Name = "Viết HSK", Description = "Luyện viết HSK", Icon = "bi-pencil", Route = "/hsk/writing", Language = "HSK", OrderIndex = 4 },
+                new LearningSection { Name = "Nói HSK", Description = "Luyện nói HSK", Icon = "bi-mic", Route = "/hsk/speaking", Language = "HSK", OrderIndex = 5 },
+                new LearningSection { Name = "Từ vựng HSK", Description = "Từ vựng HSK 1-9", Icon = "bi-spellcheck", Route = "/hsk/tu-vung", Language = "HSK", OrderIndex = 6 }
+            );
+            await dbContext.SaveChangesAsync();
+        }
     }
 }

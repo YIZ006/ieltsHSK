@@ -84,4 +84,11 @@ builder.Services.AddScoped(sp =>
     return new StoryService(httpClient);
 });
 
+// HskService: tải dữ liệu HSK
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
+    return new HskService(httpClient);
+});
+
 await builder.Build().RunAsync();

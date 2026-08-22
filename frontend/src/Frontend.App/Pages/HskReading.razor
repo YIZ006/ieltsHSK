@@ -1,0 +1,490 @@
+@page "/hsk/reading/{ExamUrl}"
+@page "/hsk/reading"
+@page "/hsk/reading/preview"
+@layout Frontend.App.Layout.ExamLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject HskService HskService
+@inject AnswerKeyService answerKeyService
+@inject IJSRuntime JS
+@inject ExamSessionService ExamSession
+@inject ExamSubmissionService SubmissionService
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<PageTitle>@(exam?.Title ?? "HSK Reading") - @(exam?.HskLevel ?? "") - IeltsHSK</PageTitle>
+
+@if (isLoading)
+{
+    <div class="reading-loading">
+        <div class="loading-ring"></div>
+        <p>Đang tải đề thi...</p>
+    </div>
+}
+else if (exam == null)
+{
+    <div class="reading-error">
+        <div class="error-icon">📭</div>
+        <h3>Không tải được đề thi</h3>
+        <p>Vui lòng thử lại hoặc chọn đề khác.</p>
+    </div>
+}
+else
+{
+    var activePart = exam.Parts[activePartIndex];
+    int qStart = exam.Parts.Take(activePartIndex).Sum(p => p.Questions.Count) + 1;
+    int qEnd   = qStart + activePart.Questions.Count - 1;
+
+    @* ── TOP BAR ── *@
+    @if (!isFinished || showReview)
+    {
+        <div class="reading-topbar">
+            <div class="topbar-left">
+                <span class="exam-title-short">@exam.Title</span>
+                @if (!string.IsNullOrEmpty(exam?.HskLevel))
+                {
+                    <span class="hsk-level-badge">@exam.HskLevel</span>
+                }
+            </div>
+            <div class="topbar-center">
+                <div class="timer-box @(secondsLeft < 600 ? "timer-warning" : "")">
+                    <span class="timer-icon">⏱</span>
+                    <span class="timer-text">@TimerDisplay remaining</span>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <button class="btn-exit-exam" @onclick="ExitExam">Exit test</button>
+                @if (isFinished)
+                {
+                    <span class="test-session-status">@(timedOut ? "Time is up" : "Submitted")</span>
+                }
+                <button class="btn-submit-exam" disabled="@isSubmitting" @onclick="SubmitExam">@(isSubmitting ? "Submitting..." : "Submit ➤")</button>
+            </div>
+        </div>
+    }
+
+    @* ── PART TABS ── *@
+    <div class="part-tabs-bar">
+        @for (int i = 0; i < exam.Parts.Count; i++)
+        {
+            var idx  = i;
+            var part = exam.Parts[i];
+            int answered = AnsweredCount(part);
+            <button class="part-tab-btn @(activePartIndex == idx ? "active" : "")"
+                    @onclick="() => { activePartIndex = idx; activeQuestionId = FirstQuestionId(exam.Parts[idx]); }">
+                Part @part.PartNumber
+                <span class="part-tab-score">@answered/@part.Questions.Count</span>
+            </button>
+        }
+        <div class="part-tabs-spacer"></div>
+        <span class="total-progress">
+            Tổng: @exam.Parts.Sum(p => AnsweredCount(p))/@exam.Parts.Sum(p => p.Questions.Count) câu
+        </span>
+    </div>
+
+    @* ── MAIN SPLIT LAYOUT ── *@
+    <div class="reading-split">
+
+        @* ── LEFT: PASSAGE ── *@
+        <div class="passage-col" id="passage-scroll">
+            <div class="part-header-label">PART @activePart.PartNumber</div>
+            <p class="part-time-note">
+                Questions <strong>@qStart–@qEnd</strong> based on the passage below.
+            </p>
+            @if (!string.IsNullOrWhiteSpace(activePart.Instruction))
+            {
+                <div class="q-group-instruction">
+                    @((MarkupString)activePart.Instruction)
+                </div>
+            }
+            <div class="passage-text">
+                @((MarkupString)activePart.PassageHtml)
+            </div>
+        </div>
+
+        @* ── RIGHT: QUESTIONS ── *@
+        <div class="questions-col" id="questions-scroll">
+            @foreach (var q in activePart.Questions)
+            {
+                bool isActive = q.Id == activeQuestionId;
+                <div class="question-block @(IsAnswered(q) ? "answered" : "") @(isActive ? "q-focused" : "")"
+                     id="q-@q.Id"
+                     @onclick="() => activeQuestionId = q.Id">
+
+                    <div class="q-text">@((MarkupString)q.Text)</div>
+
+                    @if (q.Options != null && q.Options.Count > 0)
+                    {
+                        @* Nhận diện True/False/Not Given hoặc Letter Only *@
+                        bool isTrueFalse = q.Options.Any(o => o.Label.Equals("TRUE", StringComparison.OrdinalIgnoreCase) || o.Label.Equals("YES", StringComparison.OrdinalIgnoreCase));
+                        bool isLetterOnly = q.Options.All(o => o.Label == o.Text && o.Label.Length <= 15);
+
+                        @if (isLetterOnly || isTrueFalse)
+                        {
+                            <div class="q-inline-dropdown">
+                                <select class="q-select @(q.SelectedOptionId != null ? "q-select--answered" : "")"
+                                        value="@(q.SelectedOptionId ?? "")"
+                                        @onchange="(e) => OnSelectChange(q, e)">
+                                    <option value="">— Chọn đáp án —</option>
+                                    @foreach (var opt in q.Options)
+                                    {
+                                        <option value="@opt.Id">@opt.Label</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        else
+                        {
+                            @* Radio list cho MCQ dạng có nội dung *@
+                            <ul class="q-option-list">
+                                @foreach (var opt in q.Options)
+                                {
+                                    <li class="q-option @(q.SelectedOptionId == opt.Id ? "selected" : "")"
+                                        @onclick="() => SelectOption(q, opt.Id)">
+                                        <span class="opt-badge">@opt.Label</span>
+                                        <span class="opt-body">@opt.Text</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    }
+                    else
+                    {
+                        @* Fill-in-blank *@
+                        <input class="q-fill-input"
+                               type="text"
+                               placeholder="Write your answer..."
+                               value="@q.FillAnswer"
+                               disabled="@isFinished"
+                               @oninput="(e) => SetFillAnswer(q, e)" />
+                    }
+                </div>
+            }
+
+            @* ── NAVIGATION BUTTONS ── *@
+            <div class="part-nav-buttons">
+                @if (activePartIndex > 0)
+                {
+                    <button class="nav-part-btn prev"
+                            @onclick="() => { activePartIndex--; activeQuestionId = FirstQuestionId(exam.Parts[activePartIndex]); }">
+                        ← Part @(exam.Parts[activePartIndex - 1].PartNumber)
+                    </button>
+                }
+                @if (activePartIndex < exam.Parts.Count - 1)
+                {
+                    <button class="nav-part-btn next"
+                            @onclick="() => { activePartIndex++; activeQuestionId = FirstQuestionId(exam.Parts[activePartIndex]); }">
+                        Part @(exam.Parts[activePartIndex + 1].PartNumber) →
+                    </button>
+                }
+                else
+                {
+                    <button class="nav-part-btn submit" disabled="@isSubmitting" @onclick="SubmitExam">@(isSubmitting ? "Submitting..." : "Nộp bài ✓")</button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── BOTTOM: QUESTION NAVIGATOR ── *@
+    <div class="q-navigator-bar">
+        <div class="q-navigator-label">Part @activePart.PartNumber</div>
+        <div class="q-navigator-nums">
+            @foreach (var q in activePart.Questions)
+            {
+                <button class="q-nav-num @(IsAnswered(q) ? "nav-answered" : "") @(q.Id == activeQuestionId ? "nav-active" : "")"
+                        @onclick="async () => { activeQuestionId = q.Id; await ScrollToQuestion(q.Id); }">
+                    @q.Id
+                </button>
+            }
+        </div>
+        @if (activePartIndex < exam.Parts.Count - 1)
+        {
+            var nextPart = exam.Parts[activePartIndex + 1];
+            <div class="q-navigator-next-part"
+                 @onclick="() => { activePartIndex++; activeQuestionId = FirstQuestionId(nextPart); }">
+                Part @nextPart.PartNumber: @AnsweredCount(nextPart) of @nextPart.Questions.Count questions
+            </div>
+        }
+    </div>
+}
+
+@* ── RESULT PANEL (shown after submit) ── *@
+@if (isFinished && gradingResult != null)
+{
+    <div class="result-panel">
+        <div class="result-header">
+            <h2>📊 Kết quả HSK Reading</h2>
+            <div class="result-score-row">
+                <div class="result-score-card correct">
+                    <span class="rs-label">Đúng</span>
+                    <span class="rs-value">@gradingResult.CorrectCount / @gradingResult.TotalCount</span>
+                </div>
+                <div class="result-score-card wrong">
+                    <span class="rs-label">Sai</span>
+                    <span class="rs-value">@(gradingResult.TotalCount - gradingResult.CorrectCount - gradingResult.Questions.Values.Count(q => q.IsBlank))</span>
+                </div>
+                <div class="result-score-card blank">
+                    <span class="rs-label">Bỏ trống</span>
+                    <span class="rs-value">@gradingResult.Questions.Values.Count(q => q.IsBlank)</span>
+                </div>
+            </div>
+        </div>
+        <div class="result-answer-grid">
+            @foreach (var kv in gradingResult.Questions.OrderBy(x => x.Key))
+            {
+                var qr = kv.Value;
+                <div class="result-answer-item @(qr.IsCorrect ? "correct" : qr.IsBlank ? "blank" : "wrong")">
+                    <span class="ra-num">@qr.QuestionNumber</span>
+                    <span class="ra-student">@(string.IsNullOrEmpty(qr.StudentAnswer) ? "—" : qr.StudentAnswer)</span>
+                    @if (!qr.IsCorrect && !qr.IsBlank)
+                    {
+                        <span class="ra-correct">✓ @qr.CorrectAnswer</span>
+                    }
+                    else if (qr.IsCorrect)
+                    {
+                        <span class="ra-tick">✓</span>
+                    }
+                </div>
+            }
+        </div>
+        @if (gradingResult.DebugLines.Count > 0)
+        {
+            <div class="result-debug-log" style="margin-top: 20px; padding: 16px; background: #0f172a; color: #e2e8f0; border-radius: 14px; font-size: 0.82rem; line-height: 1.5;">
+                <div style="font-weight: 700; margin-bottom: 10px;">Debug log</div>
+                @foreach (var line in gradingResult.DebugLines)
+                {
+                    <div>@line</div>
+                }
+            </div>
+        }
+        @if (!showReview)
+        {
+            <div style="text-align: center; margin-top: 24px;">
+                <button class="nav-part-btn submit" @onclick="() => showReview = true">🔍 Xem lại bài làm</button>
+            </div>
+        }
+    </div>
+}
+else if (isFinished && !string.IsNullOrWhiteSpace(_statusMessage))
+{
+    <div class="reading-error">
+        <div class="error-icon">!</div>
+        <h3>Không thể chấm bài HSK Reading</h3>
+        <p>@_statusMessage</p>
+        @if (!string.IsNullOrWhiteSpace(_answerUrlLoaded))
+        {
+            <p style="font-size: 0.85rem; color: #666; word-break: break-all;">AnswerUrl: @_answerUrlLoaded</p>
+        }
+        <button class="nav-part-btn submit" @onclick="() => { isFinished = false; _statusMessage = null; }">Quay lại bài làm</button>
+    </div>
+}
+
+@code {
+    [Parameter] public string? ExamUrl { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "ExamUrl")] public string? QueryExamUrl { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "AnswerUrl")] public string? QueryAnswerUrl { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "Session")] public string? TestSessionId { get; set; }
+
+    private HskExamData? exam;
+    private bool isLoading = true;
+    private int activePartIndex = 0;
+    private string activeQuestionId = "";
+
+    // Timer: 45 minutes for HSK reading (adjustable)
+    private int secondsLeft = 45 * 60;
+    private System.Threading.Timer? _timer;
+    private IDisposable? _navigationRegistration;
+    private string? _sessionKey;
+    private bool isFinished;
+    private bool showReview = false;
+    private bool isSubmitting;
+    private GradingResult? gradingResult;
+    private string? _examUrlLoaded;
+    private string? _answerUrlLoaded;
+    private string? _statusMessage;
+    private bool timedOut;
+
+    private const string DefaultExamUrl = "sample-data/HSK3-Sample-Reading.json";
+    private string TimerDisplay
+    {
+        get
+        {
+            int m = secondsLeft / 60, s = secondsLeft % 60;
+            return $"{m:D2}:{s:D2}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        string actualUrl = string.IsNullOrWhiteSpace(ExamUrl) ? QueryExamUrl ?? DefaultExamUrl : ExamUrl;
+        string url = Uri.UnescapeDataString(actualUrl);
+        _examUrlLoaded = url;
+        _answerUrlLoaded = string.IsNullOrWhiteSpace(QueryAnswerUrl) ? null : Uri.UnescapeDataString(QueryAnswerUrl);
+        exam = await HskService.LoadExamAsync(url);
+        if (exam?.Parts?.Count > 0)
+            activeQuestionId = FirstQuestionId(exam.Parts[0]);
+        isLoading = false;
+
+        _sessionKey = ExamSessionService.CreateStorageKey("hsk-reading", TestSessionId, url);
+        var session = await ExamSession.StartAsync(_sessionKey, secondsLeft);
+        secondsLeft = session.SecondsRemaining;
+        isFinished = session.IsCompleted || session.IsExpired;
+        timedOut = session.IsTimedOut || session.IsExpired;
+        if (isFinished) return;
+
+        _navigationRegistration = Navigation.RegisterLocationChangingHandler(ConfirmLeave);
+        await ExamSession.SetUnloadWarningAsync(true);
+        _timer = new System.Threading.Timer(_ => _ = UpdateTimerAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void SelectOption(HskQuestion q, string optionId)
+    {
+        if (!isFinished) q.SelectedOptionId = q.SelectedOptionId == optionId ? null : optionId;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && isFinished) await ExamSession.LockTestContentAsync(".reading-split");
+    }
+
+    private void OnSelectChange(HskQuestion q, ChangeEventArgs e)
+    {
+        if (isFinished) return;
+        var val = e.Value?.ToString();
+        if (!string.IsNullOrEmpty(val))
+            q.SelectedOptionId = val;
+        else
+            q.SelectedOptionId = null;
+    }
+
+    private void SetFillAnswer(HskQuestion q, ChangeEventArgs e)
+    {
+        if (!isFinished) q.FillAnswer = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private bool IsAnswered(HskQuestion q)
+        => q.SelectedOptionId != null || !string.IsNullOrEmpty(q.FillAnswer) || !string.IsNullOrEmpty(q.UserAnswer);
+
+    private int AnsweredCount(HskPart part)
+        => part.Questions.Count(IsAnswered);
+
+    private async Task ScrollToQuestion(string qId)
+    {
+        await Task.Delay(50);
+        try
+        {
+            await JS.InvokeVoidAsync("scrollToElementId", $"q-{qId}");
+        }
+        catch { }
+    }
+
+    private Task SubmitExam() => FinishExamAsync(false);
+
+    private async Task UpdateTimerAsync()
+    {
+        if (isFinished || string.IsNullOrEmpty(_sessionKey)) return;
+        var session = await ExamSession.GetAsync(_sessionKey);
+        if (session == null) return;
+        secondsLeft = session.SecondsRemaining;
+        if (session.IsExpired) await InvokeAsync(() => FinishExamAsync(true));
+        else await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task FinishExamAsync(bool timeExpired)
+    {
+        if (isFinished || isSubmitting) return;
+        isSubmitting = true;
+        _statusMessage = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            timedOut = timeExpired;
+            _timer?.Dispose();
+
+            if (string.IsNullOrEmpty(_examUrlLoaded))
+            {
+                _statusMessage = "Không tìm thấy ExamUrl của bài HSK Reading.";
+                isFinished = true;
+                return;
+            }
+
+            var answerKey = !string.IsNullOrWhiteSpace(_answerUrlLoaded)
+                ? await answerKeyService.LoadAsync(_answerUrlLoaded)
+                : await answerKeyService.LoadFromExamUrlAsync(_examUrlLoaded);
+
+            if (answerKey == null)
+            {
+                _statusMessage = "Không tải được file đáp án HSK Reading. Hãy kiểm tra link AnswerUrl trong admin.";
+                isFinished = true;
+                return;
+            }
+
+            var studentAnswers = CollectStudentAnswers();
+            gradingResult = AnswerKeyService.Grade(answerKey, studentAnswers);
+            isFinished = true;
+
+            if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
+            await ExamSession.LockTestContentAsync(".reading-split");
+            await ExamSession.SetUnloadWarningAsync(false);
+
+            try
+            {
+                await SubmissionService.SaveToDbAsync("hsk-reading", _examUrlLoaded, _sessionKey ?? "", gradingResult.BandScore, gradingResult.CorrectCount, gradingResult.TotalCount);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HSK Reading] Không lưu được kết quả vào DB: {ex.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            isFinished = true;
+            _statusMessage = $"Lỗi khi nộp bài HSK Reading: {ex.Message}";
+            Console.WriteLine($"[HSK Reading] Submit failed: {ex}");
+        }
+        finally
+        {
+            isSubmitting = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private Dictionary<int, string> CollectStudentAnswers()
+    {
+        var result = new Dictionary<int, string>();
+        if (exam == null) return result;
+        int qNum = 1;
+        foreach (var part in exam.Parts)
+            foreach (var q in part.Questions)
+            {
+                var answer = q.FillAnswer?.Trim();
+                if (!string.IsNullOrEmpty(q.SelectedOptionId))
+                {
+                    var opt = q.Options?.FirstOrDefault(o => o.Id == q.SelectedOptionId);
+                    answer = opt?.Label ?? q.SelectedOptionId;
+                }
+                result[qNum++] = answer ?? "";
+            }
+        return result;
+    }
+
+    private static string FirstQuestionId(HskPart part)
+        => part.Questions.FirstOrDefault()?.Id ?? "";
+
+    private async ValueTask ConfirmLeave(LocationChangingContext context)
+    {
+        if (!isFinished && !await ExamSession.ConfirmLeaveAsync()) context.PreventNavigation();
+    }
+
+    private void ExitExam() => Navigation.NavigateTo("/hsk/luyen-de");
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _navigationRegistration?.Dispose();
+        _ = ExamSession.SetUnloadWarningAsync(false);
+    }
+}
