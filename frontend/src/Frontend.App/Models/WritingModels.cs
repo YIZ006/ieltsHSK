@@ -4,6 +4,7 @@ public class WritingExamData
 {
     public string Title { get; set; } = "";
     public int TotalMinutes { get; set; } = 60;
+    public string? HskLevel { get; set; } // null for IELTS, e.g. "HSK3" for HSK
     public List<WritingTask> Tasks { get; set; } = new();
 }
 
