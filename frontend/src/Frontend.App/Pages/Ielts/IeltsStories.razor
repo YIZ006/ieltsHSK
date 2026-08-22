@@ -58,7 +58,7 @@
                 @if (!string.IsNullOrEmpty(searchQuery))
                 {
                     <button class="btn-clear-search" @onclick="ClearSearch">
-                        <i class="bi bi-x"></i>
+                        <i class="bi bi-x-lg"></i>
                     </button>
                 }
             </div>
@@ -81,7 +81,7 @@
         @if (isLoading)
         {
             <div class="loading-state">
-                <div class="spinner-border text-primary" role="status"></div>
+                <div class="custom-spinner"></div>
                 <p>Đang tải danh sách truyện phù hợp...</p>
             </div>
         }
@@ -93,7 +93,7 @@
                 </div>
                 <h3>Chưa có truyện nào phù hợp</h3>
                 <p>Thử đổi bộ lọc cấp độ hoặc tìm kiếm từ khóa khác.</p>
-                <button class="btn btn-outline-primary mt-2" @onclick="ResetFilters">Xóa bộ lọc</button>
+                <button class="btn-reset-filters" @onclick="ResetFilters">Xóa bộ lọc</button>
             </div>
         }
         else
@@ -102,6 +102,7 @@
                 @foreach (var story in filteredStories)
                 {
                     <div class="story-card" @onclick="() => ReadStory(story.Slug)">
+                        <!-- Thumbnail Wrapper -->
                         <div class="story-thumbnail-wrapper">
                             <img src="@(string.IsNullOrEmpty(story.ThumbnailUrl) ? "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=800" : story.ThumbnailUrl)" 
                                  alt="@story.Title" 
@@ -116,31 +117,34 @@
                             </span>
                         </div>
 
+                        <!-- Card Info Content -->
                         <div class="story-info">
                             <div class="story-meta-top">
                                 <span class="story-category">@story.Category</span>
-                                <span class="story-word-count"><i class="bi bi-file-text"></i> @story.WordCount từ</span>
+                                <span class="story-word-count"><i class="bi bi-file-earmark-text"></i> @story.WordCount từ</span>
                             </div>
 
-                            <h3 class="story-title">@story.Title</h3>
+                            <h3 class="story-title" title="@story.Title">@story.Title</h3>
                             
                             @if (!string.IsNullOrEmpty(story.Summary))
                             {
                                 <p class="story-summary">@story.Summary</p>
                             }
 
+                            <!-- Card Footer -->
                             <div class="story-footer">
                                 <div class="story-features">
                                     <span class="feature-item" title="Số từ vựng mục tiêu">
-                                        <i class="bi bi-spellcheck"></i> @story.TargetVocabCount từ mới
+                                        <i class="bi bi-spellcheck"></i> <b>@story.TargetVocabCount</b> từ mới
                                     </span>
                                     <span class="feature-item" title="Số câu hỏi đọc hiểu">
-                                        <i class="bi bi-question-circle"></i> @story.QuestionsCount câu quiz
+                                        <i class="bi bi-question-circle"></i> <b>@story.QuestionsCount</b> câu quiz
                                     </span>
                                 </div>
 
                                 <button class="btn-read-now" @onclick:stopPropagation="true" @onclick="() => ReadStory(story.Slug)">
-                                    Đọc ngay <i class="bi bi-arrow-right"></i>
+                                    <span>Đọc ngay</span>
+                                    <i class="bi bi-arrow-right-short"></i>
                                 </button>
                             </div>
                         </div>
@@ -183,29 +187,26 @@
 
     private void ApplyFilter()
     {
-        var query = allStories.AsEnumerable();
+        var result = allStories.AsEnumerable();
 
         if (selectedLevel != "Tất cả")
         {
-            query = query.Where(s => s.Level.Equals(selectedLevel, StringComparison.OrdinalIgnoreCase));
+            result = result.Where(s => s.Level.Equals(selectedLevel, StringComparison.OrdinalIgnoreCase));
         }
 
         if (selectedCategory != "All")
         {
-            query = query.Where(s => s.Category.Equals(selectedCategory, StringComparison.OrdinalIgnoreCase));
+            result = result.Where(s => s.Category.Equals(selectedCategory, StringComparison.OrdinalIgnoreCase));
         }
 
         if (!string.IsNullOrWhiteSpace(searchQuery))
         {
-            var search = searchQuery.Trim();
-            query = query.Where(s => 
-                s.Title.Contains(search, StringComparison.OrdinalIgnoreCase) || 
-                (s.Summary != null && s.Summary.Contains(search, StringComparison.OrdinalIgnoreCase)) ||
-                s.Category.Contains(search, StringComparison.OrdinalIgnoreCase)
-            );
+            result = result.Where(s => s.Title.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                                       s.Summary.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                                       s.Category.Contains(searchQuery, StringComparison.OrdinalIgnoreCase));
         }
 
-        filteredStories = query.ToList();
+        filteredStories = result.ToList();
     }
 
     private void ClearSearch()
