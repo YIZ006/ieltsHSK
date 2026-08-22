@@ -40,12 +40,21 @@ public class HskService
         try
         {
             var sections = await _http.GetFromJsonAsync<List<HskLearningSection>>("/api/hsk/sections");
-            return sections ?? new List<HskLearningSection>();
+            if (sections != null && sections.Any()) return sections;
         }
         catch
         {
-            return new List<HskLearningSection>();
         }
+
+        return new List<HskLearningSection>
+        {
+            new HskLearningSection { Name = "Từ vựng HSK", Route = "/hsk/vocabulary", Icon = "bi-book-half", Description = "Flashcard và tra cứu từ vựng chuẩn HSK 1–6" },
+            new HskLearningSection { Name = "Luyện nghe", Route = "/hsk/listening", Icon = "bi-headphones", Description = "Nghe hội thoại và đoạn văn chuẩn phổ thông" },
+            new HskLearningSection { Name = "Luyện đọc", Route = "/hsk/reading", Icon = "bi-journal-text", Description = "Đọc hiểu đoạn văn, nối câu và sắp xếp câu" },
+            new HskLearningSection { Name = "Luyện viết", Route = "/hsk/writing", Icon = "bi-pencil-square", Description = "Tập viết chữ Hán, điền từ và dịch thuật" },
+            new HskLearningSection { Name = "Luyện nói HSKK", Route = "/hsk/speaking", Icon = "bi-mic-fill", Description = "Luyện phát âm, đọc to và miêu tả tranh" },
+            new HskLearningSection { Name = "Thi thử HSK", Route = "/hsk/mock-tests", Icon = "bi-journal-check", Description = "Bộ đề thi thử mô phỏng thời gian thực" }
+        };
     }
 
     // === Vocabulary ===
