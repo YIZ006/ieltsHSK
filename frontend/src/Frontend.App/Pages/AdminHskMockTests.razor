@@ -9,181 +9,733 @@
 @inject HttpClient Http
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
-<PageTitle>HSK Mock Tests - Admin</PageTitle>
+<PageTitle>Quản lý Đề thi HSK - Admin Hub</PageTitle>
 
-<div class="admin-hsk-tests">
-    <div class="admin-header">
-        <h1>📝 HSK Mock Tests</h1>
-        <button class="btn btn-primary" @onclick="() => ShowCreateModal()">+ Create New Test</button>
+<div class="admin-hsk-tests-page">
+    <!-- Top Header -->
+    <div class="page-header">
+        <div class="header-left">
+            <div class="header-icon-badge">
+                <i class="bi bi-journal-check"></i>
+            </div>
+            <div>
+                <h1 class="page-title">Quản lý Đề thi HSK</h1>
+                <p class="page-subtitle">Ngân hàng đề thi thử mô phỏng chuẩn HSK 3.0 (HSK 1 – HSK 6) kèm file âm thanh & đáp án tự động.</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="btn-primary-action" @onclick="() => ShowCreateModal()">
+                <i class="bi bi-plus-circle-fill"></i>
+                <span>Tạo Đề thi HSK mới</span>
+            </button>
+        </div>
     </div>
 
-    <div class="filter-bar">
-        <label>Level:</label>
-        <select @bind="filterLevel" @bind:after="LoadTests">
-            <option value="">All</option>
-            <option value="HSK1">HSK1</option>
-            <option value="HSK2">HSK2</option>
-            <option value="HSK3">HSK3</option>
-            <option value="HSK4">HSK4</option>
-            <option value="HSK5">HSK5</option>
-            <option value="HSK6">HSK6</option>
-            <option value="HSK7">HSK7</option>
-            <option value="HSK8">HSK8</option>
-            <option value="HSK9">HSK9</option>
-        </select>
-        <input type="text" placeholder="Search..." @bind="searchTerm" @oninput="() => LoadTests()" />
+    <!-- Filter Toolbar -->
+    <div class="toolbar-card">
+        <div class="filter-group">
+            <label><i class="bi bi-funnel-fill"></i> Cấp độ:</label>
+            <select class="form-select-filter" @bind="filterLevel" @bind:after="LoadTests">
+                <option value="">Tất cả cấp độ (All)</option>
+                <option value="HSK1">HSK 1 - Sơ cấp 1</option>
+                <option value="HSK2">HSK 2 - Sơ cấp 2</option>
+                <option value="HSK3">HSK 3 - Trung cấp 1</option>
+                <option value="HSK4">HSK 4 - Trung cấp 2</option>
+                <option value="HSK5">HSK 5 - Cao cấp 1</option>
+                <option value="HSK6">HSK 6 - Cao cấp 2</option>
+            </select>
+        </div>
+
+        <div class="search-box-wrapper">
+            <i class="bi bi-search search-icon"></i>
+            <input type="text" placeholder="Tìm kiếm theo tiêu đề, bộ đề HSK..." @bind="searchTerm" @bind:event="oninput" @onkeyup="LoadTests" />
+            @if (!string.IsNullOrEmpty(searchTerm))
+            {
+                <button class="btn-clear-search" @onclick='() => { searchTerm = ""; LoadTests(); }'><i class="bi bi-x-lg"></i></button>
+            }
+        </div>
     </div>
 
-    @if (isLoading)
-    {
-        <div class="loading">Loading...</div>
-    }
-    else
-    {
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Level</th>
-                    <th>Title</th>
-                    <th>Collection</th>
-                    <th>Skill</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var test in tests)
-                {
-                    <tr>
-                        <td>@test.Id</td>
-                        <td>@(ExtractLevel(test.Title))</td>
-                        <td>@test.Title</td>
-                        <td>@test.CollectionName</td>
-                        <td>@(test.HskUrl != null ? GetSkillFromUrl(test.HskUrl) : "—")</td>
-                        <td>
-                            <button class="btn btn-sm btn-primary" @onclick="() => EditTest(test)">Edit</button>
-                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteTest(test.Id)">Delete</button>
-                            <a href="@(test.HskUrl)" target="_blank" class="btn btn-sm btn-secondary">View JSON</a>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
+    <!-- Main Table Card -->
+    <div class="table-card">
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="custom-spinner"></div>
+                <p>Đang tải danh sách đề thi HSK...</p>
+            </div>
+        }
+        else if (tests == null || !tests.Any())
+        {
+            <div class="empty-state">
+                <i class="bi bi-journal-x"></i>
+                <h4>Chưa tìm thấy đề thi HSK nào</h4>
+                <p>Thử đổi bộ lọc cấp độ hoặc bấm nút "Tạo Đề thi HSK mới" ở góc trên.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 70px;">ID</th>
+                            <th style="width: 110px;">Cấp độ</th>
+                            <th>Tiêu đề đề thi</th>
+                            <th>Bộ sưu tập</th>
+                            <th>Kỹ năng</th>
+                            <th class="text-end" style="width: 260px;">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var test in tests)
+                        {
+                            var lvl = ExtractLevel(test.Title);
+                            <tr>
+                                <td><span class="id-tag">#@test.Id</span></td>
+                                <td>
+                                    <span class="hsk-badge hsk-badge-@GetLevelNumber(lvl)">@lvl</span>
+                                </td>
+                                <td>
+                                    <strong class="test-title-text">@test.Title</strong>
+                                </td>
+                                <td>
+                                    <span class="collection-tag"><i class="bi bi-collection"></i> @(string.IsNullOrEmpty(test.CollectionName) ? "Chung" : test.CollectionName)</span>
+                                </td>
+                                <td>
+                                    <span class="skill-pill">@(test.HskUrl != null ? GetSkillFromUrl(test.HskUrl) : "Đầy đủ 4 kỹ năng")</span>
+                                </td>
+                                <td class="text-end">
+                                    <div class="action-buttons-group">
+                                        <button class="action-btn btn-edit" @onclick="() => EditTest(test)" title="Chỉnh sửa đề thi">
+                                            <i class="bi bi-pencil-fill"></i> Sửa
+                                        </button>
+                                        @if (!string.IsNullOrEmpty(test.HskUrl))
+                                        {
+                                            <a href="@(test.HskUrl)" target="_blank" class="action-btn btn-view" title="Xem cấu trúc JSON">
+                                                <i class="bi bi-code-slash"></i> JSON
+                                            </a>
+                                        }
+                                        <button class="action-btn btn-delete" @onclick="() => DeleteTest(test.Id)" title="Xóa đề thi">
+                                            <i class="bi bi-trash-fill"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-footer">
+                <span>Tổng cộng: <b>@totalCount</b> đề thi HSK</span>
+            </div>
+        }
+    </div>
 </div>
 
-<!-- Create/Edit Modal -->
+<!-- ========================================================================= -->
+<!-- CREATE / EDIT MODAL                                                       -->
+<!-- ========================================================================= -->
 @if (showModal)
 {
     <div class="modal-overlay" @onclick="CloseModal">
-        <div class="modal-content" @onclick:stopPropagation="true">
-            <h3>@(editingTest == null ? "Create HSK Test" : "Edit HSK Test")</h3>
-            <div class="form-group">
-                <label>Title</label>
-                <input type="text" @bind="form.Title" placeholder="e.g. HSK3 Listening Practice" />
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-journal-plus text-danger fs-4"></i>
+                    <h3>@(editingTest == null ? "Tạo Đề thi HSK mới" : "Chỉnh sửa Đề thi #" + editingTest.Id)</h3>
+                </div>
+                <button class="btn-close-modal" @onclick="CloseModal"><i class="bi bi-x-lg"></i></button>
             </div>
-            <div class="form-group">
-                <label>Collection Name</label>
-                <input type="text" @bind="form.CollectionName" placeholder="e.g. HSK3" />
+
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Tiêu đề đề thi <span class="req">*</span></label>
+                    <input type="text" class="form-input" @bind="form.Title" placeholder="VD: HSK 3 - Đề số 01 (Nghe & Đọc)" />
+                </div>
+                
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Cấp độ HSK</label>
+                            <select class="form-input" @bind="form.DisplayLevel">
+                                <option value="HSK1">HSK 1 - Sơ cấp 1</option>
+                                <option value="HSK2">HSK 2 - Sơ cấp 2</option>
+                                <option value="HSK3">HSK 3 - Trung cấp 1</option>
+                                <option value="HSK4">HSK 4 - Trung cấp 2</option>
+                                <option value="HSK5">HSK 5 - Cao cấp 1</option>
+                                <option value="HSK6">HSK 6 - Cao cấp 2</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Tên bộ sưu tập</label>
+                            <input type="text" class="form-input" @bind="form.CollectionName" placeholder="VD: HSK 3 Chuẩn 2026" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group mt-3">
+                    <label>Đường dẫn file JSON Đề thi (Exam JSON URL)</label>
+                    <input type="text" class="form-input" @bind="form.HskUrl" placeholder="/sample-data/HSK3-Sample-Reading.json hoặc R2 URL" />
+                </div>
+
+                <div class="upload-box-hsk mt-2">
+                    <label class="d-block fw-bold mb-1 text-danger"><i class="bi bi-cloud-arrow-up"></i> Hoặc tải lên file JSON trực tiếp</label>
+                    <InputFile OnChange="HandleFileSelected" accept=".json" class="file-input-clean" />
+                    @if (!string.IsNullOrEmpty(uploadStatus))
+                    {
+                        <div class="mt-1 small @(uploadStatus.StartsWith("Lỗi") ? "text-danger" : "text-success")">
+                            @uploadStatus
+                        </div>
+                    }
+                    @if (isUploading)
+                    {
+                        <div class="mt-1 small text-muted"><span class="custom-spinner mini"></span> Đang tải lên Cloudflare R2...</div>
+                    }
+                </div>
+
+                <div class="row g-2 mt-3">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label class="small text-muted">Listening URL (tùy chọn)</label>
+                            <input type="text" class="form-input" @bind="form.ListeningUrl" placeholder="Link audio/đề nghe..." />
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label class="small text-muted">Listening Answer Key</label>
+                            <input type="text" class="form-input" @bind="form.ListeningAnswerUrl" placeholder="Link file đáp án nghe..." />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-2 mt-2">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label class="small text-muted">Reading URL (tùy chọn)</label>
+                            <input type="text" class="form-input" @bind="form.ReadingUrl" placeholder="Link đề đọc..." />
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label class="small text-muted">Reading Answer Key</label>
+                            <input type="text" class="form-input" @bind="form.ReadingAnswerUrl" placeholder="Link file đáp án đọc..." />
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="form-group">
-                <label>HSK Level (for display)</label>
-                <select @bind="form.DisplayLevel">
-                    <option value="HSK1">HSK1</option>
-                    <option value="HSK2">HSK2</option>
-                    <option value="HSK3">HSK3</option>
-                    <option value="HSK4">HSK4</option>
-                    <option value="HSK5">HSK5</option>
-                    <option value="HSK6">HSK6</option>
-                    <option value="HSK7">HSK7</option>
-                    <option value="HSK8">HSK8</option>
-                    <option value="HSK9">HSK9</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Exam JSON URL</label>
-                <input type="text" @bind="form.HskUrl" placeholder="/exports/xxxx.json or R2 URL" />
-                <small>Upload JSON via R2 or place in wwwroot/exports/</small>
-            </div>
-            <div class="form-group">
-                <label>Upload JSON file</label>
-                <InputFile OnChange="HandleFileSelected" accept=".json" />
-                @if (!string.IsNullOrEmpty(uploadStatus))
-                {
-                    <small style="color: @(uploadStatus.StartsWith("Error") ? "#e74c3c" : "#2ecc71")">@uploadStatus</small>
-                }
-                @if (isUploading)
-                {
-                    <small>Uploading...</small>
-                }
-            </div>
-            <div class="form-group">
-                <label>Listening URL (optional)</label>
-                <input type="text" @bind="form.ListeningUrl" />
-            </div>
-            <div class="form-group">
-                <label>Reading URL (optional)</label>
-                <input type="text" @bind="form.ReadingUrl" />
-            </div>
-            <div class="form-group">
-                <label>Writing URL (optional)</label>
-                <input type="text" @bind="form.WritingUrl" />
-            </div>
-            <div class="form-group">
-                <label>Speaking URL (optional)</label>
-                <input type="text" @bind="form.SpeakingUrl" />
-            </div>
-            <div class="form-group">
-                <label>Listening Answer URL (optional)</label>
-                <input type="text" @bind="form.ListeningAnswerUrl" />
-            </div>
-            <div class="form-group">
-                <label>Reading Answer URL (optional)</label>
-                <input type="text" @bind="form.ReadingAnswerUrl" />
-            </div>
-            <div class="form-group">
-                <label>Writing Answer URL (optional)</label>
-                <input type="text" @bind="form.WritingAnswerUrl" />
-            </div>
-            <div class="form-group">
-                <label>Speaking Answer URL (optional)</label>
-                <input type="text" @bind="form.SpeakingAnswerUrl" />
-            </div>
-            <div class="modal-actions">
-                <button class="btn btn-primary" @onclick="SaveTest">Save</button>
+
+            <div class="modal-footer">
                 @if (editingTest != null)
                 {
-                    <button class="btn btn-danger" @onclick="DeleteFromModal">Delete This Test</button>
+                    <button class="btn-modal-delete me-auto" @onclick="DeleteFromModal">
+                        <i class="bi bi-trash"></i> Xóa đề này
+                    </button>
                 }
-                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn-modal-cancel" @onclick="CloseModal">Hủy bỏ</button>
+                <button class="btn-modal-save" @onclick="SaveTest">
+                    <i class="bi bi-check2"></i>
+                    <span>Lưu đề thi</span>
+                </button>
             </div>
         </div>
     </div>
 }
 
 <style>
-    .admin-hsk-tests { padding: 20px; max-width: 1400px; margin: 0 auto; }
-    .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
-    .filter-bar { display: flex; gap: 15px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
-    .filter-bar select, .filter-bar input { padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; background: #2a2a2a; color: #eee; }
-    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .modal-content { background: #1e1e1e; padding: 24px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; color: #eee; }
-    .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; font-weight: 600; margin-bottom: 4px; }
-    .form-group input, .form-group select { width: 100%; padding: 6px 10px; border: 1px solid #444; border-radius: 4px; background: #2a2a2a; color: #eee; }
-    .form-group small { color: #888; font-size: 12px; }
-    .modal-actions { display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; }
-    .btn { padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-    .btn-primary { background: #1a7f5a; color: #fff; }
-    .btn-secondary { background: #444; color: #fff; }
-    .btn-danger { background: #c0392b; color: #fff; }
-    .btn-sm { padding: 3px 8px; font-size: 12px; }
-    .table { width: 100%; border-collapse: collapse; }
-    .table th, .table td { padding: 8px 12px; border: 1px solid #333; text-align: left; }
-    .table th { background: #2a2a2a; }
-    .loading { text-align: center; padding: 40px; color: #888; }
-    .pagination { margin-top: 16px; text-align: right; color: #888; }
+/* ========================================================================= */
+/* ADMIN HSK MOCK TESTS (CHINESE IMPERIAL RED THEME #DC2626)                 */
+/* ========================================================================= */
+.admin-hsk-tests-page {
+    padding: 24px 32px 60px;
+    max-width: 1400px;
+    margin: 0 auto;
+    font-family: 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1e293b;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.header-icon-badge {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+    flex-shrink: 0;
+}
+
+.page-title {
+    font-size: 1.85rem;
+    font-weight: 800;
+    margin: 0 0 4px 0;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+}
+
+.page-subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #64748b;
+}
+
+.btn-primary-action {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    border: none;
+    color: #ffffff;
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.32);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-primary-action:hover {
+    background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(220, 38, 38, 0.45);
+}
+
+/* Toolbar */
+.toolbar-card {
+    background: #ffffff;
+    border: 1.5px solid #fee2e2;
+    border-radius: 18px;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+    box-shadow: 0 4px 16px rgba(220, 38, 38, 0.03);
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.filter-group label {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #dc2626;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.form-select-filter {
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: 1.5px solid #fecaca;
+    background: #ffffff;
+    color: #0f172a;
+    font-weight: 600;
+    font-size: 0.9rem;
+    outline: none;
+    cursor: pointer;
+}
+
+.form-select-filter:focus {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+}
+
+.search-box-wrapper {
+    position: relative;
+    width: 320px;
+}
+
+.search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #f87171;
+    font-size: 0.95rem;
+}
+
+.search-box-wrapper input {
+    width: 100%;
+    padding: 9px 36px 9px 38px;
+    border-radius: 12px;
+    border: 1.5px solid #fecaca;
+    font-size: 0.92rem;
+    background: #ffffff;
+    color: #0f172a;
+    outline: none;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.search-box-wrapper input:focus {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.15);
+}
+
+.btn-clear-search {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 0;
+}
+
+/* Table Card */
+.table-card {
+    background: #ffffff;
+    border: 1.5px solid #fee2e2;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(220, 38, 38, 0.04);
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+
+.data-table th {
+    background: #fff8f8;
+    color: #991b1b;
+    font-weight: 800;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 16px 20px;
+    border-bottom: 1.5px solid #fee2e2;
+    text-align: left;
+}
+
+.data-table td {
+    padding: 16px 20px;
+    vertical-align: middle;
+    border-bottom: 1px solid #fff1f2;
+    background: #ffffff;
+}
+
+.data-table tbody tr:hover td {
+    background: #fffaf9;
+}
+
+.id-tag {
+    font-weight: 700;
+    color: #94a3b8;
+    font-size: 0.85rem;
+}
+
+.test-title-text {
+    color: #0f172a;
+    font-weight: 700;
+}
+
+.collection-tag {
+    font-size: 0.85rem;
+    color: #64748b;
+    font-weight: 600;
+    background: #f8fafc;
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.skill-pill {
+    font-size: 0.82rem;
+    color: #dc2626;
+    background: #fef2f2;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-weight: 700;
+    border: 1px solid #fecaca;
+}
+
+.hsk-badge {
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #ffffff;
+    display: inline-block;
+}
+
+.hsk-badge-1 { background: #16a34a; }
+.hsk-badge-2 { background: #0284c7; }
+.hsk-badge-3 { background: #ea580c; }
+.hsk-badge-4 { background: #dc2626; }
+.hsk-badge-5 { background: #7c3aed; }
+.hsk-badge-6 { background: #0f172a; }
+
+.action-buttons-group {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.action-btn {
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1.5px solid transparent;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    text-decoration: none !important;
+    transition: all 0.2s ease;
+}
+
+.btn-edit {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #dc2626;
+}
+.btn-edit:hover {
+    background: #dc2626;
+    color: #ffffff;
+}
+
+.btn-view {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    color: #475569;
+}
+.btn-view:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.btn-delete {
+    background: #ffffff;
+    border-color: #fee2e2;
+    color: #ef4444;
+}
+.btn-delete:hover {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+.table-footer {
+    padding: 14px 20px;
+    background: #fff8f8;
+    border-top: 1px solid #fee2e2;
+    font-size: 0.88rem;
+    color: #991b1b;
+}
+
+/* Loading & Empty States */
+.loading-state, .empty-state {
+    padding: 60px 20px;
+    text-align: center;
+}
+.custom-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid #fee2e2;
+    border-top-color: #dc2626;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+}
+.custom-spinner.mini {
+    width: 14px;
+    height: 14px;
+    border-width: 2px;
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 4px 0 0;
+}
+@@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty-state i {
+    font-size: 3rem;
+    color: #fca5a5;
+    margin-bottom: 12px;
+    display: block;
+}
+
+.empty-state h4 {
+    margin: 0 0 6px;
+    color: #0f172a;
+    font-weight: 700;
+}
+.empty-state p {
+    color: #64748b;
+    margin: 0;
+}
+
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.modal-card {
+    background: #ffffff;
+    border-radius: 20px;
+    width: 640px;
+    max-width: 90%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+    border: 1px solid #fee2e2;
+    overflow: hidden;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 24px;
+    border-bottom: 1px solid #fee2e2;
+    background: #fff8f8;
+}
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+.btn-close-modal {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: #94a3b8;
+    cursor: pointer;
+}
+.btn-close-modal:hover { color: #dc2626; }
+
+.modal-body {
+    padding: 24px;
+    overflow-y: auto;
+}
+
+.form-group {
+    margin-bottom: 14px;
+}
+.form-group label {
+    display: block;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 6px;
+}
+.req { color: #dc2626; }
+
+.form-input {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1.5px solid #cbd5e1;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 0.92rem;
+    outline: none;
+    box-sizing: border-box;
+}
+.form-input:focus {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+}
+
+.upload-box-hsk {
+    background: #fff8f8;
+    border: 1.5px dashed #fca5a5;
+    border-radius: 12px;
+    padding: 14px;
+}
+.file-input-clean {
+    font-size: 0.85rem;
+}
+
+.modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #fee2e2;
+    background: #ffffff;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    align-items: center;
+}
+
+.btn-modal-cancel {
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    color: #475569;
+    padding: 8px 18px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+.btn-modal-save {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    border: none;
+    color: #ffffff;
+    padding: 8px 20px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+.btn-modal-delete {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+}
+.btn-modal-delete:hover { background: #dc2626; color: #ffffff; }
 </style>
 
 @code {
@@ -200,6 +752,12 @@
     private string uploadStatus = "";
     private string? uploadedFileUrl = null;
 
+    private string GetApiUrl(string path)
+    {
+        var baseUrl = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101/";
+        return $"{baseUrl.TrimEnd('/')}/{path.TrimStart('/')}";
+    }
+
     protected override async Task OnInitializedAsync()
     {
         await LoadTests();
@@ -212,15 +770,16 @@
 
         try
         {
-            var all = await Http.GetFromJsonAsync<List<MockTestDto>>("/api/mock-tests");
-            var hskTests = all?.Where(t => !string.IsNullOrEmpty(t.HskUrl)).ToList() ?? new();
+            var apiUrl = GetApiUrl("api/mock-tests");
+            var all = await Http.GetFromJsonAsync<List<MockTestDto>>(apiUrl);
+            var hskTests = all?.Where(t => !string.IsNullOrEmpty(t.HskUrl) || (t.Title != null && t.Title.Contains("HSK", StringComparison.OrdinalIgnoreCase))).ToList() ?? new();
 
             if (!string.IsNullOrEmpty(filterLevel))
                 hskTests = hskTests.Where(t => t.Title.Contains(filterLevel, StringComparison.OrdinalIgnoreCase)).ToList();
 
-            if (!string.IsNullOrEmpty(searchTerm))
-                hskTests = hskTests.Where(t => t.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                                               t.CollectionName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+                hskTests = hskTests.Where(t => (t.Title != null && t.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                                               (t.CollectionName != null && t.CollectionName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))).ToList();
 
             tests = hskTests;
             totalCount = tests.Count;
@@ -264,6 +823,13 @@
         showModal = true;
     }
 
+    private void CloseModal()
+    {
+        showModal = false;
+        editingTest = null;
+        ResetUploadState();
+    }
+
     private void ResetUploadState()
     {
         isUploading = false;
@@ -271,150 +837,199 @@
         uploadedFileUrl = null;
     }
 
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        isUploading = true;
+        uploadStatus = "Đang đọc và tải file lên...";
+        StateHasChanged();
+
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            var jsonContent = await reader.ReadToEndAsync();
+
+            JsonDocument.Parse(jsonContent);
+
+            using var content = new MultipartFormDataContent();
+            var fileContent = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(jsonContent));
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            content.Add(fileContent, "file", file.Name);
+
+            var uploadUrl = GetApiUrl("api/hsk/upload-json");
+            var response = await Http.PostAsync(uploadUrl, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<UploadResult>();
+                if (result?.Url != null)
+                {
+                    uploadedFileUrl = result.Url;
+                    form.HskUrl = result.Url;
+                    uploadStatus = "Tải lên Cloudflare R2 thành công!";
+                }
+            }
+            else
+            {
+                form.HskUrl = $"/sample-data/{file.Name}";
+                uploadStatus = $"Sử dụng đường dẫn cục bộ: /sample-data/{file.Name}";
+            }
+        }
+        catch (Exception ex)
+        {
+            uploadStatus = $"Lỗi: {ex.Message}";
+        }
+
+        isUploading = false;
+        StateHasChanged();
+    }
+
     private async Task SaveTest()
     {
-        var request = new CreateMockTestRequest
+        if (string.IsNullOrWhiteSpace(form.Title))
         {
-            CollectionName = form.CollectionName,
-            Title = form.Title,
-            HskUrl = form.HskUrl,
-            ListeningUrl = form.ListeningUrl,
-            ReadingUrl = form.ReadingUrl,
-            WritingUrl = form.WritingUrl,
-            SpeakingUrl = form.SpeakingUrl,
-            ListeningAnswerUrl = form.ListeningAnswerUrl,
-            ReadingAnswerUrl = form.ReadingAnswerUrl,
-            WritingAnswerUrl = form.WritingAnswerUrl,
-            SpeakingAnswerUrl = form.SpeakingAnswerUrl
-        };
+            await JS.InvokeVoidAsync("alert", "Vui lòng nhập Tiêu đề đề thi.");
+            return;
+        }
 
         try
         {
             if (editingTest == null)
             {
-                await Http.PostAsJsonAsync("/api/mock-tests", request);
+                var createDto = new
+                {
+                    Title = form.Title,
+                    CollectionName = string.IsNullOrEmpty(form.CollectionName) ? form.DisplayLevel : form.CollectionName,
+                    LanguageId = 2,
+                    HskUrl = form.HskUrl,
+                    ListeningUrl = form.ListeningUrl,
+                    ReadingUrl = form.ReadingUrl,
+                    WritingUrl = form.WritingUrl,
+                    SpeakingUrl = form.SpeakingUrl,
+                    ListeningAnswerUrl = form.ListeningAnswerUrl,
+                    ReadingAnswerUrl = form.ReadingAnswerUrl,
+                    WritingAnswerUrl = form.WritingAnswerUrl,
+                    SpeakingAnswerUrl = form.SpeakingAnswerUrl
+                };
+
+                var createUrl = GetApiUrl("api/mock-tests");
+                var response = await Http.PostAsJsonAsync(createUrl, createDto);
+                if (response.IsSuccessStatusCode)
+                {
+                    CloseModal();
+                    await LoadTests();
+                    await JS.InvokeVoidAsync("alert", "Tạo đề thi HSK thành công!");
+                }
+                else
+                {
+                    await JS.InvokeVoidAsync("alert", "Có lỗi xảy ra khi tạo đề thi.");
+                }
             }
             else
             {
-                await Http.PutAsJsonAsync($"/api/mock-tests/{editingTest.Id}", request);
+                var updateDto = new
+                {
+                    Title = form.Title,
+                    CollectionName = form.CollectionName,
+                    LanguageId = 2,
+                    HskUrl = form.HskUrl,
+                    ListeningUrl = form.ListeningUrl,
+                    ReadingUrl = form.ReadingUrl,
+                    WritingUrl = form.WritingUrl,
+                    SpeakingUrl = form.SpeakingUrl,
+                    ListeningAnswerUrl = form.ListeningAnswerUrl,
+                    ReadingAnswerUrl = form.ReadingAnswerUrl,
+                    WritingAnswerUrl = form.WritingAnswerUrl,
+                    SpeakingAnswerUrl = form.SpeakingAnswerUrl
+                };
+
+                var updateUrl = GetApiUrl($"api/mock-tests/{editingTest.Id}");
+                var response = await Http.PutAsJsonAsync(updateUrl, updateDto);
+                if (response.IsSuccessStatusCode)
+                {
+                    CloseModal();
+                    await LoadTests();
+                    await JS.InvokeVoidAsync("alert", "Cập nhật đề thi HSK thành công!");
+                }
+                else
+                {
+                    await JS.InvokeVoidAsync("alert", "Có lỗi xảy ra khi lưu đề thi.");
+                }
             }
-            showModal = false;
-            await LoadTests();
         }
         catch (Exception ex)
         {
-            await JS.InvokeVoidAsync("alert", $"Error saving test: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Lỗi kết nối: {ex.Message}");
         }
     }
 
     private async Task DeleteTest(int id)
     {
-        var confirm = await JS.InvokeAsync<bool>("confirm", "Delete this test? This will also remove associated JSON files from R2.");
+        bool confirm = await JS.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn xóa đề thi HSK này?");
         if (!confirm) return;
 
         try
         {
-            await Http.DeleteAsync($"/api/mock-tests/{id}");
-            await LoadTests();
+            var delUrl = GetApiUrl($"api/mock-tests/{id}");
+            var response = await Http.DeleteAsync(delUrl);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadTests();
+                await JS.InvokeVoidAsync("alert", "Đã xóa đề thi.");
+            }
         }
         catch (Exception ex)
         {
-            await JS.InvokeVoidAsync("alert", $"Error deleting test: {ex.Message}");
+            await JS.InvokeVoidAsync("alert", $"Lỗi xóa: {ex.Message}");
         }
     }
 
     private async Task DeleteFromModal()
     {
         if (editingTest == null) return;
-        var confirm = await JS.InvokeAsync<bool>("confirm", $"Delete test '{editingTest.Title}'? This will also remove associated JSON files from R2.");
-        if (!confirm) return;
-
-        try
-        {
-            await Http.DeleteAsync($"/api/mock-tests/{editingTest.Id}");
-            showModal = false;
-            await LoadTests();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("alert", $"Error deleting test: {ex.Message}");
-        }
-    }
-
-    private void CloseModal() => showModal = false;
-
-    private async Task HandleFileSelected(InputFileChangeEventArgs e)
-    {
-        var file = e.File;
-        if (file == null) return;
-
-        try
-        {
-            isUploading = true;
-            uploadStatus = "";
-            StateHasChanged();
-
-            // Read file content
-            await using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
-            using var memoryStream = new MemoryStream();
-            await stream.CopyToAsync(memoryStream);
-            memoryStream.Position = 0;
-
-            // Validate JSON
-            var json = System.Text.Encoding.UTF8.GetString(memoryStream.ToArray());
-            var examData = JsonSerializer.Deserialize<object>(json);
-            if (examData == null)
-            {
-                uploadStatus = "Error: Invalid JSON format";
-                return;
-            }
-
-            // Upload to R2 via HskService
-            var fileName = $"{Guid.NewGuid()}.json";
-            var url = await HskService.UploadMediaAsync(memoryStream, fileName, "application/json");
-            if (string.IsNullOrEmpty(url))
-            {
-                uploadStatus = "Error: Failed to upload to R2";
-                return;
-            }
-
-            uploadedFileUrl = url;
-            form.HskUrl = url;
-            uploadStatus = $"Uploaded: {file.Name}";
-        }
-        catch (Exception ex)
-        {
-            uploadStatus = $"Error: {ex.Message}";
-        }
-        finally
-        {
-            isUploading = false;
-            StateHasChanged();
-        }
+        await DeleteTest(editingTest.Id);
+        CloseModal();
     }
 
     private static string ExtractLevel(string title)
     {
-        var match = System.Text.RegularExpressions.Regex.Match(title, @"HSK[1-9]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        return match.Success ? match.Value.ToUpper() : "—";
+        if (string.IsNullOrEmpty(title)) return "HSK1";
+        for (int i = 9; i >= 1; i--)
+        {
+            if (title.Contains($"HSK{i}", StringComparison.OrdinalIgnoreCase) ||
+                title.Contains($"HSK {i}", StringComparison.OrdinalIgnoreCase))
+                return $"HSK{i}";
+        }
+        return "HSK1";
+    }
+
+    private static int GetLevelNumber(string levelStr)
+    {
+        if (levelStr.StartsWith("HSK", StringComparison.OrdinalIgnoreCase) && int.TryParse(levelStr[3..], out int num))
+        {
+            return num;
+        }
+        return 1;
     }
 
     private static string GetSkillFromUrl(string url)
     {
-        if (string.IsNullOrEmpty(url)) return "—";
-        var lower = url.ToLower();
-        if (lower.Contains("listening")) return "Listening";
-        if (lower.Contains("reading")) return "Reading";
-        if (lower.Contains("writing")) return "Writing";
-        if (lower.Contains("speaking")) return "Speaking";
-        return "Unknown";
+        var lower = url.ToLowerInvariant();
+        if (lower.Contains("listen")) return "Nghe (Listening)";
+        if (lower.Contains("read")) return "Đọc (Reading)";
+        if (lower.Contains("writ")) return "Viết (Writing)";
+        if (lower.Contains("speak")) return "Nói (Speaking)";
+        return "Đề thi Tổng hợp";
     }
 
-    private class HskTestForm
+    public class HskTestForm
     {
         public string Title { get; set; } = "";
         public string CollectionName { get; set; } = "";
-        public string DisplayLevel { get; set; } = "HSK3";
+        public string DisplayLevel { get; set; } = "HSK1";
         public string? HskUrl { get; set; }
         public string? ListeningUrl { get; set; }
         public string? ReadingUrl { get; set; }
@@ -424,5 +1039,10 @@
         public string? ReadingAnswerUrl { get; set; }
         public string? WritingAnswerUrl { get; set; }
         public string? SpeakingAnswerUrl { get; set; }
+    }
+
+    public class UploadResult
+    {
+        public string? Url { get; set; }
     }
 }
