@@ -1,19 +1,18 @@
 @page "/ielts/speak-along"
 @page "/ielts/speak-along/{Part}"
+@page "/ielts/noi-theo"
+@page "/ielts/noi-theo/{Part}"
 @layout Frontend.App.Layout.ExamLayout
 @using Frontend.App.Models
+@using Frontend.App.Services
 @using System.Net.Http.Json
 @using Microsoft.JSInterop
-@inject HttpClient Http
+@inject SpeakAlongService SpeakAlongService
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
-@implements IDisposable
 
-<PageTitle>IELTS Nói Theo (Shadowing) - IeltsHSK</PageTitle>
+<PageTitle>IELTS Nói Theo - IeltsHSK</PageTitle>
 
-@* ══════════════════════════════════════════════════════
-   LOADING STATE
-══════════════════════════════════════════════════════ *@
 @if (isLoading)
 {
     <div class="sa-loading">
@@ -21,134 +20,21 @@
         <p>Đang tải bài nói theo...</p>
     </div>
 }
-
-@* ══════════════════════════════════════════════════════
-   SETUP SCREEN - Microphone check
-══════════════════════════════════════════════════════ *@
-@if (!isLoading && state == SpeakAlongState.Setup)
+else if (exam == null)
 {
-    <div class="sa-setup-overlay">
-        <div class="sa-setup-card">
-            <div class="sa-setup-logo">🎯</div>
-            <h1 class="sa-setup-title">IELTS Nói Theo (Shadowing)</h1>
-            <p class="sa-setup-subtitle">Hãy luyện tập phát âm, ngữ điệu và độ chính xác bằng cách lặp lại câu trả lời mẫu.</p>
-
-            @* Step 1: Mic *@
-            <div class="sa-setup-step @(micOk ? "step-ok" : micError ? "step-error" : "")">
-                <div class="sa-step-icon">@(micOk ? "✅" : micError ? "❌" : "🎙️")</div>
-                <div class="sa-step-content">
-                    <h3>Bước 1 — Kiểm tra Microphone</h3>
-                    @if (!micChecked)
-                    {
-                        <p>Chúng tôi cần quyền truy cập microphone để ghi âm giọng nói của bạn.</p>
-                        <button class="sa-btn-primary" @onclick="RequestMic">🎙️ Cho phép Microphone</button>
-                    }
-                    else if (micError)
-                    {
-                        <p class="sa-error-msg">⚠️ Microphone bị từ chối. Hãy click biểu tượng camera ở thanh địa chỉ trình duyệt, cho phép microphone, sau đó tải lại trang.</p>
-                        <button class="sa-btn-secondary" @onclick="RequestMic">🔄 Thử lại</button>
-                    }
-                    else if (micOk)
-                    {
-                        @if (microphones.Count > 0)
-                        {
-                            <div class="sa-mic-device-picker">
-                                <label for="sa-microphone-device">Microphone sử dụng</label>
-                                <div class="sa-mic-device-actions">
-                                    <select id="sa-microphone-device" value="@selectedMicrophoneId" @onchange="ChangeMicrophone">
-                                        @foreach (var microphone in microphones)
-                                        {
-                                            <option value="@microphone.DeviceId">@microphone.Label</option>
-                                        }
-                                    </select>
-                                    <button type="button" class="sa-btn-secondary sa-btn-sm" @onclick="RefreshMicrophones">Làm mới thiết bị</button>
-                                </div>
-                                <p class="sa-mic-device-hint">Kết nối headset hoặc mic USB, làm mới danh sách, sau đó chọn thiết bị trước khi ghi âm.</p>
-                            </div>
-                        }
-                        @if (!micTested && micTestUrl == null && micCountdown == 5)
-                        {
-                            <div class="sa-mic-status">
-                                <span class="sa-mic-dot"></span>
-                                <span>Microphone hoạt động — chúng tôi nghe thấy bạn!</span>
-                            </div>
-                            <canvas id="sa-setup-waveform" class="sa-waveform" width="560" height="72"></canvas>
-                            <p class="sa-waveform-hint">Nói thử để xem sóng âm thanh ở trên</p>
-                            <button class="sa-btn-primary" @onclick="StartMicTest">🔴 Ghi âm mẫu (5 giây)</button>
-                        }
-                        else if (micTestUrl == null)
-                        {
-                            <div class="sa-mic-status">
-                                <span class="sa-mic-dot"></span>
-                                <span>Đang ghi âm... còn @micCountdown giây</span>
-                            </div>
-                            <canvas id="sa-setup-waveform" class="sa-waveform" width="560" height="72"></canvas>
-                        }
-                        else if (!micTestDone)
-                        {
-                            <p style="margin-bottom:8px">Nghe lại bản ghi âm — có rõ ràng không?</p>
-                            <audio src="@micTestUrl" controls class="sa-playback"></audio>
-                            <div class="sa-step-actions" style="margin-top:8px">
-                                <button class="sa-btn-ok" @onclick="MicTestOk">✅ Rõ ràng!</button>
-                                <button class="sa-btn-secondary" @onclick="RetryMicTest">🔄 Ghi lại</button>
-                            </div>
-                        }
-                    }
-                </div>
-            </div>
-
-            @* Step 2: Speaker *@
-            @if (micOk && micTestDone)
-            {
-                <div class="sa-setup-step @(speakerOk ? "step-ok" : "")">
-                    <div class="sa-step-icon">@(speakerOk ? "✅" : "🔊")</div>
-                    <div class="sa-step-content">
-                        <h3>Bước 2 — Kiểm tra Loa / Tai nghe</h3>
-                        <div class="sa-speaker-test">
-                            <span class="sa-speaker-icon">🎧</span>
-                            <div class="sa-speaker-info">
-                                <p>Click Play để nghe âm thanh test. Đảm bảo âm lượng đủ lớn.</p>
-                            </div>
-                            <button class="sa-btn-secondary" @onclick="TestSpeaker">▶ Play</button>
-                        </div>
-                        @if (speakerPlayed && !speakerOk)
-                        {
-                            <div class="sa-step-actions" style="margin-top:12px">
-                                <button class="sa-btn-ok" @onclick="ConfirmSpeaker">✅ Tôi nghe thấy</button>
-                                <button class="sa-btn-secondary" @onclick="TestSpeaker">🔄 Phát lại</button>
-                            </div>
-                        }
-                    </div>
-                </div>
-            }
-
-            @* Start button *@
-            @if (micOk && micTestDone && speakerOk)
-            {
-                <button class="sa-btn-start" @onclick="EnterPractice">
-                    🚀 Bắt đầu luyện Nói Theo
-                </button>
-            }
-        </div>
-    </div>
+    <div class="alert alert-warning">Không tải được dữ liệu.</div>
 }
-
-@* ══════════════════════════════════════════════════════
-   MAIN PRACTICE SCREEN
-══════════════════════════════════════════════════════ *@
-@if (!isLoading && state != SpeakAlongState.Setup && exam != null)
+else
 {
     <div class="sa-layout">
-        @* SIDEBAR - Question List *@
         <aside class="sa-sidebar">
             <div class="sa-sidebar-header">
                 <h2>@exam.Part</h2>
                 <span class="sa-level-badge">@exam.Level</span>
             </div>
             <div class="sa-part-tabs">
-                @foreach (var partName in partNames)
+                @foreach (var p in partNames)
                 {
-                    var p = partName;
                     <button class="sa-part-tab @(activePart == p ? "active" : "")" @onclick="() => SwitchPart(p)">
                         @p
                     </button>
@@ -157,312 +43,182 @@
             <div class="sa-question-list">
                 @foreach (var item in currentItems)
                 {
-                    var i = item;
-                    var isDone = sessionRecords.Any(r => r.ItemId == i.Id);
-                    var isCurrent = currentItem?.Id == i.Id;
-                    <button class="sa-question-item @(isCurrent ? "active" : "") @(isDone ? "done" : "")" @onclick="() => SelectItem(i)">
-                        <span class="sa-q-num">Câu @i.Id</span>
-                        <span class="sa-q-text">@Truncate(i.Question, 45)</span>
-                        @if (isDone)
-                        {
-                            <span class="sa-q-done">✓</span>
-                        }
+                    var isActive = currentItem?.Id == item.Id;
+                    <button class="sa-question-item @(isActive ? "active" : "")" @onclick="() => SelectItem(item)">
+                        <span class="sa-q-num">@item.Id</span>
+                        <span class="sa-q-text">@Truncate(item.Question, 40)</span>
                     </button>
                 }
             </div>
-            <div class="sa-sidebar-footer">
-                <button class="sa-btn-secondary sa-btn-sm" @onclick="GoToDashboard">← Quay lại Dashboard</button>
-            </div>
         </aside>
 
-        @* MAIN PANEL *@
         <main class="sa-main">
-            @* Top bar *@
-            <div class="sa-topbar">
-                <div class="sa-topbar-left">
-                    <span class="sa-exam-title">Nói Theo: @exam.Title</span>
+            @if (currentItem == null)
+            {
+                <div class="sa-empty-state">
+                    <p>Chọn một câu hỏi từ danh sách bên trái.</p>
                 </div>
-                <div class="sa-topbar-right">
-                    @if (currentItem != null)
-                    {
-                        <span class="sa-progress-info">Câu @(currentItems.IndexOf(currentItem) + 1) / @currentItems.Count</span>
-                    }
-                </div>
-            </div>
-
-            @* Content *@
-            <div class="sa-content">
-                @if (currentItem == null)
-                {
-                    <div class="sa-empty-state">
-                        <div class="sa-empty-icon">📋</div>
-                        <h3>Chọn một câu hỏi để bắt đầu</h3>
-                        <p>Chọn câu hỏi từ danh sách bên trái để bắt đầu luyện tập nói theo.</p>
+            }
+            else
+            {
+                <div class="sa-content">
+                    <div class="sa-question-display">
+                        <h3>@currentItem.Question</h3>
                     </div>
-                }
-                else
-                {
-                    <SpeakAlongItem 
-                        Item="currentItem" 
-                        State="state"
-                        OnStateChanged="HandleItemStateChanged"
-                        OnRecordingComplete="HandleRecordingComplete"
-                        JS="JS" />
-                }
-            </div>
+
+                    <div class="sa-model-section">
+                        <button class="sa-btn-primary" @onclick="() => PlayModel(currentItem)">
+                            🔊 Nghe câu trả lời mẫu
+                        </button>
+                        <div class="sa-model-text">@currentItem.ModelAnswer</div>
+                    </div>
+
+                    <div class="sa-practice-section">
+                        @if (state == SpeakAlongState.Idle)
+                        {
+                            <button class="sa-btn-success" @onclick="() => StartRecording(currentItem)">
+                                🎙️ Bắt đầu ghi âm
+                            </button>
+                        }
+                        else if (state == SpeakAlongState.Recording)
+                        {
+                            <div>
+                                <div class="sa-recording-indicator">🔴 Đang ghi âm...</div>
+                                <button class="sa-btn-danger" @onclick="() => StopRecording(currentItem)">
+                                    ⏹ Dừng
+                                </button>
+                            </div>
+                        }
+                        else if (state == SpeakAlongState.Result && lastResult != null)
+                        {
+                            <div class="sa-result">
+                                <h4>Kết quả</h4>
+                                <div class="sa-score-grid">
+                                    <div>Độ tương đồng: @lastResult.SimilarityScore%</div>
+                                    <div>Phát âm: @lastResult.PronunciationScore%</div>
+                                    <div>Fluency: @lastResult.FluencyScore%</div>
+                                    <div>Timing: @lastResult.TimingScore%</div>
+                                </div>
+                                <p><strong>Bạn nói:</strong> @lastResult.Transcript</p>
+                                <button class="sa-btn-secondary" @onclick="Retry">🔄 Luyện lại</button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
         </main>
     </div>
 }
 
 @code {
     [Parameter] public string? Part { get; set; }
-    [Parameter][SupplyParameterFromQuery(Name = "Part")] public string? QueryPart { get; set; }
 
-    // Data
-    private SpeakAlongExamData? exam;
     private bool isLoading = true;
-
-    // Parts
-    private List<string> partNames = new() { "Part 1", "Part 2", "Part 3" };
+    private SpeakAlongExamData? exam;
     private string activePart = "Part 1";
+    private List<string> partNames = new() { "Part 1", "Part 2", "Part 3" };
     private List<SpeakAlongItem> currentItems = new();
-
-    // Current item
     private SpeakAlongItem? currentItem;
-    private SpeakAlongState state = SpeakAlongState.Setup;
-    private List<SpeakAlongSessionRecord> sessionRecords = new();
-
-    // Setup state
-    private bool micChecked = false;
-    private bool micOk = false;
-    private bool micError = false;
-    private bool micTested = false;
-    private bool micTestDone = false;
-    private string? micTestUrl = null;
-    private int micCountdown = 5;
-    private List<MicrophoneDevice> microphones = new();
-    private string? selectedMicrophoneId;
-    private bool speakerPlayed = false;
-    private bool speakerOk = false;
-    private bool _needsVisualizerStart = false;
+    private SpeakAlongState state = SpeakAlongState.Idle;
+    private SpeakAlongResult? lastResult;
     private DotNetObjectReference<IeltsSpeakAlong>? _dotNetRef;
 
-    // State enum
-    private enum SpeakAlongState { Setup, Idle, ModelPlaying, Recording, Result }
+    private enum SpeakAlongState { Idle, Recording, Result }
 
     protected override async Task OnInitializedAsync()
     {
         _dotNetRef = DotNetObjectReference.Create(this);
-        await LoadExamData();
+        await LoadExam();
     }
 
-    protected override async Task OnParametersSetAsync()
+    private async Task LoadExam()
     {
-        if (!isLoading && exam != null)
-        {
-            var targetPart = Part ?? QueryPart ?? "Part 1";
-            if (partNames.Contains(targetPart) && targetPart != activePart)
-            {
-                await SwitchPart(targetPart);
-            }
-        }
-    }
+        isLoading = true;
+        StateHasChanged();
 
-    private async Task LoadExamData()
-    {
-        // Load all three parts and merge
-        var allItems = new List<SpeakAlongItem>();
-        var partFiles = new[]
-        {
-            "sample-data/ielts-speak-along-part1.json",
-            "sample-data/ielts-speak-along-part2.json",
-            "sample-data/ielts-speak-along-part3.json"
-        };
-
-        foreach (var file in partFiles)
-        {
-            try
-            {
-                var partData = await Http.GetFromJsonAsync<SpeakAlongExamData>(file);
-                if (partData?.Items != null)
-                {
-                    allItems.AddRange(partData.Items);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error loading {file}: {ex.Message}");
-            }
-        }
-
-        // Create merged exam data
-        exam = new SpeakAlongExamData
-        {
-            Title = "IELTS Speaking Practice - Shadowing",
-            Level = "IELTS 6.0 - 7.0+",
-            Part = "All Parts",
-            Items = allItems
-        };
-
-        // Set active part from route
-        var targetPart = Part ?? QueryPart ?? "Part 1";
-        if (partNames.Contains(targetPart))
+        var targetPart = Part ?? "Part1";
+        exam = await SpeakAlongService.LoadExamAsync(targetPart);
+        if (exam != null)
         {
             activePart = targetPart;
+            currentItems = exam.Items.ToList();
+            if (currentItems.Any())
+                currentItem = currentItems.First();
         }
-
-        await SwitchPart(activePart);
         isLoading = false;
-    }
-
-    private Task SwitchPart(string partName)
-    {
-        activePart = partName;
-        currentItems = exam?.Items.Where(i => GetPartForItem(i.Id) == partName).ToList() ?? new();
-        currentItem = null;
-        state = SpeakAlongState.Idle;
         StateHasChanged();
-        return Task.CompletedTask;
     }
 
-    private string GetPartForItem(int id)
+    private async Task SwitchPart(string part)
     {
-        if (id <= 5) return "Part 1";
-        if (id <= 7) return "Part 2";
-        return "Part 3";
+        activePart = part;
+        exam = await SpeakAlongService.LoadExamAsync(part);
+        if (exam != null)
+        {
+            currentItems = exam.Items.ToList();
+            currentItem = currentItems.FirstOrDefault();
+            state = SpeakAlongState.Idle;
+            lastResult = null;
+        }
+        StateHasChanged();
     }
 
     private void SelectItem(SpeakAlongItem item)
     {
         currentItem = item;
         state = SpeakAlongState.Idle;
+        lastResult = null;
         StateHasChanged();
     }
 
-    private void HandleItemStateChanged(SpeakAlongState newState)
+    private async Task PlayModel(SpeakAlongItem item)
     {
-        state = newState;
-        StateHasChanged();
+        await JS.InvokeVoidAsync("SpeakAlongInterop.speakText", item.ModelAnswer, "en-US");
     }
 
-    private void HandleRecordingComplete(SpeakAlongSessionRecord record)
+    private async Task StartRecording(SpeakAlongItem item)
     {
-        sessionRecords.Add(record);
+        state = SpeakAlongState.Recording;
         StateHasChanged();
+        await JS.InvokeVoidAsync("SpeakAlongInterop.startRecording", _dotNetRef);
     }
 
-    // ── SETUP METHODS (copied/adapted from IeltsSpeaking) ────────────────────
-
-    private async Task RequestMic()
+    private async Task StopRecording(SpeakAlongItem item)
     {
-        micChecked = true;
-        micError = false;
-        StateHasChanged();
-        var result = await JS.InvokeAsync<System.Text.Json.JsonElement>("SpeakingInterop.requestMicPermission");
-        micOk = result.GetProperty("success").GetBoolean();
-        micError = !micOk;
-        if (micOk)
+        var transcript = await JS.InvokeAsync<string>("SpeakAlongInterop.stopRecording");
+        // Simple mock evaluation
+        lastResult = new SpeakAlongResult
         {
-            selectedMicrophoneId = result.GetProperty("deviceId").GetString();
-            await RefreshMicrophones();
-            _needsVisualizerStart = true;
-        }
+            Transcript = transcript,
+            SimilarityScore = 75,
+            PronunciationScore = 70,
+            FluencyScore = 80,
+            TimingScore = 65,
+            WordCount = transcript.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length,
+            Wpm = 120
+        };
+        state = SpeakAlongState.Result;
         StateHasChanged();
     }
 
-    private async Task RefreshMicrophones()
+    private void Retry()
     {
-        microphones = await JS.InvokeAsync<List<MicrophoneDevice>>("SpeakingInterop.getMicrophones");
-    }
-
-    private async Task ChangeMicrophone(ChangeEventArgs args)
-    {
-        var deviceId = args.Value?.ToString();
-        if (string.IsNullOrWhiteSpace(deviceId) || deviceId == selectedMicrophoneId) return;
-
-        await JS.InvokeVoidAsync("SpeakingInterop.stopVisualizer");
-        var result = await JS.InvokeAsync<System.Text.Json.JsonElement>("SpeakingInterop.selectMicrophone", deviceId);
-        micOk = result.GetProperty("success").GetBoolean();
-        micError = !micOk;
-        if (!micOk) return;
-
-        selectedMicrophoneId = result.GetProperty("deviceId").GetString();
-        micTested = false;
-        micTestUrl = null;
-        micTestDone = false;
-        micCountdown = 5;
-        _needsVisualizerStart = true;
-        await RefreshMicrophones();
-    }
-
-    private async Task StartMicTest()
-    {
-        micTested = true;
-        micTestUrl = null;
-        micCountdown = 5;
-        StateHasChanged();
-
-        System.Threading.Timer? timer = null;
-        timer = new System.Threading.Timer(async _ =>
-        {
-            if (micCountdown > 0) { micCountdown--; await InvokeAsync(StateHasChanged); }
-            else { timer?.Dispose(); }
-        }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
-
-        micTestUrl = await JS.InvokeAsync<string>("SpeakingInterop.recordMicTest", 5);
-        timer?.Dispose();
-        StateHasChanged();
-    }
-
-    private void RetryMicTest()
-    {
-        micTested = false;
-        micTestUrl = null;
-        micTestDone = false;
-        micCountdown = 5;
-        _needsVisualizerStart = true;
-    }
-
-    private void MicTestOk() { micTestDone = true; }
-
-    private void ConfirmSpeaker() { speakerOk = true; }
-
-    private async Task TestSpeaker()
-    {
-        speakerPlayed = true;
-        StateHasChanged();
-        await JS.InvokeAsync<bool>("SpeakingInterop.playTestAudio");
-    }
-
-    private async Task EnterPractice()
-    {
-        await JS.InvokeVoidAsync("SpeakingInterop.stopVisualizer");
         state = SpeakAlongState.Idle;
+        lastResult = null;
         StateHasChanged();
     }
 
-    private void GoToDashboard() => Navigation.NavigateTo("/ielts/dashboard");
+    private string Truncate(string text, int max) =>
+        text.Length > max ? text[..max] + "…" : text;
 
-    private string Truncate(string text, int maxLen) => text.Length > maxLen ? text[..maxLen] + "…" : text;
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    [JSInvokable]
+    public void OnTranscriptUpdate(string text)
     {
-        if (_needsVisualizerStart)
-        {
-            _needsVisualizerStart = false;
-            try { await JS.InvokeVoidAsync("SpeakingInterop.startMicVisualizer", "sa-setup-waveform"); } catch { }
-        }
+        // For live transcript if needed
     }
 
     public void Dispose()
     {
         _dotNetRef?.Dispose();
-        JS.InvokeVoidAsync("SpeakingInterop.stopMicStream");
-    }
-
-    // Nested component for each item
-    private class SpeakAlongItem : IComponent
-    {
-        // This will be implemented as a render fragment in the main component
     }
 }
