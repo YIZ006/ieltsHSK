@@ -12,7 +12,7 @@
     <!-- Sidebar Thanh Dọc Màu Chủ Đạo Đỏ Á Đông -->
     <aside class="sidebar">
         <div class="sidebar-header">
-            <a href="/" class="brand-logo" title="Trang chủ">
+            <a href="/" class="brand-logo" title="Về trang chủ">
                 <i class="bi bi-box-fill brand-icon"></i>
                 <span class="brand-name">ieltsHSK</span>
             </a>
@@ -32,13 +32,13 @@
             
             <!-- Xòe ra các cấp độ HSK 1 - 6 khi hover -->
             <div class="dock-expand-menu">
-                <div class="expand-menu-title">Chọn cấp độ mục tiêu:</div>
+                <div class="expand-menu-title">Chuyển nhanh cấp độ:</div>
                 <div class="level-pills-row">
                     @for (int i = 1; i <= 6; i++)
                     {
                         var lvlStr = $"HSK{i}";
                         var lvlNum = i;
-                        <button class="level-pill @(currentLevel == lvlStr ? "active" : "") lvl-@lvlNum"
+                        <button class="level-pill @(currentLevel == lvlStr ? "active" : "")"
                                 @onclick="() => ChangeHskLevel(lvlStr)">
                             HSK @lvlNum
                         </button>
@@ -47,7 +47,7 @@
             </div>
         </div>
 
-        <!-- Navigation Menu -->
+        <!-- Navigation Menu Tinh Gọn (Không bị trùng lặp với thẻ trên trang) -->
         <nav class="sidebar-nav">
             <NavLink class="nav-item" href="/hsk/dashboard" Match="NavLinkMatch.All">
                 <span class="nav-dot"></span>
@@ -56,18 +56,26 @@
                 <i class="bi bi-chevron-right nav-arrow"></i>
             </NavLink>
 
-            @if (sections != null)
-            {
-                @foreach (var section in sections)
-                {
-                    <NavLink class="nav-item" href="@section.Route">
-                        <span class="nav-dot"></span>
-                        <i class="bi @section.Icon nav-icon"></i>
-                        <span class="nav-label">@section.Name</span>
-                        <i class="bi bi-chevron-right nav-arrow"></i>
-                    </NavLink>
-                }
-            }
+            <NavLink class="nav-item" href="/hsk/tu-vung">
+                <span class="nav-dot"></span>
+                <i class="bi bi-book-half nav-icon"></i>
+                <span class="nav-label">Từ vựng HSK</span>
+                <i class="bi bi-chevron-right nav-arrow"></i>
+            </NavLink>
+
+            <NavLink class="nav-item" href="/hsk/mock-tests">
+                <span class="nav-dot"></span>
+                <i class="bi bi-journal-check nav-icon"></i>
+                <span class="nav-label">Phòng thi thử</span>
+                <i class="bi bi-chevron-right nav-arrow"></i>
+            </NavLink>
+
+            <NavLink class="nav-item" href="/hsk">
+                <span class="nav-dot"></span>
+                <i class="bi bi-grid-fill nav-icon"></i>
+                <span class="nav-label">Tổng quan HSK 1–6</span>
+                <i class="bi bi-chevron-right nav-arrow"></i>
+            </NavLink>
         </nav>
 
         <!-- Sidebar Footer -->
@@ -136,12 +144,10 @@
 </div>
 
 @code {
-    private List<HskLearningSection>? sections;
     private string currentLevel = "HSK1";
 
     protected override async Task OnInitializedAsync()
     {
-        sections = await HskService.GetSectionsAsync();
         currentLevel = await LocalStorage.GetItemAsync<string>("hsk_level") ?? "HSK1";
     }
 

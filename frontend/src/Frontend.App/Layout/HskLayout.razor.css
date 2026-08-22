@@ -42,7 +42,7 @@
     font-size: 1.55rem;
     font-weight: 800;
     font-style: italic;
-    color: #ffffff;
+    color: #ffffff !important;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -51,12 +51,12 @@
 }
 
 .brand-icon {
-    color: #facc15;
+    color: #facc15 !important;
     filter: drop-shadow(0 2px 6px rgba(250, 204, 21, 0.4));
 }
 
 .brand-name {
-    color: #ffffff;
+    color: #ffffff !important;
 }
 
 .hsk-badge-gold {
@@ -78,7 +78,7 @@
     border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 14px;
     padding: 10px 14px;
-    margin-bottom: 18px;
+    margin-bottom: 20px;
     cursor: pointer;
     position: relative;
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -213,46 +213,49 @@
 }
 
 /* ========================================================================= */
-/* SIDEBAR NAV ITEMS (Hiệu ứng chấm tròn và xòe mở rộng khi hover)          */
+/* SIDEBAR NAV ITEMS (Không dính màu xanh dương hay gạch chân)               */
 /* ========================================================================= */
 .sidebar-nav {
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     overflow-y: auto;
 }
 
-.nav-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    border-radius: 12px;
-    color: rgba(255, 255, 255, 0.85);
+.sidebar a.nav-item,
+.sidebar .nav-item {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 12px 14px !important;
+    border-radius: 12px !important;
+    color: rgba(255, 255, 255, 0.9) !important;
     text-decoration: none !important;
-    font-weight: 600;
-    font-size: 0.9rem;
-    position: relative;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    background: transparent;
-    border: 1px solid transparent;
+    font-weight: 600 !important;
+    font-size: 0.92rem !important;
+    position: relative !important;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
 }
 
 /* Chấm tròn ban đầu của mỗi mục */
 .nav-dot {
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.4);
     transition: all 0.25s ease;
     flex-shrink: 0;
 }
 
 .nav-icon {
-    font-size: 1.15rem;
-    color: rgba(255, 255, 255, 0.8);
-    transition: all 0.25s ease;
+    font-size: 1.2rem !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+    transition: all 0.25s ease !important;
 }
 
 .nav-label {
@@ -260,6 +263,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    color: rgba(255, 255, 255, 0.9) !important;
 }
 
 .nav-arrow {
@@ -267,57 +271,75 @@
     opacity: 0;
     transform: translateX(-6px);
     transition: all 0.25s ease;
-    color: #facc15;
+    color: #facc15 !important;
 }
 
 /* Hiệu ứng xòe ra (fan out / expand) khi di chuyển chuột vào */
-.nav-item:hover {
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.05) 100%);
-    color: #ffffff;
-    transform: translateX(6px);
-    border-color: rgba(250, 204, 21, 0.3);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+.sidebar a.nav-item:hover,
+.sidebar .nav-item:hover {
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.05) 100%) !important;
+    color: #ffffff !important;
+    transform: translateX(6px) !important;
+    border-color: rgba(250, 204, 21, 0.3) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
 }
 
-.nav-item:hover .nav-dot {
-    width: 8px;
-    height: 8px;
+.sidebar a.nav-item:hover .nav-dot,
+.sidebar .nav-item:hover .nav-dot {
+    width: 9px;
+    height: 9px;
     background: #facc15;
     box-shadow: 0 0 10px #facc15, 0 0 4px #fbbf24;
-    transform: scale(1.4);
+    transform: scale(1.3);
 }
 
-.nav-item:hover .nav-icon {
-    color: #facc15;
+.sidebar a.nav-item:hover .nav-icon,
+.sidebar .nav-item:hover .nav-icon {
+    color: #facc15 !important;
     transform: scale(1.15);
 }
 
-.nav-item:hover .nav-arrow {
+.sidebar a.nav-item:hover .nav-label,
+.sidebar .nav-item:hover .nav-label {
+    color: #ffffff !important;
+}
+
+.sidebar a.nav-item:hover .nav-arrow,
+.sidebar .nav-item:hover .nav-arrow {
     opacity: 1;
     transform: translateX(0);
 }
 
 /* Mục đang Active */
-.nav-item.active {
-    background: linear-gradient(90deg, rgba(250, 204, 21, 0.25) 0%, rgba(255, 255, 255, 0.1) 100%);
-    border: 1px solid rgba(250, 204, 21, 0.5);
-    color: #ffffff;
-    font-weight: 700;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+.sidebar a.nav-item.active,
+.sidebar .nav-item.active {
+    background: linear-gradient(90deg, rgba(250, 204, 21, 0.25) 0%, rgba(255, 255, 255, 0.08) 100%) !important;
+    border: 1px solid rgba(250, 204, 21, 0.5) !important;
+    color: #ffffff !important;
+    font-weight: 800 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
 }
 
-.nav-item.active .nav-dot {
-    width: 8px;
-    height: 8px;
+.sidebar a.nav-item.active .nav-dot,
+.sidebar .nav-item.active .nav-dot {
+    width: 9px;
+    height: 9px;
     background: #facc15;
     box-shadow: 0 0 12px #facc15;
 }
 
-.nav-item.active .nav-icon {
-    color: #facc15;
+.sidebar a.nav-item.active .nav-icon,
+.sidebar .nav-item.active .nav-icon {
+    color: #facc15 !important;
 }
 
-.nav-item.active .nav-arrow {
+.sidebar a.nav-item.active .nav-label,
+.sidebar .nav-item.active .nav-label {
+    color: #ffffff !important;
+}
+
+.sidebar a.nav-item.active .nav-arrow,
+.sidebar .nav-item.active .nav-arrow {
     opacity: 1;
     transform: translateX(0);
 }
