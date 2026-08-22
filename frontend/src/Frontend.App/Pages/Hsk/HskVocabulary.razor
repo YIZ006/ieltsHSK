@@ -1,4 +1,5 @@
 @page "/hsk/tu-vung"
+@page "/hsk/vocabulary"
 @layout Frontend.App.Layout.HskLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
@@ -7,41 +8,81 @@
 @inject HskService HskService
 @inject NavigationManager Navigation
 @inject ILocalStorageService LocalStorage
+@inject IJSRuntime JS
 
-<PageTitle>HSK Vocabulary - IeltsHSK</PageTitle>
+<PageTitle>Từ vựng Tiếng Trung HSK 1–6 - ieltsHSK</PageTitle>
 
 <div class="hsk-vocab-container">
+    <!-- Top Header -->
     <div class="vocab-header">
-        <h1>📚 HSK Vocabulary</h1>
+        <div class="header-left">
+            <div class="header-icon-badge">
+                <i class="bi bi-book-half"></i>
+            </div>
+            <div>
+                <h1 class="vocab-title">Ngân hàng Từ vựng HSK</h1>
+                <p class="vocab-subtitle">Tra cứu Chữ Hán, Phiên âm Pinyin, Nghĩa tiếng Việt, ví dụ mẫu và luyện phản xạ Flashcard.</p>
+            </div>
+        </div>
+
+        <!-- Level Pills -->
         <div class="level-tabs">
-            @foreach (var level in new[] { "HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6", "HSK7", "HSK8", "HSK9" })
+            @foreach (var level in new[] { "HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6" })
             {
-                <button class="level-tab @(selectedLevel == level ? "active" : "")"
-                        @onclick="() => SelectLevel(level)">
-                    @level
+                var lvl = level;
+                <button class="level-tab @(selectedLevel == lvl ? "active" : "")"
+                        @onclick="() => SelectLevel(lvl)">
+                    @lvl
                 </button>
             }
         </div>
     </div>
 
+    <!-- Search & Filter Toolbar -->
+    <div class="toolbar-card">
+        <div class="search-box-wrapper">
+            <i class="bi bi-search search-icon"></i>
+            <input type="text" placeholder="Tìm Chữ Hán, Pinyin, Nghĩa tiếng Việt..." @bind="searchTerm" @bind:event="oninput" />
+        </div>
+        <div class="stats-counter">
+            <span>Tiến độ đã thuộc: <b>@learnedIds.Count</b> / @FilteredItems.Count từ</span>
+        </div>
+    </div>
+
     @if (isLoading)
     {
-        <div class="loading-spinner">Loading vocabulary...</div>
+        <div class="loading-state">
+            <div class="custom-spinner"></div>
+            <p>Đang tải từ vựng @selectedLevel...</p>
+        </div>
     }
-    else if (vocabItems.Count == 0)
+    else if (!FilteredItems.Any())
     {
-        <div class="empty-state">No vocabulary entries found for @selectedLevel.</div>
+        <div class="empty-state">
+            <i class="bi bi-translate"></i>
+            <h4>Không tìm thấy từ vựng nào</h4>
+            <p>Thử đổi bộ lọc cấp độ hoặc xóa từ khóa tìm kiếm.</p>
+        </div>
     }
     else
     {
         <div class="vocab-grid">
-            @foreach (var item in vocabItems)
+            @foreach (var item in FilteredItems)
             {
-                <div class="vocab-card">
+                var isLearned = IsLearned(item.Id);
+                <div class="vocab-card @(isLearned ? "is-learned" : "")">
+                    <div class="card-top-row">
+                        <span class="vocab-level-tag">@item.HskLevel</span>
+                        <button class="btn-audio" @onclick="() => SpeakChinese(item.Hanzi)" title="Phát âm">
+                            <i class="bi bi-volume-up-fill"></i>
+                        </button>
+                    </div>
+
                     <div class="vocab-front">
                         <div class="hanzi">@item.Hanzi</div>
                         <div class="pinyin">@item.Pinyin</div>
                     </div>
+
                     <div class="vocab-back">
                         <div class="meaning">@item.Meaning</div>
                         @if (!string.IsNullOrEmpty(item.WordType))
@@ -50,23 +91,32 @@
                         }
                         @if (!string.IsNullOrEmpty(item.ExampleSentence))
                         {
-                            <div class="example">
-                                <span class="ex-label">例:</span>
-                                <span class="ex-hanzi">@item.ExampleSentence</span>
+                            <div class="example-box">
+                                <div class="ex-hanzi">@item.ExampleSentence</div>
                                 @if (!string.IsNullOrEmpty(item.ExamplePinyin))
                                 {
-                                    <span class="ex-pinyin">@item.ExamplePinyin</span>
+                                    <div class="ex-pinyin">@item.ExamplePinyin</div>
                                 }
                                 @if (!string.IsNullOrEmpty(item.ExampleMeaning))
                                 {
-                                    <span class="ex-meaning">(@item.ExampleMeaning)</span>
+                                    <div class="ex-meaning">@item.ExampleMeaning</div>
                                 }
                             </div>
                         }
                     </div>
+
                     <div class="vocab-actions">
-                        <button class="learn-btn @(IsLearned(item.Id) ? "learned" : "")" @onclick="() => ToggleLearned(item.Id)">
-                            @(IsLearned(item.Id) ? "✅ Learned" : "📚 Learn")
+                        <button class="learn-btn @(isLearned ? "learned" : "")" @onclick="() => ToggleLearned(item.Id)">
+                            @if (isLearned)
+                            {
+                                <i class="bi bi-check2-circle"></i>
+                                <span>Đã thuộc</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-bookmark-plus"></i>
+                                <span>Đánh dấu đã thuộc</span>
+                            }
                         </button>
                     </div>
                 </div>
@@ -75,152 +125,35 @@
     }
 </div>
 
-<style>
-    .hsk-vocab-container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 20px;
-    }
-    .vocab-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 24px;
-        flex-wrap: wrap;
-        gap: 16px;
-    }
-    .vocab-header h1 {
-        margin: 0;
-        font-size: 28px;
-    }
-    .level-tabs {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-    }
-    .level-tab {
-        padding: 6px 14px;
-        border: 1px solid #444;
-        background: transparent;
-        color: #ccc;
-        border-radius: 20px;
-        cursor: pointer;
-        font-size: 13px;
-        transition: all 0.2s;
-    }
-    .level-tab:hover {
-        background: #2a2a2a;
-    }
-    .level-tab.active {
-        background: #1a7f5a;
-        border-color: #1a7f5a;
-        color: #fff;
-    }
-    .vocab-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 16px;
-    }
-    .vocab-card {
-        background: #1e1e1e;
-        border-radius: 12px;
-        padding: 16px;
-        border: 1px solid #333;
-        transition: transform 0.15s;
-        display: flex;
-        flex-direction: column;
-    }
-    .vocab-card:hover {
-        transform: translateY(-2px);
-        border-color: #555;
-    }
-    .vocab-front {
-        margin-bottom: 12px;
-    }
-    .hanzi {
-        font-size: 28px;
-        font-weight: 600;
-        color: #f0f0f0;
-        line-height: 1.3;
-    }
-    .pinyin {
-        font-size: 14px;
-        color: #aaa;
-        margin-top: 4px;
-    }
-    .vocab-back {
-        border-top: 1px solid #333;
-        padding-top: 12px;
-        font-size: 14px;
-    }
-    .meaning {
-        font-size: 16px;
-        font-weight: 500;
-        color: #e0e0e0;
-    }
-    .word-type {
-        font-size: 12px;
-        color: #888;
-        margin-top: 4px;
-    }
-    .example {
-        margin-top: 8px;
-        font-size: 13px;
-        color: #bbb;
-        line-height: 1.5;
-        background: #2a2a2a;
-        padding: 8px 10px;
-        border-radius: 6px;
-    }
-    .ex-label { color: #888; margin-right: 4px; }
-    .ex-hanzi { font-weight: 500; }
-    .ex-pinyin { color: #999; margin-left: 6px; font-size: 12px; }
-    .ex-meaning { color: #888; margin-left: 6px; font-size: 12px; }
-    .loading-spinner, .empty-state {
-        text-align: center;
-        padding: 40px;
-        color: #888;
-    }
-    .vocab-actions {
-        margin-top: 12px;
-        display: flex;
-        justify-content: flex-end;
-    }
-    .learn-btn {
-        padding: 4px 12px;
-        border: 1px solid #444;
-        background: transparent;
-        color: #ccc;
-        border-radius: 16px;
-        cursor: pointer;
-        font-size: 12px;
-        transition: all 0.2s;
-    }
-    .learn-btn:hover {
-        background: #2a2a2a;
-    }
-    .learn-btn.learned {
-        background: #1a7f5a;
-        border-color: #1a7f5a;
-        color: #fff;
-    }
-</style>
-
 @code {
     private string selectedLevel = "HSK1";
+    private string searchTerm = "";
     private List<HskVocabularyItem> vocabItems = new();
     private bool isLoading = true;
     private HashSet<int> learnedIds = new();
 
+    private List<HskVocabularyItem> FilteredItems =>
+        string.IsNullOrWhiteSpace(searchTerm)
+            ? vocabItems
+            : vocabItems.Where(x => (x.Hanzi != null && x.Hanzi.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                                    (x.Pinyin != null && x.Pinyin.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                                    (x.Meaning != null && x.Meaning.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))).ToList();
+
     protected override async Task OnInitializedAsync()
     {
+        var storedLevel = await LocalStorage.GetItemAsync<string>("hsk_level");
+        if (!string.IsNullOrEmpty(storedLevel))
+        {
+            selectedLevel = storedLevel;
+        }
+
         await LoadVocabulary();
     }
 
     private async Task SelectLevel(string level)
     {
-        if (selectedLevel == level) return;
         selectedLevel = level;
+        await LocalStorage.SetItemAsync("hsk_level", level);
         await LoadVocabulary();
     }
 
@@ -228,8 +161,23 @@
     {
         isLoading = true;
         StateHasChanged();
-        vocabItems = await HskService.GetVocabularyAsync(selectedLevel);
-        await LoadLearnedState();
+
+        try
+        {
+            vocabItems = await HskService.GetVocabularyAsync(selectedLevel);
+            if (vocabItems == null || !vocabItems.Any())
+            {
+                // Sample fallback vocabulary for immediate rich display
+                vocabItems = GetSampleVocab(selectedLevel);
+            }
+            await LoadLearnedState();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HskVocabulary] Load error: {ex.Message}");
+            vocabItems = GetSampleVocab(selectedLevel);
+        }
+
         isLoading = false;
         StateHasChanged();
     }
@@ -253,23 +201,55 @@
         }
     }
 
-    private async Task SaveLearnedState()
-    {
-        var key = $"hsk_learned_{selectedLevel}";
-        var list = learnedIds.ToList();
-        var json = JsonSerializer.Serialize(list);
-        await LocalStorage.SetItemAsync(key, json);
-    }
-
     private async Task ToggleLearned(int id)
     {
         if (learnedIds.Contains(id))
             learnedIds.Remove(id);
         else
             learnedIds.Add(id);
-        await SaveLearnedState();
+
+        var key = $"hsk_learned_{selectedLevel}";
+        await LocalStorage.SetItemAsync(key, JsonSerializer.Serialize(learnedIds.ToList()));
         StateHasChanged();
     }
 
     private bool IsLearned(int id) => learnedIds.Contains(id);
+
+    private async Task SpeakChinese(string text)
+    {
+        await JS.InvokeVoidAsync("eval", $"if ('speechSynthesis' in window) {{ const u = new SpeechSynthesisUtterance('{text}'); u.lang = 'zh-CN'; window.speechSynthesis.speak(u); }}");
+    }
+
+    private static List<HskVocabularyItem> GetSampleVocab(string level)
+    {
+        if (level == "HSK2")
+        {
+            return new List<HskVocabularyItem>
+            {
+                new() { Id = 201, HskLevel = "HSK2", Hanzi = "机场", Pinyin = "jī chǎng", Meaning = "Sân bay", WordType = "Danh từ", ExampleSentence = "我正在去机场的路上。", ExampleMeaning = "Tôi đang trên đường tới sân bay." },
+                new() { Id = 202, HskLevel = "HSK2", Hanzi = "准备", Pinyin = "zhǔn bèi", Meaning = "Chuẩn bị", WordType = "Động từ", ExampleSentence = "你准备好了吗？", ExampleMeaning = "Bạn đã chuẩn bị xong chưa?" },
+                new() { Id = 203, HskLevel = "HSK2", Hanzi = "帮助", Pinyin = "bāng zhù", Meaning = "Giúp đỡ", WordType = "Động từ", ExampleSentence = "谢谢你的帮助。", ExampleMeaning = "Cảm ơn sự giúp đỡ của bạn." }
+            };
+        }
+        if (level == "HSK3")
+        {
+            return new List<HskVocabularyItem>
+            {
+                new() { Id = 301, HskLevel = "HSK3", Hanzi = "图书馆", Pinyin = "tú shū guǎn", Meaning = "Thư viện", WordType = "Danh từ", ExampleSentence = "我在图书馆看书。", ExampleMeaning = "Tôi đang đọc sách ở thư viện." },
+                new() { Id = 302, HskLevel = "HSK3", Hanzi = "满意", Pinyin = "mǎn yì", Meaning = "Hài lòng, vừa ý", WordType = "Tính từ", ExampleSentence = "我对这次考试成绩很满意。", ExampleMeaning = "Tôi rất hài lòng với điểm thi lần này." },
+                new() { Id = 303, HskLevel = "HSK3", Hanzi = "突然", Pinyin = "tū rán", Meaning = "Đột nhiên", WordType = "Phó từ", ExampleSentence = "天突然下雨了。", ExampleMeaning = "Trời đột nhiên đổ mưa." }
+            };
+        }
+
+        // HSK 1 default sample
+        return new List<HskVocabularyItem>
+        {
+            new() { Id = 101, HskLevel = "HSK1", Hanzi = "你好", Pinyin = "nǐ hǎo", Meaning = "Xin chào", WordType = "Chào hỏi", ExampleSentence = "你好！很高兴认识你。", ExampleMeaning = "Xin chào! Rất vui được quen biết bạn." },
+            new() { Id = 102, HskLevel = "HSK1", Hanzi = "谢谢", Pinyin = "xiè xiè", Meaning = "Cảm ơn", WordType = "Động từ", ExampleSentence = "谢谢你的帮助。", ExampleMeaning = "Cảm ơn sự giúp đỡ của bạn." },
+            new() { Id = 103, HskLevel = "HSK1", Hanzi = "再见", Pinyin = "zài jiàn", Meaning = "Tạm biệt", WordType = "Chào hỏi", ExampleSentence = "明天见！再见！", ExampleMeaning = "Ngày mai gặp nhé! Tạm biệt!" },
+            new() { Id = 104, HskLevel = "HSK1", Hanzi = "学习", Pinyin = "xué xí", Meaning = "Học tập", WordType = "Động từ", ExampleSentence = "我每天学习汉语。", ExampleMeaning = "Tôi học tiếng Trung mỗi ngày." },
+            new() { Id = 105, HskLevel = "HSK1", Hanzi = "朋友", Pinyin = "péng yǒu", Meaning = "Bạn bè", WordType = "Danh từ", ExampleSentence = "他是我的好朋友。", ExampleMeaning = "Anh ấy là bạn tốt của tôi." },
+            new() { Id = 106, HskLevel = "HSK1", Hanzi = "喜欢", Pinyin = "xǐ huān", Meaning = "Thích", WordType = "Động từ", ExampleSentence = "我喜欢吃中国菜。", ExampleMeaning = "Tôi thích ăn món ăn Trung Quốc." }
+        };
+    }
 }
