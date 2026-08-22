@@ -1,0 +1,196 @@
+@page "/hsk"
+@page "/hsk/overview"
+@inject NavigationManager NavigationManager
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<PageTitle>HSK Master - Chinh phục Tiếng Trung HSK 1–6</PageTitle>
+
+<div class="hsk-page">
+
+    <!-- Hero Banner -->
+    <div class="hsk-hero">
+        <div class="hero-bg-chars" aria-hidden="true">
+            <span>汉</span><span>语</span><span>水</span><span>平</span><span>考</span><span>试</span>
+        </div>
+        <div class="hero-content">
+            <div class="hero-badge">HSK — Hán ngữ Thủy bình Khảo thị (HSK 3.0)</div>
+            <h1 class="hero-title">Chinh phục <span class="highlight">tiếng Trung</span> từ cấp độ nào cũng được</h1>
+            <p class="hero-desc">Từ vựng chuẩn theo giáo trình HSK 1-6, luyện 4 kỹ năng Nghe, Đọc, Viết, Nói và thi thử mô phỏng toàn diện.</p>
+            <div class="hero-stats">
+                <div class="stat-chip">
+                    <span class="chip-num">5,000+</span>
+                    <span class="chip-label">Từ vựng</span>
+                </div>
+                <div class="stat-chip">
+                    <span class="chip-num">6</span>
+                    <span class="chip-label">Cấp độ</span>
+                </div>
+                <div class="stat-chip">
+                    <span class="chip-num">300+</span>
+                    <span class="chip-label">Bài tập</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HSK Level Cards -->
+    <section class="levels-section">
+        <div class="section-header">
+            <h2>Chọn cấp độ của bạn</h2>
+            <p>Mỗi cấp độ tương ứng với số từ vựng và kỹ năng cụ thể theo chuẩn HSK</p>
+        </div>
+        <div class="levels-grid">
+            @foreach (var level in hskLevels)
+            {
+                <div class="level-card @(level.IsComingSoon ? "coming-soon" : "") level-@level.Level">
+                    <div class="level-header">
+                        <div class="level-badge">HSK @level.Level</div>
+                        @if (level.IsComingSoon)
+                        {
+                            <span class="soon-tag">Sắp có</span>
+                        }
+                    </div>
+                    <div class="level-hanzi">@level.SampleChar</div>
+                    <h3 class="level-name">@level.Name</h3>
+                    <p class="level-desc">@level.Description</p>
+                    <div class="level-meta">
+                        <div class="meta-item">
+                            <i class="bi bi-book"></i>
+                            <span>@level.VocabCount từ</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="bi bi-clock"></i>
+                            <span>~@level.StudyHours giờ học</span>
+                        </div>
+                    </div>
+                    <div class="level-tags">
+                        @foreach (var tag in level.Tags)
+                        {
+                            <span class="tag">@tag</span>
+                        }
+                    </div>
+                    <button class="level-btn @(level.IsComingSoon ? "btn-disabled" : "")"
+                            @onclick="() => SelectHskLevel(level.Level, level.IsComingSoon)">
+                        @(level.IsComingSoon ? "Sắp ra mắt" : "Bắt đầu học →")
+                    </button>
+                </div>
+            }
+        </div>
+    </section>
+
+    <!-- Modules Section -->
+    <section class="modules-section">
+        <div class="section-header">
+            <h2>Góc học tập</h2>
+            <p>Nhiều phương pháp học — chọn kỹ năng phù hợp với mục tiêu của bạn</p>
+        </div>
+        <div class="modules-grid">
+            @foreach (var mod in learningModules)
+            {
+                <a href="@(mod.IsAvailable ? mod.Route : "#")" class="module-card @(!mod.IsAvailable ? "disabled" : "")">
+                    <div class="module-icon-wrap" style="background: @mod.BgColor">
+                        <i class="bi @mod.Icon" style="color: @mod.Color"></i>
+                    </div>
+                    <div class="module-info">
+                        <h4>@mod.Name</h4>
+                        <p>@mod.Description</p>
+                    </div>
+                    <div class="module-status">
+                        @if (mod.IsAvailable)
+                        {
+                            <i class="bi bi-arrow-right-circle text-primary"></i>
+                        }
+                        else
+                        {
+                            <span class="badge-soon">Sắp có</span>
+                        }
+                    </div>
+                </a>
+            }
+        </div>
+    </section>
+
+    <!-- Quick Vocab Preview -->
+    <section class="vocab-preview-section">
+        <div class="section-header">
+            <h2>Từ vựng nhanh — HSK 1</h2>
+            <p>Làm quen với các từ vựng thông dụng cơ bản nhất</p>
+        </div>
+        <div class="vocab-grid">
+            @foreach (var word in sampleVocab)
+            {
+                <div class="vocab-card">
+                    <div class="vocab-hanzi">@word.Hanzi</div>
+                    <div class="vocab-pinyin">@word.Pinyin</div>
+                    <div class="vocab-meaning">@word.Meaning</div>
+                    <div class="vocab-example">@word.Example</div>
+                </div>
+            }
+        </div>
+        <div class="see-more-wrap">
+            <a href="/hsk/vocabulary" class="btn-see-more">Xem tất cả từ vựng HSK →</a>
+        </div>
+    </section>
+
+</div>
+
+@code {
+    record HskLevel(int Level, string Name, string SampleChar, string Description,
+        int VocabCount, int StudyHours, string[] Tags, bool IsComingSoon = false);
+
+    record LearningModule(string Name, string Description, string Icon,
+        string Color, string BgColor, string Route, bool IsAvailable = false);
+
+    record VocabWord(string Hanzi, string Pinyin, string Meaning, string Example);
+
+    private List<HskLevel> hskLevels = new()
+    {
+        new(1, "Sơ cấp 1", "你", "Làm quen với tiếng Trung — giao tiếp cơ bản nhất trong cuộc sống hàng ngày",
+            150, 60, new[]{"Chào hỏi", "Số đếm", "Gia đình"}, IsComingSoon: false),
+        new(2, "Sơ cấp 2", "好", "Mở rộng giao tiếp — diễn đạt được các tình huống quen thuộc đơn giản",
+            300, 120, new[]{"Thời gian", "Mua sắm", "Thức ăn"}, IsComingSoon: false),
+        new(3, "Trung cấp 1", "学", "Giao tiếp tự nhiên trong đời sống, du lịch, công việc cơ bản",
+            600, 200, new[]{"Du lịch", "Sức khỏe", "Nghề nghiệp"}, IsComingSoon: false),
+        new(4, "Trung cấp 2", "中", "Thảo luận được các chủ đề rộng hơn — tương đương B2 tiếng Anh",
+            1200, 360, new[]{"Văn hóa", "Môi trường", "Kinh doanh"}, IsComingSoon: false),
+        new(5, "Cao cấp 1", "难", "Đọc báo, xem phim, hội thoại chuyên nghiệp không cần từ điển",
+            2500, 600, new[]{"Văn học", "Thời sự", "Học thuật"}, IsComingSoon: true),
+        new(6, "Cao cấp 2", "精", "Thành thạo như người bản ngữ — ngưỡng cửa của C1/C2",
+            5000, 1000, new[]{"Chuyên sâu", "Văn phong", "Biện luận"}, IsComingSoon: true),
+    };
+
+    private List<LearningModule> learningModules = new()
+    {
+        new("Từ vựng & Flashcard", "Tra cứu từ vựng chuẩn HSK 1-6, học qua thẻ lật phản xạ",
+            "bi-card-text", "#e63946", "rgba(230,57,70,0.12)", "/hsk/vocabulary", IsAvailable: true),
+        new("Luyện nghe tiếng Trung", "Nghe hội thoại, đoạn văn với giọng đọc chuẩn phổ thông",
+            "bi-headphones", "#2a9d8f", "rgba(42,157,143,0.12)", "/hsk/listening", IsAvailable: true),
+        new("Luyện đọc tiếng Trung", "Đọc hiểu đoạn văn, nối câu, sắp xếp câu chuẩn cấu trúc HSK",
+            "bi-book-half", "#457b9d", "rgba(69,123,157,0.12)", "/hsk/reading", IsAvailable: true),
+        new("Luyện viết chữ Hán", "Tập viết, điền từ, sắp xếp câu và viết đoạn văn HSK",
+            "bi-pen", "#f4a261", "rgba(244,162,97,0.12)", "/hsk/writing", IsAvailable: true),
+        new("Luyện nói HSKK", "Luyện phát âm, đọc to đoạn văn và miêu tả tranh tự động",
+            "bi-mic-fill", "#6a4c93", "rgba(106,76,147,0.12)", "/hsk/speaking", IsAvailable: true),
+        new("Thi thử HSK", "Bộ đề thi thử theo chuẩn HSK chính thức — chấm điểm tự động",
+            "bi-journal-check", "#e63946", "rgba(230,57,70,0.12)", "/hsk/mock-tests", IsAvailable: true),
+    };
+
+    private List<VocabWord> sampleVocab = new()
+    {
+        new("你好", "nǐ hǎo", "Xin chào", "你好！很高兴认识你。"),
+        new("谢谢", "xiè xiè", "Cảm ơn", "谢谢你的帮助。"),
+        new("对不起", "duì bu qǐ", "Xin lỗi", "对不起，我来晚了。"),
+        new("再见", "zài jiàn", "Tạm biệt", "明天见！再见！"),
+        new("中国", "zhōng guó", "Trung Quốc", "我想去中国旅行。"),
+        new("学习", "xué xí", "Học tập", "我每天学习汉语。"),
+        new("朋友", "péng yǒu", "Bạn bè", "他是我的好朋友。"),
+        new("喜欢", "xǐ huān", "Thích", "我喜欢吃中国菜。"),
+    };
+
+    private async Task SelectHskLevel(int level, bool isComingSoon)
+    {
+        if (isComingSoon) return;
+        await LocalStorage.SetItemAsync("hsk_level", $"HSK{level}");
+        NavigationManager.NavigateTo("/hsk/dashboard");
+    }
+}
