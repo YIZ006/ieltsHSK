@@ -9,8 +9,8 @@ Tài liệu này liệt kê toàn bộ các đường dẫn (routes) hiện có 
 
 ### 🎓 Dành cho Người dùng (User)
 - `/` - Trang chủ (Home)
-- `/hsk` - Cổng chọn cấp độ HSK 3.0 (HSK1-HSK9)
-- `/hsk/dashboard` - Bảng điều khiển HSK (tổng quan + từ vựng)
+- `/hsk` - Bảng điều khiển HSK (tổng quan, tiến độ từ vựng + các mục học tập)
+- `/hsk/overview` - Cổng chọn cấp độ HSK 3.0 (HSK1-HSK9)
 - `/hsk/luyen-de` - Danh sách các bộ đề thi HSK (lọc theo HskUrl)
 - `/hsk/tu-vung` - Tra cứu từ vựng HSK theo cấp độ (flashcard)
 - `/hsk/listening`, `/hsk/listening/preview`, `/hsk/listening/{ExamUrl}` - Bài thi Nghe HSK

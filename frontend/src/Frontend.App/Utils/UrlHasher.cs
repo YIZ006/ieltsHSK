@@ -2,8 +2,9 @@ namespace Frontend.App.Utils;
 
 public static class UrlHasher
 {
-    private const uint PRIME = 2654435761; 
-    private const uint INVERSE = 3266489917; 
+    private const uint PRIME = 2654435761;
+    // Nghịch đảo modulo đúng của PRIME: (PRIME * INVERSE) % 2^32 == 1
+    private const uint INVERSE = 244002641;
     private const uint XOR_MASK = 0x5A5A5A5A;
 
     public static string Encode(int id)
