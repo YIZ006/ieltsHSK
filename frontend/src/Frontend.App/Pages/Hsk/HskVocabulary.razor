@@ -87,10 +87,13 @@
     }
     else if (!FilteredItems.Any())
     {
+        var noDataAtLevel = !vocabItems.Any();
         <div class="empty-state">
             <i class="bi bi-translate"></i>
-            <h4>Không tìm thấy từ vựng nào</h4>
-            <p>Thử đổi bộ lọc cấp độ hoặc xóa từ khóa tìm kiếm.</p>
+            <h4>@(noDataAtLevel ? $"Cấp độ {selectedLevel} chưa có từ vựng" : "Không tìm thấy từ vựng nào")</h4>
+            <p>@(noDataAtLevel
+                ? "Vui lòng chọn cấp độ khác hoặc quay lại sau nhé."
+                : "Thử đổi bộ lọc cấp độ, tắt \"Ẩn từ đã thuộc\" hoặc xóa từ khóa tìm kiếm.")</p>
         </div>
     }
     else
