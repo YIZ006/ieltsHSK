@@ -1,0 +1,413 @@
+@page "/admin/hsk-vocab"
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using System.IO
+@inject HskService HskService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject HttpClient Http
+
+<PageTitle>Quản lý Từ vựng HSK - Admin Hub</PageTitle>
+
+<div class="admin-hsk-vocab-page">
+    <!-- Top Header -->
+    <div class="page-header">
+        <div class="header-left">
+            <div class="header-icon-badge">
+                <i class="bi bi-translate"></i>
+            </div>
+            <div>
+                <h1 class="page-title">Ngân hàng Từ vựng HSK</h1>
+                <p class="page-subtitle">Quản trị toàn diện từ vựng chuẩn HSK 1–6 (Chữ Hán, Phiên âm Pinyin, Nghĩa tiếng Việt, Audio & Ví dụ mẫu).</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="btn-primary-action" @onclick="() => ShowAddModal()">
+                <i class="bi bi-plus-circle-fill"></i>
+                <span>Thêm Từ mới</span>
+            </button>
+            <select class="import-mode-select" @bind="importMode" title="Cách xử lý từ đã tồn tại khi import">
+                <option value="skip">Trùng: bỏ qua</option>
+                <option value="upsert">Trùng: cập nhật (ghi đè)</option>
+            </select>
+            <button class="btn-secondary-action" @onclick="TriggerImportExcel" disabled="@isImporting">
+                <i class="bi bi-file-earmark-excel-fill text-success"></i>
+                <span>@(isImporting ? "Đang nhập..." : "Nhập Excel/CSV")</span>
+            </button>
+            <button class="btn-secondary-action" @onclick="DownloadTemplate">
+                <i class="bi bi-file-earmark-arrow-down"></i>
+                <span>Tải Mẫu Excel</span>
+            </button>
+        </div>
+    </div>
+
+    <InputFile id="vocabExcelInput" OnChange="HandleExcelImport" accept=".xlsx,.csv" style="display: none;" />
+
+    @if (!string.IsNullOrEmpty(importMessage))
+    {
+        <div style="@(!importSuccess ? "background:#fdecea;color:#b71c1c;" : "background:#e8f5e9;color:#1b5e20;")padding:10px 16px;border-radius:8px;margin-bottom:14px;font-size:14px;">
+            <i class="bi @(!importSuccess ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill")"></i>
+            @importMessage
+        </div>
+    }
+
+    <!-- Filter Toolbar -->
+    <div class="toolbar-card">
+        <div class="filter-group">
+            <label><i class="bi bi-funnel-fill"></i> Cấp độ:</label>
+            <select class="form-select-filter" @bind="filterLevel" @bind:after="LoadData">
+                <option value="">Tất cả cấp độ (All)</option>
+                <option value="HSK1">HSK 1 - Sơ cấp 1</option>
+                <option value="HSK2">HSK 2 - Sơ cấp 2</option>
+                <option value="HSK3">HSK 3 - Trung cấp 1</option>
+                <option value="HSK4">HSK 4 - Trung cấp 2</option>
+                <option value="HSK5">HSK 5 - Cao cấp 1</option>
+                <option value="HSK6">HSK 6 - Cao cấp 2</option>
+            </select>
+        </div>
+
+        <div class="search-box-wrapper">
+            <i class="bi bi-search search-icon"></i>
+            <input type="text" placeholder="Tìm theo Chữ Hán, Pinyin, Nghĩa..." @bind="searchTerm" @bind:event="oninput" @onkeyup="LoadData" />
+            @if (!string.IsNullOrEmpty(searchTerm))
+            {
+                <button class="btn-clear-search" @onclick='() => { searchTerm = ""; LoadData(); }'><i class="bi bi-x-lg"></i></button>
+            }
+        </div>
+    </div>
+
+    <!-- Main Table Card -->
+    <div class="table-card">
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="custom-spinner"></div>
+                <p>Đang tải danh sách từ vựng HSK...</p>
+            </div>
+        }
+        else if (vocabItems == null || !vocabItems.Any())
+        {
+            <div class="empty-state">
+                <i class="bi bi-translate"></i>
+                <h4>Chưa tìm thấy từ vựng HSK nào</h4>
+                <p>Thử đổi bộ lọc cấp độ hoặc bấm nút "Thêm Từ mới" để bổ sung từ vựng.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 70px;">ID</th>
+                            <th style="width: 100px;">Cấp độ</th>
+                            <th style="width: 150px;">Chữ Hán (Hanzi)</th>
+                            <th style="width: 140px;">Phiên âm (Pinyin)</th>
+                            <th>Nghĩa tiếng Việt</th>
+                            <th style="width: 110px;">Loại từ</th>
+                            <th>Ví dụ câu mẫu</th>
+                            <th class="text-end" style="width: 180px;">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in vocabItems)
+                        {
+                            var lvlNum = GetLevelNumber(item.HskLevel);
+                            <tr>
+                                <td><span class="id-tag">#@item.Id</span></td>
+                                <td>
+                                    <span class="hsk-badge hsk-badge-@lvlNum">@item.HskLevel</span>
+                                </td>
+                                <td>
+                                    <div class="hanzi-cell">
+                                        <span class="hanzi-text">@item.Hanzi</span>
+                                        <button class="btn-audio-mini" @onclick="() => SpeakChinese(item.Hanzi)" title="Phát âm tiếng Trung">
+                                            <i class="bi bi-volume-up-fill"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="pinyin-text">@item.Pinyin</span>
+                                </td>
+                                <td>
+                                    <strong class="meaning-text">@item.Meaning</strong>
+                                </td>
+                                <td>
+                                    <span class="pos-badge">@(string.IsNullOrEmpty(item.WordType) ? "Từ vựng" : item.WordType)</span>
+                                </td>
+                                <td>
+                                    <span class="example-text">@item.ExampleSentence</span>
+                                </td>
+                                <td class="text-end">
+                                    <div class="action-buttons-group">
+                                        <button class="action-btn btn-edit" @onclick="() => ShowEditModal(item)" title="Chỉnh sửa từ vựng">
+                                            <i class="bi bi-pencil-fill"></i> Sửa
+                                        </button>
+                                        <button class="action-btn btn-delete" @onclick="() => DeleteItem(item.Id)" title="Xóa từ vựng">
+                                            <i class="bi bi-trash-fill"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-footer">
+                <span>Tổng cộng: <b>@totalCount</b> từ vựng HSK</span>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- ADD / EDIT VOCAB MODAL                                                    -->
+<!-- ========================================================================= -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-translate text-danger fs-4"></i>
+                    <h3>@(editingItem == null ? "Thêm Từ vựng HSK mới" : "Chỉnh sửa Từ vựng #" + editingItem.Id)</h3>
+                </div>
+                <button class="btn-close-modal" @onclick="CloseModal"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Cấp độ HSK <span class="req">*</span></label>
+                            <select class="form-input" @bind="form.HskLevel">
+                                <option value="HSK1">HSK 1 - Sơ cấp 1</option>
+                                <option value="HSK2">HSK 2 - Sơ cấp 2</option>
+                                <option value="HSK3">HSK 3 - Trung cấp 1</option>
+                                <option value="HSK4">HSK 4 - Trung cấp 2</option>
+                                <option value="HSK5">HSK 5 - Cao cấp 1</option>
+                                <option value="HSK6">HSK 6 - Cao cấp 2</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Loại từ (Word Type)</label>
+                            <input type="text" class="form-input" @bind="form.WordType" placeholder="VD: Danh từ, Động từ..." />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Chữ Hán (Hanzi) <span class="req">*</span></label>
+                            <input type="text" class="form-input fs-5" @bind="form.Hanzi" placeholder="VD: 你好" />
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label>Phiên âm (Pinyin) <span class="req">*</span></label>
+                            <input type="text" class="form-input" @bind="form.Pinyin" placeholder="VD: nǐ hǎo" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group mt-3">
+                    <label>Nghĩa tiếng Việt <span class="req">*</span></label>
+                    <input type="text" class="form-input" @bind="form.Meaning" placeholder="VD: Xin chào" />
+                </div>
+
+                <div class="form-group mt-3">
+                    <label>Ví dụ câu mẫu (Example Sentence)</label>
+                    <input type="text" class="form-input" @bind="form.ExampleSentence" placeholder="VD: 你好！很高兴认识你。" />
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label class="small text-muted">Pinyin câu ví dụ</label>
+                            <input type="text" class="form-input" @bind="form.ExamplePinyin" placeholder="Pinyin ví dụ..." />
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-group">
+                            <label class="small text-muted">Nghĩa tiếng Việt câu ví dụ</label>
+                            <input type="text" class="form-input" @bind="form.ExampleMeaning" placeholder="Nghĩa ví dụ..." />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-modal-cancel" @onclick="CloseModal">Hủy bỏ</button>
+                <button class="btn-modal-save" @onclick="SaveItem">
+                    <i class="bi bi-check2"></i>
+                    <span>Lưu từ vựng</span>
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<HskVocabularyItem> vocabItems = new();
+    private bool isLoading = true;
+    private string filterLevel = "";
+    private string searchTerm = "";
+    private int totalCount = 0;
+
+    private bool showModal = false;
+    private HskVocabularyItem? editingItem = null;
+    private HskVocabularyItem form = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+        var items = await HskService.GetVocabularyAsync(filterLevel) ?? new List<HskVocabularyItem>();
+        if (!string.IsNullOrEmpty(searchTerm))
+        {
+            items = items.Where(x => x.Hanzi.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                                    x.Pinyin.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                                    x.Meaning.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+        vocabItems = items;
+        totalCount = items.Count;
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void ShowAddModal()
+    {
+        editingItem = null;
+        form = new HskVocabularyItem { HskLevel = "HSK1", IsActive = true, DisplayOrder = 0 };
+        showModal = true;
+    }
+
+    private void ShowEditModal(HskVocabularyItem item)
+    {
+        editingItem = item;
+        form = new HskVocabularyItem
+        {
+            Id = item.Id,
+            HskLevel = item.HskLevel,
+            Hanzi = item.Hanzi,
+            Pinyin = item.Pinyin,
+            Meaning = item.Meaning,
+            WordType = item.WordType,
+            ExampleSentence = item.ExampleSentence,
+            ExamplePinyin = item.ExamplePinyin,
+            ExampleMeaning = item.ExampleMeaning,
+            AudioUrl = item.AudioUrl,
+            DisplayOrder = item.DisplayOrder,
+            IsActive = item.IsActive
+        };
+        showModal = true;
+    }
+
+    private async Task SaveItem()
+    {
+        if (editingItem == null)
+        {
+            await HskService.CreateVocabularyAsync(form);
+        }
+        else
+        {
+            await HskService.UpdateVocabularyAsync(form.Id, form);
+        }
+        showModal = false;
+        await LoadData();
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+    }
+
+    private async Task DeleteItem(int id)
+    {
+        var confirm = await JS.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn xóa từ vựng này?");
+        if (!confirm) return;
+        await HskService.DeleteVocabularyAsync(id);
+        await LoadData();
+    }
+
+    private async Task SpeakChinese(string text)
+    {
+        await JS.InvokeVoidAsync("eval", $"if ('speechSynthesis' in window) {{ const u = new SpeechSynthesisUtterance('{text}'); u.lang = 'zh-CN'; window.speechSynthesis.speak(u); }}");
+    }
+
+    private static int GetLevelNumber(string levelStr)
+    {
+        if (levelStr.StartsWith("HSK", StringComparison.OrdinalIgnoreCase) && int.TryParse(levelStr[3..], out int num))
+        {
+            return num;
+        }
+        return 1;
+    }
+
+    private bool isImporting = false;
+    private string? importMessage;
+    private bool importSuccess;
+    private string importMode = "upsert";
+
+    private async Task TriggerImportExcel()
+    {
+        await JS.InvokeVoidAsync("eval", "document.getElementById('vocabExcelInput').click()");
+    }
+
+    private async Task HandleExcelImport(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+        var ext = System.IO.Path.GetExtension(file.Name).ToLowerInvariant();
+        if (ext != ".xlsx" && ext != ".csv")
+        {
+            importMessage = "Vui lòng chọn file Excel (.xlsx) hoặc CSV (.csv).";
+            importSuccess = false;
+            StateHasChanged();
+            return;
+        }
+
+        isImporting = true;
+        importMessage = null;
+        StateHasChanged();
+
+        var result = await HskService.ImportVocabularyExcelAsync(file, importMode);
+
+        isImporting = false;
+        if (result == null)
+        {
+            importMessage = "Nhập Excel thất bại. Vui lòng kiểm tra định dạng file rồi thử lại.";
+            importSuccess = false;
+        }
+        else
+        {
+            var parts = new List<string>();
+            if (result.Success > 0) parts.Add($"thêm mới {result.Success} từ");
+            if (result.Updated > 0) parts.Add($"cập nhật {result.Updated} từ");
+            if (result.Duplicate > 0) parts.Add($"bỏ qua {result.Duplicate} trùng");
+            if (result.Fail > 0) parts.Add($"lỗi {result.Fail} dòng");
+            if (parts.Count == 0) parts.Add("Không có dữ liệu hợp lệ nào trong file");
+            if (!string.IsNullOrEmpty(result.JsonUrl)) parts.Add($"File JSON đã lưu tại: {result.JsonUrl}");
+            importMessage = string.Join(", ", parts) + ".";
+            importSuccess = result.Fail == 0;
+        }
+        await LoadData();
+    }
+
+    private async Task DownloadTemplate()
+    {
+        var url = "/api/hsk/vocab/template-excel";
+        await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+}

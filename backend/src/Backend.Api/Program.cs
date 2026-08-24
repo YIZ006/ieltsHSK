@@ -4,6 +4,7 @@ using Backend.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +13,7 @@ var frontendUrl = builder.Configuration["Frontend:BaseUrl"] ?? "https://localhos
 const string frontendHttpUrl = "http://localhost:5102";
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
@@ -564,7 +566,8 @@ app.MapGet("/api/mock-tests", async (Backend.Infrastructure.Persistence.AppDbCon
         ReadingAnswerUrl = m.ReadingAnswerUrl,
         WritingAnswerUrl = m.WritingAnswerUrl,
         SpeakingAnswerUrl = m.SpeakingAnswerUrl,
-        ToeicUrl = m.ToeicUrl
+        ToeicUrl = m.ToeicUrl,
+        HskUrl = m.HskUrl
     }).ToList();
     
     return Results.Ok(dtos);
@@ -751,7 +754,1287 @@ app.MapPost("/api/toeic/save-exam", async (
     return Results.Ok(new { Url = jsonUrl, Id = test.Id });
 });
 
+// STORIES (GRADED READERS) API
+app.MapGet("/api/stories", async (string? level, string? category, string? search, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var query = dbContext.Stories.Where(s => s.IsPublished).AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(level) && level != "All" && level != "Tất cả")
+        query = query.Where(s => s.Level.ToLower() == level.ToLower());
+
+    if (!string.IsNullOrWhiteSpace(category) && category != "All" && category != "Tất cả")
+        query = query.Where(s => s.Category.ToLower() == category.ToLower());
+
+    if (!string.IsNullOrWhiteSpace(search))
+        query = query.Where(s => s.Title.Contains(search) || (s.Summary != null && s.Summary.Contains(search)));
+
+    var stories = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        query.OrderByDescending(s => s.CreatedAt), cancellationToken);
+
+    var dtos = stories.Select(s =>
+    {
+        int vocabCount = 0;
+        int questionsCount = 0;
+        try
+        {
+            if (!string.IsNullOrEmpty(s.VocabularyJson))
+                vocabCount = System.Text.Json.JsonDocument.Parse(s.VocabularyJson).RootElement.GetArrayLength();
+        }
+        catch { }
+        try
+        {
+            if (!string.IsNullOrEmpty(s.QuestionsJson))
+                questionsCount = System.Text.Json.JsonDocument.Parse(s.QuestionsJson).RootElement.GetArrayLength();
+        }
+        catch { }
+
+        return new Backend.Application.DTOs.StoryListItemDto
+        {
+            Id = s.Id,
+            Title = s.Title,
+            Slug = s.Slug,
+            Level = s.Level,
+            IeltsBand = s.IeltsBand,
+            Category = s.Category,
+            Summary = s.Summary,
+            ThumbnailUrl = s.ThumbnailUrl,
+            AudioUrl = s.AudioUrl,
+            JsonUrl = s.JsonUrl,
+            WordCount = s.WordCount,
+            EstimatedMinutes = s.EstimatedMinutes,
+            TargetVocabCount = vocabCount,
+            QuestionsCount = questionsCount,
+            IsPublished = s.IsPublished,
+            ViewsCount = s.ViewsCount,
+            CreatedAt = s.CreatedAt
+        };
+    }).ToList();
+
+    return Results.Ok(dtos);
+});
+
+app.MapGet("/api/stories/{idOrSlug}", async (string idOrSlug, Backend.Infrastructure.Persistence.AppDbContext dbContext, IHttpClientFactory httpClientFactory, CancellationToken cancellationToken) =>
+{
+    Backend.Domain.Entities.Story? story = null;
+    if (int.TryParse(idOrSlug, out int id))
+    {
+        story = await dbContext.Stories.FindAsync(new object[] { id }, cancellationToken);
+    }
+    else
+    {
+        story = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+            dbContext.Stories.Where(s => s.Slug == idOrSlug), cancellationToken);
+    }
+
+    if (story == null) return Results.NotFound(new { Message = "Không tìm thấy truyện." });
+
+    story.ViewsCount++;
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    // If story has JsonUrl and ContentJson is empty, try loading from R2/URL
+    string contentJson = story.ContentJson;
+    string vocabJson = story.VocabularyJson;
+    string questionsJson = story.QuestionsJson;
+
+    if ((string.IsNullOrEmpty(contentJson) || contentJson == "[]") && !string.IsNullOrEmpty(story.JsonUrl))
+    {
+        try
+        {
+            var httpClient = httpClientFactory.CreateClient();
+            var json = await httpClient.GetStringAsync(story.JsonUrl, cancellationToken);
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("paragraphs", out var pp)) contentJson = pp.GetRawText();
+            if (root.TryGetProperty("targetVocabulary", out var tvp)) vocabJson = tvp.GetRawText();
+            if (root.TryGetProperty("questions", out var qp)) questionsJson = qp.GetRawText();
+        }
+        catch { }
+    }
+
+    var dto = new Backend.Application.DTOs.StoryDto
+    {
+        Id = story.Id,
+        Title = story.Title,
+        Slug = story.Slug,
+        Level = story.Level,
+        IeltsBand = story.IeltsBand,
+        Category = story.Category,
+        Summary = story.Summary,
+        ThumbnailUrl = story.ThumbnailUrl,
+        AudioUrl = story.AudioUrl,
+        JsonUrl = story.JsonUrl,
+        WordCount = story.WordCount,
+        EstimatedMinutes = story.EstimatedMinutes,
+        ContentJson = contentJson,
+        VocabularyJson = vocabJson,
+        QuestionsJson = questionsJson,
+        IsPublished = story.IsPublished,
+        ViewsCount = story.ViewsCount,
+        CreatedAt = story.CreatedAt
+    };
+
+    return Results.Ok(dto);
+});
+
+app.MapPost("/api/stories/{id}/quiz-submit", async (int id, Backend.Application.DTOs.StoryQuizSubmissionRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var story = await dbContext.Stories.FindAsync(new object[] { id }, cancellationToken);
+    if (story == null) return Results.NotFound(new { Message = "Không tìm thấy truyện." });
+
+    var result = new Backend.Application.DTOs.StoryQuizResultDto
+    {
+        StoryId = id
+    };
+
+    try
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(story.QuestionsJson);
+        var root = doc.RootElement;
+        result.TotalQuestions = root.GetArrayLength();
+
+        int correctCount = 0;
+        for (int i = 0; i < root.GetArrayLength(); i++)
+        {
+            var q = root[i];
+            int correctIndex = q.TryGetProperty("correctIndex", out var cp) ? cp.GetInt32() : 0;
+            string explanation = q.TryGetProperty("explanation", out var ep) ? ep.GetString() ?? "" : "";
+
+            result.CorrectIndices.Add(correctIndex);
+            result.Explanations.Add(explanation);
+
+            bool isCorrect = (i < request.Answers.Count && request.Answers[i] == correctIndex);
+            result.AnswerCorrectness.Add(isCorrect);
+            if (isCorrect) correctCount++;
+        }
+
+        result.CorrectCount = correctCount;
+        result.ScorePercentage = result.TotalQuestions > 0 ? Math.Round((double)correctCount / result.TotalQuestions * 100, 1) : 100;
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { Message = "Lỗi chấm điểm bài tập: " + ex.Message });
+    }
+
+    return Results.Ok(result);
+});
+
+// ADMIN STORIES API
+app.MapGet("/api/admin/stories", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var stories = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.Stories.OrderByDescending(s => s.CreatedAt), cancellationToken);
+
+    var dtos = stories.Select(s => new Backend.Application.DTOs.StoryDto
+    {
+        Id = s.Id,
+        Title = s.Title,
+        Slug = s.Slug,
+        Level = s.Level,
+        IeltsBand = s.IeltsBand,
+        Category = s.Category,
+        Summary = s.Summary,
+        ThumbnailUrl = s.ThumbnailUrl,
+        AudioUrl = s.AudioUrl,
+        JsonUrl = s.JsonUrl,
+        WordCount = s.WordCount,
+        EstimatedMinutes = s.EstimatedMinutes,
+        ContentJson = s.ContentJson,
+        VocabularyJson = s.VocabularyJson,
+        QuestionsJson = s.QuestionsJson,
+        IsPublished = s.IsPublished,
+        ViewsCount = s.ViewsCount,
+        CreatedAt = s.CreatedAt
+    }).ToList();
+
+    return Results.Ok(dtos);
+});
+
+// Upload story JSON to Cloudflare R2
+app.MapPost("/api/admin/stories/upload-json", async (
+    Microsoft.AspNetCore.Http.IFormFile file,
+    Backend.Application.Abstractions.IR2StorageService r2Service,
+    CancellationToken cancellationToken) =>
+{
+    if (file == null || file.Length == 0)
+        return Results.BadRequest(new { Message = "File không hợp lệ hoặc trống." });
+
+    var fileId = Guid.NewGuid().ToString("N").Substring(0, 8);
+    var safeFileName = System.Text.RegularExpressions.Regex.Replace(file.FileName, @"[^a-zA-Z0-9_\.-]", "_");
+    var fileName = $"stories/{fileId}_{safeFileName}";
+
+    string jsonContent = "";
+    using (var reader = new StreamReader(file.OpenReadStream()))
+    {
+        jsonContent = await reader.ReadToEndAsync(cancellationToken);
+    }
+
+    string r2Url;
+    try
+    {
+        using var stream = file.OpenReadStream();
+        r2Url = await r2Service.UploadFileAsync(stream, fileName, "application/json", cancellationToken);
+    }
+    catch
+    {
+        // Fallback: lưu local nếu R2 lỗi / dev
+        var dir = Path.Combine("wwwroot", "sample-data", "stories");
+        Directory.CreateDirectory(dir);
+        var localPath = Path.Combine(dir, $"{fileId}_{safeFileName}");
+        await File.WriteAllTextAsync(localPath, jsonContent, cancellationToken);
+        r2Url = $"/sample-data/stories/{fileId}_{safeFileName}";
+    }
+
+    return Results.Ok(new { Url = r2Url, JsonContent = jsonContent, Message = "Tải file lên Cloudflare R2 thành công!" });
+});
+
+app.MapPost("/api/admin/stories", async (
+    Backend.Application.DTOs.CreateStoryRequest req,
+    Backend.Application.Abstractions.IR2StorageService r2Service,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Title))
+        return Results.BadRequest(new { Message = "Tiêu đề truyện không được để trống." });
+
+    var slug = string.IsNullOrWhiteSpace(req.Slug)
+        ? System.Text.RegularExpressions.Regex.Replace(req.Title.ToLowerInvariant().Trim(), @"[^a-z0-9\s-]", "").Replace(" ", "-")
+        : req.Slug.Trim();
+
+    if (string.IsNullOrEmpty(slug)) slug = "story-" + Guid.NewGuid().ToString().Substring(0, 8);
+
+    // Make sure slug is unique
+    int suffix = 1;
+    var baseSlug = slug;
+    while (await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(dbContext.Stories, s => s.Slug == slug, cancellationToken))
+    {
+        slug = $"{baseSlug}-{suffix++}";
+    }
+
+    // Auto upload JSON to R2 if JsonUrl is not yet provided
+    string? jsonUrl = req.JsonUrl;
+    if (string.IsNullOrEmpty(jsonUrl))
+    {
+        try
+        {
+            var exportObj = new
+            {
+                title = req.Title,
+                level = req.Level,
+                ieltsBand = req.IeltsBand,
+                category = req.Category,
+                summary = req.Summary,
+                thumbnailUrl = req.ThumbnailUrl,
+                audioUrl = req.AudioUrl,
+                estimatedMinutes = req.EstimatedMinutes,
+                paragraphs = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(req.ContentJson),
+                targetVocabulary = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(req.VocabularyJson),
+                questions = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(req.QuestionsJson)
+            };
+            var fullJson = System.Text.Json.JsonSerializer.Serialize(exportObj, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var jsonBytes = System.Text.Encoding.UTF8.GetBytes(fullJson);
+            using var ms = new MemoryStream(jsonBytes);
+            jsonUrl = await r2Service.UploadFileAsync(ms, $"stories/{slug}_{Guid.NewGuid().ToString("N").Substring(0, 6)}.json", "application/json", cancellationToken);
+        }
+        catch { }
+    }
+
+    var story = new Backend.Domain.Entities.Story
+    {
+        Title = req.Title.Trim(),
+        Slug = slug,
+        Level = req.Level,
+        IeltsBand = req.IeltsBand,
+        Category = req.Category,
+        Summary = req.Summary,
+        ThumbnailUrl = req.ThumbnailUrl,
+        AudioUrl = req.AudioUrl,
+        JsonUrl = jsonUrl,
+        WordCount = req.WordCount,
+        EstimatedMinutes = req.EstimatedMinutes,
+        ContentJson = req.ContentJson,
+        VocabularyJson = req.VocabularyJson,
+        QuestionsJson = req.QuestionsJson,
+        IsPublished = req.IsPublished,
+        CreatedAt = DateTime.UtcNow
+    };
+
+    dbContext.Stories.Add(story);
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new { Id = story.Id, Slug = story.Slug, JsonUrl = story.JsonUrl, Message = "Tạo truyện và lưu lên Cloudflare R2 thành công!" });
+});
+
+app.MapPut("/api/admin/stories/{id}", async (
+    int id,
+    Backend.Application.DTOs.CreateStoryRequest req,
+    Backend.Application.Abstractions.IR2StorageService r2Service,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var story = await dbContext.Stories.FindAsync(new object[] { id }, cancellationToken);
+    if (story == null) return Results.NotFound(new { Message = "Không tìm thấy truyện để cập nhật." });
+
+    if (string.IsNullOrWhiteSpace(req.Title))
+        return Results.BadRequest(new { Message = "Tiêu đề truyện không được để trống." });
+
+    story.Title = req.Title.Trim();
+    if (!string.IsNullOrWhiteSpace(req.Slug) && req.Slug != story.Slug)
+    {
+        var slugCheck = req.Slug.Trim();
+        bool exists = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
+            dbContext.Stories, s => s.Slug == slugCheck && s.Id != id, cancellationToken);
+        if (!exists) story.Slug = slugCheck;
+    }
+
+    // Auto upload updated JSON to R2
+    string? jsonUrl = req.JsonUrl ?? story.JsonUrl;
+    try
+    {
+        var exportObj = new
+        {
+            title = req.Title,
+            level = req.Level,
+            ieltsBand = req.IeltsBand,
+            category = req.Category,
+            summary = req.Summary,
+            thumbnailUrl = req.ThumbnailUrl,
+            audioUrl = req.AudioUrl,
+            estimatedMinutes = req.EstimatedMinutes,
+            paragraphs = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(req.ContentJson),
+            targetVocabulary = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(req.VocabularyJson),
+            questions = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(req.QuestionsJson)
+        };
+        var fullJson = System.Text.Json.JsonSerializer.Serialize(exportObj, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        var jsonBytes = System.Text.Encoding.UTF8.GetBytes(fullJson);
+        using var ms = new MemoryStream(jsonBytes);
+        var oldJsonUrl = story.JsonUrl;
+        jsonUrl = await r2Service.UploadFileAsync(ms, $"stories/{story.Slug}_{Guid.NewGuid().ToString("N").Substring(0, 6)}.json", "application/json", cancellationToken);
+        if (!string.IsNullOrEmpty(oldJsonUrl) && oldJsonUrl != jsonUrl)
+        {
+            try { await r2Service.DeleteFileAsync(oldJsonUrl, cancellationToken); } catch { }
+        }
+    }
+    catch { }
+
+    story.Level = req.Level;
+    story.IeltsBand = req.IeltsBand;
+    story.Category = req.Category;
+    story.Summary = req.Summary;
+    story.ThumbnailUrl = req.ThumbnailUrl;
+    story.AudioUrl = req.AudioUrl;
+    story.JsonUrl = jsonUrl;
+    story.WordCount = req.WordCount;
+    story.EstimatedMinutes = req.EstimatedMinutes;
+    story.ContentJson = req.ContentJson;
+    story.VocabularyJson = req.VocabularyJson;
+    story.QuestionsJson = req.QuestionsJson;
+    story.IsPublished = req.IsPublished;
+    story.UpdatedAt = DateTime.UtcNow;
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { JsonUrl = story.JsonUrl, Message = "Cập nhật truyện lên Cloudflare R2 thành công!" });
+});
+
+app.MapDelete("/api/admin/stories/{id}", async (
+    int id,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    Backend.Application.Abstractions.IR2StorageService r2Service,
+    CancellationToken cancellationToken) =>
+{
+    var story = await dbContext.Stories.FindAsync(new object[] { id }, cancellationToken);
+    if (story == null) return Results.NotFound(new { Message = "Không tìm thấy truyện để xóa." });
+
+    if (!string.IsNullOrEmpty(story.JsonUrl))
+    {
+        try { await r2Service.DeleteFileAsync(story.JsonUrl, cancellationToken); } catch { }
+    }
+
+    dbContext.Stories.Remove(story);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { Message = "Đã xóa truyện và tệp tin trên Cloudflare R2." });
+});
+
+app.MapPost("/api/admin/stories/sync-to-r2", async (
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    Backend.Application.Abstractions.IR2StorageService r2Service,
+    CancellationToken cancellationToken) =>
+{
+    var stories = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(dbContext.Stories, cancellationToken);
+    int count = 0;
+    foreach (var s in stories)
+    {
+        try
+        {
+            var exportObj = new
+            {
+                title = s.Title,
+                level = s.Level,
+                ieltsBand = s.IeltsBand,
+                category = s.Category,
+                summary = s.Summary,
+                thumbnailUrl = s.ThumbnailUrl,
+                audioUrl = s.AudioUrl,
+                wordCount = s.WordCount,
+                estimatedMinutes = s.EstimatedMinutes,
+                paragraphs = !string.IsNullOrEmpty(s.ContentJson) ? System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(s.ContentJson) : default,
+                targetVocabulary = !string.IsNullOrEmpty(s.VocabularyJson) ? System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(s.VocabularyJson) : default,
+                questions = !string.IsNullOrEmpty(s.QuestionsJson) ? System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(s.QuestionsJson) : default
+            };
+            var fullJson = System.Text.Json.JsonSerializer.Serialize(exportObj, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var jsonBytes = System.Text.Encoding.UTF8.GetBytes(fullJson);
+            using var ms = new MemoryStream(jsonBytes);
+            var r2Url = await r2Service.UploadFileAsync(ms, $"stories/{s.Slug}.json", "application/json", cancellationToken);
+            s.JsonUrl = r2Url;
+            count++;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error syncing story {s.Slug} to R2: {ex.Message}");
+        }
+    }
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { Count = count, Message = $"Đã đồng bộ {count} truyện lên Cloudflare R2 trong thư mục stories/" });
+});
+
+app.MapGet("/api/admin/stories/template-json", () =>
+{
+    var sampleTemplate = new
+    {
+        title = "Tiêu đề truyện tiếng Anh (vd: The School Race)",
+        level = "B1",
+        ieltsBand = "5.0 - 6.0",
+        category = "Đời sống",
+        summary = "Tóm tắt ngắn gọn nội dung câu chuyện (1-2 câu tiếng Việt)",
+        thumbnailUrl = "https://images.unsplash.com/photo-1506953823976-52e1fdc0149a?w=800",
+        audioUrl = "",
+        estimatedMinutes = 5,
+        paragraphs = new[]
+        {
+            new {
+                en = "Tom puts on his shoes. The race is about to start.",
+                vi = "Tom đi giày vào. Cuộc đua chuẩn bị bắt đầu."
+            },
+            new {
+                en = "He runs fast and never gives up despite the pain.",
+                vi = "Cậu chạy thật nhanh và không bao giờ bỏ cuộc dù bị đau."
+            }
+        },
+        targetVocabulary = new[]
+        {
+            new {
+                word = "pain",
+                phonetic = "/peɪn/",
+                pos = "noun",
+                meaning = "cơn đau, sự đau đớn",
+                example = "He feels a sharp pain in his leg.",
+                collocations = new[] { "sharp pain", "relieve pain" }
+            },
+            new {
+                word = "give up",
+                phonetic = "/ɡɪv ʌp/",
+                pos = "phrasal verb",
+                meaning = "bỏ cuộc, từ bỏ",
+                example = "He never gives up.",
+                collocations = new[] { "give up hope", "never give up" }
+            }
+        },
+        questions = new[]
+        {
+            new {
+                question = "What does Tom do when he feels pain?",
+                options = new[] { "He stops running", "He goes home", "He continues and never gives up", "He cries loudly" },
+                correctIndex = 2,
+                explanation = "Trong bài có câu: 'He runs fast and never gives up despite the pain.'"
+            }
+        }
+    };
+
+    return Results.Ok(sampleTemplate);
+});
+
+app.MapPost("/api/admin/stories/import-json", async (
+    Backend.Application.DTOs.ImportStoryJsonRequest req,
+    Backend.Application.Abstractions.IR2StorageService r2Service,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(req.JsonContent))
+        return Results.BadRequest(new { Message = "Nội dung JSON không được để trống." });
+
+    try
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(req.JsonContent);
+        var root = doc.RootElement;
+
+        string title = root.TryGetProperty("title", out var tp) ? tp.GetString() ?? "Untitled Story" : "Untitled Story";
+        string level = root.TryGetProperty("level", out var lp) ? lp.GetString() ?? "B1" : "B1";
+        string ieltsBand = root.TryGetProperty("ieltsBand", out var ibp) ? ibp.GetString() ?? "5.0 - 6.0" : "5.0 - 6.0";
+        string category = root.TryGetProperty("category", out var cp) ? cp.GetString() ?? "Đời sống" : "Đời sống";
+        string? summary = root.TryGetProperty("summary", out var sp) ? sp.GetString() : null;
+        string? thumbnailUrl = root.TryGetProperty("thumbnailUrl", out var thp) ? thp.GetString() : null;
+        string? audioUrl = root.TryGetProperty("audioUrl", out var ap) ? ap.GetString() : null;
+        string? jsonUrl = root.TryGetProperty("jsonUrl", out var jup) ? jup.GetString() : null;
+        int estimatedMinutes = root.TryGetProperty("estimatedMinutes", out var emp) ? emp.GetInt32() : 5;
+
+        // ContentJson
+        string contentJson = "[]";
+        int wordCount = 0;
+        if (root.TryGetProperty("paragraphs", out var pp))
+        {
+            contentJson = pp.GetRawText();
+            foreach (var item in pp.EnumerateArray())
+            {
+                if (item.TryGetProperty("en", out var enText))
+                {
+                    var text = enText.GetString() ?? "";
+                    wordCount += text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+                }
+            }
+        }
+        else if (root.TryGetProperty("contentJson", out var cjp))
+        {
+            contentJson = cjp.GetString() ?? cjp.GetRawText();
+        }
+
+        // VocabularyJson
+        string vocabJson = "[]";
+        if (root.TryGetProperty("targetVocabulary", out var tvp))
+            vocabJson = tvp.GetRawText();
+        else if (root.TryGetProperty("vocabularyJson", out var vjp))
+            vocabJson = vjp.GetString() ?? vjp.GetRawText();
+
+        // QuestionsJson
+        string questionsJson = "[]";
+        if (root.TryGetProperty("questions", out var qp))
+            questionsJson = qp.GetRawText();
+        else if (root.TryGetProperty("questionsJson", out var qjp))
+            questionsJson = qjp.GetString() ?? qjp.GetRawText();
+
+        var slug = System.Text.RegularExpressions.Regex.Replace(title.ToLowerInvariant().Trim(), @"[^a-z0-9\s-]", "").Replace(" ", "-");
+        if (string.IsNullOrEmpty(slug)) slug = "story-" + Guid.NewGuid().ToString().Substring(0, 8);
+
+        // Check if slug exists
+        int suffix = 1;
+        var baseSlug = slug;
+        while (await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(dbContext.Stories, s => s.Slug == slug, cancellationToken))
+        {
+            slug = $"{baseSlug}-{suffix++}";
+        }
+
+        // Upload json to R2 if not provided
+        if (string.IsNullOrEmpty(jsonUrl))
+        {
+            try
+            {
+                var jsonBytes = System.Text.Encoding.UTF8.GetBytes(req.JsonContent);
+                using var ms = new MemoryStream(jsonBytes);
+                jsonUrl = await r2Service.UploadFileAsync(ms, $"stories/{slug}_{Guid.NewGuid().ToString("N").Substring(0, 6)}.json", "application/json", cancellationToken);
+            }
+            catch { }
+        }
+
+        var story = new Backend.Domain.Entities.Story
+        {
+            Title = title,
+            Slug = slug,
+            Level = level,
+            IeltsBand = ieltsBand,
+            Category = category,
+            Summary = summary,
+            ThumbnailUrl = thumbnailUrl,
+            AudioUrl = audioUrl,
+            JsonUrl = jsonUrl,
+            WordCount = wordCount > 0 ? wordCount : 150,
+            EstimatedMinutes = estimatedMinutes,
+            ContentJson = contentJson,
+            VocabularyJson = vocabJson,
+            QuestionsJson = questionsJson,
+            IsPublished = true,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        dbContext.Stories.Add(story);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(new { Id = story.Id, Slug = story.Slug, Title = story.Title, JsonUrl = story.JsonUrl, Message = "Import truyện và lưu lên Cloudflare R2 thành công!" });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { Message = "Lỗi định dạng JSON: " + ex.Message });
+    }
+});
+
+// --- ADMIN USER MANAGEMENT ENDPOINTS ---
+
+app.MapGet("/api/admin/users", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var users = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.Users.OrderByDescending(u => u.CreatedAt), cancellationToken);
+    
+    return Results.Ok(users.Select(u => new {
+        u.Id,
+        u.Username,
+        u.Email,
+        u.Role,
+        u.Level,
+        u.IsActive,
+        u.LastLoginAt,
+        u.CreatedAt
+    }));
+});
+
+app.MapPut("/api/admin/users/{id}/toggle-active", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var user = await dbContext.Users.FindAsync(new object[] { id }, cancellationToken);
+    if (user == null) return Results.NotFound();
+
+    user.IsActive = !user.IsActive;
+    
+    dbContext.UserActivityLogs.Add(new Backend.Domain.Entities.UserActivityLog
+    {
+        UserId = user.Id,
+        Action = user.IsActive ? "enabled" : "disabled",
+        Detail = "Toggled by Admin"
+    });
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { user.IsActive });
+});
+
+app.MapPut("/api/admin/users/{id}", async (int id, Backend.Application.DTOs.UpdateUserRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var user = await dbContext.Users.FindAsync(new object[] { id }, cancellationToken);
+    if (user == null) return Results.NotFound();
+
+    user.Username = request.Username;
+    user.Email = request.Email;
+    user.Role = request.Role;
+    user.Level = request.Level;
+
+    dbContext.UserActivityLogs.Add(new Backend.Domain.Entities.UserActivityLog
+    {
+        UserId = user.Id,
+        Action = "profile_update",
+        Detail = "Admin updated profile"
+    });
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok();
+});
+// ─── HSK: Learning Sections ───
+app.MapGet("/api/hsk/sections", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var sections = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.LearningSections
+            .Where(s => s.Language == "HSK")
+            .OrderBy(s => s.OrderIndex)
+            .Select(s => new Backend.Application.DTOs.LearningSectionDto
+            {
+                Id = s.Id,
+                Name = s.Name,
+                Description = s.Description,
+                Icon = s.Icon,
+                Route = s.Route,
+                Language = s.Language,
+                OrderIndex = s.OrderIndex
+            }), cancellationToken);
+    return Results.Ok(sections);
+});
+
+// ─── HSK: Upload media (image/audio) ───
+app.MapPost("/api/hsk/upload-media", async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Application.Abstractions.IR2StorageService r2Service, CancellationToken cancellationToken) =>
+{
+    if (file == null || file.Length == 0)
+        return Results.BadRequest("No file uploaded.");
+    bool isImage = file.ContentType.StartsWith("image/");
+    long maxSize = isImage ? 10 * 1024 * 1024 : 80 * 1024 * 1024;
+    if (file.Length > maxSize)
+        return Results.BadRequest($"File too large. Max {(isImage ? "10MB" : "80MB")}.");
+    var folder = isImage ? "hsk/images" : "hsk/audio";
+    var ext = Path.GetExtension(file.FileName);
+    var fileName = $"{folder}/{Guid.NewGuid()}{ext}";
+    using var stream = file.OpenReadStream();
+    try
+    {
+        var url = await r2Service.UploadFileAsync(stream, fileName, file.ContentType, cancellationToken);
+        return Results.Ok(new { Url = url, Type = isImage ? "image" : "audio" });
+    }
+    catch (Exception ex) { return Results.BadRequest(ex.Message); }
+}).DisableAntiforgery();
+
+// ─── HSK: Save exam JSON ───
+app.MapPost("/api/hsk/save-exam", async (
+        HskSaveExamRequest req,
+        Backend.Application.Abstractions.IR2StorageService r2Service,
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(req.CollectionName) || string.IsNullOrWhiteSpace(req.Title))
+        return Results.BadRequest("CollectionName and Title are required.");
+
+    var json = System.Text.Json.JsonSerializer.Serialize(req.ExamData,
+        new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
+    var jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
+    var fileId = Guid.NewGuid().ToString("N");
+    var fileName = $"hsk/exams/{fileId}.json";
+
+    string jsonUrl;
+    try
+    {
+        using var ms = new MemoryStream(jsonBytes);
+        jsonUrl = await r2Service.UploadFileAsync(ms, fileName, "application/json", cancellationToken);
+    }
+    catch
+    {
+        var dir = Path.Combine("wwwroot", "exports");
+        Directory.CreateDirectory(dir);
+        var localPath = Path.Combine(dir, $"{fileId}.json");
+        await File.WriteAllBytesAsync(localPath, jsonBytes, cancellationToken);
+        jsonUrl = $"/exports/{fileId}.json";
+    }
+
+    Backend.Domain.Entities.MockTest? test = null;
+    if (req.MockTestId.HasValue)
+        test = await dbContext.MockTests.FindAsync(new object[] { req.MockTestId.Value }, cancellationToken);
+
+    if (test == null)
+    {
+        test = new Backend.Domain.Entities.MockTest
+        {
+            CollectionName = req.CollectionName,
+            Title = req.Title,
+            HskUrl = jsonUrl
+        };
+        dbContext.MockTests.Add(test);
+    }
+    else
+    {
+        test.CollectionName = req.CollectionName;
+        test.Title = req.Title;
+        test.HskUrl = jsonUrl;
+    }
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new { Url = jsonUrl, Id = test.Id });
+});
+
+// ─── HSK: Vocabulary CRUD ───
+app.MapGet("/api/hsk/vocab", async (string? level, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var query = dbContext.HskVocabularies.AsQueryable();
+    if (!string.IsNullOrEmpty(level))
+        query = query.Where(v => v.HskLevel == level);
+    var items = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        query.OrderBy(v => v.HskLevel).ThenBy(v => v.DisplayOrder), cancellationToken);
+    return Results.Ok(items.Select(v => new
+    {
+        v.Id,
+        v.HskLevel,
+        v.Hanzi,
+        v.Pinyin,
+        v.Meaning,
+        v.WordType,
+        v.ExampleSentence,
+        v.ExamplePinyin,
+        v.ExampleMeaning,
+        v.AudioUrl,
+        v.DisplayOrder,
+        v.IsActive,
+        v.CreatedAt
+    }));
+});
+
+app.MapPost("/api/hsk/vocab", async (HskVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var existing = await dbContext.HskVocabularies
+        .FirstOrDefaultAsync(v => v.HskLevel == req.HskLevel && v.Hanzi == req.Hanzi, cancellationToken);
+    if (existing != null)
+        return Results.BadRequest("Từ này đã tồn tại ở cấp độ này.");
+
+    var vocab = new Backend.Domain.Entities.HskVocabulary
+    {
+        HskLevel = req.HskLevel,
+        Hanzi = req.Hanzi,
+        Pinyin = req.Pinyin,
+        Meaning = req.Meaning,
+        WordType = req.WordType,
+        ExampleSentence = req.ExampleSentence,
+        ExamplePinyin = req.ExamplePinyin,
+        ExampleMeaning = req.ExampleMeaning,
+        AudioUrl = req.AudioUrl,
+        DisplayOrder = req.DisplayOrder ?? 0,
+        IsActive = req.IsActive ?? true
+    };
+    dbContext.HskVocabularies.Add(vocab);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { Id = vocab.Id });
+});
+
+app.MapPut("/api/hsk/vocab/{id}", async (int id, HskVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var vocab = await dbContext.HskVocabularies.FindAsync(new object[] { id }, cancellationToken);
+    if (vocab == null) return Results.NotFound();
+
+    // Check duplicate if level or hanzi changed
+    if (vocab.HskLevel != req.HskLevel || vocab.Hanzi != req.Hanzi)
+    {
+        var existing = await dbContext.HskVocabularies
+            .FirstOrDefaultAsync(v => v.HskLevel == req.HskLevel && v.Hanzi == req.Hanzi && v.Id != id, cancellationToken);
+        if (existing != null)
+            return Results.BadRequest("Từ này đã tồn tại ở cấp độ này.");
+    }
+
+    vocab.HskLevel = req.HskLevel;
+    vocab.Hanzi = req.Hanzi;
+    vocab.Pinyin = req.Pinyin;
+    vocab.Meaning = req.Meaning;
+    vocab.WordType = req.WordType;
+    vocab.ExampleSentence = req.ExampleSentence;
+    vocab.ExamplePinyin = req.ExamplePinyin;
+    vocab.ExampleMeaning = req.ExampleMeaning;
+    vocab.AudioUrl = req.AudioUrl;
+    vocab.DisplayOrder = req.DisplayOrder ?? 0;
+    vocab.IsActive = req.IsActive ?? true;
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok();
+});
+
+app.MapPost("/api/admin/users/{id}/reset-password", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var user = await dbContext.Users.FindAsync(new object[] { id }, cancellationToken);
+    if (user == null) return Results.NotFound();
+
+    var tempPassword = Guid.NewGuid().ToString("N").Substring(0, 8) + "@1Aa";
+    user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(tempPassword);
+    user.PasswordChangedAt = DateTime.UtcNow;
+
+    dbContext.UserActivityLogs.Add(new Backend.Domain.Entities.UserActivityLog
+    {
+        UserId = user.Id,
+        Action = "password_reset",
+        Detail = "Manual reset by Admin"
+    });
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { TempPassword = tempPassword });
+});
+
+app.MapGet("/api/admin/users/{id}/logs", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var logs = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.UserActivityLogs
+            .Where(l => l.UserId == id)
+            .OrderByDescending(l => l.CreatedAt)
+            .Take(50), 
+        cancellationToken);
+    
+    return Results.Ok(logs);
+});
+
+app.MapDelete("/api/hsk/vocab/{id}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var vocab = await dbContext.HskVocabularies.FindAsync(new object[] { id }, cancellationToken);
+    if (vocab == null) return Results.NotFound();
+    dbContext.HskVocabularies.Remove(vocab);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok();
+});
+
+// ─── HSK Vocabulary Progress (lưu theo tài khoản người dùng) ───
+app.MapGet("/api/hsk/vocab/progress", [Microsoft.AspNetCore.Authorization.Authorize] async (
+        System.Security.Claims.ClaimsPrincipal user,
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var ids = await dbContext.HskVocabularyProgresses
+        .Where(p => p.UserId == userId)
+        .Select(p => p.VocabularyId)
+        .ToListAsync(cancellationToken);
+
+    return Results.Ok(new { vocabularyIds = ids });
+});
+
+app.MapPost("/api/hsk/vocab/progress/{vocabularyId:int}", [Microsoft.AspNetCore.Authorization.Authorize] async (
+        int vocabularyId,
+        UpdateVocabProgressRequest req,
+        System.Security.Claims.ClaimsPrincipal user,
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    bool vocabExists = await dbContext.HskVocabularies.AnyAsync(v => v.Id == vocabularyId, cancellationToken);
+    if (!vocabExists) return Results.NotFound("Không tìm thấy từ vựng.");
+
+    if (req.Learned)
+    {
+        bool exists = await dbContext.HskVocabularyProgresses.AnyAsync(
+            p => p.UserId == userId && p.VocabularyId == vocabularyId, cancellationToken);
+        if (!exists)
+        {
+            dbContext.HskVocabularyProgresses.Add(new Backend.Domain.Entities.HskVocabularyProgress
+            {
+                UserId = userId,
+                VocabularyId = vocabularyId
+            });
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        return Results.Ok(new { vocabularyId, learned = true });
+    }
+
+    var rows = await dbContext.HskVocabularyProgresses
+        .Where(p => p.UserId == userId && p.VocabularyId == vocabularyId)
+        .ToListAsync(cancellationToken);
+    if (rows.Count > 0)
+    {
+        dbContext.HskVocabularyProgresses.RemoveRange(rows);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+    return Results.Ok(new { vocabularyId, learned = false });
+});
+
+// ─── HSK Vocabulary Excel Import ───
+app.MapGet("/api/hsk/vocab/template-excel", () =>
+{
+    using var workbook = new ClosedXML.Excel.XLWorkbook();
+    var worksheet = workbook.Worksheets.Add("HSK Vocabulary");
+    // Header
+    worksheet.Cell(1, 1).Value = "HskLevel";
+    worksheet.Cell(1, 2).Value = "Hanzi";
+    worksheet.Cell(1, 3).Value = "Pinyin";
+    worksheet.Cell(1, 4).Value = "Meaning";
+    worksheet.Cell(1, 5).Value = "WordType";
+    worksheet.Cell(1, 6).Value = "ExampleSentence";
+    worksheet.Cell(1, 7).Value = "ExamplePinyin";
+    worksheet.Cell(1, 8).Value = "ExampleMeaning";
+    worksheet.Cell(1, 9).Value = "AudioUrl";
+    worksheet.Cell(1, 10).Value = "DisplayOrder";
+    var headerRange = worksheet.Range("A1:J1");
+    headerRange.Style.Font.Bold = true;
+    headerRange.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+    worksheet.Cell(2, 1).Value = "HSK3";
+    worksheet.Cell(2, 2).Value = "图书馆";
+    worksheet.Cell(2, 3).Value = "tú shū guǎn";
+    worksheet.Cell(2, 4).Value = "thư viện";
+    worksheet.Cell(2, 5).Value = "noun";
+    worksheet.Cell(2, 6).Value = "我去图书馆看书。";
+    worksheet.Cell(2, 7).Value = "wǒ qù tú shū guǎn kàn shū。";
+    worksheet.Cell(2, 8).Value = "Tôi đi thư viện đọc sách.";
+    worksheet.Column(1).Width = 12;
+    worksheet.Column(2).Width = 15;
+    worksheet.Column(3).Width = 18;
+    worksheet.Column(4).Width = 20;
+    worksheet.Column(5).Width = 12;
+    worksheet.Column(6).Width = 30;
+    worksheet.Column(7).Width = 25;
+    worksheet.Column(8).Width = 25;
+    worksheet.Column(9).Width = 30;
+    worksheet.Column(10).Width = 12;
+    using var stream = new MemoryStream();
+    workbook.SaveAs(stream);
+    stream.Position = 0;
+    return Results.File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "HSK_Vocabulary_Template.xlsx");
+});
+
+app.MapPost("/api/hsk/vocab/import-excel", async (Microsoft.AspNetCore.Http.IFormFile file,
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        Backend.Application.Abstractions.IR2StorageService r2Storage,
+        HttpContext httpContext,
+        CancellationToken cancellationToken) =>
+{
+    if (file == null || file.Length == 0)
+        return Results.BadRequest("File không hợp lệ hoặc trống.");
+    var ext = Path.GetExtension(file.FileName)?.ToLowerInvariant();
+    if (ext != ".xlsx" && ext != ".csv")
+        return Results.BadRequest("Vui lòng upload file Excel (.xlsx) hoặc CSV (.csv)");
+
+    // Chế độ xử lý từ trùng: "skip" (bỏ qua) hoặc "upsert" (cập nhật ghi đè)
+    var mode = httpContext.Request.Form.TryGetValue("mode", out var modeValue) &&
+               modeValue.ToString().Trim().Equals("upsert", StringComparison.OrdinalIgnoreCase)
+        ? "upsert"
+        : "skip";
+
+    // Normalize rows into 10 columns: level, hanzi, pinyin, meaning, wordType,
+    // exampleSentence, examplePinyin, exampleMeaning, audioUrl, displayOrder
+    var rows = new List<string[]>();
+    if (ext == ".xlsx")
+    {
+        using var stream = file.OpenReadStream();
+        using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+        var worksheet = workbook.Worksheet(1);
+        var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+        for (int i = 2; i <= lastRow; i++)
+        {
+            var r = worksheet.Row(i);
+            rows.Add(new[]
+            {
+                r.Cell(1).GetString()?.Trim() ?? "",
+                r.Cell(2).GetString()?.Trim() ?? "",
+                r.Cell(3).GetString()?.Trim() ?? "",
+                r.Cell(4).GetString()?.Trim() ?? "",
+                r.Cell(5).GetString()?.Trim() ?? "",
+                r.Cell(6).GetString()?.Trim() ?? "",
+                r.Cell(7).GetString()?.Trim() ?? "",
+                r.Cell(8).GetString()?.Trim() ?? "",
+                r.Cell(9).GetString()?.Trim() ?? "",
+                r.Cell(10).GetString()?.Trim() ?? ""
+            });
+        }
+    }
+    else
+    {
+        using var reader = new StreamReader(file.OpenReadStream(), System.Text.Encoding.UTF8);
+        var csvText = await reader.ReadToEndAsync(cancellationToken);
+        var csvRows = HskVocabCsvParser.Parse(csvText).ToList();
+
+        // Ánh xạ cột theo TÊN trong dòng header (chấp nhận thiếu/sai thứ tự cột)
+        int[] map = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+        IEnumerable<List<string>> dataRows = csvRows;
+        if (csvRows.Count > 0 && csvRows[0].Count > 0 &&
+            csvRows[0][0].Trim().Equals("HskLevel", StringComparison.OrdinalIgnoreCase))
+        {
+            var header = csvRows[0]
+                .Select(h => h.Trim().ToLowerInvariant().Replace("_", ""))
+                .ToList();
+            int Idx(string name) => header.IndexOf(name);
+            map = new[]
+            {
+                Idx("hsklevel"), Idx("hanzi"), Idx("pinyin"), Idx("meaning"), Idx("wordtype"),
+                Idx("examplesentence"), Idx("examplepinyin"), Idx("examplemeaning"), Idx("audiourl"), Idx("displayorder")
+            };
+            // Cột nào không khai báo trong header => dữ liệu không tồn tại, để trống
+            // (Get(idx<0) trả về "")
+            dataRows = csvRows.Skip(1);
+        }
+
+        foreach (var fields in dataRows)
+        {
+            if (fields.All(string.IsNullOrWhiteSpace)) continue;
+            string Get(int idx) => idx >= 0 && idx < fields.Count ? fields[idx]?.Trim() ?? "" : "";
+            rows.Add(new[] { Get(map[0]), Get(map[1]), Get(map[2]), Get(map[3]), Get(map[4]), Get(map[5]), Get(map[6]), Get(map[7]), Get(map[8]), Get(map[9]) });
+        }
+    }
+
+    int success = 0, fail = 0, duplicate = 0, updated = 0;
+    var errors = new List<string>();
+    var jsonItems = new List<object>();
+    var seenInFile = new HashSet<string>(StringComparer.Ordinal);
+
+    for (int i = 0; i < rows.Count; i++)
+    {
+        var cells = rows[i];
+        try
+        {
+            var level = cells[0];
+            var hanzi = cells[1];
+            if (string.IsNullOrEmpty(level) || string.IsNullOrEmpty(hanzi)) continue;
+
+            // JSON xuất ra gồm TOÀN BỘ dòng hợp lệ trong file (kể cả từ đã tồn tại)
+            string? wordType = HskVocabCsvParser.NullIfEmpty(cells[4]);
+            int displayOrder = int.TryParse(cells[9], out int orderVal) ? orderVal : 0;
+            jsonItems.Add(new
+            {
+                hskLevel = level,
+                hanzi,
+                pinyin = cells[2],
+                meaning = cells[3],
+                wordType,
+                exampleSentence = HskVocabCsvParser.NullIfEmpty(cells[5]),
+                examplePinyin = HskVocabCsvParser.NullIfEmpty(cells[6]),
+                exampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[7]),
+                audioUrl = HskVocabCsvParser.NullIfEmpty(cells[8]),
+                displayOrder
+            });
+
+            // Trùng trong cùng file import (cùng cấp độ + cùng chữ Hán)
+            if (!seenInFile.Add($"{level}|{hanzi}")) { duplicate++; continue; }
+
+            // Tìm từ đã tồn tại trong DB theo (cấp độ, chữ Hán)
+            var existing = await dbContext.HskVocabularies.FirstOrDefaultAsync(
+                v => v.HskLevel == level && v.Hanzi == hanzi, cancellationToken);
+
+            if (existing != null)
+            {
+                if (mode == "upsert")
+                {
+                    existing.Pinyin = cells[2];
+                    existing.Meaning = cells[3];
+                    existing.WordType = wordType;
+                    existing.ExampleSentence = HskVocabCsvParser.NullIfEmpty(cells[5]);
+                    existing.ExamplePinyin = HskVocabCsvParser.NullIfEmpty(cells[6]);
+                    existing.ExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[7]);
+                    if (!string.IsNullOrEmpty(cells[8])) existing.AudioUrl = cells[8];
+                    existing.DisplayOrder = displayOrder;
+                    updated++;
+                }
+                else duplicate++;
+                continue;
+            }
+
+            var vocab = new Backend.Domain.Entities.HskVocabulary
+            {
+                HskLevel = level,
+                Hanzi = hanzi,
+                Pinyin = cells[2],
+                Meaning = cells[3],
+                WordType = wordType,
+                ExampleSentence = HskVocabCsvParser.NullIfEmpty(cells[5]),
+                ExamplePinyin = HskVocabCsvParser.NullIfEmpty(cells[6]),
+                ExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[7]),
+                AudioUrl = HskVocabCsvParser.NullIfEmpty(cells[8]),
+                DisplayOrder = displayOrder,
+                IsActive = true
+            };
+            dbContext.HskVocabularies.Add(vocab);
+            success++;
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"Dòng {i + 1}: {ex.Message}");
+            fail++;
+        }
+    }
+    try
+    {
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Lỗi khi lưu từ vựng vào database: {ex.Message}");
+    }
+    string jsonUrl;
+    var fileId = Guid.NewGuid().ToString("N");
+    var vocabJson = System.Text.Json.JsonSerializer.Serialize(new
+    {
+        fileName = file.FileName,
+        importedAt = DateTime.UtcNow,
+        mode,
+        totalCount = jsonItems.Count,
+        items = jsonItems
+    }, new System.Text.Json.JsonSerializerOptions
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+    });
+    var jsonBytes = System.Text.Encoding.UTF8.GetBytes(vocabJson);
+
+    try
+    {
+        using var ms = new MemoryStream(jsonBytes);
+        jsonUrl = await r2Storage.UploadFileAsync(ms, $"hsk-vocab/{fileId}.json", "application/json", cancellationToken);
+    }
+    catch
+    {
+        var dir = Path.Combine("wwwroot", "exports");
+        Directory.CreateDirectory(dir);
+        await File.WriteAllBytesAsync(Path.Combine(dir, $"{fileId}.json"), jsonBytes, cancellationToken);
+        jsonUrl = $"/exports/{fileId}.json";
+    }
+
+    var batch = new Backend.Domain.Entities.HskVocabularyImport
+    {
+        FileName = file.FileName,
+        JsonUrl = jsonUrl,
+        TotalRows = rows.Count,
+        ImportedCount = success,
+        UpdatedCount = updated,
+        DuplicateCount = duplicate,
+        FailedCount = fail
+    };
+    dbContext.HskVocabularyImports.Add(batch);
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    var msg = $"Thêm mới {success}, cập nhật {updated}, thất bại {fail}, bỏ qua {duplicate} trùng.";
+    if (errors.Any()) msg += " Chi tiết: " + string.Join(" | ", errors.Take(3));
+    return Results.Ok(new { Success = success, Fail = fail, Duplicate = duplicate, Updated = updated, Errors = errors, JsonUrl = jsonUrl });
+}).DisableAntiforgery();
+
 app.Run();
 
 public record CreateExamRequest(string Title, string DataUrl, string Category = "IELTS");
-public record SaveToeicExamRequest(string CollectionName, string Title, int? MockTestId, System.Text.Json.JsonElement ExamData);
+public record SaveToeicExamRequest(string CollectionName, string Title, int? MockTestId, string ExamData);
+public record HskSaveExamRequest(string CollectionName, string Title, int? MockTestId, string ExamData);
+public record HskVocabularyRequest(string HskLevel, string Hanzi, string Pinyin, string Meaning, string? WordType, string? ExampleSentence, string? ExamplePinyin, string? ExampleMeaning, string? AudioUrl, int? DisplayOrder, bool? IsActive);
+public record UpdateVocabProgressRequest(bool Learned);
+
+/// <summary>
+/// Parser CSV hỗ trợ dấu ngoặc kép, dấu phẩy/chấm phẩy/tab trong ô và tự dò delimiter.
+/// </summary>
+public static class HskVocabCsvParser
+{
+    public static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    public static IEnumerable<List<string>> Parse(string content)
+    {
+        char delimiter = DetectDelimiter(content);
+
+        var rows = new List<List<string>>();
+        var field = new System.Text.StringBuilder();
+        var current = new List<string>();
+        var inQuotes = false;
+
+        for (int i = 0; i < content.Length; i++)
+        {
+            char c = content[i];
+            if (inQuotes)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < content.Length && content[i + 1] == '"')
+                    {
+                        field.Append('"');
+                        i++;
+                    }
+                    else inQuotes = false;
+                }
+                else field.Append(c);
+            }
+            else if (c == '"') inQuotes = true;
+            else if (c == delimiter)
+            {
+                current.Add(field.ToString());
+                field.Clear();
+            }
+            else if (c == '\n' || c == '\r')
+            {
+                if (c == '\r' && i + 1 < content.Length && content[i + 1] == '\n') i++;
+                current.Add(field.ToString());
+                field.Clear();
+                rows.Add(current);
+                current = new List<string>();
+            }
+            else field.Append(c);
+        }
+
+        if (field.Length > 0 || current.Count > 0)
+        {
+            current.Add(field.ToString());
+            rows.Add(current);
+        }
+        return rows;
+    }
+
+    private static char DetectDelimiter(string content)
+    {
+        int commas = 0, semicolons = 0, tabs = 0;
+        bool inQuotes = false;
+        foreach (char c in content)
+        {
+            if (c == '"') inQuotes = !inQuotes;
+            else if (!inQuotes)
+            {
+                if (c == ',') commas++;
+                else if (c == ';') semicolons++;
+                else if (c == '\t') tabs++;
+                else if (c == '\n') break; // chỉ xét dòng đầu
+            }
+        }
+        if (semicolons > commas && semicolons >= tabs) return ';';
+        if (tabs > commas && tabs > semicolons) return '\t';
+        return ',';
+    }
+}

@@ -7,6 +7,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<LearningResource> LearningResources { get; set; }
     public DbSet<User> Users { get; set; }
+    public DbSet<UserActivityLog> UserActivityLogs { get; set; }
     
     // Directory Block
     public DbSet<Language> Languages { get; set; }
@@ -17,19 +18,38 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Exam> Exams { get; set; }
     public DbSet<MockTest> MockTests { get; set; }
     public DbSet<TestSubmission> TestSubmissions { get; set; }
+    public DbSet<Story> Stories { get; set; }
     
     // LMS Block
     public DbSet<Course> Courses { get; set; }
     public DbSet<Lesson> Lessons { get; set; }
+    public DbSet<HskVocabulary> HskVocabularies { get; set; }
+    public DbSet<HskVocabularyImport> HskVocabularyImports { get; set; }
+    public DbSet<HskVocabularyProgress> HskVocabularyProgresses { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
+        // Story
+        modelBuilder.Entity<Story>(entity =>
+        {
+            entity.HasIndex(s => s.Slug).IsUnique();
+        });
+
         // User
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasIndex(u => u.Email).IsUnique();
+        });
+
+        // UserActivityLog
+        modelBuilder.Entity<UserActivityLog>(entity =>
+        {
+            entity.HasOne(l => l.User)
+                .WithMany()
+                .HasForeignKey(l => l.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // Course
@@ -66,6 +86,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(c => c.Websites)
                 .HasForeignKey(w => w.CategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // HskVocabulary
+        modelBuilder.Entity<HskVocabulary>(entity =>
+        {
+            entity.HasIndex(v => v.HskLevel);
+            entity.HasIndex(v => new { v.HskLevel, v.Hanzi }).IsUnique();
+        });
+
+        // HskVocabularyProgress: mỗi user chỉ có 1 dòng tiến độ cho 1 từ
+        modelBuilder.Entity<HskVocabularyProgress>(entity =>
+        {
+            entity.HasIndex(p => new { p.UserId, p.VocabularyId }).IsUnique();
+            entity.HasOne(p => p.User)
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

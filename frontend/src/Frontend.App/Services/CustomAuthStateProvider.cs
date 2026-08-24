@@ -7,43 +7,80 @@ namespace Frontend.App.Services;
 
 public class CustomAuthStateProvider(ILocalStorageService localStorage) : AuthenticationStateProvider
 {
+    private static readonly AuthenticationState AnonymousState = new(new ClaimsPrincipal(new ClaimsIdentity()));
+
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        var token = await localStorage.GetItemAsync<string>("authToken");
-
-        if (string.IsNullOrWhiteSpace(token))
+        try
         {
-            return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
-        }
+            var token = await localStorage.GetItemAsync<string>("authToken");
 
-        var identity = new ClaimsIdentity(ParseClaimsFromJwt(token), "jwt");
-        var user = new ClaimsPrincipal(identity);
-        return new AuthenticationState(user);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return AnonymousState;
+            }
+
+            var claims = ParseClaimsFromJwt(token);
+            if (!claims.Any())
+            {
+                return AnonymousState;
+            }
+
+            var identity = new ClaimsIdentity(claims, "jwt");
+            var user = new ClaimsPrincipal(identity);
+            return new AuthenticationState(user);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error resolving auth state: {ex.Message}");
+            return AnonymousState;
+        }
     }
 
     public void NotifyUserAuthentication(string token)
     {
-        var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(ParseClaimsFromJwt(token), "jwt"));
-        var authState = Task.FromResult(new AuthenticationState(authenticatedUser));
-        NotifyAuthenticationStateChanged(authState);
+        try
+        {
+            var claims = ParseClaimsFromJwt(token);
+            var authenticatedUser = new ClaimsPrincipal(new ClaimsIdentity(claims, "jwt"));
+            var authState = Task.FromResult(new AuthenticationState(authenticatedUser));
+            NotifyAuthenticationStateChanged(authState);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error notifying user auth: {ex.Message}");
+            NotifyAuthenticationStateChanged(Task.FromResult(AnonymousState));
+        }
     }
 
     public void NotifyUserLogout()
     {
-        var authState = Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity())));
+        var authState = Task.FromResult(AnonymousState);
         NotifyAuthenticationStateChanged(authState);
     }
 
     private static IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
     {
         var claims = new List<Claim>();
-        var payload = jwt.Split('.')[1];
-        var jsonBytes = ParseBase64WithoutPadding(payload);
-        var keyValuePairs = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonBytes);
+        if (string.IsNullOrWhiteSpace(jwt)) return claims;
 
-        if (keyValuePairs != null)
+        try
         {
-            claims.AddRange(keyValuePairs.Select(kvp => new Claim(kvp.Key, kvp.Value.ToString() ?? string.Empty)));
+            var parts = jwt.Split('.');
+            if (parts.Length < 2) return claims;
+
+            var payload = parts[1];
+            var jsonBytes = ParseBase64WithoutPadding(payload);
+            var keyValuePairs = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonBytes);
+
+            if (keyValuePairs != null)
+            {
+                claims.AddRange(keyValuePairs.Select(kvp => new Claim(kvp.Key, kvp.Value?.ToString() ?? string.Empty)));
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error parsing JWT claims: {ex.Message}");
         }
 
         return claims;

@@ -1,0 +1,166 @@
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Blazored.LocalStorage
+@inject NavigationManager NavigationManager
+@inject AuthService AuthService
+@inject HskService HskService
+@inject ILocalStorageService LocalStorage
+
+<div class="dashboard-wrapper hsk-theme">
+    <!-- Sidebar Thanh Dọc Màu Chủ Đạo Đỏ Á Đông -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <a href="/" class="brand-logo" title="Về trang chủ">
+                <i class="bi bi-box-fill brand-icon"></i>
+                <span class="brand-name">ieltsHSK</span>
+            </a>
+            <span class="hsk-badge-gold">HSK 3.0</span>
+        </div>
+
+        <!-- HSK Level Expandable Selector (Chấm tròn xòe ra các cấp độ khi hover) -->
+        <div class="level-selector-dock" title="Rê chuột để đổi cấp độ HSK">
+            <div class="dock-header">
+                <div class="dot-pulse-wrap">
+                    <span class="dot-pulse"></span>
+                    <span class="dot-center"></span>
+                </div>
+                <span class="dock-current-level">Cấp độ: <b>@(currentLevel)</b></span>
+                <i class="bi bi-chevron-right dock-arrow"></i>
+            </div>
+            
+            <!-- Xòe ra các cấp độ HSK 1 - 6 khi hover -->
+            <div class="dock-expand-menu">
+                <div class="expand-menu-title">Chuyển nhanh cấp độ:</div>
+                <div class="level-pills-row">
+                    @for (int i = 1; i <= 6; i++)
+                    {
+                        var lvlStr = $"HSK{i}";
+                        var lvlNum = i;
+                        <button class="level-pill @(currentLevel == lvlStr ? "active" : "")"
+                                @onclick="() => ChangeHskLevel(lvlStr)">
+                            HSK @lvlNum
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Menu Tinh Gọn (Không bị trùng lặp với thẻ trên trang) -->
+        <nav class="sidebar-nav">
+            <NavLink class="nav-item" href="/hsk" Match="NavLinkMatch.All">
+                <span class="nav-dot"></span>
+                <i class="bi bi-house-door-fill nav-icon"></i>
+                <span class="nav-label">Hôm nay</span>
+                <i class="bi bi-chevron-right nav-arrow"></i>
+            </NavLink>
+
+            <NavLink class="nav-item" href="/hsk/tu-vung">
+                <span class="nav-dot"></span>
+                <i class="bi bi-book-half nav-icon"></i>
+                <span class="nav-label">Từ vựng HSK</span>
+                <i class="bi bi-chevron-right nav-arrow"></i>
+            </NavLink>
+
+            <NavLink class="nav-item" href="/hsk/mock-tests">
+                <span class="nav-dot"></span>
+                <i class="bi bi-journal-check nav-icon"></i>
+                <span class="nav-label">Phòng thi thử</span>
+                <i class="bi bi-chevron-right nav-arrow"></i>
+            </NavLink>
+
+            <NavLink class="nav-item" href="/hsk/overview">
+                <span class="nav-dot"></span>
+                <i class="bi bi-grid-fill nav-icon"></i>
+                <span class="nav-label">Tổng quan HSK 1–6</span>
+                <i class="bi bi-chevron-right nav-arrow"></i>
+            </NavLink>
+        </nav>
+
+        <!-- Sidebar Footer -->
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <AuthorizeView>
+                    <Authorized>
+                        @{
+                            var userName = context.User.FindFirst(c => c.Type == "unique_name")?.Value ?? context.User.Identity?.Name ?? "User";
+                            var avatarChar = string.IsNullOrEmpty(userName) ? "U" : userName.Substring(0, 1).ToUpper();
+                        }
+                        <div class="user-avatar">@avatarChar</div>
+                        <div class="user-details">
+                            <span class="user-email" title="@userName">@userName</span>
+                            <span class="user-role"><i class="bi bi-shield-check"></i> Học viên HSK</span>
+                        </div>
+                    </Authorized>
+                    <NotAuthorized>
+                        <div class="user-avatar guest"><i class="bi bi-person"></i></div>
+                        <div class="user-details">
+                            <span class="user-email">Khách</span>
+                            <span class="user-role">Chưa đăng nhập</span>
+                        </div>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+            <button class="btn-logout" @onclick="Logout" title="Đăng xuất">
+                <i class="bi bi-box-arrow-right"></i>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Section -->
+    <div class="main-wrapper">
+        <!-- Topbar -->
+        <header class="topbar">
+            <div class="search-bar">
+                <i class="bi bi-search"></i>
+                <input type="text" placeholder="Tìm kiếm từ vựng, ngữ pháp, đề thi HSK..." />
+            </div>
+            <div class="topbar-actions">
+                <div class="topbar-level-indicator">
+                    <span class="mini-dot"></span>
+                    <span>Mục tiêu: <b>@currentLevel</b></span>
+                </div>
+                <AuthorizeView>
+                    <Authorized>
+                        @{
+                            var topUserName = context.User.FindFirst(c => c.Type == "unique_name")?.Value ?? context.User.Identity?.Name ?? "User";
+                            var topAvatarChar = string.IsNullOrEmpty(topUserName) ? "U" : topUserName.Substring(0, 1).ToUpper();
+                        }
+                        <span class="topbar-username">@topUserName</span>
+                        <div class="topbar-avatar">
+                            @topAvatarChar
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+            </div>
+        </header>
+
+        <!-- Content Body -->
+        <main class="content-area">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    private string currentLevel = "HSK1";
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentLevel = await LocalStorage.GetItemAsync<string>("hsk_level") ?? "HSK1";
+    }
+
+    private async Task ChangeHskLevel(string level)
+    {
+        currentLevel = level;
+        await LocalStorage.SetItemAsync("hsk_level", level);
+        NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: true);
+    }
+
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+        NavigationManager.NavigateTo("/", true);
+    }
+}

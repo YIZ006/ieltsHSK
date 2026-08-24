@@ -1,0 +1,224 @@
+@page "/ielts/speak-along"
+@page "/ielts/speak-along/{Part}"
+@page "/ielts/noi-theo"
+@page "/ielts/noi-theo/{Part}"
+@layout Frontend.App.Layout.ExamLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using System.Net.Http.Json
+@using Microsoft.JSInterop
+@inject SpeakAlongService SpeakAlongService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>IELTS Nói Theo - IeltsHSK</PageTitle>
+
+@if (isLoading)
+{
+    <div class="sa-loading">
+        <div class="sa-spinner"></div>
+        <p>Đang tải bài nói theo...</p>
+    </div>
+}
+else if (exam == null)
+{
+    <div class="alert alert-warning">Không tải được dữ liệu.</div>
+}
+else
+{
+    <div class="sa-layout">
+        <aside class="sa-sidebar">
+            <div class="sa-sidebar-header">
+                <h2>@exam.Part</h2>
+                <span class="sa-level-badge">@exam.Level</span>
+            </div>
+            <div class="sa-part-tabs">
+                @foreach (var p in partNames)
+                {
+                    <button class="sa-part-tab @(activePart == p ? "active" : "")" @onclick="() => SwitchPart(p)">
+                        @p
+                    </button>
+                }
+            </div>
+            <div class="sa-question-list">
+                @foreach (var item in currentItems)
+                {
+                    var isActive = currentItem?.Id == item.Id;
+                    <button class="sa-question-item @(isActive ? "active" : "")" @onclick="() => SelectItem(item)">
+                        <span class="sa-q-num">@item.Id</span>
+                        <span class="sa-q-text">@Truncate(item.Question, 40)</span>
+                    </button>
+                }
+            </div>
+        </aside>
+
+        <main class="sa-main">
+            @if (currentItem == null)
+            {
+                <div class="sa-empty-state">
+                    <p>Chọn một câu hỏi từ danh sách bên trái.</p>
+                </div>
+            }
+            else
+            {
+                <div class="sa-content">
+                    <div class="sa-question-display">
+                        <h3>@currentItem.Question</h3>
+                    </div>
+
+                    <div class="sa-model-section">
+                        <button class="sa-btn-primary" @onclick="() => PlayModel(currentItem)">
+                            🔊 Nghe câu trả lời mẫu
+                        </button>
+                        <div class="sa-model-text">@currentItem.ModelAnswer</div>
+                    </div>
+
+                    <div class="sa-practice-section">
+                        @if (state == SpeakAlongState.Idle)
+                        {
+                            <button class="sa-btn-success" @onclick="() => StartRecording(currentItem)">
+                                🎙️ Bắt đầu ghi âm
+                            </button>
+                        }
+                        else if (state == SpeakAlongState.Recording)
+                        {
+                            <div>
+                                <div class="sa-recording-indicator">🔴 Đang ghi âm...</div>
+                                <button class="sa-btn-danger" @onclick="() => StopRecording(currentItem)">
+                                    ⏹ Dừng
+                                </button>
+                            </div>
+                        }
+                        else if (state == SpeakAlongState.Result && lastResult != null)
+                        {
+                            <div class="sa-result">
+                                <h4>Kết quả</h4>
+                                <div class="sa-score-grid">
+                                    <div>Độ tương đồng: @lastResult.SimilarityScore%</div>
+                                    <div>Phát âm: @lastResult.PronunciationScore%</div>
+                                    <div>Fluency: @lastResult.FluencyScore%</div>
+                                    <div>Timing: @lastResult.TimingScore%</div>
+                                </div>
+                                <p><strong>Bạn nói:</strong> @lastResult.Transcript</p>
+                                <button class="sa-btn-secondary" @onclick="Retry">🔄 Luyện lại</button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </main>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Part { get; set; }
+
+    private bool isLoading = true;
+    private SpeakAlongExamData? exam;
+    private string activePart = "Part 1";
+    private List<string> partNames = new() { "Part 1", "Part 2", "Part 3" };
+    private List<SpeakAlongItem> currentItems = new();
+    private SpeakAlongItem? currentItem;
+    private SpeakAlongState state = SpeakAlongState.Idle;
+    private SpeakAlongResult? lastResult;
+    private DotNetObjectReference<IeltsSpeakAlong>? _dotNetRef;
+
+    private enum SpeakAlongState { Idle, Recording, Result }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _dotNetRef = DotNetObjectReference.Create(this);
+        await LoadExam();
+    }
+
+    private async Task LoadExam()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        var targetPart = Part ?? "Part1";
+        exam = await SpeakAlongService.LoadExamAsync(targetPart);
+        if (exam != null)
+        {
+            activePart = targetPart;
+            currentItems = exam.Items.ToList();
+            if (currentItems.Any())
+                currentItem = currentItems.First();
+        }
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task SwitchPart(string part)
+    {
+        activePart = part;
+        exam = await SpeakAlongService.LoadExamAsync(part);
+        if (exam != null)
+        {
+            currentItems = exam.Items.ToList();
+            currentItem = currentItems.FirstOrDefault();
+            state = SpeakAlongState.Idle;
+            lastResult = null;
+        }
+        StateHasChanged();
+    }
+
+    private void SelectItem(SpeakAlongItem item)
+    {
+        currentItem = item;
+        state = SpeakAlongState.Idle;
+        lastResult = null;
+        StateHasChanged();
+    }
+
+    private async Task PlayModel(SpeakAlongItem item)
+    {
+        await JS.InvokeVoidAsync("SpeakAlongInterop.speakText", item.ModelAnswer, "en-US");
+    }
+
+    private async Task StartRecording(SpeakAlongItem item)
+    {
+        state = SpeakAlongState.Recording;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("SpeakAlongInterop.startRecording", _dotNetRef);
+    }
+
+    private async Task StopRecording(SpeakAlongItem item)
+    {
+        var transcript = await JS.InvokeAsync<string>("SpeakAlongInterop.stopRecording");
+        // Simple mock evaluation
+        lastResult = new SpeakAlongResult
+        {
+            Transcript = transcript,
+            SimilarityScore = 75,
+            PronunciationScore = 70,
+            FluencyScore = 80,
+            TimingScore = 65,
+            WordCount = transcript.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length,
+            Wpm = 120
+        };
+        state = SpeakAlongState.Result;
+        StateHasChanged();
+    }
+
+    private void Retry()
+    {
+        state = SpeakAlongState.Idle;
+        lastResult = null;
+        StateHasChanged();
+    }
+
+    private string Truncate(string text, int max) =>
+        text.Length > max ? text[..max] + "…" : text;
+
+    [JSInvokable]
+    public void OnTranscriptUpdate(string text)
+    {
+        // For live transcript if needed
+    }
+
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
+    }
+}
