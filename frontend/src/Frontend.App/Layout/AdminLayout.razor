@@ -1,30 +1,43 @@
 @inherits LayoutComponentBase
 @inject NavigationManager NavigationManager
 
-<div class="admin-layout">
+<div class="admin-layout theme-@activeDomain.ToLower()">
     <!-- Top Horizontal Navbar -->
     <header class="admin-topbar">
         <div class="topbar-logo" @onclick='() => NavigationManager.NavigateTo("/admin")'>
-            <span class="logo-icon">⚙️</span>
-            <span class="logo-text">Admin Dashboard</span>
+            <span class="logo-icon">
+                @if (activeDomain == "TOEIC") { <span>🏆</span> }
+                else if (activeDomain == "HSK") { <span>🇨🇳</span> }
+                else if (activeDomain == "USERS") { <span>👥</span> }
+                else { <span>🇬🇧</span> }
+            </span>
+            <span class="logo-text">Admin Hub</span>
         </div>
+
         <nav class="topbar-nav">
-            <button class="nav-tab @(activeDomain == "IELTS" ? "active" : "")" @onclick='() => SwitchDomain("IELTS")'>
+            <button class="nav-tab tab-ielts @(activeDomain == "IELTS" ? "active" : "")" @onclick='() => SwitchDomain("IELTS")'>
                 <span class="tab-icon">🇬🇧</span> IELTS
             </button>
-            <button class="nav-tab @(activeDomain == "TOEIC" ? "active" : "")" @onclick='() => SwitchDomain("TOEIC")'>
+            <button class="nav-tab tab-toeic @(activeDomain == "TOEIC" ? "active" : "")" @onclick='() => SwitchDomain("TOEIC")'>
                 <span class="tab-icon">🏆</span> TOEIC
             </button>
-            <button class="nav-tab @(activeDomain == "HSK" ? "active" : "")" @onclick='() => SwitchDomain("HSK")'>
+            <button class="nav-tab tab-hsk @(activeDomain == "HSK" ? "active" : "")" @onclick='() => SwitchDomain("HSK")'>
                 <span class="tab-icon">🇨🇳</span> HSK
             </button>
-            <a href="http://localhost:5101/swagger" target="_blank" class="nav-tab" style="text-decoration: none; color: inherit;">
-                <span class="tab-icon">⚙️</span> API Swagger
+            <button class="nav-tab tab-users @(activeDomain == "USERS" ? "active" : "")" @onclick='() => SwitchDomain("USERS")'>
+                <span class="tab-icon">👥</span> Học viên & Users
+            </button>
+            <a href="http://localhost:5101/swagger" target="_blank" class="nav-tab tab-swagger" style="text-decoration: none;">
+                <span class="tab-icon">⚙️</span> Swagger API
             </a>
         </nav>
+
         <div class="topbar-user">
             <span class="user-avatar">A</span>
-            <span class="user-name">Quản trị viên</span>
+            <div class="user-info-text">
+                <span class="user-name">Quản trị viên</span>
+                <span class="domain-tag domain-tag-@activeDomain.ToLower()">@activeDomain</span>
+            </div>
         </div>
     </header>
 
@@ -32,8 +45,18 @@
         <!-- Left Vertical Sidebar -->
         <aside class="admin-sidebar">
             <div class="sidebar-header">
-                <h3>Quản lý @activeDomain</h3>
+                <h3>
+                    @if (activeDomain == "USERS")
+                    {
+                        <span>Quản lý Tài khoản</span>
+                    }
+                    else
+                    {
+                        <span>Quản lý @activeDomain</span>
+                    }
+                </h3>
             </div>
+
             <ul class="sidebar-menu">
                 @if (activeDomain == "IELTS")
                 {
@@ -47,14 +70,14 @@
                             <i class="bi bi-camera-video"></i> Duyệt Video Nghe Điền
                         </a>
                     </li>
-                    <li class="menu-item">
-                        <a href="/admin/ielts-users" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
-                            <i class="bi bi-people"></i> Quản lý học viên
+                    <li class="menu-item @(IsActive("/admin/stories") ? "active" : "")">
+                        <a href="/admin/stories">
+                            <i class="bi bi-book"></i> Quản lý Đọc truyện
                         </a>
                     </li>
-                    <li class="menu-item">
-                        <a href="/admin/ielts-reports" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
-                            <i class="bi bi-bar-chart"></i> Thống kê điểm số
+                    <li class="menu-item @(IsActive("/admin/users") && (NavigationManager.Uri.Contains("ielts") || !NavigationManager.Uri.Contains("domain")) ? "active" : "")">
+                        <a href="/admin/users?domain=ielts">
+                            <i class="bi bi-people-fill"></i> Học viên IELTS
                         </a>
                     </li>
                 }
@@ -70,22 +93,55 @@
                             <i class="bi bi-pencil-square"></i> Tạo & Sửa đề TOEIC
                         </a>
                     </li>
-                    <li class="menu-item">
-                        <a href="/admin/toeic-users" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
-                            <i class="bi bi-people"></i> Quản lý học viên
+                    <li class="menu-item @(IsActive("/admin/users") && NavigationManager.Uri.Contains("toeic") ? "active" : "")">
+                        <a href="/admin/users?domain=toeic">
+                            <i class="bi bi-people-fill"></i> Học viên TOEIC
                         </a>
                     </li>
                 }
                 else if (activeDomain == "HSK")
                 {
-                    <li class="menu-item">
-                        <a href="/admin/hsk-mock-tests" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
-                            <i class="bi bi-journal-text"></i> Quản lý đề thi HSK
+                    <li class="menu-item @(IsActive("/admin/hsk-mock-tests") ? "active" : "")">
+                        <a href="/admin/hsk-mock-tests">
+                            <i class="bi bi-journal-check"></i> Quản lý Đề thi HSK
                         </a>
                     </li>
-                    <li class="menu-item">
-                        <a href="/admin/hsk-vocab" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
-                            <i class="bi bi-translate"></i> Quản lý từ vựng
+                    <li class="menu-item @(IsActive("/admin/hsk-vocab") ? "active" : "")">
+                        <a href="/admin/hsk-vocab">
+                            <i class="bi bi-translate"></i> Ngân hàng Từ vựng HSK
+                        </a>
+                    </li>
+                    <li class="menu-item @(IsActive("/admin/users") && NavigationManager.Uri.Contains("hsk") ? "active" : "")">
+                        <a href="/admin/users?domain=hsk">
+                            <i class="bi bi-people-fill"></i> Học viên HSK
+                        </a>
+                    </li>
+                }
+                else if (activeDomain == "USERS")
+                {
+                    <li class="menu-item @(IsActive("/admin/users") && !NavigationManager.Uri.Contains("domain=") ? "active" : "")">
+                        <a href="/admin/users">
+                            <i class="bi bi-people-fill"></i> Tất cả người dùng
+                        </a>
+                    </li>
+                    <li class="menu-item @(NavigationManager.Uri.Contains("domain=ielts") ? "active" : "")">
+                        <a href="/admin/users?domain=ielts">
+                            <i class="bi bi-mortarboard-fill text-primary"></i> Học viên IELTS
+                        </a>
+                    </li>
+                    <li class="menu-item @(NavigationManager.Uri.Contains("domain=toeic") ? "active" : "")">
+                        <a href="/admin/users?domain=toeic">
+                            <i class="bi bi-trophy-fill text-warning"></i> Học viên TOEIC
+                        </a>
+                    </li>
+                    <li class="menu-item @(NavigationManager.Uri.Contains("domain=hsk") ? "active" : "")">
+                        <a href="/admin/users?domain=hsk">
+                            <i class="bi bi-translate text-danger"></i> Học viên HSK
+                        </a>
+                    </li>
+                    <li class="menu-item @(NavigationManager.Uri.Contains("domain=admin") ? "active" : "")">
+                        <a href="/admin/users?domain=admin">
+                            <i class="bi bi-shield-lock-fill text-danger"></i> Ban Quản trị (Admin)
                         </a>
                     </li>
                 }
@@ -108,21 +164,42 @@
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
         
-        // Auto-detect domain based on URL
-        if (currentUrl.Contains("hsk-", StringComparison.OrdinalIgnoreCase))
-        {
-            activeDomain = "HSK";
-        }
-        else
-        {
-            activeDomain = "IELTS";
-        }
+        UpdateActiveDomain(currentUrl);
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        UpdateActiveDomain(currentUrl);
         StateHasChanged();
+    }
+
+    private void UpdateActiveDomain(string url)
+    {
+        if (url.StartsWith("admin/users", StringComparison.OrdinalIgnoreCase) || url.StartsWith("admin/ielts-users", StringComparison.OrdinalIgnoreCase))
+        {
+            // If explicit domain param in query
+            if (NavigationManager.Uri.Contains("domain=toeic", StringComparison.OrdinalIgnoreCase))
+                activeDomain = "TOEIC";
+            else if (NavigationManager.Uri.Contains("domain=hsk", StringComparison.OrdinalIgnoreCase))
+                activeDomain = "HSK";
+            else if (NavigationManager.Uri.Contains("domain=ielts", StringComparison.OrdinalIgnoreCase))
+                activeDomain = "IELTS";
+            else
+                activeDomain = "USERS";
+        }
+        else if (url.Contains("hsk", StringComparison.OrdinalIgnoreCase))
+        {
+            activeDomain = "HSK";
+        }
+        else if (url.Contains("toeic", StringComparison.OrdinalIgnoreCase))
+        {
+            activeDomain = "TOEIC";
+        }
+        else
+        {
+            activeDomain = "IELTS";
+        }
     }
 
     private void SwitchDomain(string domain)
@@ -132,8 +209,10 @@
             NavigationManager.NavigateTo("/admin/mock-tests");
         else if (domain == "TOEIC")
             NavigationManager.NavigateTo("/admin/toeic-mock-tests");
+        else if (domain == "HSK")
+            NavigationManager.NavigateTo("/admin/hsk-mock-tests");
         else
-            NavigationManager.NavigateTo("/admin");
+            NavigationManager.NavigateTo("/admin/users");
     }
 
     private bool IsActive(string path)

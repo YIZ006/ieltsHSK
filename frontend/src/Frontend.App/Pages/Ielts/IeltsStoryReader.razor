@@ -1,0 +1,480 @@
+@page "/ielts/doc-truyen/{Slug}"
+@layout Frontend.App.Layout.IeltsLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject StoryService StoryService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<PageTitle>@(story?.Title ?? "Đang tải truyện...") - IELTS Đọc Truyện</PageTitle>
+
+@if (isLoading)
+{
+    <div class="reader-loading">
+        <div class="custom-spinner"></div>
+        <p class="mt-3">Đang mở truyện...</p>
+    </div>
+}
+else if (story == null)
+{
+    <div class="reader-error">
+        <div class="custom-alert alert-error text-center">
+            <h3>Không tìm thấy truyện</h3>
+            <p>Truyện này không tồn tại hoặc đã được gỡ xuống.</p>
+            <a href="/ielts/doc-truyen" class="btn btn-primary-outline mt-2">Về danh sách truyện</a>
+        </div>
+    </div>
+}
+else
+{
+    <div class="story-reader-wrapper theme-@currentTheme font-@fontFamily">
+        <!-- Top Sticky Control Bar -->
+        <div class="reader-topbar">
+            <div class="topbar-left">
+                <a href="/ielts/doc-truyen" class="btn-back">
+                    <i class="bi bi-arrow-left"></i> <span>Kho truyện</span>
+                </a>
+                <span class="topbar-divider">|</span>
+                <span class="badge-level level-@story.Level.ToLower()">@story.Level</span>
+                <span class="story-category-tag">@story.Category</span>
+            </div>
+
+            <div class="topbar-controls">
+                <!-- Audio Speech Narration -->
+                <div class="speech-controls">
+                    <button class="ctrl-btn btn-audio @(isPlayingAudio ? "active" : "")" @onclick="TogglePlayStory" title="Đọc toàn bài">
+                        <i class="bi @(isPlayingAudio ? "bi-stop-fill" : "bi-volume-up-fill")"></i>
+                        <span>@(isPlayingAudio ? "Dừng đọc" : "Nghe đọc")</span>
+                    </button>
+                    <select class="speed-select" @bind="audioSpeed" title="Tốc độ đọc">
+                        <option value="0.8">0.8x</option>
+                        <option value="1.0">1.0x</option>
+                        <option value="1.2">1.2x</option>
+                    </select>
+                </div>
+
+                <span class="topbar-divider">|</span>
+
+                <!-- Bilingual Translation Toggle -->
+                <button class="ctrl-btn btn-bilingual @(showBilingual ? "active" : "")" @onclick="ToggleBilingual" title="Bật/tắt dịch song ngữ">
+                    <i class="bi bi-translate"></i>
+                    <span>Song ngữ</span>
+                </button>
+
+                <!-- Font Family Toggle -->
+                <button class="ctrl-btn-icon btn-font-family" @onclick="ToggleFontFamily" title="Đổi kiểu font (Sans / Serif)">
+                    @(fontFamily == "sans" ? "Aa" : "𝒯")
+                </button>
+
+                <!-- Font Size -->
+                <div class="font-size-group">
+                    <button class="ctrl-btn-icon" @onclick="DecreaseFontSize" title="Giảm cỡ chữ">A-</button>
+                    <button class="ctrl-btn-icon" @onclick="IncreaseFontSize" title="Tăng cỡ chữ">A+</button>
+                </div>
+
+                <!-- Theme Switcher -->
+                <div class="theme-switcher">
+                    <button class="theme-dot theme-light @(currentTheme == "light" ? "active" : "")" @onclick='() => ChangeTheme("light")' title="Giao diện Sáng"></button>
+                    <button class="theme-dot theme-paper @(currentTheme == "paper" ? "active" : "")" @onclick='() => ChangeTheme("paper")' title="Giao diện Giấy đọc"></button>
+                    <button class="theme-dot theme-dark @(currentTheme == "dark" ? "active" : "")" @onclick='() => ChangeTheme("dark")' title="Giao diện Ban đêm"></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Reading Container -->
+        <div class="reader-container" style="font-size: @(fontSize)px;">
+            <!-- Story Header -->
+            <header class="story-header">
+                <div class="story-meta-line">
+                    <span class="meta-item"><i class="bi bi-award-fill text-primary"></i> Band @story.IeltsBand</span>
+                    <span class="meta-item"><i class="bi bi-file-earmark-text-fill"></i> @story.WordCount từ</span>
+                    <span class="meta-item"><i class="bi bi-clock-fill"></i> ~@story.EstimatedMinutes phút đọc</span>
+                    <span class="meta-item"><i class="bi bi-eye-fill"></i> @story.ViewsCount lượt đọc</span>
+                </div>
+                <h1 class="story-main-title">@story.Title</h1>
+                @if (!string.IsNullOrEmpty(story.Summary))
+                {
+                    <p class="story-lead-summary">@story.Summary</p>
+                }
+
+                <div class="reading-guide-tip">
+                    <i class="bi bi-lightbulb-fill tip-icon"></i>
+                    <span>Chạm vào từ <span class="tip-highlight">nổi bật</span> để tra nghĩa, phiên âm và phát âm. Bật <b>Song ngữ</b> ở trên để xem bản dịch tiếng Việt.</span>
+                </div>
+            </header>
+
+            <!-- Story Body Paragraphs -->
+            <article class="story-article">
+                @for (int pIdx = 0; pIdx < story.Paragraphs.Count; pIdx++)
+                {
+                    var para = story.Paragraphs[pIdx];
+                    <div class="paragraph-block">
+                        <div class="paragraph-en">
+                            @RenderParagraphEn(para.En)
+                            <button class="btn-read-sentence" @onclick="() => SpeakSentence(para.En)" title="Nghe đọc đoạn này">
+                                <i class="bi bi-volume-up-fill"></i>
+                            </button>
+                        </div>
+
+                        @if (showBilingual && !string.IsNullOrEmpty(para.Vi))
+                        {
+                            <div class="paragraph-vi">
+                                @para.Vi
+                            </div>
+                        }
+                    </div>
+                }
+            </article>
+
+            <!-- Floating / Active Vocabulary Tooltip Modal -->
+            @if (activeVocab != null)
+            {
+                <div class="vocab-popup-overlay" @onclick="CloseVocabPopup">
+                    <div class="vocab-popup-card" @onclick:stopPropagation="true">
+                        <div class="vocab-popup-header">
+                            <div class="vocab-word-info">
+                                <span class="vocab-word">@activeVocab.Word</span>
+                                @if (!string.IsNullOrEmpty(activeVocab.Pos))
+                                {
+                                    <span class="vocab-pos">@activeVocab.Pos</span>
+                                }
+                                @if (!string.IsNullOrEmpty(activeVocab.Phonetic))
+                                {
+                                    <span class="vocab-phonetic">@activeVocab.Phonetic</span>
+                                }
+                            </div>
+                            <div class="vocab-popup-actions">
+                                <button class="btn-audio-speak" @onclick="() => SpeakWord(activeVocab.Word)" title="Phát âm từ vựng">
+                                    <i class="bi bi-volume-up-fill"></i>
+                                </button>
+                                <button class="btn-close-popup" @onclick="CloseVocabPopup">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="vocab-meaning-box">
+                            <label class="vocab-label">Nghĩa tiếng Việt:</label>
+                            <p class="vocab-meaning">@activeVocab.Meaning</p>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(activeVocab.Example))
+                        {
+                            <div class="vocab-example-box">
+                                <label class="vocab-label">Ví dụ trong ngữ cảnh:</label>
+                                <p class="vocab-example">"@activeVocab.Example"</p>
+                            </div>
+                        }
+
+                        @if (activeVocab.Collocations != null && activeVocab.Collocations.Count > 0)
+                        {
+                            <div class="vocab-collocations-box">
+                                <label class="vocab-label">Cụm từ liên quan (Collocations):</label>
+                                <div class="collocation-tags">
+                                    @foreach (var col in activeVocab.Collocations)
+                                    {
+                                        <span class="collocation-tag">@col</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <div class="vocab-popup-footer">
+                            <button class="btn-save-vocab @(isWordSaved ? "saved" : "")" @onclick="ToggleSaveWord">
+                                <i class="bi @(isWordSaved ? "bi-check-circle-fill" : "bi-bookmark-plus-fill")"></i>
+                                <span>@(isWordSaved ? "Đã lưu vào sổ từ" : "Lưu vào sổ từ vựng")</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Post-Reading Section: Quiz & Diagnostic -->
+            <section class="post-reading-section">
+                <div class="section-title-wrapper">
+                    <span class="section-badge"><i class="bi bi-patch-check-fill"></i> BÀI TẬP CUỐI TRUYỆN</span>
+                    <h2>Kiểm tra Đọc hiểu & Từ vựng</h2>
+                    <p class="section-desc">Làm bài tập ngắn để củng cố nội dung và phát hiện các từ vựng bạn chưa nắm vững.</p>
+                </div>
+
+                @if (story.Questions != null && story.Questions.Count > 0)
+                {
+                    <div class="quiz-container">
+                        @for (int qIdx = 0; qIdx < story.Questions.Count; qIdx++)
+                        {
+                            var qIndex = qIdx;
+                            var question = story.Questions[qIndex];
+                            bool isGraded = quizResult != null;
+                            bool isCorrect = isGraded && quizResult!.AnswerCorrectness.Count > qIndex && quizResult.AnswerCorrectness[qIndex];
+
+                            <div class="quiz-card @(isGraded ? (isCorrect ? "quiz-correct" : "quiz-wrong") : "")">
+                                <div class="quiz-question-header">
+                                    <span class="quiz-num">Câu @(qIndex + 1)</span>
+                                    <h4 class="quiz-question-text">@question.Question</h4>
+                                </div>
+
+                                <div class="quiz-options">
+                                    @for (int oIdx = 0; oIdx < question.Options.Count; oIdx++)
+                                    {
+                                        var optIndex = oIdx;
+                                        var optionText = question.Options[optIndex];
+                                        bool isSelected = selectedAnswers.ContainsKey(qIndex) && selectedAnswers[qIndex] == optIndex;
+                                        bool isOptionCorrect = isGraded && question.CorrectIndex == optIndex;
+
+                                        <div class="quiz-option @(isSelected ? "selected" : "") @(isGraded && isOptionCorrect ? "opt-correct" : "") @(isGraded && isSelected && !isOptionCorrect ? "opt-wrong" : "")"
+                                             @onclick="() => SelectOption(qIndex, optIndex)">
+                                            <span class="opt-indicator">@((char)('A' + optIndex))</span>
+                                            <span class="opt-text">@optionText</span>
+                                            @if (isGraded && isOptionCorrect)
+                                            {
+                                                <i class="bi bi-check-circle-fill text-success ms-auto"></i>
+                                            }
+                                            else if (isGraded && isSelected && !isOptionCorrect)
+                                            {
+                                                <i class="bi bi-x-circle-fill text-danger ms-auto"></i>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                @if (isGraded && !string.IsNullOrEmpty(question.Explanation))
+                                {
+                                    <div class="quiz-explanation">
+                                        <strong><i class="bi bi-lightbulb-fill"></i> Giải thích:</strong> @question.Explanation
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <div class="quiz-actions-bar">
+                            @if (quizResult == null)
+                            {
+                                <button class="btn-submit-quiz" @onclick="SubmitQuiz" disabled="@isSubmittingQuiz">
+                                    @if (isSubmittingQuiz)
+                                    {
+                                        <span class="mini-spinner"></span>
+                                        <span>Đang chấm điểm...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-send-check-fill"></i>
+                                        <span>Nộp bài & Chấm điểm</span>
+                                    }
+                                </button>
+                            }
+                            else
+                            {
+                                <div class="quiz-result-summary">
+                                    <div class="score-circle">
+                                        <span class="score-num">@quizResult.CorrectCount/@quizResult.TotalQuestions</span>
+                                        <span class="score-label">Đúng</span>
+                                    </div>
+                                    <div class="score-details">
+                                        <h4>@(quizResult.ScorePercentage >= 80 ? "Xuất sắc! 🎉" : (quizResult.ScorePercentage >= 50 ? "Khá tốt! 👍" : "Cần cố gắng thêm! 💪"))</h4>
+                                        <p>Bạn đã hoàn thành bài kiểm tra đọc hiểu với độ chính xác <b>@quizResult.ScorePercentage%</b>.</p>
+                                    </div>
+                                    <button class="btn btn-secondary-outline ms-auto" @onclick="RetryQuiz">
+                                        <i class="bi bi-arrow-repeat"></i> Làm lại
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Target Vocabulary Summary Card -->
+                @if (story.Vocabulary != null && story.Vocabulary.Count > 0)
+                {
+                    <div class="target-vocab-recap">
+                        <div class="recap-header">
+                            <h3><i class="bi bi-journal-bookmark-fill text-primary"></i> Từ vựng trọng tâm trong bài (@story.Vocabulary.Count từ)</h3>
+                            <p>Chạm vào từ để phát âm hoặc ôn tập lại nghĩa.</p>
+                        </div>
+                        <div class="recap-vocab-grid">
+                            @foreach (var v in story.Vocabulary)
+                            {
+                                <div class="recap-vocab-item" @onclick="() => OpenVocabPopup(v)">
+                                    <div class="recap-vocab-top">
+                                        <span class="recap-word">@v.Word</span>
+                                        <span class="recap-pos">@v.Pos</span>
+                                    </div>
+                                    <div class="recap-phonetic">@v.Phonetic</div>
+                                    <div class="recap-meaning">@v.Meaning</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </section>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string Slug { get; set; } = "";
+
+    private StoryModel? story;
+    private bool isLoading = true;
+
+    // Reader UI state
+    private bool showBilingual = false;
+    private int fontSize = 18; // default 18px for optimal reading
+    private string currentTheme = "light"; // "light" | "paper" | "dark"
+    private string fontFamily = "sans"; // "sans" | "serif"
+    private bool isPlayingAudio = false;
+    private double audioSpeed = 1.0;
+
+    // Active vocab popup
+    private StoryVocabulary? activeVocab;
+    private bool isWordSaved = false;
+
+    // Quiz state
+    private Dictionary<int, int> selectedAnswers = new();
+    private StoryQuizResultModel? quizResult;
+    private bool isSubmittingQuiz = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadStory();
+    }
+
+    private async Task LoadStory()
+    {
+        isLoading = true;
+        story = await StoryService.GetStoryAsync(Slug);
+        isLoading = false;
+    }
+
+    private void ToggleBilingual()
+    {
+        showBilingual = !showBilingual;
+    }
+
+    private void ToggleFontFamily()
+    {
+        fontFamily = fontFamily == "sans" ? "serif" : "sans";
+    }
+
+    private void IncreaseFontSize()
+    {
+        if (fontSize < 28) fontSize += 2;
+    }
+
+    private void DecreaseFontSize()
+    {
+        if (fontSize > 14) fontSize -= 2;
+    }
+
+    private void ChangeTheme(string theme)
+    {
+        currentTheme = theme;
+    }
+
+    private async Task TogglePlayStory()
+    {
+        if (isPlayingAudio)
+        {
+            await JSRuntime.InvokeVoidAsync("stopSpeakText");
+            isPlayingAudio = false;
+        }
+        else
+        {
+            if (story == null || story.Paragraphs.Count == 0) return;
+            isPlayingAudio = true;
+            var fullText = string.Join(". ", story.Paragraphs.Select(p => p.En));
+            await JSRuntime.InvokeVoidAsync("speakText", fullText, "en-US", audioSpeed);
+        }
+    }
+
+    private async Task SpeakSentence(string text)
+    {
+        await JSRuntime.InvokeVoidAsync("speakText", text, "en-US", audioSpeed);
+    }
+
+    private async Task SpeakWord(string word)
+    {
+        await JSRuntime.InvokeVoidAsync("speakText", word, "en-US", 0.9);
+    }
+
+    private void OpenVocabPopup(StoryVocabulary vocab)
+    {
+        activeVocab = vocab;
+        isWordSaved = false;
+    }
+
+    private void CloseVocabPopup()
+    {
+        activeVocab = null;
+    }
+
+    private void ToggleSaveWord()
+    {
+        isWordSaved = !isWordSaved;
+    }
+
+    private void SelectOption(int questionIndex, int optionIndex)
+    {
+        if (quizResult != null) return;
+        selectedAnswers[questionIndex] = optionIndex;
+    }
+
+    private async Task SubmitQuiz()
+    {
+        if (story == null || story.Questions.Count == 0) return;
+
+        isSubmittingQuiz = true;
+        var answersList = new List<int>();
+        for (int i = 0; i < story.Questions.Count; i++)
+        {
+            answersList.Add(selectedAnswers.TryGetValue(i, out int val) ? val : -1);
+        }
+
+        quizResult = await StoryService.SubmitQuizAsync(story.Id, answersList);
+        isSubmittingQuiz = false;
+    }
+
+    private void RetryQuiz()
+    {
+        quizResult = null;
+        selectedAnswers.Clear();
+    }
+
+    private RenderFragment RenderParagraphEn(string text) => builder =>
+    {
+        if (story?.Vocabulary == null || story.Vocabulary.Count == 0)
+        {
+            builder.AddContent(0, text);
+            return;
+        }
+
+        var words = text.Split(' ');
+        for (int i = 0; i < words.Length; i++)
+        {
+            var rawWord = words[i];
+            var cleanWord = rawWord.Trim(',', '.', '!', '?', '"', '“', '”', ':', ';', '(', ')');
+
+            var target = story.Vocabulary.FirstOrDefault(v => 
+                v.Word.Equals(cleanWord, StringComparison.OrdinalIgnoreCase) ||
+                (v.Word.Contains(' ') && text.Contains(v.Word, StringComparison.OrdinalIgnoreCase)));
+
+            if (target != null && target.Word.Equals(cleanWord, StringComparison.OrdinalIgnoreCase))
+            {
+                builder.OpenElement(1, "span");
+                builder.AddAttribute(2, "class", "target-word");
+                builder.AddAttribute(3, "onclick", EventCallback.Factory.Create(this, () => OpenVocabPopup(target)));
+                builder.AddContent(4, rawWord);
+                builder.CloseElement();
+            }
+            else
+            {
+                builder.AddContent(5, rawWord);
+            }
+
+            if (i < words.Length - 1)
+            {
+                builder.AddContent(6, " ");
+            }
+        }
+    };
+}

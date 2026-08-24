@@ -1,21 +1,250 @@
+/* ========================================================================= */
+/* ADMIN LAYOUT MULTI-DOMAIN THEMES (IELTS, TOEIC, HSK, USERS)               */
+/* ========================================================================= */
 .admin-layout {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    background-color: #f8f9fa;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Topbar Styles */
-.admin-topbar {
-    height: 60px;
+/* ========================================================================= */
+/* 1. IELTS THEME (CLEAN BRAND BLUE)                                         */
+/* ========================================================================= */
+.theme-ielts {
+    background-color: #f8fafc;
+    color: #1e293b;
+}
+
+.theme-ielts .admin-topbar {
     background-color: #ffffff;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.theme-ielts .nav-tab.active {
+    background-color: #f0f9ff;
+    color: #0284c7;
+    border: 1px solid #bae6fd;
+}
+
+.theme-ielts .user-avatar {
+    background-color: #0284c7;
+    color: #ffffff;
+}
+
+.theme-ielts .admin-sidebar {
+    background-color: #ffffff;
+    border-right: 1px solid #e2e8f0;
+}
+
+.theme-ielts .menu-item.active a {
+    background-color: #0284c7;
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.28);
+}
+
+.theme-ielts .menu-item.active a i {
+    color: #ffffff;
+}
+
+.theme-ielts .admin-content {
+    background-color: #f8fafc;
+}
+
+/* ========================================================================= */
+/* 2. TOEIC THEME (DARK PURPLE / VIOLET LUXURY AS IN PHOTO)                 */
+/* ========================================================================= */
+.theme-toeic {
+    background-color: #0d0b1e;
+    color: #f1f5f9;
+}
+
+.theme-toeic .admin-topbar {
+    background-color: #14112c;
+    border-bottom: 1px solid #282256;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.theme-toeic .logo-text {
+    color: #e0e7ff;
+}
+
+.theme-toeic .nav-tab {
+    color: #a5b4fc;
+}
+
+.theme-toeic .nav-tab:hover {
+    background-color: #221c4b;
+    color: #ffffff;
+}
+
+.theme-toeic .nav-tab.active {
+    background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+    color: #ffffff;
+    border: 1px solid #818cf8;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
+}
+
+.theme-toeic .user-avatar {
+    background: linear-gradient(135deg, #7c3aed, #4f46e5);
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(124, 58, 237, 0.5);
+}
+
+.theme-toeic .user-name {
+    color: #e0e7ff;
+}
+
+.theme-toeic .admin-sidebar {
+    background-color: #14112c;
+    border-right: 1px solid #282256;
+}
+
+.theme-toeic .sidebar-header h3 {
+    color: #818cf8;
+}
+
+.theme-toeic .menu-item a {
+    color: #c7d2fe;
+}
+
+.theme-toeic .menu-item a i {
+    color: #818cf8;
+}
+
+.theme-toeic .menu-item a:hover {
+    background-color: #221c4b;
+    color: #ffffff;
+}
+
+.theme-toeic .menu-item.active a {
+    background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 18px rgba(124, 58, 237, 0.45);
+}
+
+.theme-toeic .menu-item.active a i {
+    color: #ffffff;
+}
+
+.theme-toeic .admin-content {
+    background-color: #0d0b1e;
+    color: #f1f5f9;
+}
+
+/* ========================================================================= */
+/* 3. HSK THEME (CHINESE IMPERIAL RED)                                       */
+/* ========================================================================= */
+.theme-hsk {
+    background-color: #fffaf9;
+    color: #1e293b;
+}
+
+.theme-hsk .admin-topbar {
+    background-color: #ffffff;
+    border-bottom: 1.5px solid #fee2e2;
+}
+
+.theme-hsk .nav-tab.active {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    color: #ffffff;
+    border: 1px solid #dc2626;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3);
+}
+
+.theme-hsk .user-avatar {
+    background: linear-gradient(135deg, #dc2626, #991b1b);
+    color: #ffffff;
+}
+
+.theme-hsk .admin-sidebar {
+    background-color: #ffffff;
+    border-right: 1px solid #fee2e2;
+}
+
+.theme-hsk .sidebar-header h3 {
+    color: #dc2626;
+}
+
+.theme-hsk .menu-item a:hover {
+    background-color: #fef2f2;
+    color: #dc2626;
+}
+
+.theme-hsk .menu-item a:hover i {
+    color: #dc2626;
+}
+
+.theme-hsk .menu-item.active a {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3);
+}
+
+.theme-hsk .menu-item.active a i {
+    color: #ffffff;
+}
+
+.theme-hsk .admin-content {
+    background-color: #fffaf9;
+}
+
+/* ========================================================================= */
+/* 4. USERS COMMON THEME                                                     */
+/* ========================================================================= */
+.theme-users {
+    background-color: #f8fafc;
+    color: #1e293b;
+}
+
+.theme-users .admin-topbar {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.theme-users .nav-tab.active {
+    background-color: #0f172a;
+    color: #ffffff;
+    border: 1px solid #0f172a;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25);
+}
+
+.theme-users .user-avatar {
+    background-color: #0f172a;
+    color: #ffffff;
+}
+
+.theme-users .admin-sidebar {
+    background-color: #ffffff;
+    border-right: 1px solid #e2e8f0;
+}
+
+.theme-users .menu-item.active a {
+    background-color: #0f172a;
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25);
+}
+
+.theme-users .menu-item.active a i {
+    color: #ffffff;
+}
+
+.theme-users .admin-content {
+    background-color: #f8fafc;
+}
+
+/* ========================================================================= */
+/* BASE TOPBAR & SIDEBAR STYLES                                              */
+/* ========================================================================= */
+.admin-topbar {
+    height: 64px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 24px;
-    z-index: 10;
+    z-index: 100;
+    transition: all 0.3s ease;
 }
 
 .topbar-logo {
@@ -30,40 +259,34 @@
 }
 
 .logo-text {
-    font-size: 18px;
-    font-weight: 700;
-    color: #2c3e50;
-    letter-spacing: 0.5px;
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
 }
 
 .topbar-nav {
     display: flex;
-    gap: 16px;
+    gap: 10px;
+    align-items: center;
 }
 
 .nav-tab {
-    background: none;
-    border: none;
+    background: transparent;
+    border: 1px solid transparent;
     padding: 8px 16px;
-    font-size: 15px;
-    font-weight: 600;
-    color: #6c757d;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #64748b;
     cursor: pointer;
-    border-radius: 6px;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     gap: 8px;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .nav-tab:hover {
-    background-color: #f1f3f5;
-    color: #495057;
-}
-
-.nav-tab.active {
-    background-color: #e6f2ff;
-    color: #0d6efd;
+    background-color: rgba(0, 0, 0, 0.04);
 }
 
 .topbar-user {
@@ -73,23 +296,38 @@
 }
 
 .user-avatar {
-    width: 36px;
-    height: 36px;
-    background-color: #0d6efd;
-    color: white;
-    border-radius: 50%;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: bold;
-    font-size: 16px;
+    font-weight: 800;
+    font-size: 1rem;
+}
+
+.user-info-text {
+    display: flex;
+    flex-direction: column;
 }
 
 .user-name {
-    font-size: 14px;
-    font-weight: 500;
-    color: #495057;
+    font-size: 0.88rem;
+    font-weight: 700;
+    line-height: 1.2;
 }
+
+.domain-tag {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.domain-tag-ielts { color: #0284c7; }
+.domain-tag-toeic { color: #a855f7; }
+.domain-tag-hsk { color: #dc2626; }
+.domain-tag-users { color: #64748b; }
 
 /* Body Layout */
 .admin-body {
@@ -100,24 +338,23 @@
 
 /* Sidebar Styles */
 .admin-sidebar {
-    width: 260px;
-    background-color: #ffffff;
-    border-right: 1px solid #e9ecef;
+    width: 270px;
     display: flex;
     flex-direction: column;
+    transition: all 0.3s ease;
 }
 
 .sidebar-header {
-    padding: 20px 24px 10px;
+    padding: 24px 20px 12px;
 }
 
 .sidebar-header h3 {
     margin: 0;
-    font-size: 13px;
+    font-size: 0.78rem;
     text-transform: uppercase;
-    color: #adb5bd;
-    font-weight: 700;
-    letter-spacing: 1px;
+    color: #94a3b8;
+    font-weight: 800;
+    letter-spacing: 0.08em;
 }
 
 .sidebar-menu {
@@ -127,49 +364,30 @@
 }
 
 .menu-item {
-    margin: 4px 12px;
+    margin: 4px 14px;
 }
 
 .menu-item a {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 16px;
-    color: #495057;
+    padding: 11px 16px;
+    color: #475569;
     text-decoration: none;
-    font-size: 14px;
-    font-weight: 500;
-    border-radius: 8px;
-    transition: all 0.2s;
+    font-size: 0.92rem;
+    font-weight: 700;
+    border-radius: 12px;
+    transition: all 0.2s ease;
 }
 
 .menu-item a i {
-    font-size: 18px;
-    color: #6c757d;
-}
-
-.menu-item a:hover {
-    background-color: #f8f9fa;
-    color: #0d6efd;
-}
-
-.menu-item a:hover i {
-    color: #0d6efd;
-}
-
-.menu-item.active a {
-    background-color: #0d6efd;
-    color: #ffffff;
-}
-
-.menu-item.active a i {
-    color: #ffffff;
+    font-size: 1.15rem;
+    color: #94a3b8;
 }
 
 /* Main Content Styles */
 .admin-content {
     flex: 1;
-    padding: 24px;
     overflow-y: auto;
-    background-color: #f8f9fa;
+    transition: all 0.3s ease;
 }

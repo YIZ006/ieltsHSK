@@ -45,8 +45,32 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             throw new Exception("Invalid username or password.");
         }
 
-        var token = GenerateJwtToken(user);
-        return new AuthResponse(token, user.Username, user.Email);
+        if (!user.IsActive)
+        {
+            throw new Exception("Account is disabled. Please contact admin.");
+        }
+
+        string? tempPassword = null;
+        if ((DateTime.UtcNow - user.PasswordChangedAt).TotalDays > 30)
+        {
+            tempPassword = GenerateRandomPassword();
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(tempPassword);
+            user.PasswordChangedAt = DateTime.UtcNow;
+        }
+
+        user.LastLoginAt = DateTime.UtcNow;
+        
+        dbContext.UserActivityLogs.Add(new UserActivityLog
+        {
+            UserId = user.Id,
+            Action = "login",
+            Detail = tempPassword != null ? "Password auto-reset due to 30 days policy" : "Normal login"
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var token = GenerateJwtToken(user, 30); // 30 days for normal login
+        return new AuthResponse(token, user.Username, user.Email, tempPassword);
     }
 
     public async Task<AuthResponse> LoginWithGoogleAsync(GoogleLoginRequest request, CancellationToken cancellationToken = default)
@@ -74,11 +98,27 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             throw new Exception($"UserNotRegistered|{payload.Email}");
         }
 
-        var token = GenerateJwtToken(user);
+        if (!user.IsActive)
+        {
+            throw new Exception("Account is disabled. Please contact admin.");
+        }
+
+        user.LastLoginAt = DateTime.UtcNow;
+        
+        dbContext.UserActivityLogs.Add(new UserActivityLog
+        {
+            UserId = user.Id,
+            Action = "login_google",
+            Detail = "Google login"
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var token = GenerateJwtToken(user, 1.0 / 24.0); // 1 hour for Google login
         return new AuthResponse(token, user.Username, user.Email);
     }
 
-    private string GenerateJwtToken(User user)
+    private string GenerateJwtToken(User user, double expireDays = 30)
     {
         var jwtSettings = configuration.GetSection("Jwt");
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]!));
@@ -96,10 +136,15 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             issuer: jwtSettings["Issuer"],
             audience: jwtSettings["Audience"],
             claims: claims,
-            expires: DateTime.Now.AddDays(1),
+            expires: DateTime.UtcNow.AddDays(expireDays),
             signingCredentials: creds
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private string GenerateRandomPassword()
+    {
+        return Guid.NewGuid().ToString("N").Substring(0, 8) + "@1Aa";
     }
 }

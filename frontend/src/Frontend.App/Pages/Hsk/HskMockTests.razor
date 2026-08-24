@@ -1,0 +1,321 @@
+@page "/hsk/luyen-de"
+@page "/hsk/mock-tests"
+@layout Frontend.App.Layout.HskLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject MockTestService MockTestService
+@inject NavigationManager Navigation
+
+<PageTitle>HSK Mock Tests</PageTitle>
+
+<div class="mocktests-container">
+    <div class="main-content">
+        <div class="collection-header">
+            <div class="collection-image">
+                <img src="/sample-data/mocktest-cover.png" alt="HSK Mock Test" onerror="this.src='https://placehold.co/400x400/1e1e1e/FFF?text=HSK+MOCK+TEST'" />
+            </div>
+            <div class="collection-info">
+                <h1>HSK Practice Tests</h1>
+                <div class="rating">
+                    <span class="score">4.2</span>
+                    <span class="stars">
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-half"></i>
+                    </span>
+                    <span class="votes">(256 votes)</span>
+                </div>
+                <div class="meta">
+                    <p><i class="bi bi-calendar"></i> Updated: <strong>Aug 2026</strong></p>
+                    <p><i class="bi bi-lightning-charge"></i> Tests taken: <strong>12,345</strong></p>
+                </div>
+            </div>
+        </div>
+
+        @if (isLoading)
+        {
+            <div class="loading-spinner">Đang tải danh sách đề thi...</div>
+        }
+        else if (mockTests.Count == 0)
+        {
+            <div class="empty-state">Chưa có đề thi HSK nào trong hệ thống.</div>
+        }
+        else
+        {
+            <div class="tests-grid">
+                @foreach (var test in mockTests)
+                {
+                    <div class="test-block">
+                        <h2>@test.Title</h2>
+                        <div class="skills-grid">
+                            <!-- Listening -->
+                            <div class="skill-card listening">
+                                <div class="skill-header">
+                                    <i class="bi bi-headphones"></i>
+                                    <span>Listening</span>
+                                </div>
+                                <button class="btn-take-test"
+                                        disabled="@string.IsNullOrEmpty(test.ListeningUrl)"
+                                        @onclick="() => TakeListeningTest(test.ListeningUrl, test.ListeningAnswerUrl)">
+                                    <i class="bi bi-lightning-charge-fill"></i> Take Test
+                                </button>
+                            </div>
+
+                            <!-- Reading -->
+                            <div class="skill-card reading">
+                                <div class="skill-header">
+                                    <i class="bi bi-file-text"></i>
+                                    <span>Reading</span>
+                                </div>
+                                <button class="btn-take-test"
+                                        disabled="@string.IsNullOrEmpty(test.ReadingUrl)"
+                                        @onclick="() => TakeReadingTest(test.ReadingUrl, test.ReadingAnswerUrl)">
+                                    <i class="bi bi-lightning-charge-fill"></i> Take Test
+                                </button>
+                            </div>
+
+                            <!-- Writing -->
+                            <div class="skill-card writing">
+                                <div class="skill-header">
+                                    <i class="bi bi-pen"></i>
+                                    <span>Writing</span>
+                                </div>
+                                <button class="btn-take-test"
+                                        disabled="@string.IsNullOrEmpty(test.WritingUrl)"
+                                        @onclick="() => TakeWritingTest(test.WritingUrl)">
+                                    <i class="bi bi-lightning-charge-fill"></i> Take Test
+                                </button>
+                            </div>
+
+                            <!-- Speaking -->
+                            <div class="skill-card speaking">
+                                <div class="skill-header">
+                                    <i class="bi bi-mic"></i>
+                                    <span>Speaking</span>
+                                </div>
+                                <button class="btn-take-test"
+                                        disabled="@string.IsNullOrEmpty(test.SpeakingUrl)"
+                                        @onclick="() => TakeSpeakingTest(test.SpeakingUrl)">
+                                    <i class="bi bi-lightning-charge-fill"></i> Take Test
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="sidebar">
+        <div class="ad-banner">
+            <h3>HSK 3.0<br/><span class="highlight">9 Levels</span></h3>
+            <p>From beginner to advanced</p>
+            <button class="btn-learn-more">Learn more</button>
+            <img src="https://placehold.co/300x200/1e1e1e/FFF?text=HSK+3.0" alt="HSK 3.0" />
+        </div>
+    </div>
+</div>
+
+<style>
+    .mocktests-container {
+        display: flex;
+        gap: 24px;
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    .main-content {
+        flex: 1;
+    }
+    .collection-header {
+        display: flex;
+        gap: 24px;
+        background: #1e1e1e;
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 24px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .collection-image img {
+        width: 120px;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 12px;
+    }
+    .collection-info h1 {
+        margin: 0 0 8px 0;
+        font-size: 24px;
+    }
+    .rating {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    .rating .score {
+        font-weight: 700;
+        font-size: 18px;
+    }
+    .rating .stars {
+        color: #f5a623;
+    }
+    .rating .votes {
+        color: #888;
+        font-size: 14px;
+    }
+    .meta p {
+        margin: 4px 0;
+        color: #aaa;
+        font-size: 14px;
+    }
+    .meta strong {
+        color: #eee;
+    }
+    .tests-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .test-block {
+        background: #1a1a1a;
+        border-radius: 12px;
+        padding: 20px;
+        border: 1px solid #2a2a2a;
+    }
+    .test-block h2 {
+        margin: 0 0 16px 0;
+        font-size: 20px;
+        color: #eee;
+    }
+    .skills-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 12px;
+    }
+    .skill-card {
+        background: #242424;
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+        border: 1px solid #333;
+    }
+    .skill-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-weight: 600;
+        color: #ccc;
+        margin-bottom: 12px;
+    }
+    .skill-header i {
+        font-size: 20px;
+    }
+    .btn-take-test {
+        background: #1a7f5a;
+        color: #fff;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+        width: 100%;
+        transition: background 0.2s;
+    }
+    .btn-take-test:hover:not(:disabled) {
+        background: #239a6e;
+    }
+    .btn-take-test:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+    .sidebar {
+        width: 280px;
+        flex-shrink: 0;
+    }
+    .ad-banner {
+        background: #1e1e1e;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        border: 1px solid #2a2a2a;
+    }
+    .ad-banner h3 {
+        margin: 0 0 8px 0;
+    }
+    .ad-banner .highlight {
+        color: #f5a623;
+    }
+    .ad-banner p {
+        color: #aaa;
+    }
+    .btn-learn-more {
+        background: #2a2a2a;
+        border: none;
+        color: #fff;
+        padding: 8px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        margin: 12px 0;
+    }
+    .ad-banner img {
+        width: 100%;
+        border-radius: 8px;
+        margin-top: 12px;
+    }
+    .loading-spinner, .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: #888;
+    }
+    @@media (max-width: 768px) {
+        .sidebar { display: none; }
+        .collection-header { flex-direction: column; align-items: flex-start; }
+        .skills-grid { grid-template-columns: 1fr 1fr; }
+    }
+</style>
+
+@code {
+    private List<MockTestDto> mockTests = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        var all = await MockTestService.GetMockTestsAsync();
+        // Filter only tests that have HskUrl not null
+        mockTests = all.Where(t => !string.IsNullOrEmpty(t.HskUrl)).ToList();
+        isLoading = false;
+    }
+
+    private static string NewSessionQuery() => $"Session={Guid.NewGuid():N}";
+
+    private void TakeReadingTest(string? url, string? answerUrl)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+        var extra = string.IsNullOrWhiteSpace(answerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(answerUrl)}";
+        Navigation.NavigateTo($"/hsk/reading/preview?ExamUrl={Uri.EscapeDataString(url)}{extra}&{NewSessionQuery()}");
+    }
+
+    private void TakeListeningTest(string? url, string? answerUrl)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+        var extra = string.IsNullOrWhiteSpace(answerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(answerUrl)}";
+        Navigation.NavigateTo($"/hsk/listening/preview?ExamUrl={Uri.EscapeDataString(url)}{extra}&{NewSessionQuery()}");
+    }
+
+    private void TakeWritingTest(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+        Navigation.NavigateTo($"/hsk/writing/preview?ExamUrl={Uri.EscapeDataString(url)}&{NewSessionQuery()}");
+    }
+
+    private void TakeSpeakingTest(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return;
+        Navigation.NavigateTo($"/hsk/speaking/preview?ExamUrl={Uri.EscapeDataString(url)}&{NewSessionQuery()}");
+    }
+}

@@ -1,0 +1,466 @@
+@page "/admin/listen-videos"
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject IeltsService IeltsService
+@inject IJSRuntime JSRuntime
+@inject HttpClient Http
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
+<PageTitle>Quản lý Video Nghe Điền - Admin</PageTitle>
+
+<div class="admin-videos-page">
+    <!-- Header -->
+    <div class="page-top-header">
+        <div class="header-titles">
+            <h1 class="page-title"><i class="bi bi-camera-video-fill text-primary"></i> Quản lý Video Nghe Điền</h1>
+            <p class="page-subtitle">Duyệt danh sách video luyện nghe điền từ, thêm phụ đề tiếng Anh và nhập hàng loạt từ Excel.</p>
+        </div>
+        <div class="header-actions">
+            <a href="@templateUrl" class="btn btn-secondary-outline" download="ListenVideos_Template.xlsx">
+                <i class="bi bi-file-earmark-spreadsheet-fill text-success"></i> Tải Form Mẫu Excel
+            </a>
+            <button class="btn btn-primary-outline" @onclick="TriggerFileInput" disabled="@isImporting">
+                @if (isImporting)
+                {
+                    <span class="mini-spinner"></span>
+                    <span>Đang xử lý Excel...</span>
+                }
+                else
+                {
+                    <i class="bi bi-file-earmark-arrow-up-fill"></i>
+                    <span>Nhập từ Excel</span>
+                }
+            </button>
+            <InputFile id="excelFileInput" OnChange="HandleExcelUpload" accept=".xlsx" style="display: none;" />
+            <button class="btn btn-primary-solid" @onclick="LoadVideos">
+                <i class="bi bi-arrow-clockwise"></i> Tải lại
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(alertMessage))
+    {
+        <div class="custom-alert @(alertType == "success" ? "alert-success" : "alert-error")">
+            <div class="alert-content">
+                <i class="bi @(alertType == "success" ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill")"></i>
+                <span>@alertMessage</span>
+            </div>
+            <button class="alert-close" @onclick="() => alertMessage = null">×</button>
+        </div>
+    }
+
+    <!-- Filter & Search Bar -->
+    <div class="filter-toolbar">
+        <div class="search-input-wrapper">
+            <i class="bi bi-search search-icon"></i>
+            <input type="text" class="search-input" placeholder="Tìm kiếm theo tiêu đề video YouTube..." 
+                   @bind="searchTitle" @bind:event="oninput" />
+            @if (!string.IsNullOrEmpty(searchTitle))
+            {
+                <button class="search-clear-btn" @onclick='() => searchTitle = ""'>×</button>
+            }
+        </div>
+        <div class="filter-controls">
+            <input type="date" class="custom-date-input" @bind="searchDate" />
+            <select class="custom-select" @bind="searchStatus">
+                <option value="All">Tất cả trạng thái</option>
+                <option value="Approved">Đã duyệt</option>
+                <option value="Pending">Chờ duyệt</option>
+            </select>
+            <button class="btn btn-secondary-outline btn-sm" @onclick="ClearFilters">
+                <i class="bi bi-x-circle"></i> Xóa lọc
+            </button>
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="content-card">
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="custom-spinner"></div>
+                <p>Đang tải danh sách video nghe điền...</p>
+            </div>
+        }
+        else if (FilteredVideos.Count == 0)
+        {
+            <div class="empty-state">
+                <div class="empty-icon"><i class="bi bi-camera-video-off"></i></div>
+                <h3>Không tìm thấy video nào</h3>
+                <p>Không có dữ liệu phù hợp với điều kiện lọc hiện tại hoặc chưa có video nào được nạp.</p>
+                <button class="btn btn-primary-solid mt-3" @onclick="TriggerFileInput">
+                    <i class="bi bi-file-earmark-arrow-up-fill"></i> Nhập Video từ Excel
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="table-container">
+                <table class="videos-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 110px;">Thumbnail</th>
+                            <th>Thông tin Video & Kênh</th>
+                            <th style="width: 120px;">Trạng thái</th>
+                            <th style="width: 120px;">Ngày gửi</th>
+                            <th style="width: 220px;" class="text-right">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var video in FilteredVideos)
+                        {
+                            <tr>
+                                <td>
+                                    <img src="@video.ThumbnailUrl" alt="@video.Title" class="video-thumb" 
+                                         onerror="this.src='https://placehold.co/120x68/e2e8f0/475569?text=YouTube'" />
+                                </td>
+                                <td>
+                                    <div class="video-title-text" title="@video.Title">
+                                        @video.Title
+                                    </div>
+                                    <div class="video-meta-row">
+                                        <a href="@video.YoutubeUrl" target="_blank" class="youtube-link">
+                                            <i class="bi bi-youtube text-danger"></i> Xem trên YouTube
+                                        </a>
+                                        @if (video.WordCount > 0)
+                                        {
+                                            <span class="transcript-tag tag-has-words">
+                                                <i class="bi bi-file-text-fill"></i> @video.WordCount từ phụ đề
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="transcript-tag tag-no-words">
+                                                <i class="bi bi-exclamation-circle"></i> Chưa có phụ đề
+                                            </span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (video.IsApproved)
+                                    {
+                                        <span class="status-pill status-approved"><i class="bi bi-check-circle-fill"></i> Đã duyệt</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-pill status-pending"><i class="bi bi-clock-history"></i> Chờ duyệt</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="date-badge">@video.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy")</span>
+                                </td>
+                                <td class="text-right">
+                                    <div class="action-btn-group">
+                                        <button class="action-btn btn-transcript" @onclick="() => OpenTranscriptModal(video)" title="Thêm / Chỉnh sửa phụ đề">
+                                            <i class="bi bi-card-text"></i> Phụ đề
+                                        </button>
+
+                                        @if (!video.IsApproved)
+                                        {
+                                            <button class="action-btn btn-approve" @onclick="() => ApproveVideo(video.Id)" disabled="@isApproving" title="Duyệt video">
+                                                @if (approvingId == video.Id)
+                                                {
+                                                    <span class="mini-spinner"></span>
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-check-lg"></i> <span>Duyệt</span>
+                                                }
+                                            </button>
+                                        }
+
+                                        <button class="action-btn btn-delete" @onclick="() => DeleteVideo(video.Id)" title="Xóa video">
+                                            <i class="bi bi-trash3"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL CHỈNH SỬA PHỤ ĐỀ VIDEO (CLEAN & BEAUTIFUL)                          -->
+<!-- ========================================================================= -->
+@if (showTranscriptModal && selectedVideo != null)
+{
+    <div class="modal-overlay">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="bi bi-card-text text-primary"></i>
+                    <div>
+                        <h3>Chỉnh sửa phụ đề tiếng Anh</h3>
+                        <p class="modal-subtitle">Dán toàn bộ lời thoại tiếng Anh của video để tạo bài tập nghe điền từ.</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn" @onclick="CloseTranscriptModal">×</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="transcript-video-info">
+                    <img src="@selectedVideo.ThumbnailUrl" alt="@selectedVideo.Title" class="modal-video-thumb" 
+                         onerror="this.src='https://placehold.co/120x68/e2e8f0/475569?text=YouTube'" />
+                    <div class="modal-video-details">
+                        <div class="modal-video-title">@selectedVideo.Title</div>
+                        <a href="@selectedVideo.YoutubeUrl" target="_blank" class="youtube-link">
+                            <i class="bi bi-box-arrow-up-right"></i> Mở video trên YouTube để copy phụ đề
+                        </a>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-group-label mb-0">Nội dung phụ đề tiếng Anh (Transcript):</label>
+                        @if (!string.IsNullOrWhiteSpace(manualText))
+                        {
+                            <span class="transcript-word-count">
+                                <b>@manualText.Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length</b> từ
+                            </span>
+                        }
+                    </div>
+                    <textarea class="custom-textarea transcript-textarea" rows="10" 
+                              placeholder="Dán toàn bộ phụ đề tiếng Anh vào đây..." 
+                              @bind="manualText"></textarea>
+                    <small class="text-muted d-block mt-1">
+                        <i class="bi bi-info-circle"></i> Bạn có thể copy transcript từ YouTube và dán thẳng vào ô này. Hệ thống sẽ tự động tách câu và tạo bài tập điền từ.
+                    </small>
+                </div>
+
+                @if (!string.IsNullOrEmpty(modalError))
+                {
+                    <div class="custom-alert alert-error mt-3">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span>@modalError</span>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary-outline" @onclick="CloseTranscriptModal">Hủy</button>
+                <button class="btn btn-primary-solid" @onclick="SaveTranscript" disabled="@isSavingTranscript">
+                    @if (isSavingTranscript)
+                    {
+                        <span class="mini-spinner"></span>
+                        <span>Đang lưu phụ đề...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-check2-circle"></i>
+                        <span>Lưu Phụ Đề</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ListenVideoDto> allVideos = new();
+    private bool isLoading = true;
+    private string? alertMessage;
+    private string alertType = "success";
+    
+    private bool isApproving = false;
+    private int? approvingId = null;
+
+    // Filters
+    private string searchTitle = "";
+    private DateTime? searchDate = null;
+    private string searchStatus = "All";
+
+    // Mẫu URL
+    private string templateUrl = "";
+
+    // Modal Phụ Đề
+    private bool showTranscriptModal = false;
+    private ListenVideoDto? selectedVideo = null;
+    private string manualText = "";
+    private bool isSavingTranscript = false;
+    private string? modalError = null;
+
+    // Import Excel
+    private bool isImporting = false;
+
+    private List<ListenVideoDto> FilteredVideos
+    {
+        get
+        {
+            var query = allVideos.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(searchTitle))
+            {
+                query = query.Where(v => v.Title.Contains(searchTitle, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (searchDate.HasValue)
+            {
+                query = query.Where(v => v.SubmittedAt.Date == searchDate.Value.Date);
+            }
+
+            if (searchStatus == "Approved")
+            {
+                query = query.Where(v => v.IsApproved);
+            }
+            else if (searchStatus == "Pending")
+            {
+                query = query.Where(v => !v.IsApproved);
+            }
+
+            return query.OrderByDescending(v => v.SubmittedAt).ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var apiBase = Configuration["ApiBaseUrl"] ?? "https://localhost:7101";
+        templateUrl = $"{apiBase}/api/listen-videos/template";
+        await LoadVideos();
+    }
+
+    private async Task LoadVideos()
+    {
+        isLoading = true;
+        allVideos = await IeltsService.GetAllListenVideosAsync();
+        isLoading = false;
+    }
+
+    private void ClearFilters()
+    {
+        searchTitle = "";
+        searchDate = null;
+        searchStatus = "All";
+    }
+
+    private async Task ApproveVideo(int id)
+    {
+        isApproving = true;
+        approvingId = id;
+        
+        var (success, msg) = await IeltsService.ApproveListenVideoAsync(id);
+        isApproving = false;
+        approvingId = null;
+
+        if (success)
+        {
+            alertType = "success";
+            alertMessage = "Duyệt video thành công!";
+            var video = allVideos.FirstOrDefault(v => v.Id == id);
+            if (video != null) video.IsApproved = true;
+        }
+        else
+        {
+            alertType = "danger";
+            alertMessage = msg ?? "Có lỗi xảy ra khi duyệt video.";
+        }
+    }
+
+    private async Task DeleteVideo(int id)
+    {
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn xóa video này không?");
+        if (confirmed)
+        {
+            var success = await IeltsService.DeleteListenVideoAsync(id);
+            if (success)
+            {
+                alertType = "success";
+                alertMessage = "Đã xóa video thành công.";
+                allVideos.RemoveAll(v => v.Id == id);
+            }
+            else
+            {
+                alertType = "danger";
+                alertMessage = "Có lỗi xảy ra khi xóa video.";
+            }
+        }
+    }
+
+    private async Task TriggerFileInput()
+    {
+        await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('excelFileInput').click()");
+    }
+
+    private async Task HandleExcelUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        isImporting = true;
+        alertMessage = null;
+
+        try
+        {
+            var (success, msg) = await IeltsService.ImportListenVideosExcelAsync(file);
+            if (success)
+            {
+                alertType = "success";
+                alertMessage = "Nhập dữ liệu thành công! " + msg;
+                await LoadVideos();
+            }
+            else
+            {
+                alertType = "danger";
+                alertMessage = "Lỗi khi nhập Excel: " + msg;
+            }
+        }
+        catch (Exception ex)
+        {
+            alertType = "danger";
+            alertMessage = $"Có lỗi xảy ra: {ex.Message}";
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private void OpenTranscriptModal(ListenVideoDto video)
+    {
+        selectedVideo = video;
+        manualText = "";
+        modalError = null;
+        showTranscriptModal = true;
+    }
+
+    private void CloseTranscriptModal()
+    {
+        showTranscriptModal = false;
+        selectedVideo = null;
+        manualText = "";
+        modalError = null;
+    }
+
+    private async Task SaveTranscript()
+    {
+        if (selectedVideo == null) return;
+        
+        if (string.IsNullOrWhiteSpace(manualText))
+        {
+            modalError = "Vui lòng dán nội dung phụ đề tiếng Anh.";
+            return;
+        }
+
+        isSavingTranscript = true;
+        modalError = null;
+
+        var (success, msg) = await IeltsService.UpdateManualTranscriptAsync(selectedVideo.Id, manualText);
+        isSavingTranscript = false;
+
+        if (success)
+        {
+            alertType = "success";
+            alertMessage = "Cập nhật phụ đề thành công!";
+            CloseTranscriptModal();
+            await LoadVideos();
+        }
+        else
+        {
+            modalError = msg ?? "Có lỗi xảy ra khi lưu phụ đề.";
+        }
+    }
+}
