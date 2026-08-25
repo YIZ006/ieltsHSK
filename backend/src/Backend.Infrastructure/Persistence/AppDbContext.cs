@@ -26,6 +26,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<HskVocabulary> HskVocabularies { get; set; }
     public DbSet<HskVocabularyImport> HskVocabularyImports { get; set; }
     public DbSet<HskVocabularyProgress> HskVocabularyProgresses { get; set; }
+    public DbSet<IeltsVocabulary> IeltsVocabularies { get; set; }
+    public DbSet<IeltsVocabularyImport> IeltsVocabularyImports { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -103,6 +105,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(p => p.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // IeltsVocabulary: không cho trùng (từ + nghĩa) để tránh import lặp
+        modelBuilder.Entity<IeltsVocabulary>(entity =>
+        {
+            entity.HasIndex(v => new { v.Word, v.Meaning }).IsUnique();
+            entity.HasIndex(v => v.Topic);
         });
     }
 }

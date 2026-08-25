@@ -43,3 +43,11 @@ public class ListenVideoSubmitRequest
 {
     public string YoutubeUrl { get; set; } = string.Empty;
 }
+
+public class UpdateListenVideoRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string Level { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+}
+

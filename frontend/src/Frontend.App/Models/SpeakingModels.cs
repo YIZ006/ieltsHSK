@@ -99,3 +99,40 @@ public class SpeakAlongSessionRecord
     public SpeakAlongResult Result { get; set; } = new();
     public DateTime AttemptedAt { get; set; } = DateTime.UtcNow;
 }
+
+public class MicrophoneDevice
+{
+    public string DeviceId { get; set; } = "";
+    public string Label { get; set; } = "";
+}
+
+// ══════════════════════════════════════════════════════
+// AUDIO SHADOWING (CAMBRIDGE IELTS & ENGNOVATE MP3) MODELS
+// ══════════════════════════════════════════════════════
+
+public class AudioLessonDto
+{
+    public string Id { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Category { get; set; } = "";
+    public string Level { get; set; } = "Band 7.0 - 8.5";
+    public string AudioUrl { get; set; } = "";
+    public int TotalUnits { get; set; }
+    public string JsonFile { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Icon { get; set; } = "🎧";
+    public List<AudioLessonLine> Lines { get; set; } = new();
+}
+
+public class AudioLessonLine
+{
+    public int Index { get; set; }
+    public string Speaker { get; set; } = "";
+    public double StartTime { get; set; }
+    public double Duration { get; set; }
+    public double EndTime { get; set; }
+    public string Text { get; set; } = "";
+    public string Translation { get; set; } = "";
+    public bool IsCompleted { get; set; }
+    public int LastScore { get; set; }
+}

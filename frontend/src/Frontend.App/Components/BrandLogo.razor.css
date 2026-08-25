@@ -1,0 +1,37 @@
+/* ================================================
+   BRAND LOGO - Nguồn duy nhất cho style logo
+   Dùng: <BrandLogo /> hoặc <BrandLogo Theme="white" />
+   File ảnh: wwwroot/images/ieltsHSK-logo.png
+   ================================================ */
+
+.brand-logo {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none !important;
+    transition: opacity 0.2s ease;
+}
+
+.brand-logo:hover {
+    opacity: 0.8;
+    text-decoration: none !important;
+}
+
+.brand-logo__img {
+    height: 36px;
+    width: auto;
+    display: block;
+}
+
+/* Theme: dark — dành cho nền sáng (trang chủ, IELTS dashboard) */
+/* Ảnh hiển thị màu gốc, không cần filter */
+.brand-logo--dark .brand-logo__img {
+    filter: none;
+}
+
+/* Theme: white — dành cho nền tối/đỏ (HSK sidebar) */
+/* invert(1): đảo màu → nền trắng thành đen, chữ tối thành trắng */
+/* screen: phần đen trở thành trong suốt → chỉ còn chữ trắng */
+.brand-logo--white .brand-logo__img {
+    filter: invert(1);
+    mix-blend-mode: screen;
+}

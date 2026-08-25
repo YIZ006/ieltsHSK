@@ -4,6 +4,7 @@ using Frontend.App;
 using Frontend.App.Services;
 using Blazored.LocalStorage;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.JSInterop;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -92,14 +93,14 @@ builder.Services.AddScoped(sp =>
     {
         BaseAddress = new Uri(backendApiBaseUrl)
     };
-    return new HskService(httpClient);
+    return new HskService(httpClient, sp.GetRequiredService<ILocalStorageService>());
 });
 
 // SpeakAlongService: IELTS Nói Theo (Shadowing)
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
-    return new SpeakAlongService(httpClient);
+    return new SpeakAlongService(httpClient, sp.GetRequiredService<IJSRuntime>(), backendApiBaseUrl);
 });
 
 await builder.Build().RunAsync();

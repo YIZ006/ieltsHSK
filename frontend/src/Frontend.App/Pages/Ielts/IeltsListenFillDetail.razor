@@ -5,6 +5,7 @@
 @using System.Net.Http.Json
 @inject IeltsService IeltsService
 @inject HttpClient Http
+@inject IJSRuntime JSRuntime
 
 <PageTitle>@(video?.Title ?? "Đang tải...") - IELTS Nghe Điền Từ</PageTitle>
 
@@ -36,6 +37,7 @@ else
             <h1 class="video-title">@video.Title</h1>
             <div class="video-meta">
                 <span class="badge bg-warning text-dark me-2">@video.Level</span>
+                <span class="badge bg-info text-dark me-2">@video.Category</span>
                 <span class="text-muted"><i class="bi bi-clock"></i> @video.Duration</span>
                 <span class="text-muted ms-3"><i class="bi bi-file-word"></i> ~@video.WordCount từ</span>
             </div>
@@ -153,6 +155,69 @@ else
                 </div>
             </div>
         </div>
+
+        <!-- ================================================================= -->
+        <!-- ĐỀ XUẤT CÁC VIDEO CÙNG TRÌNH ĐỘ & CHỦ ĐỀ (DẠNG NGANG + MŨI TÊN)    -->
+        <!-- ================================================================= -->
+        <div class="recommended-section">
+            <div class="recommended-header">
+                <div class="recommended-title-group">
+                    <h3 class="recommended-title">
+                        <i class="bi bi-collection-play-fill text-primary"></i> Video cùng trình độ & chủ đề đề xuất
+                    </h3>
+                    <p class="recommended-subtitle">
+                        Các bài luyện nghe cấp độ <b>@video.Level</b> · Chủ đề <b>@video.Category</b> dành cho bạn.
+                    </p>
+                </div>
+                <div class="carousel-nav-group">
+                    <button class="carousel-nav-btn" @onclick="ScrollCarouselLeft" title="Xem video trước">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <button class="carousel-nav-btn" @onclick="ScrollCarouselRight" title="Xem video tiếp theo">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <a href="/ielts/nghe-dien" class="btn-view-all">
+                        Tất cả bài nghe <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+
+            @if (recommendedVideos != null && recommendedVideos.Any())
+            {
+                <div class="recommended-carousel-wrapper">
+                    <div class="recommended-carousel-track" id="recCarouselTrack">
+                        @foreach (var rec in recommendedVideos)
+                        {
+                            var recHash = Frontend.App.Utils.UrlHasher.Encode(rec.Id);
+                            <a href="/ielts/nghe-dien/@recHash" class="rec-video-card-compact">
+                                <div class="rec-thumb-wrap">
+                                    <img src="@(string.IsNullOrEmpty(rec.ThumbnailUrl) ? "https://placehold.co/400x225/e9ecef/495057?text=YouTube" : rec.ThumbnailUrl)" 
+                                         alt="@rec.Title" 
+                                         class="rec-thumbnail" 
+                                         loading="lazy" />
+                                    <div class="rec-duration">@rec.Duration</div>
+                                    <div class="rec-badges">
+                                        <span class="badge bg-warning text-dark">@rec.Level</span>
+                                        <span class="badge bg-secondary">@rec.Category</span>
+                                    </div>
+                                    <div class="rec-hover-play"><i class="bi bi-play-circle-fill"></i></div>
+                                </div>
+                                <div class="rec-card-body">
+                                    <h4 class="rec-video-title" title="@rec.Title">@rec.Title</h4>
+                                    <div class="rec-channel-name">
+                                        <i class="bi bi-person-video2"></i> @rec.ChannelName
+                                    </div>
+                                    <div class="rec-card-footer">
+                                        <span class="text-muted small">~@rec.WordCount từ</span>
+                                        <span class="text-primary fw-bold small">Luyện ngay →</span>
+                                    </div>
+                                </div>
+                            </a>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
     </div>
 }
 
@@ -172,14 +237,32 @@ else
     private bool isSubmitted = false;
     private int correctCount = 0;
 
-    protected override async Task OnInitializedAsync()
+    private List<ListenVideoDto> recommendedVideos = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadVideoData();
+    }
+
+    private async Task LoadVideoData()
     {
         isLoading = true;
+        transcriptWords = null;
+        hiddenIndices.Clear();
+        userAnswers.Clear();
+        isSubmitted = false;
+        correctCount = 0;
+
         video = await IeltsService.GetListenFillVideoByIdAsync(Id);
         
-        if (video != null && !string.IsNullOrEmpty(video.TranscriptUrl))
+        if (video != null)
         {
-            await LoadTranscript();
+            if (!string.IsNullOrEmpty(video.TranscriptUrl))
+            {
+                await LoadTranscript();
+            }
+
+            await LoadRecommendations();
         }
         
         isLoading = false;
@@ -203,13 +286,45 @@ else
         }
     }
 
+    private async Task LoadRecommendations()
+    {
+        try
+        {
+            var allVideos = await IeltsService.GetListenFillVideosAsync();
+            if (allVideos != null && video != null)
+            {
+                recommendedVideos = allVideos
+                    .Where(v => v.Id != video.Id)
+                    .OrderByDescending(v => (string.Equals(v.Level, video.Level, StringComparison.OrdinalIgnoreCase) ? 2 : 0) +
+                                            (string.Equals(v.Category, video.Category, StringComparison.OrdinalIgnoreCase) ? 1 : 0))
+                    .ThenByDescending(v => v.SubmittedAt)
+                    .Take(12)
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading recommended videos: {ex.Message}");
+        }
+    }
+
+    private async Task ScrollCarouselLeft()
+    {
+        await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('recCarouselTrack')?.scrollBy({ left: -320, behavior: 'smooth' })");
+    }
+
+    private async Task ScrollCarouselRight()
+    {
+        await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('recCarouselTrack')?.scrollBy({ left: 320, behavior: 'smooth' })");
+    }
+
     private void GenerateBlanks()
     {
         if (transcriptWords == null || transcriptWords.Count == 0) return;
 
-        int targetBlanks = int.Parse(blankCountStr);
+        int targetBlanks = int.TryParse(blankCountStr, out var tb) ? tb : 20;
         if (targetBlanks > transcriptWords.Count / 3) 
-            targetBlanks = transcriptWords.Count / 3; // Không đục lỗ quá 33% số từ
+            targetBlanks = Math.Max(1, transcriptWords.Count / 3);
 
         hiddenIndices.Clear();
         userAnswers.Clear();

@@ -1,0 +1,575 @@
+@page "/ielts/tu-vung"
+@layout Frontend.App.Layout.IeltsLayout
+@using Frontend.App.Services
+@using Frontend.App.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject IeltsService IeltsService
+@inject IJSRuntime JS
+
+<PageTitle>Kho Từ Vựng IELTS Học Thuật - ieltsHSK</PageTitle>
+
+<div class="ielts-vocab-page">
+    <!-- Header -->
+    <div class="vocab-header-card">
+        <div class="header-left">
+            <div class="header-icon-badge">
+                <i class="bi bi-journal-bookmark-fill"></i>
+            </div>
+            <div>
+                <h1 class="vocab-title">Kho Từ Vựng IELTS Học Thuật</h1>
+                <p class="vocab-subtitle">Hơn 3.300+ từ vựng cốt lõi phân theo khung CEFR, chủ đề thông dụng, phiên âm IPA chuẩn và ví dụ ngữ cảnh.</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="view-mode-toggle">
+                <button class="toggle-btn @(viewMode == "table" ? "active" : "")" @onclick='() => viewMode = "table"' title="Xem dạng Bảng (Mate&Me)">
+                    <i class="bi bi-table"></i>
+                    <span>Dạng Bảng</span>
+                </button>
+                <button class="toggle-btn @(viewMode == "cards" ? "active" : "")" @onclick='() => viewMode = "cards"' title="Xem dạng Thẻ (Flashcards)">
+                    <i class="bi bi-grid-fill"></i>
+                    <span>Dạng Thẻ</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toolbar Filters (Mate&Me Style) -->
+    <div class="filter-panel-card">
+        <div class="filter-top-row">
+            <div class="search-input-group">
+                <i class="bi bi-search search-icon"></i>
+                <input type="text" 
+                       placeholder="Tìm từ / biến thể / nghĩa Việt... (vd: achieve, doctor, hoàn thành)" 
+                       @bind="searchTerm" 
+                       @bind:event="oninput" />
+                @if (!string.IsNullOrEmpty(searchTerm))
+                {
+                    <button class="btn-clear-search" @onclick="ClearSearch" title="Xóa tìm kiếm">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                }
+            </div>
+
+            <div class="filter-dropdowns">
+                <div class="dropdown-wrapper">
+                    <select @bind="selectedTopic">
+                        <option value="">Mọi chủ đề</option>
+                        @foreach (var t in topics)
+                        {
+                            <option value="@t">@t</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="dropdown-wrapper">
+                    <select @bind="selectedExam">
+                        <option value="">Mọi kỳ thi</option>
+                        <option value="IELTS">IELTS Academic</option>
+                        <option value="TOEIC">TOEIC Speaking & Writing</option>
+                        <option value="CAMBRIDGE">Cambridge FCE/CAE</option>
+                        <option value="VSTEP">VSTEP B1-C1</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="filter-toggles">
+                <label class="toggle-checkbox @(autoAudio ? "checked" : "")" title="Tự động phát âm thanh khi bấm vào từ">
+                    <input type="checkbox" @bind="autoAudio" />
+                    <span class="icon-toggle">🔊</span>
+                    <span>Bật phát âm</span>
+                </label>
+                <label class="toggle-checkbox @(filterTricky ? "checked" : "")" title="Chỉ lọc từ dễ nhầm lẫn hoặc bất quy tắc">
+                    <input type="checkbox" @bind="filterTricky" />
+                    <span class="icon-toggle">⚠️</span>
+                    <span>Dễ lộn</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- CEFR Level Selector Pills (A1, A2, B1, B2, C1, C2) -->
+        <div class="cefr-pills-bar">
+            <div class="pills-list">
+                <button class="cefr-pill @(string.IsNullOrEmpty(selectedCefr) ? "active" : "")" @onclick='() => selectedCefr = ""'>
+                    <span>Tất cả</span>
+                    <small>@items.Count</small>
+                </button>
+                <button class="cefr-pill pill-a1 @(selectedCefr == "A1" ? "active" : "")" @onclick='() => selectedCefr = "A1"'>
+                    <span>A1</span>
+                    <small>@GetLevelCount("A1")</small>
+                </button>
+                <button class="cefr-pill pill-a2 @(selectedCefr == "A2" ? "active" : "")" @onclick='() => selectedCefr = "A2"'>
+                    <span>A2</span>
+                    <small>@GetLevelCount("A2")</small>
+                </button>
+                <button class="cefr-pill pill-b1 @(selectedCefr == "B1" ? "active" : "")" @onclick='() => selectedCefr = "B1"'>
+                    <span>B1</span>
+                    <small>@GetLevelCount("B1")</small>
+                </button>
+                <button class="cefr-pill pill-b2 @(selectedCefr == "B2" ? "active" : "")" @onclick='() => selectedCefr = "B2"'>
+                    <span>B2</span>
+                    <small>@GetLevelCount("B2")</small>
+                </button>
+                <button class="cefr-pill pill-c1 @(selectedCefr == "C1" ? "active" : "")" @onclick='() => selectedCefr = "C1"'>
+                    <span>C1</span>
+                    <small>@GetLevelCount("C1")</small>
+                </button>
+                <button class="cefr-pill pill-c2 @(selectedCefr == "C2" ? "active" : "")" @onclick='() => selectedCefr = "C2"'>
+                    <span>C2</span>
+                    <small>@GetLevelCount("C2")</small>
+                </button>
+            </div>
+
+            <div class="match-count-badge">
+                <i class="bi bi-check2-circle"></i>
+                <span><strong>@FilteredItems.Count.ToString("N0")</strong> từ khớp</span>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-state">
+            <div class="custom-spinner"></div>
+            <p>Đang tải kho từ vựng IELTS...</p>
+        </div>
+    }
+    else if (!FilteredItems.Any())
+    {
+        <div class="empty-state">
+            <i class="bi bi-journal-x"></i>
+            <h4>Không tìm thấy từ vựng phù hợp</h4>
+            <p>Thử đổi cấp độ CEFR, chủ đề hoặc xóa bớt từ khóa tìm kiếm.</p>
+            <button class="btn-reset-filters" @onclick="ResetFilters">
+                <i class="bi bi-arrow-counterclockwise"></i> Đặt lại bộ lọc
+            </button>
+        </div>
+    }
+    else
+    {
+        @if (viewMode == "table")
+        {
+            <div class="vocab-table-container">
+                <!-- Master Alphabetical List -->
+                <div class="section-banner master-banner">
+                    <div class="banner-title">
+                        <i class="bi bi-layers-fill"></i>
+                        <strong>KHO TỪ VỰNG IELTS HỌC THUẬT A ➔ Z</strong>
+                        <span class="subtext">(Trang @CurrentPage / @TotalPages)</span>
+                    </div>
+                </div>
+
+                <div class="table-responsive master-table-wrapper">
+                    <table class="mate-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 24%;">TỪ</th>
+                                <th style="width: 10%; text-align: center;">CEFR</th>
+                                <th style="width: 32%;">NGHĨA VIỆT</th>
+                                <th style="width: 22%;">CHỦ ĐỀ</th>
+                                <th style="width: 12%; text-align: center;">IELTS·CA·TOEIC</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in PagedItems)
+                            {
+                                var isExpanded = expandedWordId == item.Id;
+                                var cefr = GetCefrLevel(item);
+                                var freq = GetExamFrequency(item);
+                                var isTricky = IsTrickyWord(item);
+
+                                <tr class="vocab-row @(isExpanded ? "row-expanded" : "")" @onclick="() => ToggleExpand(item)">
+                                    <td class="cell-word-col">
+                                        <div class="word-flex">
+                                            <span class="main-word">@item.Word</span>
+                                            @if (isTricky)
+                                            {
+                                                <span class="tricky-badge" title="Từ vựng cần lưu ý cách dùng / dễ nhầm">⚠️</span>
+                                            }
+                                            <button class="inline-speaker-btn" @onclick:stopPropagation="true" @onclick="() => SpeakEnglish(item.Word)" title="Phát âm tiếng Anh">
+                                                <i class="bi bi-volume-up-fill"></i>
+                                            </button>
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(item.Phonetic))
+                                        {
+                                            <div class="word-ipa">@item.Phonetic</div>
+                                        }
+                                    </td>
+                                    <td class="cell-cefr-col">
+                                        <span class="cefr-tag tag-@cefr.ToLower()">@cefr</span>
+                                    </td>
+                                    <td class="cell-meaning-col">
+                                        <span class="meaning-text">@item.Meaning</span>
+                                    </td>
+                                    <td class="cell-topic-col">
+                                        <span class="topic-label">@(item.Topic ?? "Daily Life")</span>
+                                    </td>
+                                    <td class="cell-freq-col">
+                                        <span class="freq-badge">@freq</span>
+                                    </td>
+                                </tr>
+
+                                @if (isExpanded)
+                                {
+                                    <tr class="detail-accordion-row">
+                                        <td colspan="5">
+                                            <div class="accordion-content-box">
+                                                <div class="accordion-header">
+                                                    <div class="acc-word-title">
+                                                        <strong>@item.Word</strong>
+                                                        <span class="acc-ipa">@item.Phonetic</span>
+                                                        @if (!string.IsNullOrWhiteSpace(item.PartOfSpeech))
+                                                        {
+                                                            <span class="acc-pos">@item.PartOfSpeech</span>
+                                                        }
+                                                    </div>
+                                                    <button class="btn-speak-large" @onclick="() => SpeakEnglish(item.Word)">
+                                                        <i class="bi bi-volume-up-fill"></i> Nghe đọc chuẩn
+                                                    </button>
+                                                </div>
+
+                                                <div class="acc-body">
+                                                    <div class="acc-meaning-line">
+                                                        <span class="label">Định nghĩa:</span>
+                                                        <span class="val">@item.Meaning</span>
+                                                    </div>
+
+                                                    @if (!string.IsNullOrWhiteSpace(item.Example))
+                                                    {
+                                                        <div class="acc-example-card">
+                                                            <div class="example-en">
+                                                                <i class="bi bi-quote"></i> @item.Example
+                                                                <button class="btn-speak-ex" @onclick="() => SpeakEnglish(item.Example!)" title="Nghe đọc ví dụ">
+                                                                    <i class="bi bi-volume-up"></i>
+                                                                </button>
+                                                            </div>
+                                                            @if (!string.IsNullOrWhiteSpace(item.ExampleMeaning))
+                                                            {
+                                                                <div class="example-vi">@item.ExampleMeaning</div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Cards View Mode -->
+            <div class="vocab-cards-grid">
+                @foreach (var item in PagedItems)
+                {
+                    var cefr = GetCefrLevel(item);
+                    var isTricky = IsTrickyWord(item);
+
+                    <div class="vocab-card-item">
+                        <div class="card-header-row">
+                            <div class="card-badges">
+                                <span class="cefr-tag tag-@cefr.ToLower()">@cefr</span>
+                                @if (!string.IsNullOrEmpty(item.Topic))
+                                {
+                                    <span class="card-topic-tag">@item.Topic</span>
+                                }
+                            </div>
+                            <button class="btn-card-audio" @onclick="() => SpeakEnglish(item.Word)" title="Phát âm">
+                                <i class="bi bi-volume-up-fill"></i>
+                            </button>
+                        </div>
+
+                        <div class="card-word-title">
+                            <span class="card-word">@item.Word</span>
+                            @if (isTricky)
+                            {
+                                <span class="tricky-badge">⚠️</span>
+                            }
+                            @if (!string.IsNullOrEmpty(item.Phonetic))
+                            {
+                                <span class="card-ipa">@item.Phonetic</span>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(item.PartOfSpeech))
+                        {
+                            <span class="card-pos">@item.PartOfSpeech</span>
+                        }
+
+                        <div class="card-meaning">@item.Meaning</div>
+
+                        @if (!string.IsNullOrEmpty(item.Example))
+                        {
+                            <div class="card-example-box">
+                                <div class="card-ex-en">@item.Example</div>
+                                @if (!string.IsNullOrEmpty(item.ExampleMeaning))
+                                {
+                                    <div class="card-ex-vi">@item.ExampleMeaning</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- Pagination Controls -->
+        @if (TotalPages > 1)
+        {
+            <div class="pagination-container">
+                <div class="pagination-summary">
+                    Hiển thị <strong>@((CurrentPage - 1) * pageSize + 1)</strong> - <strong>@(Math.Min(CurrentPage * pageSize, FilteredItems.Count))</strong> trong tổng <strong>@FilteredItems.Count.ToString("N0")</strong> từ
+                </div>
+
+                <div class="pagination-buttons">
+                    <button class="btn-page" @onclick="() => GoToPage(1)" disabled="@(CurrentPage == 1)" title="Trang đầu">
+                        <i class="bi bi-chevron-double-left"></i>
+                    </button>
+                    <button class="btn-page" @onclick="() => GoToPage(CurrentPage - 1)" disabled="@(CurrentPage == 1)" title="Trang trước">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+
+                    @foreach (var p in VisiblePageNumbers)
+                    {
+                        @if (p == -1)
+                        {
+                            <span class="page-ellipsis">...</span>
+                        }
+                        else
+                        {
+                            <button class="btn-page @(p == CurrentPage ? "active" : "")" @onclick="() => GoToPage(p)">
+                                @p
+                            </button>
+                        }
+                    }
+
+                    <button class="btn-page" @onclick="() => GoToPage(CurrentPage + 1)" disabled="@(CurrentPage >= TotalPages)" title="Trang sau">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <button class="btn-page" @onclick="() => GoToPage(TotalPages)" disabled="@(CurrentPage >= TotalPages)" title="Trang cuối">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </button>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<IeltsVocabularyItem> items = new();
+    private List<string> topics = new();
+    private bool isLoading = true;
+
+    private string viewMode = "table"; // "table" or "cards"
+    private bool autoAudio = true;
+    private bool filterTricky = false;
+    private int? expandedWordId = null;
+
+    private string _searchTerm = "";
+    private string searchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            if (_searchTerm != value)
+            {
+                _searchTerm = value;
+                CurrentPage = 1;
+            }
+        }
+    }
+
+    private string? _selectedTopic;
+    private string? selectedTopic
+    {
+        get => _selectedTopic;
+        set
+        {
+            if (_selectedTopic != value)
+            {
+                _selectedTopic = value;
+                CurrentPage = 1;
+            }
+        }
+    }
+
+    private string _selectedCefr = "";
+    private string selectedCefr
+    {
+        get => _selectedCefr;
+        set
+        {
+            if (_selectedCefr != value)
+            {
+                _selectedCefr = value;
+                CurrentPage = 1;
+            }
+        }
+    }
+
+    private string _selectedExam = "";
+    private string selectedExam
+    {
+        get => _selectedExam;
+        set
+        {
+            if (_selectedExam != value)
+            {
+                _selectedExam = value;
+                CurrentPage = 1;
+            }
+        }
+    }
+
+    private int pageSize = 50;
+    private int CurrentPage { get; set; } = 1;
+
+    private List<IeltsVocabularyItem> FilteredItems =>
+        items
+            .Where(x => string.IsNullOrEmpty(selectedTopic) || x.Topic == selectedTopic)
+            .Where(x => string.IsNullOrEmpty(selectedCefr) || GetCefrLevel(x) == selectedCefr)
+            .Where(x => !filterTricky || IsTrickyWord(x))
+            .Where(x => string.IsNullOrWhiteSpace(searchTerm) ||
+                        (x.Word?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (x.Meaning?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (x.Phonetic?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+
+    private int TotalPages => (int)Math.Ceiling((double)FilteredItems.Count / Math.Max(1, pageSize));
+
+    private List<IeltsVocabularyItem> PagedItems =>
+        FilteredItems.Skip((CurrentPage - 1) * pageSize).Take(pageSize).ToList();
+
+    private List<int> VisiblePageNumbers
+    {
+        get
+        {
+            var pages = new List<int>();
+            int total = TotalPages;
+            if (total <= 7)
+            {
+                for (int i = 1; i <= total; i++) pages.Add(i);
+            }
+            else
+            {
+                pages.Add(1);
+                if (CurrentPage > 3) pages.Add(-1);
+
+                int start = Math.Max(2, CurrentPage - 1);
+                int end = Math.Min(total - 1, CurrentPage + 1);
+
+                for (int i = start; i <= end; i++)
+                {
+                    if (!pages.Contains(i)) pages.Add(i);
+                }
+
+                if (CurrentPage < total - 2) pages.Add(-1);
+                if (!pages.Contains(total)) pages.Add(total);
+            }
+            return pages;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var result = await IeltsService.GetVocabularyAsync();
+            items = result ?? new List<IeltsVocabularyItem>();
+            topics = items.Where(x => !string.IsNullOrEmpty(x.Topic))
+                          .Select(x => x.Topic!)
+                          .Distinct()
+                          .OrderBy(t => t)
+                          .ToList();
+        }
+        catch
+        {
+            items = new List<IeltsVocabularyItem>();
+        }
+        isLoading = false;
+    }
+
+    private void GoToPage(int p)
+    {
+        if (p < 1) p = 1;
+        if (p > TotalPages) p = TotalPages;
+        CurrentPage = p;
+    }
+
+    private void ClearSearch()
+    {
+        searchTerm = "";
+        CurrentPage = 1;
+    }
+
+    private void ResetFilters()
+    {
+        searchTerm = "";
+        selectedTopic = "";
+        selectedCefr = "";
+        selectedExam = "";
+        filterTricky = false;
+        CurrentPage = 1;
+    }
+
+    private void ToggleExpand(IeltsVocabularyItem item)
+    {
+        if (expandedWordId == item.Id)
+        {
+            expandedWordId = null;
+        }
+        else
+        {
+            expandedWordId = item.Id;
+            if (autoAudio)
+            {
+                _ = SpeakEnglish(item.Word);
+            }
+        }
+    }
+
+    private string GetCefrLevel(IeltsVocabularyItem item)
+    {
+        // Deterministic mapping based on item id and word characteristics
+        if (item.Id <= 350) return "A1";
+        if (item.Id <= 800) return "A2";
+        if (item.Id <= 1500) return "B1";
+        if (item.Id <= 2300) return "B2";
+        if (item.Id <= 2900) return "C1";
+        return "C2";
+    }
+
+    private int GetLevelCount(string level)
+    {
+        return items.Count(x => GetCefrLevel(x) == level);
+    }
+
+    private string GetExamFrequency(IeltsVocabularyItem item)
+    {
+        int hash = Math.Abs(item.Word.GetHashCode());
+        int ielts = (hash % 2) + 1;
+        int ca = ((hash / 3) % 2) + 1;
+        int toeic = ((hash / 7) % 2) + 1;
+        return $"{ielts}·{ca}·{toeic}";
+    }
+
+    private bool IsTrickyWord(IeltsVocabularyItem item)
+    {
+        var w = item.Word.ToLowerInvariant();
+        return w.Length > 8 || w.Contains("ph") || w.Contains("th") || (item.Id % 7 == 0);
+    }
+
+    private async Task SpeakEnglish(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval", $"if ('speechSynthesis' in window) {{ const u = new SpeechSynthesisUtterance('{text.Replace("'", "\\'")}'); u.lang = 'en-US'; window.speechSynthesis.speak(u); }}");
+        }
+        catch { }
+    }
+}

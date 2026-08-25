@@ -8,6 +8,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject HttpClient Http
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
 <PageTitle>Quản lý Từ vựng HSK - Admin Hub</PageTitle>
 
@@ -36,10 +37,10 @@
                 <i class="bi bi-file-earmark-excel-fill text-success"></i>
                 <span>@(isImporting ? "Đang nhập..." : "Nhập Excel/CSV")</span>
             </button>
-            <button class="btn-secondary-action" @onclick="DownloadTemplate">
+            <a href="@templateUrl" class="btn-secondary-action" download="HSK_Vocabulary_Template.xlsx" style="text-decoration:none;">
                 <i class="bi bi-file-earmark-arrow-down"></i>
                 <span>Tải Mẫu Excel</span>
-            </button>
+            </a>
         </div>
     </div>
 
@@ -264,8 +265,12 @@
     private HskVocabularyItem? editingItem = null;
     private HskVocabularyItem form = new();
 
+    private string templateUrl = "";
+
     protected override async Task OnInitializedAsync()
     {
+        var apiBase = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101";
+        templateUrl = $"{apiBase.TrimEnd('/')}/api/hsk/vocab/template-excel";
         await LoadData();
     }
 
@@ -403,11 +408,5 @@
             importSuccess = result.Fail == 0;
         }
         await LoadData();
-    }
-
-    private async Task DownloadTemplate()
-    {
-        var url = "/api/hsk/vocab/template-excel";
-        await JS.InvokeVoidAsync("open", url, "_blank");
     }
 }

@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using Blazored.LocalStorage;
 using Frontend.App.Models;
 
 namespace Frontend.App.Services;
@@ -6,13 +7,15 @@ namespace Frontend.App.Services;
 public class HskService
 {
     private readonly HttpClient _http;
+    private readonly ILocalStorageService _localStorage;
     private readonly Dictionary<string, HskExamData> _examCache = new();
 
     public HttpClient Client => _http;
 
-    public HskService(HttpClient http)
+    public HskService(HttpClient http, ILocalStorageService localStorage)
     {
         _http = http;
+        _localStorage = localStorage;
     }
 
     // === Exam loading ===
@@ -155,6 +158,55 @@ public class HskService
         catch
         {
             return false;
+        }
+    }
+
+    // === Gộp tiến độ cũ trong localStorage lên tài khoản (chạy khi đăng nhập) ===
+    public async Task MigrateLocalProgressToAccountAsync()
+    {
+        const string MarkerKey = "hsk_progress_migrated";
+        try
+        {
+            // Đã migrate rồi thì bỏ qua (tránh quét lại mỗi lần load)
+            if (await _localStorage.GetItemAsync<bool>(MarkerKey)) return;
+
+            var allIds = new HashSet<int>();
+            var keysFound = new List<string>();
+            foreach (var level in new[] { "HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6", "HSK7", "HSK8", "HSK9" })
+            {
+                var key = $"hsk_learned_{level}";
+                var stored = await _localStorage.GetItemAsync<string>(key);
+                if (string.IsNullOrEmpty(stored)) continue;
+                keysFound.Add(key);
+                try
+                {
+                    var ids = System.Text.Json.JsonSerializer.Deserialize<List<int>>(stored);
+                    if (ids != null)
+                        foreach (var id in ids) allIds.Add(id);
+                }
+                catch { }
+            }
+
+            if (keysFound.Count == 0)
+            {
+                await _localStorage.SetItemAsync(MarkerKey, true);
+                return;
+            }
+
+            var response = await _http.PostAsJsonAsync("/api/hsk/vocab/progress/migrate",
+                new { vocabularyIds = allIds.ToList() });
+
+            // Chỉ dọn key khi đẩy thành công, tránh mất dữ liệu nếu lỗi mạng
+            if (response.IsSuccessStatusCode)
+            {
+                foreach (var key in keysFound)
+                    await _localStorage.RemoveItemAsync(key);
+                await _localStorage.SetItemAsync(MarkerKey, true);
+            }
+        }
+        catch
+        {
+            // Lỗi mạng -> giữ nguyên localStorage, lần sau thử lại
         }
     }
 

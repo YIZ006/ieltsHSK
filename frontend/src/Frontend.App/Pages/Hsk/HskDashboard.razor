@@ -201,6 +201,8 @@
         bool isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
         if (isAuthenticated)
         {
+            // Gộp tiến độ cũ trong localStorage lên tài khoản (nếu chưa), sau đó chỉ theo server
+            await HskService.MigrateLocalProgressToAccountAsync();
             var serverIds = await HskService.GetVocabProgressAsync();
             if (serverIds != null)
             {

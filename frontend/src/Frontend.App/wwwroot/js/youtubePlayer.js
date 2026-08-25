@@ -22,7 +22,7 @@ window.initYouTubePlayer = function (videoId, dotNetHelper) {
 
 function createPlayer(videoId) {
     if (ytPlayer) {
-        ytPlayer.destroy();
+        try { ytPlayer.destroy(); } catch (e) { }
     }
     ytPlayer = new YT.Player('yt-hidden-player', {
         height: '0',
@@ -41,7 +41,6 @@ function createPlayer(videoId) {
 }
 
 function onPlayerReady(event) {
-    // Player is ready
     if (ytDotNetHelper) {
         ytDotNetHelper.invokeMethodAsync('OnPlayerReady', ytPlayer.getDuration());
     }
@@ -88,16 +87,157 @@ window.setYouTubeVolume = function(volume) {
     }
 }
 
-window.handleSeekClick = function(event) {
-    if (!ytPlayer || !ytPlayer.getDuration) return;
-    
-    // Calculate progress percentage
-    let rect = event.currentTarget.getBoundingClientRect();
-    let x = event.clientX - rect.left;
-    let width = rect.width;
-    let percentage = x / width;
-    
-    // Seek
-    let duration = ytPlayer.getDuration();
-    ytPlayer.seekTo(duration * percentage, true);
-}
+// ═══════════════════════════════════════════════════════════════════════════
+// YOUTUBE SHADOWING VIDEO INTEROP
+// ═══════════════════════════════════════════════════════════════════════════
+let shadowPlayer = null;
+let shadowInterval = null;
+
+window.initYouTubeShadowPlayer = function (elementId, videoId, dotNetHelper) {
+    if (shadowInterval) clearInterval(shadowInterval);
+    if (shadowPlayer) {
+        try { shadowPlayer.destroy(); } catch (e) { }
+    }
+
+    const create = () => {
+        shadowPlayer = new YT.Player(elementId, {
+            height: '100%',
+            width: '100%',
+            videoId: videoId,
+            playerVars: {
+                'playsinline': 1,
+                'controls': 1,
+                'rel': 0,
+                'modestbranding': 1
+            },
+            events: {
+                'onReady': function () {
+                    if (dotNetHelper) {
+                        try { dotNetHelper.invokeMethodAsync('OnShadowPlayerReady'); } catch (e) { }
+                    }
+                }
+            }
+        });
+    };
+
+    if (!window.YT || !window.YT.Player) {
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        window.onYouTubeIframeAPIReady = function() {
+            create();
+        };
+    } else {
+        create();
+    }
+};
+
+window.playYouTubeSegment = function (startTime, endTime, rate, isLoop, dotNetHelper) {
+    if (!shadowPlayer || !shadowPlayer.seekTo) return;
+    if (shadowInterval) clearInterval(shadowInterval);
+
+    if (rate && shadowPlayer.setPlaybackRate) {
+        shadowPlayer.setPlaybackRate(rate);
+    }
+
+    // Lead in slightly (60ms) before the first word
+    const safeStart = Math.max(0, startTime - 0.06);
+    shadowPlayer.seekTo(safeStart, true);
+    shadowPlayer.playVideo();
+
+    // Natural speech tail padding (0.18s) to allow final consonants to sound completely
+    const targetEnd = endTime + 0.18;
+
+    shadowInterval = setInterval(() => {
+        if (!shadowPlayer || !shadowPlayer.getCurrentTime) return;
+        const cur = shadowPlayer.getCurrentTime();
+        if (cur >= targetEnd) {
+            if (isLoop) {
+                shadowPlayer.seekTo(safeStart, true);
+                shadowPlayer.playVideo();
+            } else {
+                clearInterval(shadowInterval);
+                shadowPlayer.pauseVideo();
+                if (dotNetHelper) {
+                    try { dotNetHelper.invokeMethodAsync('OnSegmentPlaybackEnded'); } catch (e) { }
+                }
+            }
+        }
+    }, 40);
+};
+
+window.pauseYouTubeShadowPlayer = function () {
+    if (shadowInterval) clearInterval(shadowInterval);
+    if (shadowPlayer && shadowPlayer.pauseVideo) {
+        shadowPlayer.pauseVideo();
+    }
+};
+
+window.setYouTubeShadowRate = function (rate) {
+    if (shadowPlayer && shadowPlayer.setPlaybackRate) {
+        shadowPlayer.setPlaybackRate(rate);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DIRECT MP3 AUDIO SHADOWING (ENGNOVATE / CAMBRIDGE IELTS NATIVE AUDIO)
+// ═══════════════════════════════════════════════════════════════════════════
+let nativeAudio = null;
+let audioSegmentInterval = null;
+
+window.initAudioShadowPlayer = function (audioElementId, audioUrl) {
+    if (audioSegmentInterval) clearInterval(audioSegmentInterval);
+    nativeAudio = document.getElementById(audioElementId);
+    if (!nativeAudio) {
+        nativeAudio = new Audio(audioUrl);
+    } else if (audioUrl && nativeAudio.src !== audioUrl) {
+        nativeAudio.src = audioUrl;
+    }
+};
+
+window.playAudioSegment = function (startTime, endTime, rate, isLoop, dotNetHelper) {
+    if (!nativeAudio) {
+        nativeAudio = document.getElementById('engnovate-main-audio');
+    }
+    if (!nativeAudio) return;
+    if (audioSegmentInterval) clearInterval(audioSegmentInterval);
+
+    if (rate) {
+        nativeAudio.playbackRate = rate;
+    }
+
+    const safeStart = Math.max(0, startTime);
+    nativeAudio.currentTime = safeStart;
+    nativeAudio.play().catch(e => console.log('Audio play error:', e));
+
+    audioSegmentInterval = setInterval(() => {
+        if (!nativeAudio) return;
+        if (nativeAudio.currentTime >= endTime) {
+            if (isLoop) {
+                nativeAudio.currentTime = safeStart;
+                nativeAudio.play().catch(e => console.log('Audio play error:', e));
+            } else {
+                clearInterval(audioSegmentInterval);
+                nativeAudio.pause();
+                if (dotNetHelper) {
+                    try { dotNetHelper.invokeMethodAsync('OnSegmentPlaybackEnded'); } catch (e) { }
+                }
+            }
+        }
+    }, 25);
+};
+
+window.pauseAudioSegment = function () {
+    if (audioSegmentInterval) clearInterval(audioSegmentInterval);
+    if (nativeAudio) {
+        nativeAudio.pause();
+    }
+};
+
+window.setAudioSegmentRate = function (rate) {
+    if (nativeAudio && rate) {
+        nativeAudio.playbackRate = rate;
+    }
+};
+

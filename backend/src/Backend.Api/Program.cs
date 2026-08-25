@@ -314,6 +314,19 @@ app.MapDelete("/api/admin/listen-videos/{id}", async (int id, Backend.Infrastruc
     return Results.Ok(new { Message = "Video removed successfully" });
 });
 
+app.MapPut("/api/admin/listen-videos/{id}", async (int id, Backend.Application.DTOs.UpdateListenVideoRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var video = await dbContext.ListenVideos.FindAsync(new object[] { id }, cancellationToken);
+    if (video == null) return Results.NotFound();
+
+    if (!string.IsNullOrWhiteSpace(req.Title)) video.Title = req.Title.Trim();
+    if (!string.IsNullOrWhiteSpace(req.Level)) video.Level = req.Level.Trim();
+    if (!string.IsNullOrWhiteSpace(req.Category)) video.Category = req.Category.Trim();
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { Message = "Cập nhật thông tin video thành công", Video = video });
+});
+
 app.MapGet("/api/admin/listen-videos/template-excel", () =>
 {
     using var workbook = new ClosedXML.Excel.XLWorkbook();
@@ -322,18 +335,24 @@ app.MapGet("/api/admin/listen-videos/template-excel", () =>
     // Header
     worksheet.Cell(1, 1).Value = "Youtube Link";
     worksheet.Cell(1, 2).Value = "Transcript (Tiếng Anh)";
+    worksheet.Cell(1, 3).Value = "Level (A1-C2)";
+    worksheet.Cell(1, 4).Value = "Category (Chủ đề)";
     
     // Header styling
-    var headerRange = worksheet.Range("A1:B1");
+    var headerRange = worksheet.Range("A1:D1");
     headerRange.Style.Font.Bold = true;
     headerRange.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
     
     // Sample data
     worksheet.Cell(2, 1).Value = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
     worksheet.Cell(2, 2).Value = "Never gonna give you up, never gonna let you down...";
+    worksheet.Cell(2, 3).Value = "B2";
+    worksheet.Cell(2, 4).Value = "Giao tiếp";
     
-    worksheet.Column(1).Width = 50;
-    worksheet.Column(2).Width = 100;
+    worksheet.Column(1).Width = 45;
+    worksheet.Column(2).Width = 70;
+    worksheet.Column(3).Width = 15;
+    worksheet.Column(4).Width = 25;
     
     using var stream = new MemoryStream();
     workbook.SaveAs(stream);
@@ -367,12 +386,19 @@ app.MapPost("/api/admin/listen-videos/import-excel", async (Microsoft.AspNetCore
             var row = worksheet.Row(i);
             var urlCell = row.Cell(1);
             var transcriptCell = row.Cell(2);
+            var levelCell = row.Cell(3);
+            var categoryCell = row.Cell(4);
             
             var url = urlCell.GetString()?.Trim();
             if (string.IsNullOrEmpty(url) && urlCell.HasHyperlink)
                 url = urlCell.GetHyperlink().ExternalAddress?.ToString()?.Trim();
                 
             var transcript = transcriptCell.GetString()?.Trim();
+            var level = levelCell.GetString()?.Trim();
+            if (string.IsNullOrEmpty(level)) level = "B2";
+            
+            var category = categoryCell.GetString()?.Trim();
+            if (string.IsNullOrEmpty(category)) category = "Giao tiếp";
             
             if (string.IsNullOrEmpty(url)) continue;
 
@@ -420,8 +446,8 @@ app.MapPost("/api/admin/listen-videos/import-excel", async (Microsoft.AspNetCore
                 ChannelName = channel,
                 Duration = duration.ToString(@"hh\:mm\:ss"),
                 ThumbnailUrl = thumbnail,
-                Level = "Intermediate",
-                Category = "General",
+                Level = level,
+                Category = category,
                 IsApproved = true,
                 TranscriptUrl = r2Url,
                 WordCount = wordCount,
@@ -490,6 +516,215 @@ app.MapGet("/api/ielts/exams", async (Backend.Infrastructure.Persistence.AppDbCo
     
     return Results.Ok(exams);
 });
+
+// ─── IELTS SPEAK ALONG (SHADOWING): Cloudflare R2 Storage & Sync ───
+app.MapGet("/api/ielts/speak-along/{part}", async (
+    string part,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var cleanPart = part.ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+    var exam = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+        dbContext.Exams.Where(e => e.Category == "IELTS_SPEAK_ALONG" && e.Title.ToLower() == cleanPart && e.IsActive),
+        cancellationToken);
+
+    if (exam == null || string.IsNullOrWhiteSpace(exam.DataUrl))
+    {
+        return Results.NotFound(new { Message = $"No remote Speak Along exam found for {part}" });
+    }
+
+    return Results.Ok(new { DataUrl = exam.DataUrl, Title = exam.Title, Id = exam.Id });
+});
+
+app.MapPost("/api/ielts/speak-along/save", async (
+    Backend.Application.DTOs.SaveSpeakAlongRequest req,
+    Backend.Application.Abstractions.IR2StorageService r2Service,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Part))
+        return Results.BadRequest("Part is required.");
+
+    var cleanPart = req.Part.ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+    var json = System.Text.Json.JsonSerializer.Serialize(req.Data,
+        new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    var jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
+    var fileId = Guid.NewGuid().ToString("N")[..8];
+    var fileName = $"ielts/speak-along/{cleanPart}_{fileId}.json";
+
+    string jsonUrl;
+    try
+    {
+        using var ms = new MemoryStream(jsonBytes);
+        jsonUrl = await r2Service.UploadFileAsync(ms, fileName, "application/json", cancellationToken);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { Message = $"Lỗi khi tải lên Cloudflare R2: {ex.Message}" });
+    }
+
+    var exam = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+        dbContext.Exams.Where(e => e.Category == "IELTS_SPEAK_ALONG" && e.Title.ToLower() == cleanPart),
+        cancellationToken);
+
+    if (exam == null)
+    {
+        exam = new Backend.Domain.Entities.Exam
+        {
+            Title = cleanPart,
+            DataUrl = jsonUrl,
+            Category = "IELTS_SPEAK_ALONG",
+            IsActive = true
+        };
+        dbContext.Exams.Add(exam);
+    }
+    else
+    {
+        exam.DataUrl = jsonUrl;
+        exam.IsActive = true;
+    }
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { Success = true, R2Url = jsonUrl, Id = exam.Id });
+}).DisableAntiforgery();
+
+app.MapPost("/api/ielts/speak-along/upload-file", async (
+    Microsoft.AspNetCore.Http.IFormFile file,
+    string part,
+    Backend.Application.Abstractions.IR2StorageService r2Service,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    if (file == null || file.Length == 0)
+        return Results.BadRequest("No file uploaded.");
+
+    var cleanPart = (part ?? "100sentences").ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+    var fileId = Guid.NewGuid().ToString("N")[..8];
+    var fileName = $"ielts/speak-along/{cleanPart}_{fileId}.json";
+
+    using var stream = file.OpenReadStream();
+    string jsonUrl;
+    try
+    {
+        jsonUrl = await r2Service.UploadFileAsync(stream, fileName, "application/json", cancellationToken);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { Message = $"Lỗi khi tải lên Cloudflare R2: {ex.Message}" });
+    }
+
+    var exam = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+        dbContext.Exams.Where(e => e.Category == "IELTS_SPEAK_ALONG" && e.Title.ToLower() == cleanPart),
+        cancellationToken);
+
+    if (exam == null)
+    {
+        exam = new Backend.Domain.Entities.Exam
+        {
+            Title = cleanPart,
+            DataUrl = jsonUrl,
+            Category = "IELTS_SPEAK_ALONG",
+            IsActive = true
+        };
+        dbContext.Exams.Add(exam);
+    }
+    else
+    {
+        exam.DataUrl = jsonUrl;
+        exam.IsActive = true;
+    }
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { Success = true, R2Url = jsonUrl, Id = exam.Id });
+}).DisableAntiforgery();
+
+app.MapGet("/api/ielts/audio-shadowing", async (
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var exam = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+        dbContext.Exams.Where(e => e.Category == "IELTS_AUDIO_SHADOWING_CATALOG" && e.IsActive),
+        cancellationToken);
+
+    if (exam == null)
+    {
+        return Results.NotFound(new { Message = "Chưa có catalog Audio Shadowing trên R2." });
+    }
+
+    return Results.Ok(new { DataUrl = exam.DataUrl, Title = exam.Title });
+}).DisableAntiforgery();
+
+app.MapPost("/api/ielts/audio-shadowing/save", async (
+    System.Text.Json.JsonElement payload,
+    Backend.Application.Abstractions.IR2StorageService r2Service,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var json = payload.GetRawText();
+    var jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
+    var fileId = Guid.NewGuid().ToString("N")[..8];
+    var fileName = $"ielts/audio-shadowing/catalog_{fileId}.json";
+
+    string jsonUrl;
+    try
+    {
+        using var ms = new MemoryStream(jsonBytes);
+        jsonUrl = await r2Service.UploadFileAsync(ms, fileName, "application/json", cancellationToken);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { Message = $"Lỗi khi tải lên Cloudflare R2: {ex.Message}" });
+    }
+
+    var exam = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+        dbContext.Exams.Where(e => e.Category == "IELTS_AUDIO_SHADOWING_CATALOG"),
+        cancellationToken);
+
+    if (exam == null)
+    {
+        exam = new Backend.Domain.Entities.Exam
+        {
+            Title = "IELTS Audio Shadowing Catalog",
+            DataUrl = jsonUrl,
+            Category = "IELTS_AUDIO_SHADOWING_CATALOG",
+            IsActive = true
+        };
+        dbContext.Exams.Add(exam);
+    }
+    else
+    {
+        exam.DataUrl = jsonUrl;
+        exam.IsActive = true;
+    }
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { Success = true, R2Url = jsonUrl, Id = exam.Id });
+}).DisableAntiforgery();
+
+app.MapPost("/api/ielts/audio-shadowing/upload-lesson", async (
+    string lessonId,
+    System.Text.Json.JsonElement payload,
+    Backend.Application.Abstractions.IR2StorageService r2Service,
+    CancellationToken cancellationToken) =>
+{
+    var safeId = string.IsNullOrWhiteSpace(lessonId) ? Guid.NewGuid().ToString("N")[..8] : lessonId.Trim().ToLowerInvariant();
+    var json = payload.GetRawText();
+    var jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
+    var fileName = $"ielts/audio-shadowing/lessons/{safeId}.json";
+
+    string jsonUrl;
+    try
+    {
+        using var ms = new MemoryStream(jsonBytes);
+        jsonUrl = await r2Service.UploadFileAsync(ms, fileName, "application/json", cancellationToken);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { Message = $"Lỗi khi tải lên Cloudflare R2: {ex.Message}" });
+    }
+
+    return Results.Ok(new { Success = true, LessonId = safeId, R2Url = jsonUrl });
+}).DisableAntiforgery();
 
 app.MapPost("/api/auth/register", async (RegisterRequest request, IAuthService authService, CancellationToken cancellationToken) =>
 {
@@ -1521,6 +1756,286 @@ app.MapPost("/api/hsk/save-exam", async (
     return Results.Ok(new { Url = jsonUrl, Id = test.Id });
 });
 
+// ─── IELTS: Vocabulary CRUD ───
+app.MapGet("/api/ielts/vocab", async (string? topic, string? search, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var query = dbContext.IeltsVocabularies.AsQueryable();
+    if (!string.IsNullOrEmpty(topic))
+        query = query.Where(v => v.Topic == topic);
+    if (!string.IsNullOrEmpty(search))
+        query = query.Where(v => v.Word.Contains(search) || v.Meaning.Contains(search));
+    var items = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        query.OrderBy(v => v.DisplayOrder).ThenBy(v => v.Id), cancellationToken);
+    return Results.Ok(items.Select(v => new
+    {
+        v.Id, v.Word, v.Phonetic, v.PartOfSpeech, v.Meaning,
+        v.Example, v.ExampleMeaning, v.Topic, v.DisplayOrder, v.IsActive, v.CreatedAt
+    }));
+});
+
+app.MapPost("/api/ielts/vocab", async (IeltsVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    bool exists = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
+        dbContext.IeltsVocabularies, v => v.Word == req.Word && v.Meaning == req.Meaning, cancellationToken);
+    if (exists) return Results.BadRequest("Cặp (từ, nghĩa) này đã tồn tại.");
+
+    var vocab = new Backend.Domain.Entities.IeltsVocabulary
+    {
+        Word = req.Word.Trim(),
+        Phonetic = req.Phonetic?.Trim(),
+        PartOfSpeech = req.PartOfSpeech?.Trim(),
+        Meaning = req.Meaning.Trim(),
+        Example = req.Example?.Trim(),
+        ExampleMeaning = req.ExampleMeaning?.Trim(),
+        Topic = req.Topic?.Trim(),
+        DisplayOrder = req.DisplayOrder ?? 0,
+        IsActive = req.IsActive ?? true
+    };
+    dbContext.IeltsVocabularies.Add(vocab);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { Id = vocab.Id });
+});
+
+app.MapPut("/api/ielts/vocab/{id:int}", async (int id, IeltsVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var vocab = await dbContext.IeltsVocabularies.FindAsync(new object[] { id }, cancellationToken);
+    if (vocab == null) return Results.NotFound();
+
+    bool exists = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
+        dbContext.IeltsVocabularies, v => v.Id != id && v.Word == req.Word && v.Meaning == req.Meaning, cancellationToken);
+    if (exists) return Results.BadRequest("Cặp (từ, nghĩa) này đã tồn tại ở dòng khác.");
+
+    vocab.Word = req.Word.Trim();
+    vocab.Phonetic = req.Phonetic?.Trim();
+    vocab.PartOfSpeech = req.PartOfSpeech?.Trim();
+    vocab.Meaning = req.Meaning.Trim();
+    vocab.Example = req.Example?.Trim();
+    vocab.ExampleMeaning = req.ExampleMeaning?.Trim();
+    vocab.Topic = req.Topic?.Trim();
+    if (req.DisplayOrder.HasValue) vocab.DisplayOrder = req.DisplayOrder.Value;
+    if (req.IsActive.HasValue) vocab.IsActive = req.IsActive.Value;
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok();
+});
+
+app.MapDelete("/api/ielts/vocab/{id:int}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var vocab = await dbContext.IeltsVocabularies.FindAsync(new object[] { id }, cancellationToken);
+    if (vocab == null) return Results.NotFound();
+    dbContext.IeltsVocabularies.Remove(vocab);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok();
+});
+
+// ─── IELTS: Vocabulary Excel Template ───
+app.MapGet("/api/ielts/vocab/template-excel", () =>
+{
+    using var workbook = new ClosedXML.Excel.XLWorkbook();
+    var worksheet = workbook.Worksheets.Add("IELTS Vocabulary");
+    string[] headers = { "Word", "Phonetic", "PartOfSpeech", "Meaning", "Example", "ExampleMeaning", "Topic", "DisplayOrder" };
+    for (int i = 0; i < headers.Length; i++)
+        worksheet.Cell(1, i + 1).Value = headers[i];
+    var headerRange = worksheet.Range(1, 1, 1, headers.Length);
+    headerRange.Style.Font.Bold = true;
+    headerRange.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+
+    worksheet.Cell(2, 1).Value = "achieve";
+    worksheet.Cell(2, 2).Value = "/əˈtʃiːv/";
+    worksheet.Cell(2, 3).Value = "verb";
+    worksheet.Cell(2, 4).Value = "đạt được, hoàn thành";
+    worksheet.Cell(2, 5).Value = "She achieved her goal of becoming a doctor.";
+    worksheet.Cell(2, 6).Value = "Cô ấy đã đạt được mục tiêu trở thành bác sĩ.";
+    worksheet.Cell(2, 7).Value = "Education";
+    worksheet.Cell(2, 8).Value = 1;
+    worksheet.Cell(3, 1).Value = "sustainable";
+    worksheet.Cell(3, 2).Value = "/səˈsteɪnəbl/";
+    worksheet.Cell(3, 3).Value = "adjective";
+    worksheet.Cell(3, 4).Value = "bền vững";
+    worksheet.Cell(3, 5).Value = "We need sustainable development to protect the environment.";
+    worksheet.Cell(3, 6).Value = "Chúng ta cần phát triển bền vững để bảo vệ môi trường.";
+    worksheet.Cell(3, 7).Value = "Environment";
+    worksheet.Cell(3, 8).Value = 2;
+
+    worksheet.Column(1).Width = 16;
+    worksheet.Column(2).Width = 16;
+    worksheet.Column(3).Width = 12;
+    worksheet.Column(4).Width = 28;
+    worksheet.Column(5).Width = 48;
+    worksheet.Column(6).Width = 42;
+    worksheet.Column(7).Width = 16;
+    worksheet.Column(8).Width = 13;
+
+    using var stream = new MemoryStream();
+    workbook.SaveAs(stream);
+    stream.Position = 0;
+    return Results.File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "IELTS_Vocabulary_Template.xlsx");
+});
+
+// ─── IELTS: Vocabulary Excel Import (JSON → R2 ielts-vocab/ → DB) ───
+app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IFormFile file,
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        Backend.Application.Abstractions.IR2StorageService r2Storage,
+        HttpContext httpContext,
+        CancellationToken cancellationToken) =>
+{
+    if (file == null || file.Length == 0)
+        return Results.BadRequest("File không hợp lệ hoặc trống.");
+    if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        return Results.BadRequest("Vui lòng upload file Excel (.xlsx)");
+
+    var mode = httpContext.Request.Form.TryGetValue("mode", out var modeValue) &&
+               modeValue.ToString().Trim().Equals("upsert", StringComparison.OrdinalIgnoreCase)
+        ? "upsert"
+        : "skip";
+
+    // Đọc toàn bộ dòng dữ liệu (bỏ header), 8 cột theo template
+    var rows = new List<string[]>();
+    using (var stream = file.OpenReadStream())
+    using (var workbook = new ClosedXML.Excel.XLWorkbook(stream))
+    {
+        var worksheet = workbook.Worksheet(1);
+        var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+        for (int i = 2; i <= lastRow; i++)
+        {
+            var r = worksheet.Row(i);
+            rows.Add(new[]
+            {
+                r.Cell(1).GetString()?.Trim() ?? "",
+                r.Cell(2).GetString()?.Trim() ?? "",
+                r.Cell(3).GetString()?.Trim() ?? "",
+                r.Cell(4).GetString()?.Trim() ?? "",
+                r.Cell(5).GetString()?.Trim() ?? "",
+                r.Cell(6).GetString()?.Trim() ?? "",
+                r.Cell(7).GetString()?.Trim() ?? "",
+                r.Cell(8).GetString()?.Trim() ?? ""
+            });
+        }
+    }
+
+    int success = 0, fail = 0, duplicate = 0, updated = 0;
+    var errors = new List<string>();
+    var jsonItems = new List<object>();
+    var seenInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    for (int i = 0; i < rows.Count; i++)
+    {
+        var cells = rows[i];
+        try
+        {
+            var word = cells[0];
+            var meaning = cells[3];
+            if (string.IsNullOrEmpty(word) || string.IsNullOrEmpty(meaning)) continue;
+
+            jsonItems.Add(new
+            {
+                word,
+                phonetic = HskVocabCsvParser.NullIfEmpty(cells[1]),
+                partOfSpeech = HskVocabCsvParser.NullIfEmpty(cells[2]),
+                meaning,
+                example = HskVocabCsvParser.NullIfEmpty(cells[4]),
+                exampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]),
+                topic = HskVocabCsvParser.NullIfEmpty(cells[6]),
+                displayOrder = int.TryParse(cells[7], out int ordVal) ? ordVal : 0
+            });
+
+            var dedupeKey = $"{word}|{meaning}".ToLowerInvariant();
+            if (!seenInFile.Add(dedupeKey)) { duplicate++; continue; }
+
+            var existing = await dbContext.IeltsVocabularies.FirstOrDefaultAsync(
+                v => v.Word == word && v.Meaning == meaning, cancellationToken);
+
+            if (existing != null)
+            {
+                if (mode == "upsert")
+                {
+                    existing.Phonetic = HskVocabCsvParser.NullIfEmpty(cells[1]);
+                    existing.PartOfSpeech = HskVocabCsvParser.NullIfEmpty(cells[2]);
+                    existing.Example = HskVocabCsvParser.NullIfEmpty(cells[4]);
+                    existing.ExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]);
+                    existing.Topic = HskVocabCsvParser.NullIfEmpty(cells[6]);
+                    if (int.TryParse(cells[7], out int ord)) existing.DisplayOrder = ord;
+                    updated++;
+                }
+                else duplicate++;
+                continue;
+            }
+
+            dbContext.IeltsVocabularies.Add(new Backend.Domain.Entities.IeltsVocabulary
+            {
+                Word = word,
+                Phonetic = HskVocabCsvParser.NullIfEmpty(cells[1]),
+                PartOfSpeech = HskVocabCsvParser.NullIfEmpty(cells[2]),
+                Meaning = meaning,
+                Example = HskVocabCsvParser.NullIfEmpty(cells[4]),
+                ExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]),
+                Topic = HskVocabCsvParser.NullIfEmpty(cells[6]),
+                DisplayOrder = int.TryParse(cells[7], out int order) ? order : 0,
+                IsActive = true
+            });
+            success++;
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"Dòng {i + 1}: {ex.Message}");
+            fail++;
+        }
+    }
+
+    try
+    {
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Lỗi khi lưu từ vựng vào database: {ex.Message}");
+    }
+
+    // Serialize toàn bộ dòng hợp lệ -> JSON -> upload R2 ielts-vocab/
+    string jsonUrl;
+    var fileId = Guid.NewGuid().ToString("N");
+    var vocabJson = System.Text.Json.JsonSerializer.Serialize(new
+    {
+        fileName = file.FileName,
+        importedAt = DateTime.UtcNow,
+        mode,
+        totalCount = jsonItems.Count,
+        items = jsonItems
+    }, new System.Text.Json.JsonSerializerOptions
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+    });
+    var jsonBytes = System.Text.Encoding.UTF8.GetBytes(vocabJson);
+
+    try
+    {
+        using var ms = new MemoryStream(jsonBytes);
+        jsonUrl = await r2Storage.UploadFileAsync(ms, $"ielts-vocab/{fileId}.json", "application/json", cancellationToken);
+    }
+    catch
+    {
+        var dir = Path.Combine("wwwroot", "exports");
+        Directory.CreateDirectory(dir);
+        await File.WriteAllBytesAsync(Path.Combine(dir, $"{fileId}.json"), jsonBytes, cancellationToken);
+        jsonUrl = $"/exports/{fileId}.json";
+    }
+
+    var batch = new Backend.Domain.Entities.IeltsVocabularyImport
+    {
+        FileName = file.FileName,
+        JsonUrl = jsonUrl,
+        TotalRows = rows.Count,
+        ImportedCount = success,
+        UpdatedCount = updated,
+        DuplicateCount = duplicate,
+        FailedCount = fail
+    };
+    dbContext.IeltsVocabularyImports.Add(batch);
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new { Success = success, Fail = fail, Duplicate = duplicate, Updated = updated, Errors = errors, JsonUrl = jsonUrl });
+}).DisableAntiforgery();
+
 // ─── HSK: Vocabulary CRUD ───
 app.MapGet("/api/hsk/vocab", async (string? level, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
@@ -1658,6 +2173,46 @@ app.MapGet("/api/hsk/vocab/progress", [Microsoft.AspNetCore.Authorization.Author
         .ToListAsync(cancellationToken);
 
     return Results.Ok(new { vocabularyIds = ids });
+});
+
+app.MapPost("/api/hsk/vocab/progress/migrate", [Microsoft.AspNetCore.Authorization.Authorize] async (
+        MigrateVocabProgressRequest req,
+        System.Security.Claims.ClaimsPrincipal user,
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    if (req.VocabularyIds == null || req.VocabularyIds.Count == 0)
+        return Results.Ok(new { migrated = 0 });
+
+    // Chỉ nhận ID từ vựng tồn tại thật
+    var validIds = (await dbContext.HskVocabularies
+        .Where(v => req.VocabularyIds.Contains(v.Id))
+        .Select(v => v.Id)
+        .ToListAsync(cancellationToken)).ToHashSet();
+
+    // Bỏ qua những từ user đã có sẵn tiến độ
+    var existingIds = (await dbContext.HskVocabularyProgresses
+        .Where(p => p.UserId == userId && req.VocabularyIds.Contains(p.VocabularyId))
+        .Select(p => p.VocabularyId)
+        .ToListAsync(cancellationToken)).ToHashSet();
+
+    var toAdd = validIds.Except(existingIds)
+        .Select(id => new Backend.Domain.Entities.HskVocabularyProgress
+        {
+            UserId = userId,
+            VocabularyId = id
+        }).ToList();
+
+    if (toAdd.Count > 0)
+    {
+        dbContext.HskVocabularyProgresses.AddRange(toAdd);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    return Results.Ok(new { migrated = toAdd.Count });
 });
 
 app.MapPost("/api/hsk/vocab/progress/{vocabularyId:int}", [Microsoft.AspNetCore.Authorization.Authorize] async (
@@ -1963,6 +2518,8 @@ public record SaveToeicExamRequest(string CollectionName, string Title, int? Moc
 public record HskSaveExamRequest(string CollectionName, string Title, int? MockTestId, string ExamData);
 public record HskVocabularyRequest(string HskLevel, string Hanzi, string Pinyin, string Meaning, string? WordType, string? ExampleSentence, string? ExamplePinyin, string? ExampleMeaning, string? AudioUrl, int? DisplayOrder, bool? IsActive);
 public record UpdateVocabProgressRequest(bool Learned);
+public record MigrateVocabProgressRequest(List<int> VocabularyIds);
+public record IeltsVocabularyRequest(string Word, string? Phonetic, string? PartOfSpeech, string Meaning, string? Example, string? ExampleMeaning, string? Topic, int? DisplayOrder, bool? IsActive);
 
 /// <summary>
 /// Parser CSV hỗ trợ dấu ngoặc kép, dấu phẩy/chấm phẩy/tab trong ô và tự dò delimiter.

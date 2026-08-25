@@ -2,111 +2,502 @@
 @page "/ielts/speak-along/{Part}"
 @page "/ielts/noi-theo"
 @page "/ielts/noi-theo/{Part}"
-@layout Frontend.App.Layout.ExamLayout
+@layout Frontend.App.Layout.IeltsLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
-@using System.Net.Http.Json
+@using System.Text.Json
 @using Microsoft.JSInterop
 @inject SpeakAlongService SpeakAlongService
+@inject IeltsService IeltsService
+@inject HttpClient Http
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
+@implements IDisposable
 
-<PageTitle>IELTS Nói Theo - IeltsHSK</PageTitle>
+<PageTitle>IELTS Nói Theo (Shadowing) - IeltsHSK</PageTitle>
 
-@if (isLoading)
-{
-    <div class="sa-loading">
-        <div class="sa-spinner"></div>
-        <p>Đang tải bài nói theo...</p>
-    </div>
-}
-else if (exam == null)
-{
-    <div class="alert alert-warning">Không tải được dữ liệu.</div>
-}
-else
-{
-    <div class="sa-layout">
-        <aside class="sa-sidebar">
-            <div class="sa-sidebar-header">
-                <h2>@exam.Part</h2>
-                <span class="sa-level-badge">@exam.Level</span>
-            </div>
-            <div class="sa-part-tabs">
-                @foreach (var p in partNames)
+<div class="speak-along-page">
+    <!-- Top Header -->
+    <div class="page-top-header">
+        <div class="header-titles">
+            <div class="header-badge-row">
+                <span class="badge-hero">
+                    <i class="bi bi-mic-fill"></i> IELTS Shadowing Studio
+                </span>
+                <!-- Streak Badge -->
+                <span class="badge-streak" title="Số ngày học liên tiếp của bạn!">
+                    <span class="streak-flame">🔥</span>
+                    <strong>@streakDays ngày Streak</strong>
+                </span>
+                <!-- Nút Phỏng vấn Giả lập -->
+                @if (activePart != "YouTube" && activePart != "Audio")
                 {
-                    <button class="sa-part-tab @(activePart == p ? "active" : "")" @onclick="() => SwitchPart(p)">
-                        @p
+                    <button class="btn-mock-interview-toggle @(isMockInterviewMode ? "active" : "")" @onclick="ToggleMockInterviewMode">
+                        <i class="bi bi-person-video3"></i>
+                        <span>@(isMockInterviewMode ? "Thoát Phỏng Vấn" : "Phỏng Vấn Giả Lập")</span>
                     </button>
                 }
+                <!-- Nút Test Âm thanh ở góc -->
+                <button class="btn-corner-mic-test" @onclick="OpenAudioTestModal" title="Kiểm tra Micro & Loa tai nghe">
+                    <i class="bi bi-gear-wide-connected text-primary"></i>
+                    <span>Kiểm tra Micro & Loa</span>
+                    <span class="mic-status-indicator @(isMicReady ? "online" : "offline")"></span>
+                </button>
             </div>
-            <div class="sa-question-list">
-                @foreach (var item in currentItems)
-                {
-                    var isActive = currentItem?.Id == item.Id;
-                    <button class="sa-question-item @(isActive ? "active" : "")" @onclick="() => SelectItem(item)">
-                        <span class="sa-q-num">@item.Id</span>
-                        <span class="sa-q-text">@Truncate(item.Question, 40)</span>
-                    </button>
-                }
-            </div>
-        </aside>
+            <h1 class="page-title">Luyện Nói Theo & Phản Xạ IELTS (Shadowing)</h1>
+            <p class="page-subtitle">Phương pháp Shadowing chuẩn quốc tế: Luyện từng câu theo Audio chuẩn Cambridge IELTS & Engnovate, làm chủ ngữ điệu và phát âm như người bản xứ.</p>
+        </div>
 
-        <main class="sa-main">
-            @if (currentItem == null)
+        <div class="part-selector-tabs">
+            @foreach (var p in partList)
             {
-                <div class="sa-empty-state">
-                    <p>Chọn một câu hỏi từ danh sách bên trái.</p>
-                </div>
+                <button class="part-tab-btn @(activePart == p.Key ? "active" : "")" @onclick="() => SwitchPart(p.Key)">
+                    <span class="part-tab-num">@p.Key</span>
+                    <span class="part-tab-label">@p.Label</span>
+                </button>
             }
-            else
-            {
-                <div class="sa-content">
-                    <div class="sa-question-display">
-                        <h3>@currentItem.Question</h3>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-state">
+            <div class="custom-spinner"></div>
+            <p>Đang nạp dữ liệu bài nói theo...</p>
+        </div>
+    }
+    else if (activePart == "Audio")
+    {
+        <!-- ================================================================= -->
+        <!-- CHẾ ĐỘ: AUDIO SHADOWING (CAMBRIDGE IELTS & ENGNOVATE CHUẨN)       -->
+        <!-- ================================================================= -->
+        @if (selectedAudioLesson == null)
+        {
+            <!-- Danh sách Bài Audio Shadowing -->
+            <div class="audio-catalog-section">
+                <div class="section-intro-bar">
+                    <div class="intro-left">
+                        <h2 class="section-heading"><i class="bi bi-headphones text-primary"></i> Danh Sách Bài Audio Shadowing Chuẩn Cambridge & Engnovate</h2>
+                        <p class="section-desc">Audio gốc bản quyền kèm mốc thời gian từng câu <strong>100% chuẩn xác</strong>, không bị lệch hay ngắt chữ.</p>
+                    </div>
+                    <div class="overall-progress-chip">
+                        <i class="bi bi-disc text-primary"></i>
+                        <span>Hiện có: <strong>@audioLessons.Count</strong> bài luyện</span>
+                    </div>
+                </div>
+
+                <!-- Grid Audio Lesson Cards -->
+                <div class="audio-lesson-grid">
+                    @foreach (var lesson in audioLessons)
+                    {
+                        <div class="audio-lesson-card" @onclick="() => SelectAudioLesson(lesson)">
+                            <div class="audio-card-top">
+                                <div class="audio-icon-wrap">
+                                    <span class="audio-lesson-icon">@lesson.Icon</span>
+                                </div>
+                                <span class="audio-level-badge">@lesson.Level</span>
+                            </div>
+                            <div class="audio-card-body">
+                                <span class="audio-category-tag">@lesson.Category</span>
+                                <h3 class="audio-card-title">@lesson.Title</h3>
+                                <p class="audio-card-desc">@lesson.Description</p>
+                                <div class="audio-card-footer">
+                                    <span class="audio-unit-count"><i class="bi bi-list-check"></i> @lesson.TotalUnits câu</span>
+                                    <span class="btn-start-audio-shadow">Luyện Audio Shadowing →</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- ============================================================= -->
+            <!-- WORKSPACE: AUDIO SHADOWING (ENGNOVATE UI WITH NATIVE MP3)     -->
+            <!-- ============================================================= -->
+            <div class="engnovate-shadowing-container">
+                <!-- Header Bar -->
+                <div class="engnovate-header-bar">
+                    <button class="btn-engnovate-back" @onclick="BackToAudioList">
+                        <i class="bi bi-arrow-left"></i> Đổi Bài Nghe khác
+                    </button>
+                    <div class="engnovate-meta-info">
+                        <span class="mode-badge"><i class="bi bi-headphones"></i> Practice Mode: Audio Shadowing</span>
+                        <h2 class="exercise-video-title" title="@selectedAudioLesson.Title">@selectedAudioLesson.Title</h2>
+                    </div>
+                    <div class="engnovate-speed-bar">
+                        <span class="speed-title">Tốc độ:</span>
+                        <button class="speed-chip @(audioSpeed == 0.75 ? "active" : "")" @onclick="() => SetAudioSpeed(0.75)">0.75x</button>
+                        <button class="speed-chip @(audioSpeed == 1.0 ? "active" : "")" @onclick="() => SetAudioSpeed(1.0)">1.0x</button>
+                        <button class="speed-chip @(audioSpeed == 1.25 ? "active" : "")" @onclick="() => SetAudioSpeed(1.25)">1.25x</button>
+                    </div>
+                </div>
+
+                <!-- Main Grid -->
+                <div class="engnovate-main-grid">
+                    <!-- Cột 1: Audio Player & Kịch bản toàn bài -->
+                    <div class="engnovate-video-col">
+                        <div class="engnovate-video-card">
+                            <div class="engnovate-audio-player-box mb-3">
+                                <label class="audio-player-label">
+                                    <i class="bi bi-music-note-beamed text-primary"></i> Audio bài nghe gốc:
+                                </label>
+                                <audio id="engnovate-main-audio" class="dictation-audio w-100" controls src="@selectedAudioLesson.AudioUrl">
+                                    Trình duyệt không hỗ trợ thẻ audio.
+                                </audio>
+                            </div>
+                            <div class="unit-progress-bar-wrap">
+                                <div class="unit-progress-text">
+                                    <span>Tiến độ: <strong>@(currentAudioLineIndex + 1) / @selectedAudioLesson.Lines.Count</strong> câu</span>
+                                    <span class="completed-count-badge">@GetCompletedAudioLineCount() đã hoàn thành</span>
+                                </div>
+                                <div class="unit-progress-track">
+                                    <div class="unit-progress-fill" style="width: @((currentAudioLineIndex + 1) * 100 / Math.Max(1, selectedAudioLesson.Lines.Count))%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Full Transcript Accordion -->
+                        <div class="engnovate-transcript-wrapper">
+                            <div class="transcript-toggle-bar" @onclick="() => showFullTranscript = !showFullTranscript">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-file-text-fill text-primary"></i>
+                                    <strong>Toàn bộ kịch bản Audio (Full Transcript)</strong>
+                                </div>
+                                <i class="bi @(showFullTranscript ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                            </div>
+
+                            @if (showFullTranscript)
+                            {
+                                <div class="transcript-lines-list">
+                                    @for (int i = 0; i < selectedAudioLesson.Lines.Count; i++)
+                                    {
+                                        var lineIdx = i;
+                                        var line = selectedAudioLesson.Lines[i];
+                                        var isActive = lineIdx == currentAudioLineIndex;
+                                        <div class="transcript-line @(isActive ? "active-line" : "") @(line.IsCompleted ? "completed-line" : "")" 
+                                             @onclick="() => SelectAudioLine(lineIdx)">
+                                            <span class="line-speaker">(@(lineIdx + 1))</span>
+                                            <div class="line-content">
+                                                @if (!string.IsNullOrEmpty(line.Speaker))
+                                                {
+                                                    <span class="line-speaker-tag">@line.Speaker</span>
+                                                }
+                                                <span class="line-text">@line.Text</span>
+                                            </div>
+                                            <span class="line-time">@FormatTimestamp(line.StartTime)</span>
+                                            @if (line.IsCompleted)
+                                            {
+                                                <i class="bi bi-check-circle-fill text-success ms-1"></i>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
                     </div>
 
-                    <div class="sa-model-section">
-                        <button class="sa-btn-primary" @onclick="() => PlayModel(currentItem)">
-                            🔊 Nghe câu trả lời mẫu
-                        </button>
-                        <div class="sa-model-text">@currentItem.ModelAnswer</div>
-                    </div>
+                    <!-- Cột 2: Dictation & Shadowing Card (Engnovate) -->
+                    <div class="engnovate-shadow-col">
+                        <div class="dictation-card-wrapper">
+                            <!-- Unit Counter Header -->
+                            <div class="dictation-unit-counter-row">
+                                <span class="unit-counter-pill">
+                                    <i class="bi bi-bookmark-fill"></i> Câu @(currentAudioLineIndex + 1) / @selectedAudioLesson.Lines.Count
+                                </span>
+                                <span class="segment-timing-pill">
+                                    <i class="bi bi-clock-history"></i> @FormatTimestamp(currentAudioLine?.StartTime ?? 0) - @FormatTimestamp(currentAudioLine?.EndTime ?? 0)
+                                </span>
+                            </div>
 
-                    <div class="sa-practice-section">
-                        @if (state == SpeakAlongState.Idle)
-                        {
-                            <button class="sa-btn-success" @onclick="() => StartRecording(currentItem)">
-                                🎙️ Bắt đầu ghi âm
-                            </button>
-                        }
-                        else if (state == SpeakAlongState.Recording)
-                        {
-                            <div>
-                                <div class="sa-recording-indicator">🔴 Đang ghi âm...</div>
-                                <button class="sa-btn-danger" @onclick="() => StopRecording(currentItem)">
-                                    ⏹ Dừng
+                            <!-- Target Caption -->
+                            <div class="dictation-unit-wrapper">
+                                @if (!string.IsNullOrEmpty(currentAudioLine?.Speaker))
+                                {
+                                    <div class="caption-speaker-badge">
+                                        <i class="bi bi-person-fill"></i> @currentAudioLine.Speaker
+                                    </div>
+                                }
+                                <div class="dictation-unit-caption">
+                                    @for (int i = 0; i < modelTokens.Count; i++)
+                                    {
+                                        var token = modelTokens[i];
+                                        var isKaraokeActive = isPlayingAll && i == activeKaraokeWordIndex;
+                                        <span class="caption-word @(isKaraokeActive ? "karaoke-active" : "")">
+                                            @token
+                                        </span>
+                                    }
+                                </div>
+
+                                <div class="caption-action-bar">
+                                    <button class="btn-play-caption-tts" @onclick="PlayModelTts" title="Nghe AI đọc câu này">
+                                        <i class="bi bi-volume-up-fill"></i> Nghe TTS
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- User Input & Recording Area -->
+                            <div class="user-speech-card">
+                                <label class="speech-box-label">
+                                    <i class="bi bi-soundwave"></i> Lời bạn nói (Your speech):
+                                </label>
+
+                                <div class="speech-display-box @(state == PracticeState.Recording ? "is-recording" : "")">
+                                    @if (state == PracticeState.Recording)
+                                    {
+                                        <canvas id="active-recording-waveform" class="speech-live-waveform" width="460" height="50"></canvas>
+                                        <div class="speech-live-text">
+                                            @(string.IsNullOrWhiteSpace(liveTranscript) ? "Đang lắng nghe giọng nói của bạn..." : liveTranscript)
+                                        </div>
+                                    }
+                                    else if (state == PracticeState.Evaluating)
+                                    {
+                                        <div class="speech-evaluating-placeholder">
+                                            <div class="spinner-border text-primary spinner-border-sm"></div>
+                                            <span>Đang phân tích đối chiếu phát âm...</span>
+                                        </div>
+                                    }
+                                    else if (state == PracticeState.Result && evaluationResult != null)
+                                    {
+                                        <div class="speech-result-text">
+                                            @(string.IsNullOrWhiteSpace(evaluationResult.Transcript) ? "(Không nhận diện được giọng nói rõ ràng)" : $"\"{evaluationResult.Transcript}\"")
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="speech-placeholder">
+                                            Bấm nút Microphone tròn bên dưới và đọc theo phụ đề...
+                                        </div>
+                                    }
+                                </div>
+
+                                <!-- Big Circular Microphone Button (Engnovate Style) -->
+                                <div class="record-button-center-wrapper">
+                                    @if (state == PracticeState.Idle || state == PracticeState.Result)
+                                    {
+                                        <button class="big-engnovate-mic-btn" @onclick="StartRecording" title="Bắt đầu ghi âm nói theo">
+                                            <div class="mic-inner-circle">
+                                                <i class="bi bi-mic-fill"></i>
+                                            </div>
+                                            <span class="mic-btn-label">Bấm để Nói Theo</span>
+                                        </button>
+                                    }
+                                    else if (state == PracticeState.Recording)
+                                    {
+                                        <button class="big-engnovate-mic-btn recording-active" @onclick="StopRecording" title="Dừng và chấm điểm">
+                                            <div class="mic-inner-circle">
+                                                <i class="bi bi-stop-fill"></i>
+                                            </div>
+                                            <span class="mic-btn-label">Dừng & Chấm điểm (@recordDurationSec s)</span>
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Results & Word Diff Container -->
+                            @if (state == PracticeState.Result && evaluationResult != null)
+                            {
+                                <div class="engnovate-result-box">
+                                    <div class="result-score-banner @GetScoreColorClass(evaluationResult.SimilarityScore)">
+                                        <div class="score-main">
+                                            <span class="score-digit">@evaluationResult.SimilarityScore%</span>
+                                            <span class="score-lbl">Độ chính xác</span>
+                                        </div>
+                                        <div class="score-sub">
+                                            <span class="score-sub-item">⚡ <strong>@evaluationResult.Wpm WPM</strong></span>
+                                            <span class="score-sub-item">🎯 <strong>@GetBandEstimate(evaluationResult.SimilarityScore)</strong></span>
+                                        </div>
+                                    </div>
+
+                                    @if (!string.IsNullOrEmpty(userAudioUrl))
+                                    {
+                                        <div class="user-audio-review-bar">
+                                            <span class="audio-lbl"><i class="bi bi-headphones"></i> Nghe lại giọng của bạn:</span>
+                                            <audio src="@userAudioUrl" controls class="engnovate-audio-player"></audio>
+                                        </div>
+                                    }
+
+                                    <!-- Word-by-word Highlight Diff -->
+                                    <div class="dictation-diff-box">
+                                        <div class="diff-header">
+                                            <span><i class="bi bi-spellcheck"></i> Đối chiếu chi tiết từng từ:</span>
+                                            <div class="diff-legend">
+                                                <span class="legend-chip chip-exact">🟢 Chuẩn</span>
+                                                <span class="legend-chip chip-partial">🟡 Tạm ổn</span>
+                                                <span class="legend-chip chip-missed">🔴 Cần sửa</span>
+                                            </div>
+                                        </div>
+                                        <div class="diff-words-flow">
+                                            @foreach (var w in wordMatches)
+                                            {
+                                                <span class="diff-word-badge @GetWordMatchClass(w.MatchLevel)" title="@GetWordTooltip(w.MatchLevel)">
+                                                    @w.Word
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- Engnovate Control Buttons Bar -->
+                            <div class="engnovate-control-buttons-bar">
+                                <button class="engnovate-ctrl-btn btn-relisten" @onclick="PlayCurrentAudioLineOnce" title="Nghe lại câu này (Shift + R)">
+                                    <i class="bi bi-arrow-repeat"></i>
+                                    <span>Nghe lại câu</span>
+                                </button>
+                                <button class="engnovate-ctrl-btn btn-loop @(isLoopingAudio ? "active" : "")" @onclick="ToggleLoopAudio" title="Lặp đi lặp lại câu này">
+                                    <i class="bi bi-repeat"></i>
+                                    <span>@(isLoopingAudio ? "Đang lặp" : "Lặp câu")</span>
+                                </button>
+                                <button class="engnovate-ctrl-btn btn-prev auto-margin-left" @onclick="PrevAudioLine" disabled="@(currentAudioLineIndex == 0)" title="Câu trước">
+                                    <i class="bi bi-arrow-left"></i>
+                                    <span>Câu trước</span>
+                                </button>
+                                <button class="engnovate-ctrl-btn btn-next" @onclick="NextAudioLine" disabled="@(currentAudioLineIndex >= selectedAudioLesson.Lines.Count - 1)" title="Câu tiếp">
+                                    <span>Câu tiếp</span>
+                                    <i class="bi bi-arrow-right"></i>
                                 </button>
                             </div>
-                        }
-                        else if (state == SpeakAlongState.Result && lastResult != null)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else if (activePart == "YouTube")
+    {
+        <!-- ================================================================= -->
+        <!-- CHẾ ĐỘ: VIDEO SHADOWING YOUTUBE (KHÓA - SẮP CẬP NHẬT)              -->
+        <!-- ================================================================= -->
+        <div class="coming-soon-card-container">
+            <div class="coming-soon-card">
+                <div class="coming-soon-badge">
+                    <i class="bi bi-lock-fill"></i> Tính Năng Đang Nâng Cấp
+                </div>
+                <div class="coming-soon-icon-wrap">
+                    <span class="coming-soon-icon">🚀</span>
+                </div>
+                <h2 class="coming-soon-title">Video Shadowing (YouTube) Sẽ Sớm Ra Mắt!</h2>
+                <p class="coming-soon-desc">
+                    Hệ thống AI nhận diện và đồng bộ mốc thời gian phụ đề YouTube đang được tối ưu hóa để đạt độ chính xác chuẩn từng mili-giây. 
+                    Chức năng sẽ sớm được mở trong bản cập nhật tới!
+                </p>
+                <div class="coming-soon-recommendation">
+                    <i class="bi bi-lightbulb-fill text-warning"></i>
+                    <span>Trong thời gian này, bạn hãy luyện tập với <strong>Audio Shadowing (Cambridge IELTS)</strong> với Audio gốc bản quyền và mốc thời gian từng câu chuẩn xác 100%!</span>
+                </div>
+                <button class="btn-switch-to-audio" @onclick='() => SwitchPart("Audio")'>
+                    <i class="bi bi-headphones"></i>
+                    <span>Chuyển sang Audio Shadowing (Cambridge IELTS) ngay</span>
+                    <i class="bi bi-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    }
+    else if (exam == null || allItems.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bi bi-exclamation-circle text-warning fs-1"></i>
+            <h3>Chưa có dữ liệu bài nói cho phần này</h3>
+        </div>
+    }
+    else if (isMockInterviewMode)
+    {
+        <div class="mock-interview-container">
+            <div class="interview-header-card">
+                <div class="interview-title-row">
+                    <div class="interview-badge"><i class="bi bi-award-fill"></i> IELTS Speaking Mock Interview</div>
+                    <div class="interview-countdown @(interviewSecondsLeft <= 10 ? "urgent" : "")">
+                        <i class="bi bi-stopwatch"></i> Thời gian còn lại: <strong>@interviewSecondsLeft s</strong>
+                    </div>
+                </div>
+            </div>
+            @if (interviewState == InterviewState.QuestionActive)
+            {
+                <div class="interview-practice-box">
+                    <div class="examiner-avatar-box">
+                        <div class="examiner-icon">🎙️</div>
+                        <h3>Giám khảo đang lắng nghe bạn...</h3>
+                    </div>
+                    <div class="interview-record-area">
+                        @if (state == PracticeState.Idle)
                         {
-                            <div class="sa-result">
-                                <h4>Kết quả</h4>
-                                <div class="sa-score-grid">
-                                    <div>Độ tương đồng: @lastResult.SimilarityScore%</div>
-                                    <div>Phát âm: @lastResult.PronunciationScore%</div>
-                                    <div>Fluency: @lastResult.FluencyScore%</div>
-                                    <div>Timing: @lastResult.TimingScore%</div>
-                                </div>
-                                <p><strong>Bạn nói:</strong> @lastResult.Transcript</p>
-                                <button class="sa-btn-secondary" @onclick="Retry">🔄 Luyện lại</button>
-                            </div>
+                            <button class="btn-start-record btn-lg" @onclick="StartRecording">Bấm để trả lời</button>
+                        }
+                        else if (state == PracticeState.Recording)
+                        {
+                            <button class="btn-stop-record" @onclick="StopRecording">Hoàn thành câu này</button>
                         }
                     </div>
                 </div>
             }
-        </main>
+        </div>
+    }
+    else if (currentTopic == null)
+    {
+        <!-- View 10 Topic Cards -->
+        <div class="topics-overview-section">
+            <div class="section-intro-bar">
+                <div class="intro-left">
+                    <h2 class="section-heading"><i class="bi bi-grid-fill text-primary"></i> Chọn Chủ Đề Luyện Tập</h2>
+                </div>
+            </div>
+            <div class="topic-cards-grid">
+                @foreach (var topic in topics)
+                {
+                    <div class="topic-card" @onclick="() => SelectTopic(topic)">
+                        <div class="topic-card-header">
+                            <div class="topic-icon-box">@topic.Icon</div>
+                            <span class="topic-level-tag">@topic.LevelTag</span>
+                        </div>
+                        <h3 class="topic-title">@topic.TitleEn</h3>
+                        <p class="topic-sub">@topic.TitleVi</p>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- View Flashcard -->
+        <div class="flashcard-workspace">
+            <div class="flashcard-nav-header">
+                <button class="btn-back-to-topics" @onclick="BackToTopics"><i class="bi bi-arrow-left"></i> Đổi chủ đề</button>
+                <div class="topic-indicator-badge">@currentTopic.TitleEn</div>
+            </div>
+            @if (currentItem != null)
+            {
+                <div class="practice-main-grid">
+                    <div class="panel-card model-panel">
+                        <h2 class="question-title">@currentItem.Question</h2>
+                        <div class="karaoke-text-container">
+                            @currentItem.ModelAnswer
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Modal Audio & Mic Test -->
+@if (showAudioTestModal)
+{
+    <div class="audio-modal-overlay">
+        <div class="audio-modal-card">
+            <div class="audio-modal-header">
+                <h3>Kiểm tra Micro & Âm thanh</h3>
+                <button class="audio-modal-close" @onclick="CloseAudioTestModal">×</button>
+            </div>
+            <div class="audio-modal-body">
+                <p>Thử nói vào micro:</p>
+                <canvas id="shadowing-waveform" class="waveform-canvas" width="460" height="60"></canvas>
+            </div>
+            <div class="audio-modal-footer">
+                <button class="btn-modal-done" @onclick="CloseAudioTestModal">Xong</button>
+            </div>
+        </div>
     </div>
 }
 
@@ -115,110 +506,879 @@ else
 
     private bool isLoading = true;
     private SpeakAlongExamData? exam;
-    private string activePart = "Part 1";
-    private List<string> partNames = new() { "Part 1", "Part 2", "Part 3" };
-    private List<SpeakAlongItem> currentItems = new();
-    private SpeakAlongItem? currentItem;
-    private SpeakAlongState state = SpeakAlongState.Idle;
-    private SpeakAlongResult? lastResult;
-    private DotNetObjectReference<IeltsSpeakAlong>? _dotNetRef;
+    private string activePart = "Audio";
 
-    private enum SpeakAlongState { Idle, Recording, Result }
+    private List<(string Key, string Label)> partList = new()
+    {
+        ("Audio", "🎧 Audio Shadowing (Cambridge IELTS)"),
+        ("100Sentences", "⭐ 100 Câu Tuyển Chọn"),
+        ("Part1", "Part 1: Giao tiếp thường ngày"),
+        ("Part2", "Part 2: Kể chuyện & Miêu tả"),
+        ("Part3", "Part 3: Thảo luận chuyên sâu"),
+        ("YouTube", "🎬 Video Shadowing (YouTube)")
+    };
+
+    private List<SpeakAlongItem> allItems = new();
+    private List<TopicGroup> topics = new();
+    private TopicGroup? currentTopic;
+    private int topicCurrentIndex = 0;
+    private SpeakAlongItem? currentItem;
+
+    private HashSet<int> completedItemIds = new();
+    private int streakDays = 5;
+
+    // Karaoke Sync
+    private List<string> modelTokens = new();
+    private int activeKaraokeWordIndex = -1;
+
+    // Practice State
+    private enum PracticeState { Idle, Recording, Evaluating, Result }
+    private PracticeState state = PracticeState.Idle;
+
+    private double ttsRate = 1.0;
+    private bool isPlayingAll = false;
+
+    private string liveTranscript = "";
+    private string userAudioUrl = "";
+    private int recordDurationSec = 0;
+    private System.Threading.Timer? recordTimer;
+
+    private SpeakAlongResult? evaluationResult;
+    private List<WordMatch> wordMatches = new();
+
+    private DotNetObjectReference<IeltsSpeakAlong>? dotNetRef;
+
+    // ── Audio Shadowing (Cambridge IELTS & Engnovate Native MP3) ──────────
+    private List<AudioLessonDto> audioLessons = new();
+    private AudioLessonDto? selectedAudioLesson;
+    private int currentAudioLineIndex = 0;
+    private AudioLessonLine? currentAudioLine;
+    private double audioSpeed = 1.0;
+    private bool isPlayingAudio = false;
+    private bool isLoopingAudio = false;
+
+    // ── YouTube Video Shadowing State ────────────────────────────────────
+    private List<ListenVideoDto> ytVideos = new();
+    private ListenVideoDto? selectedVideo;
+    private List<VideoSegment> videoSegments = new();
+    private int currentSegmentIndex = 0;
+    private VideoSegment? currentSegment;
+    private double videoSpeed = 1.0;
+    private bool isPlayingSegment = false;
+    private bool isLoopingSegment = false;
+    private bool showTranslation = false;
+    private bool showFullTranscript = true;
+
+    // Mock Interview State
+    private bool isMockInterviewMode = false;
+    private enum InterviewState { QuestionActive, Finished }
+    private InterviewState interviewState = InterviewState.QuestionActive;
+    private List<SpeakAlongItem> interviewQuestions = new();
+    private int interviewCurrentIndex = 0;
+    private SpeakAlongItem? currentInterviewItem;
+    private int interviewSecondsLeft = 30;
+    private System.Threading.Timer? interviewTimer;
+    private List<int> interviewScores = new();
+
+    // Audio & Mic Setup
+    private bool showAudioTestModal = false;
+    private bool isMicReady = false;
+    private List<MicrophoneDevice> microphones = new();
+    private string selectedMicrophoneId = "";
+    private bool needsVisualizerStart = false;
+
+    public enum MatchQuality { Exact, Partial, Missed }
+
+    public class WordMatch
+    {
+        public string Word { get; set; } = "";
+        public MatchQuality MatchLevel { get; set; } = MatchQuality.Missed;
+    }
+
+    public class TopicGroup
+    {
+        public string Id { get; set; } = "";
+        public string Icon { get; set; } = "";
+        public string TitleEn { get; set; } = "";
+        public string TitleVi { get; set; } = "";
+        public string LevelTag { get; set; } = "Band 7.0+";
+        public List<SpeakAlongItem> Items { get; set; } = new();
+    }
+
+    public class VideoSegment
+    {
+        public int Index { get; set; }
+        public double StartTime { get; set; }
+        public double EndTime { get; set; }
+        public string Text { get; set; } = "";
+        public string Translation { get; set; } = "";
+        public bool IsCompleted { get; set; }
+        public int LastScore { get; set; }
+    }
+
+    public class StopRecordPayload
+    {
+        public string transcript { get; set; } = "";
+        public string audioUrl { get; set; } = "";
+        public double durationSeconds { get; set; }
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        _dotNetRef = DotNetObjectReference.Create(this);
-        await LoadExam();
+        dotNetRef = DotNetObjectReference.Create(this);
+        await LoadAudioLessons();
+        await LoadStreakData();
+        await LoadExamData();
+        await InitMicrophoneDevices();
     }
 
-    private async Task LoadExam()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        isLoading = true;
-        StateHasChanged();
+        if (needsVisualizerStart && showAudioTestModal)
+        {
+            needsVisualizerStart = false;
+            await Task.Delay(100);
+            await JS.InvokeVoidAsync("SpeakingInterop.startMicVisualizer", "shadowing-waveform");
+        }
+    }
 
-        var targetPart = Part ?? "Part1";
-        exam = await SpeakAlongService.LoadExamAsync(targetPart);
-        if (exam != null)
+    protected override async Task OnParametersSetAsync()
+    {
+        var targetPart = !string.IsNullOrWhiteSpace(Part) ? NormalizePart(Part) : "Audio";
+        if (targetPart != activePart)
         {
             activePart = targetPart;
-            currentItems = exam.Items.ToList();
-            if (currentItems.Any())
-                currentItem = currentItems.First();
+            await LoadExamData();
         }
+    }
+
+    private string NormalizePart(string p)
+    {
+        var clean = p.ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+        if (clean.Contains("audio") || clean.Contains("cambridge")) return "Audio";
+        if (clean.Contains("youtube") || clean.Contains("video")) return "YouTube";
+        if (clean.Contains("100") || clean.Contains("all") || clean.Contains("full")) return "100Sentences";
+        if (clean.Contains("part1") || clean.Contains("1")) return "Part1";
+        if (clean.Contains("part2") || clean.Contains("2")) return "Part2";
+        if (clean.Contains("part3") || clean.Contains("3")) return "Part3";
+        return "Audio";
+    }
+
+    private async Task LoadStreakData()
+    {
+        try
+        {
+            var savedStreak = await JS.InvokeAsync<string?>("localStorage.getItem", "ielts_shadowing_streak_days");
+            if (int.TryParse(savedStreak, out int s)) streakDays = s;
+            else streakDays = 5;
+        }
+        catch { streakDays = 5; }
+    }
+
+    private async Task LoadAudioLessons()
+    {
+        try
+        {
+            audioLessons = await SpeakAlongService.LoadAudioLessonsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[IeltsSpeakAlong] LoadAudioLessons failed: {ex.Message}");
+        }
+    }
+
+    private async Task LoadExamData()
+    {
+        isLoading = true;
+        ResetToIdle();
+        currentTopic = null;
+        selectedVideo = null;
+        selectedAudioLesson = null;
+
+        if (activePart == "Audio")
+        {
+            await LoadAudioLessons();
+        }
+        else if (activePart == "YouTube")
+        {
+            await LoadYouTubeVideos();
+        }
+        else
+        {
+            exam = await SpeakAlongService.LoadExamAsync(activePart);
+            if (exam != null && exam.Items != null)
+            {
+                allItems = exam.Items.ToList();
+                BuildTopicGroups();
+            }
+        }
+
+        isLoading = false;
+    }
+
+    // ── Audio Shadowing Logic ────────────────────────────────────────────
+
+    private async Task SelectAudioLesson(AudioLessonDto lesson)
+    {
+        isLoading = true;
+        selectedAudioLesson = lesson;
+        currentAudioLineIndex = 0;
+        ResetToIdle();
+
+        if (selectedAudioLesson.Lines == null || selectedAudioLesson.Lines.Count == 0)
+        {
+            try
+            {
+                var source = !string.IsNullOrEmpty(lesson.JsonFile) ? lesson.JsonFile : $"sample-data/{lesson.Id}.json";
+                var jsonText = await Http.GetStringAsync(source);
+                var parsed = JsonSerializer.Deserialize<AudioLessonDataParsed>(jsonText, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (parsed?.Lines != null && parsed.Lines.Count > 0)
+                {
+                    selectedAudioLesson.Lines = parsed.Lines;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading audio lesson JSON: {ex.Message}");
+            }
+        }
+
+        currentAudioLine = selectedAudioLesson.Lines.FirstOrDefault();
+        if (currentAudioLine != null)
+        {
+            PrepareModelTokens(currentAudioLine.Text);
+        }
+
         isLoading = false;
         StateHasChanged();
+
+        await Task.Delay(150);
+        await JS.InvokeVoidAsync("initAudioShadowPlayer", "engnovate-main-audio", selectedAudioLesson.AudioUrl);
     }
 
-    private async Task SwitchPart(string part)
+    public class AudioLessonDataParsed
     {
-        activePart = part;
-        exam = await SpeakAlongService.LoadExamAsync(part);
-        if (exam != null)
+        public string Title { get; set; } = "";
+        public string AudioUrl { get; set; } = "";
+        public List<AudioLessonLine> Lines { get; set; } = new();
+    }
+
+    private void SelectAudioLine(int index)
+    {
+        if (selectedAudioLesson != null && index >= 0 && index < selectedAudioLesson.Lines.Count)
         {
-            currentItems = exam.Items.ToList();
-            currentItem = currentItems.FirstOrDefault();
-            state = SpeakAlongState.Idle;
-            lastResult = null;
+            currentAudioLineIndex = index;
+            currentAudioLine = selectedAudioLesson.Lines[index];
+            PrepareModelTokens(currentAudioLine.Text);
+            ResetToIdle();
+            PlayCurrentAudioLineOnce();
         }
-        StateHasChanged();
     }
 
-    private void SelectItem(SpeakAlongItem item)
+    private void NextAudioLine()
     {
-        currentItem = item;
-        state = SpeakAlongState.Idle;
-        lastResult = null;
-        StateHasChanged();
-    }
-
-    private async Task PlayModel(SpeakAlongItem item)
-    {
-        await JS.InvokeVoidAsync("SpeakAlongInterop.speakText", item.ModelAnswer, "en-US");
-    }
-
-    private async Task StartRecording(SpeakAlongItem item)
-    {
-        state = SpeakAlongState.Recording;
-        StateHasChanged();
-        await JS.InvokeVoidAsync("SpeakAlongInterop.startRecording", _dotNetRef);
-    }
-
-    private async Task StopRecording(SpeakAlongItem item)
-    {
-        var transcript = await JS.InvokeAsync<string>("SpeakAlongInterop.stopRecording");
-        // Simple mock evaluation
-        lastResult = new SpeakAlongResult
+        if (selectedAudioLesson != null && currentAudioLineIndex < selectedAudioLesson.Lines.Count - 1)
         {
-            Transcript = transcript,
-            SimilarityScore = 75,
-            PronunciationScore = 70,
-            FluencyScore = 80,
-            TimingScore = 65,
-            WordCount = transcript.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length,
-            Wpm = 120
-        };
-        state = SpeakAlongState.Result;
-        StateHasChanged();
+            SelectAudioLine(currentAudioLineIndex + 1);
+        }
     }
 
-    private void Retry()
+    private void PrevAudioLine()
     {
-        state = SpeakAlongState.Idle;
-        lastResult = null;
-        StateHasChanged();
+        if (selectedAudioLesson != null && currentAudioLineIndex > 0)
+        {
+            SelectAudioLine(currentAudioLineIndex - 1);
+        }
     }
 
-    private string Truncate(string text, int max) =>
-        text.Length > max ? text[..max] + "…" : text;
+    private void BackToAudioList()
+    {
+        selectedAudioLesson = null;
+        isLoopingAudio = false;
+        isPlayingAudio = false;
+        JS.InvokeVoidAsync("pauseAudioSegment");
+        ResetToIdle();
+    }
+
+    private async Task PlayCurrentAudioLineOnce()
+    {
+        if (currentAudioLine == null) return;
+        isPlayingAudio = true;
+        isLoopingAudio = false;
+        await JS.InvokeVoidAsync("playAudioSegment", currentAudioLine.StartTime, currentAudioLine.EndTime, audioSpeed, false, dotNetRef);
+    }
+
+    private async Task ToggleLoopAudio()
+    {
+        if (currentAudioLine == null) return;
+        isLoopingAudio = !isLoopingAudio;
+        isPlayingAudio = isLoopingAudio;
+
+        if (isLoopingAudio)
+        {
+            await JS.InvokeVoidAsync("playAudioSegment", currentAudioLine.StartTime, currentAudioLine.EndTime, audioSpeed, true, dotNetRef);
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("pauseAudioSegment");
+        }
+    }
+
+    private async Task SetAudioSpeed(double speed)
+    {
+        audioSpeed = speed;
+        await JS.InvokeVoidAsync("setAudioSegmentRate", audioSpeed);
+    }
+
+    private int GetCompletedAudioLineCount()
+    {
+        if (selectedAudioLesson == null) return 0;
+        return selectedAudioLesson.Lines.Count(l => l.IsCompleted);
+    }
+
+    // ── YouTube Video Shadowing Logic ────────────────────────────────────
+
+    private async Task LoadYouTubeVideos()
+    {
+        try
+        {
+            var all = await IeltsService.GetListenFillVideosAsync();
+            if (all != null && all.Count > 0)
+            {
+                ytVideos = all.Take(8).ToList();
+            }
+        }
+        catch { }
+    }
+
+    private async Task SelectYouTubeVideo(ListenVideoDto video)
+    {
+        selectedVideo = video;
+        currentSegmentIndex = 0;
+        videoSegments.Clear();
+        ResetToIdle();
+
+        if (!string.IsNullOrEmpty(video.TranscriptUrl))
+        {
+            try
+            {
+                var transcriptData = await Http.GetFromJsonAsync<TranscriptRootDto>(video.TranscriptUrl);
+                if (transcriptData?.Words != null && transcriptData.Words.Count > 0)
+                {
+                    BuildSegmentsFromWords(transcriptData.Words);
+                }
+            }
+            catch { }
+        }
+
+        currentSegment = videoSegments.FirstOrDefault();
+        if (currentSegment != null)
+        {
+            PrepareModelTokens(currentSegment.Text);
+        }
+
+        await Task.Delay(150);
+        var ytId = GetYouTubeId(selectedVideo.YoutubeUrl);
+        await JS.InvokeVoidAsync("initYouTubeShadowPlayer", "yt-shadow-player", ytId, dotNetRef);
+    }
+
+    private void BuildSegmentsFromWords(List<TranscriptWordDto> words)
+    {
+        videoSegments.Clear();
+        if (words == null || words.Count == 0) return;
+
+        var currentChunk = new List<TranscriptWordDto>();
+        int segIndex = 0;
+
+        for (int i = 0; i < words.Count; i++)
+        {
+            var w = words[i];
+            currentChunk.Add(w);
+
+            var cleanWord = w.Text.Trim();
+            bool isTerminalPunctuation = cleanWord.EndsWith(".") || cleanWord.EndsWith("?") || cleanWord.EndsWith("!") || cleanWord.EndsWith("...");
+            if (isTerminalPunctuation && cleanWord.Length <= 4 && char.IsUpper(cleanWord[0]))
+            {
+                isTerminalPunctuation = false;
+            }
+
+            double silenceGap = (i < words.Count - 1) ? (words[i + 1].Start - (w.Start + w.Duration)) : 0;
+            bool isNaturalPauseEnd = silenceGap >= 0.70 && currentChunk.Count >= 4;
+            bool isLastWord = (i == words.Count - 1);
+
+            if (isTerminalPunctuation || isNaturalPauseEnd || currentChunk.Count >= 18 || isLastWord)
+            {
+                var start = currentChunk.First().Start;
+                var lastW = currentChunk.Last();
+                double naturalEnd = lastW.Start + Math.Max(lastW.Duration, 0.45);
+                double end = (i < words.Count - 1) ? Math.Min(naturalEnd + 0.35, words[i + 1].Start - 0.05) : naturalEnd + 0.4;
+                if (end < naturalEnd) end = naturalEnd + 0.15;
+
+                videoSegments.Add(new VideoSegment
+                {
+                    Index = segIndex++,
+                    StartTime = Math.Round(Math.Max(0, start), 2),
+                    EndTime = Math.Round(end, 2),
+                    Text = string.Join(" ", currentChunk.Select(c => c.Text.Trim()))
+                });
+                currentChunk.Clear();
+            }
+        }
+    }
+
+    private void SelectSegment(int index)
+    {
+        if (index >= 0 && index < videoSegments.Count)
+        {
+            currentSegmentIndex = index;
+            currentSegment = videoSegments[index];
+            PrepareModelTokens(currentSegment.Text);
+            ResetToIdle();
+            PlayCurrentSegmentOnce();
+        }
+    }
+
+    private void NextVideoSegment()
+    {
+        if (currentSegmentIndex < videoSegments.Count - 1)
+        {
+            SelectSegment(currentSegmentIndex + 1);
+        }
+    }
+
+    private void PrevVideoSegment()
+    {
+        if (currentSegmentIndex > 0)
+        {
+            SelectSegment(currentSegmentIndex - 1);
+        }
+    }
+
+    private void BackToVideoList()
+    {
+        selectedVideo = null;
+        JS.InvokeVoidAsync("pauseYouTubeShadowPlayer");
+        ResetToIdle();
+    }
+
+    private async Task PlayCurrentSegmentOnce()
+    {
+        if (currentSegment == null) return;
+        isPlayingSegment = true;
+        await JS.InvokeVoidAsync("playYouTubeSegment", currentSegment.StartTime, currentSegment.EndTime, videoSpeed, false, dotNetRef);
+    }
 
     [JSInvokable]
-    public void OnTranscriptUpdate(string text)
+    public void OnShadowPlayerReady() { }
+
+    [JSInvokable]
+    public void OnSegmentPlaybackEnded()
     {
-        // For live transcript if needed
+        isPlayingSegment = false;
+        isPlayingAudio = false;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string GetYouTubeId(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return "";
+        if (url.Contains("v=")) return url.Split("v=")[1].Split("&")[0];
+        if (url.Contains("youtu.be/")) return url.Split("youtu.be/")[1].Split("?")[0];
+        return url;
+    }
+
+    private string FormatTimestamp(double seconds)
+    {
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.ToString(@"mm\:ss");
+    }
+
+    // ── Topic Groups (Standard Shadowing) ────────────────────────────────
+
+    private void BuildTopicGroups()
+    {
+        topics.Clear();
+        if (allItems.Count == 0) return;
+
+        var topicDefs = new[]
+        {
+            ("hometown", "🏡", "Hometown & Living", "Quê hương & Nhà ở", 1, 10, "Band 6.0 - 6.5"),
+            ("routine", "⏰", "Daily Routine & Habits", "Thói quen hàng ngày", 21, 30, "Band 6.0 - 6.5"),
+            ("food", "🍜", "Food & Culinary Culture", "Ẩm thực & Nấu ăn", 41, 50, "Band 6.5 - 7.0"),
+            ("work", "💼", "Work & Study", "Công việc & Học tập", 11, 20, "Band 6.5 - 7.0"),
+            ("travel", "✈️", "Travel & Transport", "Du lịch & Đi lại", 31, 40, "Band 7.0 - 7.5"),
+            ("health", "🏃", "Fitness & Wellbeing", "Thể thao & Sức khỏe", 81, 90, "Band 7.0 - 7.5"),
+            ("tech", "🤖", "Technology & AI", "Công nghệ & Trí tuệ nhân tạo", 51, 60, "Band 7.5 - 8.0"),
+            ("environment", "🌿", "Environment & Nature", "Môi trường & Thiên nhiên", 61, 70, "Band 7.5 - 8.0"),
+            ("art", "🎨", "Art, Music & Cinema", "Nghệ thuật & Giải trí", 71, 80, "Band 8.0 - 8.5"),
+            ("future", "🚀", "Vision & Society", "Tầm nhìn & Xã hội", 91, 100, "Band 8.0 - 8.5")
+        };
+
+        foreach (var (id, icon, en, vi, startId, endId, bandTag) in topicDefs)
+        {
+            var chunk = allItems.Where(i => i.Id >= startId && i.Id <= endId).ToList();
+            if (chunk.Count > 0)
+            {
+                topics.Add(new TopicGroup
+                {
+                    Id = id,
+                    Icon = icon,
+                    TitleEn = en,
+                    TitleVi = vi,
+                    LevelTag = bandTag,
+                    Items = chunk
+                });
+            }
+        }
+    }
+
+    private void SelectTopic(TopicGroup topic)
+    {
+        currentTopic = topic;
+        topicCurrentIndex = 0;
+        LoadCurrentItem();
+    }
+
+    private void BackToTopics()
+    {
+        currentTopic = null;
+        ResetToIdle();
+    }
+
+    private void LoadCurrentItem()
+    {
+        if (currentTopic != null && currentTopic.Items.Count > topicCurrentIndex)
+        {
+            currentItem = currentTopic.Items[topicCurrentIndex];
+            PrepareModelTokens(currentItem.ModelAnswer);
+            ResetToIdle();
+        }
+    }
+
+    private void PrepareModelTokens(string answer)
+    {
+        if (string.IsNullOrWhiteSpace(answer))
+        {
+            modelTokens = new List<string>();
+            return;
+        }
+        modelTokens = answer.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        activeKaraokeWordIndex = -1;
+    }
+
+    private async Task PlayModelTts()
+    {
+        var text = activePart == "Audio" ? currentAudioLine?.Text : (activePart == "YouTube" ? currentSegment?.Text : currentItem?.ModelAnswer);
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        isPlayingAll = true;
+        activeKaraokeWordIndex = 0;
+        StateHasChanged();
+        await JS.InvokeVoidAsync("SpeakAlongInterop.speakTextWithKaraoke", text, "en-US", ttsRate, dotNetRef);
+    }
+
+    [JSInvokable]
+    public void OnKaraokeWordBoundary(int charIndex, int charLength)
+    {
+        if (modelTokens.Count == 0) return;
+        int curChar = 0;
+        for (int i = 0; i < modelTokens.Count; i++)
+        {
+            if (curChar <= charIndex && charIndex < curChar + modelTokens[i].Length + 1)
+            {
+                activeKaraokeWordIndex = i;
+                InvokeAsync(StateHasChanged);
+                break;
+            }
+            curChar += modelTokens[i].Length + 1;
+        }
+    }
+
+    [JSInvokable]
+    public void OnKaraokeEnded()
+    {
+        isPlayingAll = false;
+        activeKaraokeWordIndex = -1;
+        InvokeAsync(StateHasChanged);
+    }
+
+    // ── Recording & Live Waveform ────────────────────────────────────────
+
+    private async Task StartRecording()
+    {
+        state = PracticeState.Recording;
+        liveTranscript = "";
+        userAudioUrl = "";
+        recordDurationSec = 0;
+
+        recordTimer?.Dispose();
+        recordTimer = new System.Threading.Timer(_ =>
+        {
+            recordDurationSec++;
+            InvokeAsync(StateHasChanged);
+        }, null, 1000, 1000);
+
+        await JS.InvokeVoidAsync("SpeakAlongInterop.startRecording", dotNetRef, selectedMicrophoneId, "active-recording-waveform");
+    }
+
+    [JSInvokable]
+    public void OnSpeechRecognized(string text)
+    {
+        liveTranscript = text;
+        StateHasChanged();
+    }
+
+    private async Task StopRecording()
+    {
+        recordTimer?.Dispose();
+        state = PracticeState.Evaluating;
+        StateHasChanged();
+
+        var jsonPayload = await JS.InvokeAsync<string>("SpeakAlongInterop.stopRecording");
+        string userTranscript = "";
+        double durationSec = 3.0;
+
+        try
+        {
+            var payload = JsonSerializer.Deserialize<StopRecordPayload>(jsonPayload);
+            if (payload != null)
+            {
+                userTranscript = !string.IsNullOrWhiteSpace(payload.transcript) ? payload.transcript : liveTranscript;
+                userAudioUrl = payload.audioUrl ?? "";
+                durationSec = payload.durationSeconds > 0 ? payload.durationSeconds : 3.0;
+            }
+        }
+        catch
+        {
+            userTranscript = liveTranscript;
+        }
+
+        string targetModelText = "";
+        if (activePart == "Audio" && currentAudioLine != null)
+        {
+            targetModelText = currentAudioLine.Text;
+        }
+        else if (activePart == "YouTube" && currentSegment != null)
+        {
+            targetModelText = currentSegment.Text;
+        }
+        else if (currentItem != null)
+        {
+            targetModelText = currentItem.ModelAnswer;
+        }
+
+        EvaluateSpeech(targetModelText, userTranscript, durationSec);
+
+        if (activePart == "Audio" && currentAudioLine != null && evaluationResult != null)
+        {
+            currentAudioLine.LastScore = evaluationResult.SimilarityScore;
+            if (evaluationResult.SimilarityScore >= 60) currentAudioLine.IsCompleted = true;
+        }
+
+        state = PracticeState.Result;
+        StateHasChanged();
+    }
+
+    private void EvaluateSpeech(string modelAnswer, string userTranscript, double durationSec)
+    {
+        wordMatches.Clear();
+        if (string.IsNullOrWhiteSpace(userTranscript))
+        {
+            foreach (var mWord in CleanWords(modelAnswer))
+            {
+                wordMatches.Add(new WordMatch { Word = mWord, MatchLevel = MatchQuality.Missed });
+            }
+            evaluationResult = new SpeakAlongResult { Transcript = "", SimilarityScore = 0, FluencyScore = 0, WordCount = 0, Wpm = 0 };
+            return;
+        }
+
+        var modelWords = CleanWords(modelAnswer);
+        var normUserWords = CleanWords(NormalizeSpokenEnglish(userTranscript));
+        var normModelWords = CleanWords(NormalizeSpokenEnglish(modelAnswer));
+
+        int matchedScoreTotal = 0;
+        int searchWindowStart = 0;
+
+        for (int i = 0; i < modelWords.Count; i++)
+        {
+            var originalWord = modelWords[i];
+            var normWord = i < normModelWords.Count ? normModelWords[i] : originalWord.ToLowerInvariant();
+
+            MatchQuality matchQuality = MatchQuality.Missed;
+            int foundIdx = -1;
+
+            int windowEnd = Math.Min(normUserWords.Count, searchWindowStart + 6);
+            for (int u = searchWindowStart; u < windowEnd; u++)
+            {
+                if (string.Equals(normUserWords[u], normWord, StringComparison.OrdinalIgnoreCase))
+                {
+                    matchQuality = MatchQuality.Exact;
+                    foundIdx = u;
+                    break;
+                }
+                if (IsPhoneticOrFuzzyMatch(normUserWords[u], normWord))
+                {
+                    matchQuality = MatchQuality.Partial;
+                    foundIdx = u;
+                    break;
+                }
+            }
+
+            if (foundIdx < 0)
+            {
+                for (int u = 0; u < normUserWords.Count; u++)
+                {
+                    if (string.Equals(normUserWords[u], normWord, StringComparison.OrdinalIgnoreCase))
+                    {
+                        matchQuality = MatchQuality.Exact;
+                        foundIdx = u;
+                        break;
+                    }
+                }
+            }
+
+            if (foundIdx >= 0)
+            {
+                matchedScoreTotal += (matchQuality == MatchQuality.Exact) ? 100 : 75;
+                searchWindowStart = Math.Min(foundIdx + 1, normUserWords.Count);
+            }
+
+            wordMatches.Add(new WordMatch { Word = originalWord, MatchLevel = matchQuality });
+        }
+
+        int totalModelWords = Math.Max(1, modelWords.Count);
+        int accuracyScore = Math.Clamp((int)Math.Round(((double)matchedScoreTotal / (totalModelWords * 100)) * 100), 0, 100);
+        int wordCount = normUserWords.Count;
+        int wpm = durationSec > 0 ? (int)Math.Round((wordCount / durationSec) * 60) : 0;
+        if (wpm > 220) wpm = 150;
+
+        evaluationResult = new SpeakAlongResult
+        {
+            Transcript = userTranscript,
+            SimilarityScore = accuracyScore,
+            FluencyScore = accuracyScore,
+            WordCount = wordCount,
+            Wpm = wpm
+        };
+    }
+
+    private string NormalizeSpokenEnglish(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        return text.ToLowerInvariant().Replace("'s", "").Replace("don't", "do not").Replace("i'm", "i am");
+    }
+
+    private bool IsPhoneticOrFuzzyMatch(string uWord, string mWord)
+    {
+        if (string.IsNullOrEmpty(uWord) || string.IsNullOrEmpty(mWord)) return false;
+        if (uWord == mWord) return true;
+        return Math.Abs(uWord.Length - mWord.Length) <= 2 && LevenshteinDistance(uWord, mWord) <= 2;
+    }
+
+    private string GetWordMatchClass(MatchQuality quality) => quality switch
+    {
+        MatchQuality.Exact => "word-correct",
+        MatchQuality.Partial => "word-partial",
+        _ => "word-missed"
+    };
+
+    private string GetWordTooltip(MatchQuality quality) => quality switch
+    {
+        MatchQuality.Exact => "Phát âm chuẩn xác",
+        MatchQuality.Partial => "Gần đúng / Tạm ổn",
+        _ => "Phát âm chưa rõ"
+    };
+
+    private string GetScoreColorClass(int score) => score >= 80 ? "score-excellent" : (score >= 60 ? "score-good" : "score-needs-work");
+
+    private string GetBandEstimate(int score)
+    {
+        if (score >= 92) return "Band 8.5 - 9.0 (Expert)";
+        if (score >= 84) return "Band 8.0 (Very Good)";
+        if (score >= 75) return "Band 7.5 (Good / Fluent)";
+        if (score >= 67) return "Band 7.0 (Competent)";
+        if (score >= 55) return "Band 6.0 - 6.5";
+        return "Band 5.0 - 5.5";
+    }
+
+    private void ToggleMockInterviewMode()
+    {
+        isMockInterviewMode = !isMockInterviewMode;
+    }
+
+    private async Task InitMicrophoneDevices()
+    {
+        try
+        {
+            microphones = await JS.InvokeAsync<List<MicrophoneDevice>>("SpeakingInterop.getMicrophones");
+            if (microphones != null && microphones.Count > 0)
+            {
+                selectedMicrophoneId = microphones[0].DeviceId;
+                isMicReady = true;
+            }
+        }
+        catch { }
+    }
+
+    private void OpenAudioTestModal() => showAudioTestModal = true;
+    private void CloseAudioTestModal() => showAudioTestModal = false;
+
+    private async Task SwitchPart(string partKey)
+    {
+        activePart = partKey;
+        await LoadExamData();
+    }
+
+    private List<string> CleanWords(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return new List<string>();
+        return text.Split(new[] { ' ', ',', '.', '!', '?', ';', ':', '-', '\r', '\n', '"' }, StringSplitOptions.RemoveEmptyEntries)
+                   .Select(w => w.Trim()).Where(w => w.Length > 0).ToList();
+    }
+
+    private int LevenshteinDistance(string s, string t)
+    {
+        if (string.IsNullOrEmpty(s)) return t?.Length ?? 0;
+        if (string.IsNullOrEmpty(t)) return s.Length;
+        int[,] d = new int[s.Length + 1, t.Length + 1];
+        for (int i = 0; i <= s.Length; i++) d[i, 0] = i;
+        for (int j = 0; j <= t.Length; j++) d[0, j] = j;
+        for (int j = 1; j <= t.Length; j++)
+            for (int i = 1; i <= s.Length; i++)
+                d[i, j] = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + (s[i - 1] == t[j - 1] ? 0 : 1));
+        return d[s.Length, t.Length];
+    }
+
+    private void ResetToIdle()
+    {
+        state = PracticeState.Idle;
+        liveTranscript = "";
+        userAudioUrl = "";
+        recordDurationSec = 0;
+        evaluationResult = null;
+        wordMatches.Clear();
+        isPlayingAll = false;
+        activeKaraokeWordIndex = -1;
+        recordTimer?.Dispose();
     }
 
     public void Dispose()
     {
-        _dotNetRef?.Dispose();
+        recordTimer?.Dispose();
+        interviewTimer?.Dispose();
+        dotNetRef?.Dispose();
+        JS.InvokeVoidAsync("pauseAudioSegment");
+    }
+
+    public class TranscriptRootDto
+    {
+        public List<TranscriptWordDto> Words { get; set; } = new();
+    }
+
+    public class TranscriptWordDto
+    {
+        public string Text { get; set; } = "";
+        public double Start { get; set; }
+        public double Duration { get; set; }
     }
 }

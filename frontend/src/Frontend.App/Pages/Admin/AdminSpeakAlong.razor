@@ -1,0 +1,1031 @@
+@page "/admin/speak-along"
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Forms
+@inject SpeakAlongService SpeakAlongService
+@inject IJSRuntime JS
+@inject HttpClient Http
+
+<PageTitle>Quản lý Nói Theo & Audio Shadowing - Admin</PageTitle>
+
+<div class="admin-speak-along-page">
+    <!-- Header -->
+    <div class="page-top-header">
+        <div class="header-titles">
+            <h1 class="page-title"><i class="bi bi-mic-fill text-primary"></i> Quản lý Bài Nói Theo & Audio Shadowing</h1>
+            <p class="page-subtitle">Quản lý ngân hàng bài nghe Audio Shadowing (Cambridge IELTS / Engnovate) và ngân hàng câu hỏi luyện nói theo, nhập dữ liệu JSON, đồng bộ tức thì.</p>
+        </div>
+        <div class="header-actions">
+            @if (activePart == "AudioLessons")
+            {
+                <button class="btn btn-secondary-outline" @onclick="DownloadSampleAudioJson">
+                    <i class="bi bi-file-earmark-code-fill text-info"></i> Tải Mẫu JSON Audio
+                </button>
+                <button class="btn btn-primary-outline" @onclick="() => showAudioImportModal = true">
+                    <i class="bi bi-file-earmark-arrow-up-fill"></i> Nhập Bài Audio từ JSON
+                </button>
+                <button class="btn btn-primary-solid" @onclick="OpenAddAudioModal">
+                    <i class="bi bi-plus-circle-fill"></i> + Thêm Bài Audio Mới
+                </button>
+            }
+            else
+            {
+                <button class="btn btn-secondary-outline" @onclick="DownloadSampleJson">
+                    <i class="bi bi-file-earmark-code-fill text-info"></i> Tải Mẫu JSON
+                </button>
+                <button class="btn btn-primary-outline" @onclick="() => showImportModal = true">
+                    <i class="bi bi-file-earmark-arrow-up-fill"></i> Nhập File JSON
+                </button>
+                <button class="btn btn-success-outline" @onclick="ExportCurrentJson">
+                    <i class="bi bi-download"></i> Xuất File JSON
+                </button>
+                <button class="btn btn-primary-solid" @onclick="OpenAddModal">
+                    <i class="bi bi-plus-circle-fill"></i> + Thêm Câu Mới
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(alertMessage))
+    {
+        <div class="custom-alert @(alertType == "success" ? "alert-success" : "alert-error")">
+            <div class="alert-content">
+                <i class="bi @(alertType == "success" ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill")"></i>
+                <span>@alertMessage</span>
+            </div>
+            <button class="alert-close" @onclick="() => alertMessage = null">×</button>
+        </div>
+    }
+
+    <!-- Filter & Category Toolbar -->
+    <div class="filter-toolbar">
+        <div class="category-tabs">
+            @foreach (var p in partOptions)
+            {
+                <button class="category-tab-btn @(activePart == p.Key ? "active" : "")" @onclick="() => SelectPart(p.Key)">
+                    @p.Label
+                </button>
+            }
+        </div>
+
+        <div class="search-filter-row">
+            <div class="search-input-wrapper">
+                <i class="bi bi-search search-icon"></i>
+                <input type="text" class="search-input" placeholder="Tìm kiếm theo tiêu đề, câu hỏi, từ vựng..." 
+                       @bind="searchKeyword" @bind:event="oninput" />
+                @if (!string.IsNullOrEmpty(searchKeyword))
+                {
+                    <button class="search-clear-btn" @onclick='() => searchKeyword = ""'>×</button>
+                }
+            </div>
+
+            <div class="stats-badge">
+                @if (activePart == "AudioLessons")
+                {
+                    <span>Tổng số: <strong>@FilteredAudioLessons.Count</strong> bài Audio</span>
+                }
+                else
+                {
+                    <span>Tổng số: <strong>@FilteredItems.Count</strong> / @(examData?.Items.Count ?? 0) câu</span>
+                }
+            </div>
+
+            @if (activePart == "AudioLessons")
+            {
+                <button class="btn btn-danger-outline btn-sm" @onclick="ConfirmResetAudioDefault" title="Khôi phục danh sách bài Audio gốc">
+                    <i class="bi bi-arrow-counterclockwise"></i> Khôi phục mặc định
+                </button>
+            }
+            else
+            {
+                <button class="btn btn-danger-outline btn-sm" @onclick="ConfirmResetDefault" title="Khôi phục dữ liệu ban đầu từ hệ thống">
+                    <i class="bi bi-arrow-counterclockwise"></i> Khôi phục mặc định
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Data Content Card -->
+    <div class="content-card">
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="custom-spinner"></div>
+                <p>Đang tải dữ liệu...</p>
+            </div>
+        }
+        else if (activePart == "AudioLessons")
+        {
+            <!-- ============================================================= -->
+            <!-- BẢNG QUẢN LÝ CÁC BÀI AUDIO SHADOWING                           -->
+            <!-- ============================================================= -->
+            @if (FilteredAudioLessons.Count == 0)
+            {
+                <div class="empty-state">
+                    <div class="empty-icon"><i class="bi bi-headphones"></i></div>
+                    <h3>Chưa có bài Audio Shadowing nào</h3>
+                    <p>Bấm nút bên dưới để thêm bài Audio hoặc nhập từ file JSON.</p>
+                    <button class="btn btn-primary-solid btn-sm mt-2" @onclick="OpenAddAudioModal">+ Thêm bài Audio mới</button>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">Icon</th>
+                                <th style="width: 32%;">Tiêu đề bài & Mô tả</th>
+                                <th style="width: 18%;">Phân loại & Band</th>
+                                <th style="width: 100px; text-align: center;">Số câu</th>
+                                <th>Nghe thử Audio</th>
+                                <th style="width: 150px; text-align: center;">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var lesson in FilteredAudioLessons)
+                            {
+                                <tr>
+                                    <td class="text-center fs-4">@lesson.Icon</td>
+                                    <td>
+                                        <div class="fw-bold text-dark fs-6">@lesson.Title</div>
+                                        <div class="text-muted small text-truncate" style="max-width: 320px;">@lesson.Description</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary text-white mb-1">@lesson.Category</span>
+                                        <div><span class="badge bg-success-subtle text-success border border-success-subtle">@lesson.Level</span></div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-secondary">@(lesson.Lines?.Count > 0 ? lesson.Lines.Count : lesson.TotalUnits) câu</span>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(lesson.AudioUrl))
+                                        {
+                                            <audio src="@lesson.AudioUrl" controls style="height: 32px; max-width: 220px;"></audio>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">Chưa có link audio</span>
+                                        }
+                                    </td>
+                                    <td class="actions-cell">
+                                        <button class="btn-action-edit" @onclick="() => OpenEditAudioModal(lesson)" title="Chỉnh sửa bài & danh sách câu">
+                                            <i class="bi bi-pencil-fill"></i>
+                                        </button>
+                                        <button class="btn-action-view" @onclick="() => ExportAudioLessonJson(lesson)" title="Xuất JSON bài này">
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                        <button class="btn-action-delete" @onclick="() => DeleteAudioLesson(lesson)" title="Xóa bài">
+                                            <i class="bi bi-trash-fill"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+        else
+        {
+            <!-- ============================================================= -->
+            <!-- BẢNG QUẢN LÝ CÂU HỎI SHADOWING TIÊU CHUẨN                      -->
+            <!-- ============================================================= -->
+            @if (FilteredItems.Count == 0)
+            {
+                <div class="empty-state">
+                    <div class="empty-icon"><i class="bi bi-mic-mute"></i></div>
+                    <h3>Không tìm thấy câu hỏi nào</h3>
+                    <p>Chưa có câu hỏi nào trong phần này hoặc không khớp với từ khóa tìm kiếm.</p>
+                    <button class="btn btn-primary-solid btn-sm mt-2" @onclick="OpenAddModal">+ Thêm câu mới ngay</button>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 55px;">#</th>
+                                <th style="width: 25%;">Câu hỏi (Question)</th>
+                                <th>Câu trả lời mẫu (Model Answer)</th>
+                                <th style="width: 20%;">Từ vựng & Mẹo phản xạ</th>
+                                <th style="width: 130px; text-align: center;">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in FilteredItems)
+                            {
+                                <tr>
+                                    <td class="fw-bold text-muted">@item.Id</td>
+                                    <td class="question-cell">
+                                        <div class="question-text">@item.Question</div>
+                                    </td>
+                                    <td class="answer-cell">
+                                        <div class="answer-text">@item.ModelAnswer</div>
+                                        <button class="btn-tts-listen" @onclick="() => PlayTTS(item.ModelAnswer)" title="Nghe đọc mẫu">
+                                            <i class="bi bi-volume-up-fill"></i> Nghe thử
+                                        </button>
+                                    </td>
+                                    <td class="info-cell">
+                                        @if (!string.IsNullOrWhiteSpace(item.Vocabulary))
+                                        {
+                                            <div class="vocab-tag" title="Từ vựng">
+                                                <i class="bi bi-bookmark-star-fill text-warning"></i> @item.Vocabulary
+                                            </div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(item.Tips))
+                                        {
+                                            <div class="tips-tag" title="Mẹo">
+                                                <i class="bi bi-lightbulb-fill text-primary"></i> @item.Tips
+                                            </div>
+                                        }
+                                    </td>
+                                    <td class="actions-cell">
+                                        <button class="btn-action-edit" @onclick="() => OpenEditModal(item)" title="Chỉnh sửa">
+                                            <i class="bi bi-pencil-fill"></i>
+                                        </button>
+                                        <button class="btn-action-delete" @onclick="() => DeleteItem(item)" title="Xóa">
+                                            <i class="bi bi-trash-fill"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL THÊM / SỬA BÀI AUDIO SHADOWING                                       -->
+<!-- ========================================================================= -->
+@if (showAudioLessonModal)
+{
+    <div class="admin-modal-overlay">
+        <div class="admin-modal-card modal-lg-custom">
+            <div class="admin-modal-header">
+                <h3>
+                    <i class="bi @(isEditingAudio ? "bi-pencil-square text-primary" : "bi-plus-circle text-success")"></i>
+                    @(isEditingAudio ? "Chỉnh sửa bài Audio Shadowing" : "Thêm bài Audio Shadowing mới")
+                </h3>
+                <button class="admin-modal-close" @onclick="() => showAudioLessonModal = false">×</button>
+            </div>
+
+            <div class="admin-modal-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-8">
+                        <label class="form-label required">Tiêu đề bài Audio:</label>
+                        <input type="text" class="form-control" @bind="formAudioLesson.Title" placeholder="VD: Cambridge IELTS 20 Academic Listening Test 2 Part 1" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Icon / Emoji:</label>
+                        <input type="text" class="form-control" @bind="formAudioLesson.Icon" placeholder="VD: 🎧 hoặc 🎯" />
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label required">Phân loại (Category):</label>
+                        <input type="text" class="form-control" @bind="formAudioLesson.Category" placeholder="VD: IELTS Listening Part 1 hoặc Daily Story" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label required">Cấp độ (Level / Band):</label>
+                        <input type="text" class="form-control" @bind="formAudioLesson.Level" placeholder="VD: Band 7.0 - 8.5" />
+                    </div>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label class="form-label required">Đường dẫn Audio MP3 (Audio URL):</label>
+                    <input type="text" class="form-control" @bind="formAudioLesson.AudioUrl" placeholder="https://engnovate.com/wp-content/uploads/.../audio.mp3" />
+                </div>
+
+                <div class="form-group mb-3">
+                    <label class="form-label">Mô tả bài học:</label>
+                    <textarea class="form-control" rows="2" @bind="formAudioLesson.Description" placeholder="Mô tả nội dung bài nghe, bối cảnh phỏng vấn..."></textarea>
+                </div>
+
+                <!-- Danh sách các câu phân đoạn -->
+                <div class="audio-lines-editor-box mt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label fw-bold mb-0">
+                            <i class="bi bi-list-ol text-primary"></i> Danh sách câu phân đoạn (@(formAudioLesson.Lines?.Count ?? 0) câu):
+                        </label>
+                        <button type="button" class="btn btn-sm btn-primary-solid" @onclick="AddNewAudioLine">
+                            <i class="bi bi-plus"></i> Thêm câu
+                        </button>
+                    </div>
+
+                    <div class="audio-lines-table-scroll">
+                        <table class="table table-sm table-bordered align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 40px;">#</th>
+                                    <th style="width: 100px;">Speaker</th>
+                                    <th style="width: 80px;">Start (s)</th>
+                                    <th style="width: 80px;">Duration</th>
+                                    <th>Nội dung câu tiếng Anh (Text)</th>
+                                    <th style="width: 50px;">Xóa</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (formAudioLesson.Lines != null)
+                                {
+                                    @for (int i = 0; i < formAudioLesson.Lines.Count; i++)
+                                    {
+                                        var idx = i;
+                                        var line = formAudioLesson.Lines[idx];
+                                        <tr>
+                                            <td class="text-center text-muted small">@(idx + 1)</td>
+                                            <td>
+                                                <input type="text" class="form-control form-control-sm" @bind="line.Speaker" placeholder="Speaker 1" />
+                                            </td>
+                                            <td>
+                                                <input type="number" step="0.01" class="form-control form-control-sm" @bind="line.StartTime" />
+                                            </td>
+                                            <td>
+                                                <input type="number" step="0.01" class="form-control form-control-sm" @bind="line.Duration" />
+                                            </td>
+                                            <td>
+                                                <input type="text" class="form-control form-control-sm" @bind="line.Text" placeholder="Nội dung câu nói..." />
+                                            </td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-link text-danger p-0" @onclick="() => RemoveAudioLine(idx)">
+                                                    <i class="bi bi-x-circle-fill"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-modal-footer">
+                <button class="btn btn-secondary-outline" @onclick="() => showAudioLessonModal = false">Hủy</button>
+                <button class="btn btn-primary-solid" @onclick="SaveAudioLesson">
+                    <i class="bi bi-check-circle-fill"></i> Lưu Bài Audio
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ========================================================================= -->
+<!-- MODAL NHẬP BÀI AUDIO TỪ FILE JSON                                         -->
+<!-- ========================================================================= -->
+@if (showAudioImportModal)
+{
+    <div class="admin-modal-overlay">
+        <div class="admin-modal-card">
+            <div class="admin-modal-header">
+                <h3><i class="bi bi-file-earmark-arrow-up-fill text-primary"></i> Nhập bài Audio Shadowing từ JSON</h3>
+                <button class="admin-modal-close" @onclick="() => showAudioImportModal = false">×</button>
+            </div>
+
+            <div class="admin-modal-body">
+                <p class="import-hint">
+                    Hỗ trợ file JSON chuẩn Audio Shadowing (chứa <code>title</code>, <code>audioUrl</code>, và mảng <code>lines</code> có <code>startTime</code>, <code>duration</code>, <code>text</code>).
+                </p>
+
+                <div class="form-group mb-3">
+                    <label class="form-label">Chọn File .JSON từ máy tính:</label>
+                    <InputFile OnChange="HandleAudioJsonFileUpload" accept=".json" class="form-control" />
+                </div>
+
+                <div class="form-group mb-3">
+                    <label class="form-label">Hoặc Dán chuỗi JSON vào đây:</label>
+                    <textarea class="form-control font-monospace" rows="7" @bind="rawAudioJsonInput" placeholder='{ "title": "Cambridge IELTS 20...", "audioUrl": "https://...", "lines": [ { "index": 0, "startTime": 1.59, "duration": 1.28, "text": "Test two." } ] }'></textarea>
+                </div>
+            </div>
+
+            <div class="admin-modal-footer">
+                <button class="btn btn-secondary-outline" @onclick="() => showAudioImportModal = false">Hủy</button>
+                <button class="btn btn-primary-solid" @onclick="ExecuteAudioJsonImport" disabled="@isImporting">
+                    @if (isImporting)
+                    {
+                        <span class="mini-spinner"></span>
+                        <span>Đang xử lý...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-box-arrow-in-down"></i>
+                        <span>Nạp Bài Audio Ngay</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ========================================================================= -->
+<!-- MODAL THÊM / SỬA CÂU HỎI TIÊU CHUẨN                                       -->
+<!-- ========================================================================= -->
+@if (showEditModal)
+{
+    <div class="admin-modal-overlay">
+        <div class="admin-modal-card">
+            <div class="admin-modal-header">
+                <h3>
+                    <i class="bi @(isEditing ? "bi-pencil-square text-primary" : "bi-plus-circle text-success")"></i>
+                    @(isEditing ? "Chỉnh sửa câu hỏi Nói Theo" : "Thêm câu hỏi Nói Theo mới")
+                </h3>
+                <button class="admin-modal-close" @onclick="() => showEditModal = false">×</button>
+            </div>
+
+            <div class="admin-modal-body">
+                <div class="form-group mb-3">
+                    <label class="form-label required">Câu hỏi IELTS (Question):</label>
+                    <input type="text" class="form-control" @bind="formItem.Question" placeholder="VD: Where are you from?" />
+                </div>
+
+                <div class="form-group mb-3">
+                    <label class="form-label required">Câu trả lời mẫu (Model Answer):</label>
+                    <textarea class="form-control" rows="3" @bind="formItem.ModelAnswer" placeholder="VD: I'm from Hanoi, the capital city of Vietnam..."></textarea>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label class="form-label">Từ vựng ghi điểm (Vocabulary):</label>
+                    <input type="text" class="form-control" @bind="formItem.Vocabulary" placeholder="VD: bustling capital (thủ đô nhộn nhịp), vibrant (sôi động)" />
+                </div>
+
+                <div class="form-group mb-3">
+                    <label class="form-label">Mẹo phát âm / Ngữ điệu (Tips):</label>
+                    <textarea class="form-control" rows="2" @bind="formItem.Tips" placeholder="VD: Nhấn mạnh các tính từ miêu tả..."></textarea>
+                </div>
+            </div>
+
+            <div class="admin-modal-footer">
+                <button class="btn btn-secondary-outline" @onclick="() => showEditModal = false">Hủy</button>
+                <button class="btn btn-primary-solid" @onclick="SaveItem">
+                    <i class="bi bi-check-circle-fill"></i> Lưu thay đổi
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ========================================================================= -->
+<!-- MODAL NHẬP FILE JSON CÂU HỎI TIÊU CHUẨN                                   -->
+<!-- ========================================================================= -->
+@if (showImportModal)
+{
+    <div class="admin-modal-overlay">
+        <div class="admin-modal-card">
+            <div class="admin-modal-header">
+                <h3><i class="bi bi-file-earmark-arrow-up-fill text-primary"></i> Nhập dữ liệu Nói Theo từ JSON</h3>
+                <button class="admin-modal-close" @onclick="() => showImportModal = false">×</button>
+            </div>
+
+            <div class="admin-modal-body">
+                <p class="import-hint">
+                    Hỗ trợ file JSON chứa danh sách câu hỏi Nói Theo (như file mẫu hoặc bộ 100 câu).
+                </p>
+
+                <div class="form-group mb-3">
+                    <label class="form-label">1. Chọn nạp vào phần nào:</label>
+                    <select class="form-control" @bind="importTargetPart">
+                        <option value="100Sentences">⭐ 100 Câu Tuyển Chọn</option>
+                        <option value="Part1">Part 1: Giao tiếp thường ngày</option>
+                        <option value="Part2">Part 2: Kể chuyện & Miêu tả</option>
+                        <option value="Part3">Part 3: Thảo luận chuyên sâu</option>
+                    </select>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label class="form-label">2. Chọn File .JSON từ máy tính:</label>
+                    <InputFile OnChange="HandleJsonFileUpload" accept=".json" class="form-control" />
+                </div>
+
+                <div class="form-group mb-3">
+                    <label class="form-label">Hoặc Dán trực tiếp chuỗi JSON vào đây:</label>
+                    <textarea class="form-control font-monospace" rows="6" @bind="rawJsonInput" placeholder='[ {"Question": "...", "ModelAnswer": "..."} ]'></textarea>
+                </div>
+            </div>
+
+            <div class="admin-modal-footer">
+                <button class="btn btn-secondary-outline" @onclick="() => showImportModal = false">Hủy</button>
+                <button class="btn btn-primary-solid" @onclick="ExecuteJsonImport" disabled="@isImporting">
+                    @if (isImporting)
+                    {
+                        <span class="mini-spinner"></span>
+                        <span>Đang xử lý...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-box-arrow-in-down"></i>
+                        <span>Nạp Dữ Liệu Ngay</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private string activePart = "AudioLessons";
+
+    private List<(string Key, string Label)> partOptions = new()
+    {
+        ("AudioLessons", "🎧 Quản lý Audio Shadowing (Cambridge / Engnovate)"),
+        ("100Sentences", "⭐ 100 Câu Tuyển Chọn"),
+        ("Part1", "Part 1: Giao tiếp thường ngày"),
+        ("Part2", "Part 2: Kể chuyện & Miêu tả"),
+        ("Part3", "Part 3: Thảo luận chuyên sâu")
+    };
+
+    private string searchKeyword = "";
+    private string? alertMessage;
+    private string alertType = "success";
+
+    // ── Audio Shadowing State ────────────────────────────────────────────
+    private List<AudioLessonDto> audioLessons = new();
+    private AudioLessonDto formAudioLesson = new();
+    private bool showAudioLessonModal = false;
+    private bool isEditingAudio = false;
+    private bool showAudioImportModal = false;
+    private string rawAudioJsonInput = "";
+
+    // ── Standard Shadowing State ─────────────────────────────────────────
+    private SpeakAlongExamData? examData;
+    private SpeakAlongItem formItem = new();
+    private bool showEditModal = false;
+    private bool isEditing = false;
+    private bool showImportModal = false;
+    private string importTargetPart = "100Sentences";
+    private string rawJsonInput = "";
+    private bool isImporting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task SelectPart(string partKey)
+    {
+        activePart = partKey;
+        searchKeyword = "";
+        alertMessage = null;
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+
+        if (activePart == "AudioLessons")
+        {
+            audioLessons = await SpeakAlongService.LoadAudioLessonsAsync();
+            // Ensure lines are populated
+            foreach (var lesson in audioLessons)
+            {
+                if ((lesson.Lines == null || lesson.Lines.Count == 0) && !string.IsNullOrEmpty(lesson.JsonFile))
+                {
+                    try
+                    {
+                        var json = await Http.GetStringAsync(lesson.JsonFile);
+                        var parsed = JsonSerializer.Deserialize<AudioLessonDataParsed>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (parsed?.Lines != null) lesson.Lines = parsed.Lines;
+                    }
+                    catch { }
+                }
+            }
+        }
+        else
+        {
+            examData = await SpeakAlongService.LoadExamAsync(activePart);
+            if (examData == null)
+            {
+                examData = new SpeakAlongExamData { Part = activePart, Items = new List<SpeakAlongItem>() };
+            }
+        }
+
+        isLoading = false;
+    }
+
+    private List<AudioLessonDto> FilteredAudioLessons
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(searchKeyword)) return audioLessons;
+            var kw = searchKeyword.ToLowerInvariant();
+            return audioLessons.Where(l => l.Title.ToLowerInvariant().Contains(kw) || 
+                                           l.Category.ToLowerInvariant().Contains(kw) || 
+                                           l.Level.ToLowerInvariant().Contains(kw)).ToList();
+        }
+    }
+
+    private List<SpeakAlongItem> FilteredItems
+    {
+        get
+        {
+            if (examData?.Items == null) return new List<SpeakAlongItem>();
+            if (string.IsNullOrWhiteSpace(searchKeyword)) return examData.Items;
+
+            var kw = searchKeyword.ToLowerInvariant();
+            return examData.Items.Where(i =>
+                i.Question.ToLowerInvariant().Contains(kw) ||
+                i.ModelAnswer.ToLowerInvariant().Contains(kw) ||
+                i.Vocabulary.ToLowerInvariant().Contains(kw)
+            ).ToList();
+        }
+    }
+
+    // ── Audio Lessons CRUD ───────────────────────────────────────────────
+
+    private void OpenAddAudioModal()
+    {
+        isEditingAudio = false;
+        formAudioLesson = new AudioLessonDto
+        {
+            Id = Guid.NewGuid().ToString("N").Substring(0, 8),
+            Title = "",
+            Category = "IELTS Listening Part 1",
+            Level = "Band 7.0 - 8.5",
+            AudioUrl = "",
+            Icon = "🎧",
+            Description = "",
+            Lines = new List<AudioLessonLine>
+            {
+                new() { Index = 0, Speaker = "Speaker 1", StartTime = 0.0, Duration = 2.5, Text = "" }
+            }
+        };
+        showAudioLessonModal = true;
+    }
+
+    private async Task OpenEditAudioModal(AudioLessonDto lesson)
+    {
+        isEditingAudio = true;
+        formAudioLesson = new AudioLessonDto
+        {
+            Id = lesson.Id,
+            Title = lesson.Title,
+            Category = lesson.Category,
+            Level = lesson.Level,
+            AudioUrl = lesson.AudioUrl,
+            Icon = lesson.Icon,
+            Description = lesson.Description,
+            JsonFile = lesson.JsonFile,
+            TotalUnits = lesson.TotalUnits,
+            Lines = lesson.Lines?.Select(l => new AudioLessonLine
+            {
+                Index = l.Index,
+                Speaker = l.Speaker,
+                StartTime = l.StartTime,
+                Duration = l.Duration,
+                EndTime = l.EndTime,
+                Text = l.Text,
+                Translation = l.Translation,
+                IsCompleted = l.IsCompleted,
+                LastScore = l.LastScore
+            }).ToList() ?? new List<AudioLessonLine>()
+        };
+
+        if (formAudioLesson.Lines.Count == 0 && !string.IsNullOrEmpty(formAudioLesson.JsonFile))
+        {
+            try
+            {
+                var json = await Http.GetStringAsync(formAudioLesson.JsonFile);
+                var parsed = JsonSerializer.Deserialize<AudioLessonDataParsed>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (parsed?.Lines != null) formAudioLesson.Lines = parsed.Lines;
+            }
+            catch { }
+        }
+
+        showAudioLessonModal = true;
+    }
+
+    private void AddNewAudioLine()
+    {
+        if (formAudioLesson.Lines == null) formAudioLesson.Lines = new List<AudioLessonLine>();
+        var last = formAudioLesson.Lines.LastOrDefault();
+        double nextStart = last != null ? Math.Round(last.StartTime + last.Duration, 2) : 0.0;
+        formAudioLesson.Lines.Add(new AudioLessonLine
+        {
+            Index = formAudioLesson.Lines.Count,
+            Speaker = last?.Speaker ?? "Speaker 1",
+            StartTime = nextStart,
+            Duration = 3.0,
+            EndTime = Math.Round(nextStart + 3.0, 2),
+            Text = ""
+        });
+    }
+
+    private void RemoveAudioLine(int index)
+    {
+        if (formAudioLesson.Lines != null && index >= 0 && index < formAudioLesson.Lines.Count)
+        {
+            formAudioLesson.Lines.RemoveAt(index);
+            for (int i = 0; i < formAudioLesson.Lines.Count; i++) formAudioLesson.Lines[i].Index = i;
+        }
+    }
+
+    private async Task SaveAudioLesson()
+    {
+        if (string.IsNullOrWhiteSpace(formAudioLesson.Title) || string.IsNullOrWhiteSpace(formAudioLesson.AudioUrl))
+        {
+            ShowAlert("Vui lòng nhập đầy đủ Tiêu đề và Link Audio MP3!", "error");
+            return;
+        }
+
+        if (formAudioLesson.Lines != null)
+        {
+            for (int i = 0; i < formAudioLesson.Lines.Count; i++)
+            {
+                formAudioLesson.Lines[i].Index = i;
+                formAudioLesson.Lines[i].EndTime = Math.Round(formAudioLesson.Lines[i].StartTime + formAudioLesson.Lines[i].Duration, 2);
+            }
+            formAudioLesson.TotalUnits = formAudioLesson.Lines.Count;
+        }
+
+        await SpeakAlongService.SaveAudioLessonAsync(formAudioLesson);
+        showAudioLessonModal = false;
+        await LoadData();
+        ShowAlert($"Đã lưu thành công bài Audio '{formAudioLesson.Title}' ({formAudioLesson.TotalUnits} câu)!", "success");
+    }
+
+    private async Task DeleteAudioLesson(AudioLessonDto lesson)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Bạn có chắc chắn muốn xóa bài Audio '{lesson.Title}'?");
+        if (confirmed)
+        {
+            await SpeakAlongService.DeleteAudioLessonAsync(lesson.Id);
+            await LoadData();
+            ShowAlert($"Đã xóa bài Audio '{lesson.Title}'!", "success");
+        }
+    }
+
+    private async Task ExportAudioLessonJson(AudioLessonDto lesson)
+    {
+        var json = JsonSerializer.Serialize(lesson, new JsonSerializerOptions { WriteIndented = true });
+        var fileName = $"{lesson.Id ?? "audio-shadowing"}.json";
+        await JS.InvokeVoidAsync("SpeakingInterop.downloadJsonFile", fileName, json);
+        ShowAlert($"Đã xuất file JSON bài '{lesson.Title}'!", "success");
+    }
+
+    private async Task DownloadSampleAudioJson()
+    {
+        var sample = new AudioLessonDto
+        {
+            Id = "sample-audio-lesson",
+            Title = "Sample IELTS Audio Shadowing Lesson",
+            Category = "IELTS Listening Part 1",
+            Level = "Band 7.0 - 8.5",
+            AudioUrl = "https://engnovate.com/wp-content/uploads/2025/07/cambridge-ielts-20-academic-listening-2-audio1.mp3",
+            Description = "Bài mẫu luyện Audio Shadowing chuẩn Cambridge IELTS với mốc thời gian từng câu.",
+            TotalUnits = 3,
+            Lines = new List<AudioLessonLine>
+            {
+                new() { Index = 0, Speaker = "Speaker 1", StartTime = 1.59, Duration = 1.28, Text = "Test two." },
+                new() { Index = 1, Speaker = "Speaker 1", StartTime = 4.08, Duration = 2.47, Text = "This is the IELTS listening test." },
+                new() { Index = 2, Speaker = "Speaker 2", StartTime = 7.44, Duration = 5.83, Text = "You will hear a number of different recordings." }
+            }
+        };
+        var json = JsonSerializer.Serialize(sample, new JsonSerializerOptions { WriteIndented = true });
+        await JS.InvokeVoidAsync("SpeakingInterop.downloadJsonFile", "sample-audio-shadowing.json", json);
+    }
+
+    private async Task HandleAudioJsonFileUpload(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            using var reader = new System.IO.StreamReader(stream);
+            rawAudioJsonInput = await reader.ReadToEndAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Lỗi khi đọc file: {ex.Message}", "error");
+        }
+    }
+
+    private async Task ExecuteAudioJsonImport()
+    {
+        if (string.IsNullOrWhiteSpace(rawAudioJsonInput))
+        {
+            ShowAlert("Vui lòng chọn file JSON hoặc dán chuỗi JSON!", "error");
+            return;
+        }
+
+        isImporting = true;
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<AudioLessonDto>(rawAudioJsonInput, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (parsed != null && !string.IsNullOrEmpty(parsed.Title))
+            {
+                if (string.IsNullOrEmpty(parsed.Id)) parsed.Id = Guid.NewGuid().ToString("N").Substring(0, 8);
+                if (parsed.Lines != null)
+                {
+                    parsed.TotalUnits = parsed.Lines.Count;
+                    for (int i = 0; i < parsed.Lines.Count; i++)
+                    {
+                        parsed.Lines[i].Index = i;
+                        parsed.Lines[i].EndTime = Math.Round(parsed.Lines[i].StartTime + parsed.Lines[i].Duration, 2);
+                    }
+                }
+                await SpeakAlongService.SaveAudioLessonAsync(parsed);
+                showAudioImportModal = false;
+                rawAudioJsonInput = "";
+                await LoadData();
+                ShowAlert($"Đã nhập thành công bài Audio '{parsed.Title}' ({parsed.TotalUnits} câu)!", "success");
+            }
+            else
+            {
+                ShowAlert("Cấu trúc JSON không hợp lệ. Vui lòng kiểm tra lại định dạng!", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Lỗi xử lý JSON: {ex.Message}", "error");
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private async Task ConfirmResetAudioDefault()
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn khôi phục danh mục Audio Shadowing về mặc định ban đầu?");
+        if (confirmed)
+        {
+            await JS.InvokeVoidAsync("localStorage.removeItem", "ielts_audio_shadowing_lessons_catalog");
+            await LoadData();
+            ShowAlert("Đã khôi phục danh mục bài Audio mặc định!", "success");
+        }
+    }
+
+    // ── Standard Shadowing CRUD ──────────────────────────────────────────
+
+    private void OpenAddModal()
+    {
+        isEditing = false;
+        int nextId = (examData?.Items.Count > 0) ? (examData.Items.Max(i => i.Id) + 1) : 1;
+        formItem = new SpeakAlongItem { Id = nextId, Question = "", ModelAnswer = "", Vocabulary = "", Tips = "" };
+        showEditModal = true;
+    }
+
+    private void OpenEditModal(SpeakAlongItem item)
+    {
+        isEditing = true;
+        formItem = new SpeakAlongItem
+        {
+            Id = item.Id,
+            Question = item.Question,
+            ModelAnswer = item.ModelAnswer,
+            Vocabulary = item.Vocabulary,
+            Tips = item.Tips
+        };
+        showEditModal = true;
+    }
+
+    private async Task SaveItem()
+    {
+        if (string.IsNullOrWhiteSpace(formItem.Question) || string.IsNullOrWhiteSpace(formItem.ModelAnswer))
+        {
+            ShowAlert("Vui lòng nhập đầy đủ Câu hỏi và Câu trả lời mẫu!", "error");
+            return;
+        }
+
+        if (examData == null) examData = new SpeakAlongExamData { Part = activePart };
+
+        if (isEditing)
+        {
+            var idx = examData.Items.FindIndex(i => i.Id == formItem.Id);
+            if (idx >= 0) examData.Items[idx] = formItem;
+        }
+        else
+        {
+            examData.Items.Add(formItem);
+        }
+
+        await SpeakAlongService.SaveExamDataAsync(activePart, examData);
+        showEditModal = false;
+        ShowAlert($"Đã lưu câu hỏi #{formItem.Id} thành công!", "success");
+    }
+
+    private async Task DeleteItem(SpeakAlongItem item)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Bạn có chắc chắn muốn xóa câu #{item.Id}: '{item.Question}'?");
+        if (confirmed && examData != null)
+        {
+            examData.Items.RemoveAll(i => i.Id == item.Id);
+            await SpeakAlongService.SaveExamDataAsync(activePart, examData);
+            ShowAlert($"Đã xóa câu hỏi #{item.Id} thành công!", "success");
+        }
+    }
+
+    private async Task ExportCurrentJson()
+    {
+        if (examData == null || examData.Items.Count == 0)
+        {
+            ShowAlert("Không có dữ liệu để xuất!", "error");
+            return;
+        }
+        var json = JsonSerializer.Serialize(examData, new JsonSerializerOptions { WriteIndented = true });
+        var fileName = $"ielts-speak-along-{activePart.ToLowerInvariant()}.json";
+        await JS.InvokeVoidAsync("SpeakingInterop.downloadJsonFile", fileName, json);
+        ShowAlert($"Đã xuất file {fileName} thành công!", "success");
+    }
+
+    private async Task DownloadSampleJson()
+    {
+        var sample = new SpeakAlongExamData
+        {
+            Title = "IELTS Speak Along Sample Dataset",
+            Level = "IELTS 6.5 - 8.0+",
+            Part = activePart,
+            Items = new List<SpeakAlongItem>
+            {
+                new() { Id = 1, Question = "Where are you from?", ModelAnswer = "I'm from Hanoi, the capital city of Vietnam...", Vocabulary = "bustling capital (thủ đô nhộn nhịp)", Tips = "Nhấn mạnh tính từ..." },
+                new() { Id = 2, Question = "Do you work or are you a student?", ModelAnswer = "Currently, I am a third-year university student...", Vocabulary = "major in (chuyên ngành)", Tips = "Nói rõ ràng và tự tin..." }
+            }
+        };
+        var json = JsonSerializer.Serialize(sample, new JsonSerializerOptions { WriteIndented = true });
+        await JS.InvokeVoidAsync("SpeakingInterop.downloadJsonFile", "sample-speak-along.json", json);
+    }
+
+    private async Task HandleJsonFileUpload(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            using var reader = new System.IO.StreamReader(stream);
+            rawJsonInput = await reader.ReadToEndAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Lỗi khi đọc file: {ex.Message}", "error");
+        }
+    }
+
+    private async Task ExecuteJsonImport()
+    {
+        if (string.IsNullOrWhiteSpace(rawJsonInput))
+        {
+            ShowAlert("Vui lòng chọn file JSON hoặc dán chuỗi JSON!", "error");
+            return;
+        }
+
+        isImporting = true;
+        try
+        {
+            var success = await SpeakAlongService.ImportJsonAsync(rawJsonInput, importTargetPart);
+            if (success)
+            {
+                showImportModal = false;
+                rawJsonInput = "";
+                await LoadData();
+                ShowAlert($"Đã nạp thành công dữ liệu vào phần '{importTargetPart}'!", "success");
+            }
+            else
+            {
+                ShowAlert("Không tìm thấy câu hỏi hợp lệ trong JSON!", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowAlert($"Lỗi xử lý JSON: {ex.Message}", "error");
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private async Task ConfirmResetDefault()
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Bạn có chắc chắn muốn khôi phục phần '{activePart}' về mặc định ban đầu?");
+        if (confirmed)
+        {
+            await SpeakAlongService.ResetToDefaultAsync(activePart);
+            await LoadData();
+            ShowAlert($"Đã khôi phục dữ liệu mặc định cho phần '{activePart}'!", "success");
+        }
+    }
+
+    private async Task PlayTTS(string text)
+    {
+        await JS.InvokeVoidAsync("SpeakingInterop.speakText", text, "en-US", 1.0);
+    }
+
+    private void ShowAlert(string msg, string type = "success")
+    {
+        alertMessage = msg;
+        alertType = type;
+    }
+
+    public class AudioLessonDataParsed
+    {
+        public string Title { get; set; } = "";
+        public string AudioUrl { get; set; } = "";
+        public List<AudioLessonLine> Lines { get; set; } = new();
+    }
+}
