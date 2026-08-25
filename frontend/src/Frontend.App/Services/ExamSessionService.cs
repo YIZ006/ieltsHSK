@@ -27,6 +27,16 @@ public sealed class ExamSessionService(IJSRuntime js)
     public Task LockTestContentAsync(string selector)
         => js.InvokeVoidAsync("ExamSession.lockTestContent", selector).AsTask();
 
+    // ── LƯU / ĐỌC / XOÁ TIẾN TRÌNH BÀI THI (localStorage) ──
+    public Task SaveProgressAsync(string storageKey, object state)
+        => js.InvokeVoidAsync("ExamSession.saveProgress", storageKey, state).AsTask();
+
+    public async Task<T?> LoadProgressAsync<T>(string storageKey)
+        => await js.InvokeAsync<T?>("ExamSession.loadProgress", storageKey);
+
+    public Task ClearProgressAsync(string storageKey)
+        => js.InvokeVoidAsync("ExamSession.clearProgress", storageKey).AsTask();
+
     public static string CreateStorageKey(string skill, string? sessionId, string examUrl)
     {
         var identity = string.IsNullOrWhiteSpace(sessionId) ? examUrl : sessionId;

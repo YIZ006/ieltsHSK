@@ -14,6 +14,13 @@ public sealed class IeltsSubmissionRecord
     public WritingSubmissionData? Writing { get; set; }
     public SpeakingSubmissionData? Speaking { get; set; }
     public IeltsScoreReport? Score { get; set; }
+
+    // Điểm riêng cho TOEIC (null với bài IELTS cũ)
+    public int? CorrectCount { get; set; }
+    public int? TotalQuestions { get; set; }
+    public int? ListeningScore { get; set; }
+    public int? ReadingScore { get; set; }
+    public int? TotalScore { get; set; }
 }
 
 public sealed class WritingSubmissionData

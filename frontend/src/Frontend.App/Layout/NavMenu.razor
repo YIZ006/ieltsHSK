@@ -27,6 +27,10 @@
         <div class="exam-toolbar exam-toolbar-desktop">
             @if (ExamHeader.Visible)
             {
+                @if (!string.IsNullOrEmpty(ExamHeader.SecondaryButtonText))
+                {
+                    <button class="exam-secondary-btn" @onclick="() => ExamHeader.RequestSecondaryAction()" @onclick:stopPropagation>@ExamHeader.SecondaryButtonText</button>
+                }
                 <button class="exam-submit-btn" @onclick="() => ExamHeader.RequestSubmit()" @onclick:stopPropagation>NỘP BÀI</button>
                 <span class="exam-timer-chip @(ExamHeader.TimerUrgent ? "urgent" : "")">@ExamHeader.TimerText</span>
             }
@@ -70,6 +74,10 @@
     <div class="exam-toolbar exam-toolbar-mobile">
         @if (ExamHeader.Visible)
         {
+            @if (!string.IsNullOrEmpty(ExamHeader.SecondaryButtonText))
+            {
+                <button class="exam-secondary-btn" @onclick="() => ExamHeader.RequestSecondaryAction()" @onclick:stopPropagation>@ExamHeader.SecondaryButtonText</button>
+            }
             <button class="exam-submit-btn" @onclick="() => ExamHeader.RequestSubmit()">NỘP BÀI</button>
             <span class="exam-timer-chip @(ExamHeader.TimerUrgent ? "urgent" : "")">@ExamHeader.TimerText</span>
         }

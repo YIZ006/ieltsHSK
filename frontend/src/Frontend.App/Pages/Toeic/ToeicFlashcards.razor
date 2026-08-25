@@ -1,0 +1,319 @@
+@page "/toeic/flashcards"
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Blazored.LocalStorage
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject ILocalStorageService LocalStorage
+@implements IDisposable
+
+<PageTitle>Flashcard Từ vựng TOEIC - ieltsHSK</PageTitle>
+
+<div class="fc-page">
+    <div class="fc-header">
+        <div>
+            <h1 class="fc-title"><i class="bi bi-layers"></i> Flashcard Từ vựng TOEIC</h1>
+            <p class="fc-subtitle">Lật thẻ, nghe phát âm và học thuộc từ mới mỗi ngày.</p>
+        </div>
+        <a href="/toeic" class="fc-back-link"><i class="bi bi-arrow-left"></i> Về dashboard</a>
+    </div>
+
+    @if (loading)
+    {
+        <div class="fc-loading">
+            <div class="fc-spinner"></div>
+            <p>Đang tải bộ thẻ...</p>
+        </div>
+    }
+    else if (loadError != null)
+    {
+        <div class="fc-empty">
+            <div class="fc-empty-icon">⚠️</div>
+            <div class="fc-empty-title">@loadError</div>
+            <div class="fc-empty-sub">Vui lòng thử lại sau.</div>
+        </div>
+    }
+    else if (allWords.Count == 0)
+    {
+        <div class="fc-empty">
+            <div class="fc-empty-icon">📭</div>
+            <div class="fc-empty-title">Chưa có từ vựng nào</div>
+            <div class="fc-empty-sub">Dữ liệu bộ thẻ đang trống.</div>
+        </div>
+    }
+    else
+    {
+        <div class="fc-stats">
+            <span class="fc-chip fc-chip-green"><i class="bi bi-check-circle-fill"></i> Đã thuộc @learned.Count</span>
+            <span class="fc-chip fc-chip-amber"><i class="bi bi-arrow-repeat"></i> Cần ôn @againSet.Count</span>
+            <span class="fc-chip"><i class="bi bi-collection"></i> @allWords.Count từ</span>
+        </div>
+
+        <div class="fc-progress">
+            <div class="fc-progress-bar"><div class="fc-progress-fill" style="width:@GlobalPercent%"></div></div>
+            <span class="fc-progress-text">@GlobalPercent%</span>
+        </div>
+
+        <div class="fc-toolbar">
+            <div class="fc-toolbar-left">
+                <select class="fc-select" @bind="topicFilter" @bind:after="BuildDeck">
+                    <option value="Tất cả">Tất cả chủ đề</option>
+                    @foreach (var topic in Topics)
+                    {
+                        <option value="@topic">@topic</option>
+                    }
+                </select>
+                <button class="fc-tool-btn" @onclick="ShuffleDeck" title="Trộn thứ tự thẻ">
+                    <i class="bi bi-shuffle"></i> Trộn thẻ
+                </button>
+            </div>
+            <div class="fc-toolbar-right">
+                <label class="fc-toggle">
+                    <input type="checkbox" @bind="autoSpeak" />
+                    <i class="bi bi-volume-up-fill"></i> Tự phát âm
+                </label>
+                <button class="fc-tool-btn fc-tool-danger" @onclick="ResetProgressAsync" title="Xóa tiến độ đã thuộc">
+                    <i class="bi bi-arrow-counterclockwise"></i> Đặt lại
+                </button>
+            </div>
+        </div>
+
+        @if (DeckCompleted)
+        {
+            <div class="fc-done">
+                <span class="fc-done-emoji">🎉</span>
+                <div class="fc-done-text">
+                    <div class="fc-done-title">Xuất sắc! Bạn đã thuộc @deck.Count từ của chủ đề này.</div>
+                    <div class="fc-done-sub">Ôn lại để nhớ lâu hơn, hoặc chọn chủ đề khác ở trên.</div>
+                </div>
+                <button class="fc-tool-btn" @onclick="ShuffleDeck"><i class="bi bi-arrow-repeat"></i> Ôn lại</button>
+            </div>
+        }
+
+        @if (deck.Count == 0)
+        {
+            <div class="fc-empty">
+                <div class="fc-empty-icon">🗂️</div>
+                <div class="fc-empty-title">Không có thẻ nào cho chủ đề này</div>
+                <div class="fc-empty-sub">Hãy chọn một chủ đề khác.</div>
+            </div>
+        }
+        else
+        {
+            <div class="fc-scene">
+                <div class="fc-card @(flipped ? "flipped" : "")" @onclick="FlipCard">
+                    <div class="fc-face fc-front">
+                        <span class="fc-topic">@CurrentCard.Topic</span>
+                        <button class="fc-speak" title="Phát âm" @onclick="() => SpeakAsync(CurrentCard.Word)" @onclick:stopPropagation="true">
+                            <i class="bi bi-volume-up-fill"></i>
+                        </button>
+                        <div class="fc-word">@CurrentCard.Word</div>
+                        <div class="fc-ipa">@CurrentCard.Ipa</div>
+                        <div class="fc-hint"><i class="bi bi-hand-index-thumb"></i> Nhấp vào thẻ để xem nghĩa</div>
+                    </div>
+                    <div class="fc-face fc-back">
+                        <span class="fc-topic fc-topic-back">@CurrentCard.Topic</span>
+                        <div class="fc-meaning">@CurrentCard.Meaning</div>
+                        <div class="fc-example">"@CurrentCard.Example"</div>
+                        <button class="fc-speak fc-speak-back" @onclick="() => SpeakAsync(CurrentCard.Example)" @onclick:stopPropagation="true">
+                            <i class="bi bi-volume-up-fill"></i> Nghe ví dụ
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fc-controls">
+                <button class="fc-nav-btn" @onclick="PrevCard" title="Thẻ trước">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <button class="fc-btn fc-btn-again" @onclick="MarkAgainAsync">
+                    <i class="bi bi-arrow-counterclockwise"></i> Chưa thuộc
+                </button>
+                <button class="fc-btn fc-btn-know" @onclick="MarkKnownAsync">
+                    <i class="bi bi-check-lg"></i> Đã thuộc
+                </button>
+                <button class="fc-nav-btn" @onclick="NextCard" title="Thẻ sau">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+
+            <div class="fc-counter">Thẻ @(index + 1) / @deck.Count</div>
+        }
+    }
+</div>
+
+@code {
+    private const string StateKey = "toeic_flashcards_v1";
+
+    private List<ToeicVocabItem> allWords = new();
+    private List<ToeicVocabItem> deck = new();
+    private HashSet<int> learned = new();
+    private HashSet<int> againSet = new();
+    private int index;
+    private bool flipped;
+    private bool loading = true;
+    private string? loadError;
+    private string topicFilter = "Tất cả";
+    private bool autoSpeak = true;
+
+    private List<string> Topics => allWords.Select(w => w.Topic).Distinct().ToList();
+
+    private ToeicVocabItem CurrentCard => deck[index];
+
+    private bool DeckCompleted => deck.Count > 0 && deck.All(w => learned.Contains(w.Id));
+
+    private int GlobalPercent => allWords.Count == 0 ? 0 : learned.Count * 100 / allWords.Count;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            allWords = await Http.GetFromJsonAsync<List<ToeicVocabItem>>("sample-data/toeic-vocabulary.json") ?? new List<ToeicVocabItem>();
+        }
+        catch
+        {
+            loadError = "Không tải được dữ liệu từ vựng.";
+        }
+
+        try
+        {
+            var state = await LocalStorage.GetItemAsync<ToeicFlashcardState>(StateKey);
+            if (state != null)
+            {
+                learned = state.Learned.ToHashSet();
+                againSet = state.Again.ToHashSet();
+            }
+        }
+        catch
+        {
+            // Bỏ qua lỗi đọc localStorage, dùng trạng thái rỗng
+        }
+
+        BuildDeck();
+        loading = false;
+    }
+
+    private void BuildDeck()
+    {
+        var filtered = topicFilter == "Tất cả"
+            ? allWords
+            : allWords.Where(w => w.Topic == topicFilter).ToList();
+
+        deck = filtered
+            .Where(w => !learned.Contains(w.Id))
+            .Concat(filtered.Where(w => learned.Contains(w.Id)))
+            .ToList();
+
+        index = 0;
+        flipped = false;
+    }
+
+    private void FlipCard() => flipped = !flipped;
+
+    private void NextCard()
+    {
+        if (deck.Count == 0) return;
+        index = (index + 1) % deck.Count;
+        flipped = false;
+        _ = SpeakCurrentAsync();
+    }
+
+    private void PrevCard()
+    {
+        if (deck.Count == 0) return;
+        index = (index - 1 + deck.Count) % deck.Count;
+        flipped = false;
+        _ = SpeakCurrentAsync();
+    }
+
+    private async Task MarkKnownAsync()
+    {
+        if (deck.Count == 0) return;
+
+        var id = deck[index].Id;
+        learned.Add(id);
+        againSet.Remove(id);
+        await SaveStateAsync();
+
+        flipped = false;
+        if (!DeckCompleted)
+        {
+            NextCard();
+        }
+    }
+
+    private async Task MarkAgainAsync()
+    {
+        if (deck.Count == 0) return;
+
+        var card = deck[index];
+        againSet.Add(card.Id);
+        learned.Remove(card.Id);
+        await SaveStateAsync();
+
+        deck.RemoveAt(index);
+        deck.Add(card);
+        if (index >= deck.Count) index = 0;
+
+        flipped = false;
+        await SpeakCurrentAsync();
+    }
+
+    private void ShuffleDeck()
+    {
+        if (deck.Count < 2) return;
+
+        var rng = new Random();
+        for (var i = deck.Count - 1; i > 0; i--)
+        {
+            var j = rng.Next(i + 1);
+            (deck[i], deck[j]) = (deck[j], deck[i]);
+        }
+
+        index = 0;
+        flipped = false;
+    }
+
+    private async Task ResetProgressAsync()
+    {
+        learned.Clear();
+        againSet.Clear();
+        await SaveStateAsync();
+        BuildDeck();
+    }
+
+    private async Task SaveStateAsync()
+    {
+        await LocalStorage.SetItemAsync(StateKey, new ToeicFlashcardState
+        {
+            Learned = learned.ToList(),
+            Again = againSet.ToList()
+        });
+    }
+
+    private async Task SpeakCurrentAsync()
+    {
+        if (autoSpeak && deck.Count > 0)
+        {
+            await SpeakAsync(deck[index].Word);
+        }
+    }
+
+    private async Task SpeakAsync(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("speakText", text);
+        }
+        catch
+        {
+            // Trình duyệt không hỗ trợ Web Speech API
+        }
+    }
+
+    public void Dispose()
+    {
+        _ = JS.InvokeVoidAsync("stopSpeakText");
+    }
+}

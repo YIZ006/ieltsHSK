@@ -1,4 +1,8 @@
 @inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using Frontend.App.Services
+@inject AuthenticationStateProvider AuthStateProvider
+@inject StreakService Streak
 
 <div class="page">
     <header class="top-navbar">
@@ -16,4 +20,20 @@
 
 @code {
     private AuthModal? authModal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                await Streak.MarkTodayAsync();
+            }
+        }
+        catch
+        {
+            // Không chặn render nếu ghi chuỗi thất bại
+        }
+    }
 }

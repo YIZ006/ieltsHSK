@@ -4,6 +4,8 @@
 @using Frontend.App.Services
 @inject ToeicService ToeicService
 @inject MockTestService MockTestService
+@inject ExamSessionService ExamSession
+@inject ExamSubmissionService Submissions
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
 @inject ExamHeaderService ExamHeader
@@ -151,27 +153,58 @@ else if (showSetup && exam != null)
             <button class="setup-back-btn" @onclick='() => NavManager.NavigateTo("/toeic/test")'>← Chọn đề khác</button>
         </div>
     </div>
+
+    @* ── MODAL: BÀI THI LÀM DỞ ── *@
+    @if (showResumePrompt && savedProgress != null)
+    {
+        <div class="result-overlay">
+            <div class="result-modal">
+                <div class="result-title">BÀI THI CHƯA HOÀN THÀNH</div>
+                <p class="confirm-text">Bạn có bài test đang làm dở: <b>@(savedProgress.Title)</b></p>
+                <p class="confirm-sub">
+                    Đã trả lời: <b>@savedProgress.AnsweredCount câu</b>
+                    · Thời gian còn lại: <b>@FormatDuration(savedProgress.SecondsLeft)</b>
+                    @if (!string.IsNullOrWhiteSpace(savedProgress.SavedAtText))
+                    {
+                        <div>Lưu lúc: @savedProgress.SavedAtText</div>
+                    }
+                </p>
+                <div class="confirm-actions">
+                    <button class="btn-cancel" @onclick="DiscardSavedProgress">Làm lại từ đầu</button>
+                    <button class="result-close-btn" @onclick="ResumeSavedExam">Tiếp tục làm bài</button>
+                </div>
+            </div>
+        </div>
+    }
 }
 else
 {
-    var activePart = exam.Parts[activePartIndex];
+    var activePart = exam!.Parts[activePartIndex];
     var pageGroup = CurrentPageGroup;
     int totalAnswered = exam.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count(q => q.SelectedOptionId.HasValue)));
 
-    @* ── PART TABS ── *@
+    @* ── PART TABS (ẩn khi đang làm bài nghe, chỉ mở lại ở chế độ xem đáp án) ── *@
     <nav class="part-nav-bar">
-        @for (int i = 0; i < exam.Parts.Count; i++)
+        @if (ShowPartTabs)
         {
-            var idx  = i;
-            var part = exam.Parts[i];
-            int partAnswered = part.QuestionGroups.Sum(g => g.Questions.Count(q => q.SelectedOptionId.HasValue));
-            int partTotal    = part.QuestionGroups.Sum(g => g.Questions.Count);
-            <button class="part-tab @(activePartIndex == idx ? "active" : "")"
-                    id="part-tab-@idx"
-                    @onclick="() => SwitchPart(idx)">
-                <span class="part-tab-label">PART @part.PartNumber</span>
-                <span class="part-tab-count @(partAnswered == partTotal && partTotal > 0 ? "all-done" : "")">@partAnswered/@partTotal</span>
-            </button>
+            @for (int i = 0; i < exam.Parts.Count; i++)
+            {
+                var idx  = i;
+                var part = exam.Parts[i];
+                int partAnswered = part.QuestionGroups.Sum(g => g.Questions.Count(q => q.SelectedOptionId.HasValue));
+                int partTotal    = part.QuestionGroups.Sum(g => g.Questions.Count);
+                bool targetIsListening = part.HasListening || part.PartNumber <= 4;
+                <button class="part-tab @(activePartIndex == idx ? "active" : "")"
+                        id="part-tab-@idx"
+                        @onclick="() => OnPartTabClicked(idx, targetIsListening)">
+                    <span class="part-tab-label">PART @part.PartNumber</span>
+                    <span class="part-tab-count @(partAnswered == partTotal && partTotal > 0 ? "all-done" : "")">@partAnswered/@partTotal</span>
+                </button>
+            }
+        }
+        else
+        {
+            <span class="part-tab-static">PART @activePart.PartNumber</span>
         }
         <div class="part-tab-spacer"></div>
         <div class="total-score-badge">
@@ -183,19 +216,12 @@ else
 
     @* ── MAIN CONTENT AREA ── *@
     <main class="toeic-main">
-        @if (!activePart.HasListening || !audioStarted)
+        @if (activePart.HasListening && !audioStarted && (pageGroup is not null || ShowIntroPage))
         {
             <div class="exam-page-toolbar" style="display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; padding:12px 16px; border:1px solid #d0d7de; border-radius:10px; background:#f6f8fa; color:#57606a; font-weight:700;">
-                @if (!activePart.HasListening)
-                {
-                    <span>Trang @(activePageIndex + 1) / @PageCount</span>
-                }
-                @if (activePart.HasListening && !audioStarted && (pageGroup is not null || ShowIntroPage))
-                {
-                    <button class="audio-start-btn" style="border:0; border-radius:6px; padding:9px 16px; color:#fff; background:linear-gradient(135deg,#ea580c,#f97316); cursor:pointer; font-weight:700;" @onclick="StartCurrentAudio">
-                        ▶ Bắt đầu nghe
-                    </button>
-                }
+                <button class="audio-start-btn" style="border:0; border-radius:6px; padding:9px 16px; color:#fff; background:linear-gradient(135deg,#ea580c,#f97316); cursor:pointer; font-weight:700;" @onclick="StartCurrentAudio">
+                    @(showAnswers ? "▶ Phát audio trang này" : "▶ Bắt đầu nghe")
+                </button>
             </div>
         }
         @if (ShowIntroPage)
@@ -311,7 +337,7 @@ else
                             {
                                 <section class="conversation-transcript">
                                     <h3>📝 Nội dung audio</h3>
-                                    <div>@group.Transcript</div>
+                                    <div>@((MarkupString)FormatTranslation(group.Transcript))</div>
                                 </section>
                             }
                         </div>
@@ -363,6 +389,11 @@ else
                             <div class="q-header">
                                 <span class="q-number-circle">@q.Id</span>
                                 <span class="q-sentence">@q.Text</span>
+                                <button class="flag-btn @(q.IsFlagged ? "flagged" : "")"
+                                        title="@(q.IsFlagged ? "Bỏ đánh dấu" : "Đánh dấu câu này")"
+                                        @onclick="() => ToggleFlag(q)">
+                                    <i class="bi bi-flag-fill"></i>
+                                </button>
                             </div>
                             <div class="options-list options-grid-2">
                                 @foreach (var opt in q.Options)
@@ -409,8 +440,13 @@ else
                                         {
                                             <span class="q-text-content">@q.Text</span>
                                         }
+                                        <button class="flag-btn @(q.IsFlagged ? "flagged" : "")"
+                                                title="@(q.IsFlagged ? "Bỏ đánh dấu" : "Đánh dấu câu này")"
+                                                @onclick="() => ToggleFlag(q)">
+                                            <i class="bi bi-flag-fill"></i>
+                                        </button>
                                     </div>
-                                    <div class="options-list options-grid-2">
+                                    <div class="options-list">
                                         @foreach (var opt in q.Options)
                                         {
                                             <button class="@OptionCssClass(q, opt)"
@@ -461,6 +497,11 @@ else
                                     <div class="q-header">
                                         <span class="q-number-circle">@q.Id</span>
                                         <span class="q-text-content">@q.Text</span>
+                                        <button class="flag-btn @(q.IsFlagged ? "flagged" : "")"
+                                                title="@(q.IsFlagged ? "Bỏ đánh dấu" : "Đánh dấu câu này")"
+                                                @onclick="() => ToggleFlag(q)">
+                                            <i class="bi bi-flag-fill"></i>
+                                        </button>
                                     </div>
                                     <div class="options-list">
                                         @foreach (var opt in q.Options)
@@ -490,20 +531,27 @@ else
 
         @* Part Navigation Buttons (bài nghe không cho phép quay lại) *@
         <div class="part-footer-nav">
-            @if (HasPreviousPage && !activePart.HasListening)
+            @if (ShowFooterPrevNext)
             {
-                <button class="nav-btn prev-btn" @onclick="PreviousPage">
-                    @PreviousPageLabel
-                </button>
+                @if (HasPreviousPage)
+                {
+                    <button class="nav-btn prev-btn" @onclick="PreviousPage">
+                        @PrevBtnLabel
+                    </button>
+                }
+                <div class="nav-spacer"></div>
+                @if (HasNextPage)
+                {
+                    <button class="nav-btn next-btn" @onclick="NextPage">
+                        @NextBtnLabel
+                    </button>
+                }
             }
-            <div class="nav-spacer"></div>
-            @if (HasNextPage && !activePart.HasListening)
+            else
             {
-                <button class="nav-btn next-btn" @onclick="NextPage">
-                    @NextPageLabel
-                </button>
+                <div class="nav-spacer"></div>
             }
-            else if (!HasNextPage)
+            @if (!HasNextPage && !showAnswers)
             {
                 <button class="nav-btn submit-final-btn" @onclick="SubmitExam">
                     NỘP BÀI ✓
@@ -512,24 +560,36 @@ else
         </div>
     </main>
 
-    @* ── BOTTOM Q-NAVIGATOR BAR ── *@
-    <div class="bottom-qnav">
-        <div class="bottom-qnav-inner">
-            <span class="bottom-qnav-label">Part @activePart.PartNumber:</span>
-            <div class="bottom-qnav-nums">
-                @foreach (var group in activePart.QuestionGroups)
-                {
-                    @foreach (var q in group.Questions)
+    @* ── BOTTOM Q-NAVIGATOR BAR (part nghe 1-4: chỉ hiện khi xem đáp án) ── *@
+    @if (ShowBottomQnav)
+    {
+        <div class="bottom-qnav">
+            <div class="bottom-qnav-inner">
+                <span class="bottom-qnav-label">Part @activePart.PartNumber:</span>
+                <div class="bottom-qnav-nums">
+                    @if (showAnswers)
                     {
-                        <button class="qnav-num @(q.SelectedOptionId.HasValue ? "qnav-answered" : "") @(q.Id == activeQuestionId ? "qnav-active" : "")"
-                                @onclick="async () => { activeQuestionId = q.Id; await ScrollToQuestion(q.Id); }">
-                            @q.Id
+                        <button class="qnav-num qnav-intro @(ShowIntroPage ? "qnav-active" : "")"
+                                title="Trang giới thiệu"
+                                @onclick="GoToIntroPage">
+                            GT
                         </button>
                     }
-                }
+                    @foreach (var group in activePart.QuestionGroups)
+                    {
+                        @foreach (var q in group.Questions)
+                        {
+                            <button class="qnav-num @(q.SelectedOptionId.HasValue ? "qnav-answered" : "") @(q.IsFlagged ? "qnav-flagged" : "") @(q.Id == activeQuestionId && !ShowIntroPage ? "qnav-active" : "")"
+                                    title="@(activePart.HasListening && activePart.PartNumber <= 4 ? $"Xem câu {q.Id}" : $"Đến câu {q.Id}")"
+                                    @onclick="() => GoToQuestion(q)">
+                                @q.Id
+                            </button>
+                        }
+                    }
+                </div>
             </div>
         </div>
-    </div>
+    }
 
     @* ── CONFIRM SUBMIT MODAL ── *@
     @if (showConfirm)
@@ -541,7 +601,21 @@ else
                 <p class="confirm-sub">Đã trả lời: <b>@totalAnswered/@exam.TotalQuestions</b> câu</p>
                 <div class="confirm-actions">
                     <button class="btn-cancel" @onclick="() => showConfirm = false">Hủy</button>
-                    <button class="result-close-btn" @onclick="ConfirmSubmit">Nộp bài</button>
+                    <button class="result-close-btn" @onclick="ConfirmSubmitAsync">Nộp bài</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── CẢNH BÁO: KHÔNG CHO PHÉP QUAY LẠI BÀI NGHE ── *@
+    @if (showBackWarning)
+    {
+        <div class="result-overlay">
+            <div class="result-modal">
+                <div class="result-title">⚠ KHÔNG THỂ QUAY LẠI</div>
+                <p class="confirm-text">Bạn không được phép quay lại các phần Nghe (Part 1-4) sau khi đã vào phần Đọc.</p>
+                <div class="confirm-actions">
+                    <button class="result-close-btn" @onclick="() => showBackWarning = false">Đã hiểu</button>
                 </div>
             </div>
         </div>
@@ -591,6 +665,7 @@ else
     private int activeQuestionId = 0;
     private bool audioStarted = false;
     private bool showConfirm = false;
+    private bool showBackWarning = false;
     private bool showResult = false;
     private bool showAnswers = false;
 
@@ -609,6 +684,20 @@ else
 
     private ToeicPart ActivePart => exam!.Parts[activePartIndex];
     private bool IsSingleQuestionPage => ActivePart.PartNumber is 1 or 2 or 5;
+
+    /// <summary>Part nghe là part 1-4.</summary>
+    private static bool IsListeningPart(ToeicPart p) => p.HasListening || p.PartNumber <= 4;
+
+    private bool HasListeningParts => exam!.Parts.Any(IsListeningPart);
+
+    /// <summary>Đã làm xong bài nghe (đang ở phần đọc) hoặc đề không có part nghe nào.</summary>
+    private bool ListeningFinished => !HasListeningParts || !IsListeningPart(ActivePart);
+
+    /// <summary>Tab part ở đầu trang: chỉ hiện khi làm xong bài nghe hoặc khi xem đáp án.</summary>
+    private bool ShowPartTabs => showAnswers || ListeningFinished;
+
+    /// <summary>Thanh chọn câu dưới cùng: ẩn với part nghe khi đang làm bài, chỉ hiện khi xem đáp án.</summary>
+    private bool ShowBottomQnav => showAnswers || !IsListeningPart(ActivePart);
 
     /// <summary>Trang giới thiệu riêng ở đầu mỗi part.</summary>
     private bool ActivePartHasIntro => true;
@@ -630,6 +719,12 @@ else
     private string NextPageLabel => activePageIndex < PageCount - 1
         ? "Trang tiếp →"
         : $"PART {exam!.Parts[activePartIndex + 1].PartNumber} →";
+
+    /// <summary>Nút trước/sau ở chân trang: hiện với part đọc khi làm bài, mọi part khi xem đáp án.</summary>
+    private bool ShowFooterPrevNext => !IsListeningPart(ActivePart) || showAnswers;
+
+    private string PrevBtnLabel => showAnswers && IsListeningPart(ActivePart) ? "← Câu trước" : PreviousPageLabel;
+    private string NextBtnLabel => showAnswers && IsListeningPart(ActivePart) ? "Câu sau →" : NextPageLabel;
 
     private ToeicQuestionGroup? CurrentPageGroup
     {
@@ -707,9 +802,33 @@ else
     private bool _introAudioTriggered;
     private string? _lastPlayedAudioUrl;
 
+    // ── LƯU / PHỤC HỒI TIẾN TRÌNH BÀI THI ──
+    private string _progressKey = "";
+    private bool showResumePrompt = false;
+    private ToeicSavedState? savedProgress;
+
+    /// <summary>Trạng thái bài thi đang làm dở lưu trong localStorage.</summary>
+    private sealed class ToeicSavedState
+    {
+        public string Title { get; set; } = "";
+        public List<int> PartNumbers { get; set; } = new();
+        public int TotalTimeSeconds { get; set; }
+        public int ActivePartIndex { get; set; }
+        public int ActivePageIndex { get; set; }
+        public int ActiveQuestionId { get; set; }
+        public int SecondsLeft { get; set; }
+        public Dictionary<int, int> Answers { get; set; } = new();
+        public List<int> FlaggedIds { get; set; } = new();
+        public string SavedAtText { get; set; } = "";
+        public int AnsweredCount => Answers.Count;
+    }
+
+    private static string BuildProgressKey(string examUrl) => $"toeic:{examUrl}";
+
     protected override async Task OnInitializedAsync()
     {
         ExamHeader.SubmitRequested += OnHeaderSubmitRequested;
+        ExamHeader.SecondaryActionRequested += OnHeaderSaveExitRequested;
     }
 
     private void OnHeaderSubmitRequested()
@@ -719,6 +838,16 @@ else
             if (exam == null || showResult) return;
             showConfirm = true;
             StateHasChanged();
+        });
+    }
+
+    /// <summary>Bấm nút "Lưu và thoát" trên navbar.</summary>
+    private void OnHeaderSaveExitRequested()
+    {
+        InvokeAsync(async () =>
+        {
+            if (exam == null || showResult || showAnswers) return;
+            await SaveAndExit();
         });
     }
 
@@ -769,7 +898,7 @@ else
                 else
                 {
                     ExamHeader.Hide();
-                    string url = DecodeExamUrl(ExamUrl);
+                    string url = DecodeExamUrl(ExamUrl ?? "");
                     if (string.IsNullOrWhiteSpace(url))
                     {
                         throw new Exception("URL đề thi rỗng sau khi giải mã!");
@@ -780,6 +909,8 @@ else
                     {
                         exam = loaded;
                         EnterSetupState();
+                        _progressKey = BuildProgressKey(url);
+                        await TryShowResumePromptAsync();
                     }
                     else
                     {
@@ -812,10 +943,114 @@ else
         activePageIndex = 0;
         secondsLeft = exam!.TotalTimeSeconds;
         ExamHeader.Show(TimerDisplay);
+        ExamHeader.SetSecondaryButton("💾 Lưu và thoát");
         activeQuestionId = exam.Parts[0].QuestionGroups
             .FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
         _ = JS.InvokeVoidAsync("toeicAudio.stop");
+        _ = ExamSession.SetUnloadWarningAsync(true);
         RestartTimer();
+    }
+
+    /// <summary>Phục hồi bài thi đang làm dở từ localStorage.</summary>
+    private void ResumeSavedExam()
+    {
+        var saved = savedProgress;
+        if (exam == null || saved == null) { showResumePrompt = false; return; }
+
+        // Áp lại bộ part đã chọn khi bắt đầu lần trước
+        if (saved.PartNumbers.Count > 0)
+        {
+            var chosen = exam.Parts.Where(p => saved.PartNumbers.Contains(p.PartNumber)).ToList();
+            if (chosen.Count > 0)
+            {
+                exam.Parts = chosen;
+                exam.TotalQuestions = chosen.Sum(CountQuestions);
+            }
+        }
+        if (saved.TotalTimeSeconds > 0) exam.TotalTimeSeconds = saved.TotalTimeSeconds;
+
+        // Phục hồi đáp án + cờ đánh dấu
+        foreach (var q in exam.Parts.SelectMany(p => p.QuestionGroups).SelectMany(g => g.Questions))
+        {
+            q.SelectedOptionId = saved.Answers.TryGetValue(q.Id, out var optId) ? optId : null;
+            q.IsFlagged = saved.FlaggedIds.Contains(q.Id);
+        }
+
+        showResumePrompt = false;
+        showSetup = false;
+        showConfirm = false;
+        showResult = false;
+        showAnswers = false;
+
+        activePartIndex = Math.Clamp(saved.ActivePartIndex, 0, exam.Parts.Count - 1);
+        activePageIndex = Math.Clamp(saved.ActivePageIndex, 0, PageCount - 1);
+
+        var pageQs = CurrentPageQuestions.ToList();
+        activeQuestionId = pageQs.Any(x => x.Id == saved.ActiveQuestionId)
+            ? saved.ActiveQuestionId
+            : pageQs.FirstOrDefault()?.Id ?? 0;
+
+        secondsLeft = saved.SecondsLeft > 0 ? Math.Min(saved.SecondsLeft, exam.TotalTimeSeconds) : exam.TotalTimeSeconds;
+
+        audioStarted = false;
+        _introAudioTriggered = false;
+        _lastPlayedAudioUrl = null;
+
+        ExamHeader.Show(TimerDisplay);
+        ExamHeader.SetSecondaryButton("💾 Lưu và thoát");
+        RestartTimer();
+        _ = ExamSession.SetUnloadWarningAsync(true);
+    }
+
+    /// <summary>Bỏ bài làm dở: xoá dữ liệu đã lưu, ở lại màn hình chọn part.</summary>
+    private void DiscardSavedProgress()
+    {
+        showResumePrompt = false;
+        savedProgress = null;
+        if (!string.IsNullOrWhiteSpace(_progressKey))
+            _ = ExamSession.ClearProgressAsync(_progressKey);
+    }
+
+    /// <summary>Ghi trạng thái hiện tại vào localStorage.</summary>
+    private async Task SaveProgressToBrowser()
+    {
+        if (exam == null || string.IsNullOrWhiteSpace(_progressKey)) return;
+
+        var state = new ToeicSavedState
+        {
+            Title = exam.Title,
+            PartNumbers = exam.Parts.Select(p => p.PartNumber).ToList(),
+            TotalTimeSeconds = exam.TotalTimeSeconds,
+            ActivePartIndex = activePartIndex,
+            ActivePageIndex = activePageIndex,
+            ActiveQuestionId = activeQuestionId,
+            SecondsLeft = secondsLeft,
+            Answers = exam.Parts.SelectMany(p => p.QuestionGroups)
+                .SelectMany(g => g.Questions)
+                .Where(q => q.SelectedOptionId.HasValue)
+                .ToDictionary(q => q.Id, q => q.SelectedOptionId!.Value),
+            FlaggedIds = exam.Parts.SelectMany(p => p.QuestionGroups)
+                .SelectMany(g => g.Questions)
+                .Where(q => q.IsFlagged)
+                .Select(q => q.Id)
+                .ToList(),
+            SavedAtText = DateTime.Now.ToString("HH:mm dd/MM/yyyy")
+        };
+
+        try { await ExamSession.SaveProgressAsync(_progressKey, state); }
+        catch (Exception ex) { Console.WriteLine($"[ToeicTest] Save progress error: {ex.Message}"); }
+    }
+
+    /// <summary>Lưu tiến trình rồi thoát về danh sách đề.</summary>
+    private async Task SaveAndExit()
+    {
+        if (exam == null) return;
+        await SaveProgressToBrowser();
+        StopTimer();
+        ExamHeader.Hide();
+        _ = JS.InvokeVoidAsync("toeicAudio.stop");
+        _ = ExamSession.SetUnloadWarningAsync(false);
+        NavManager.NavigateTo("/toeic/test");
     }
 
     private void RestartTimer()
@@ -838,12 +1073,29 @@ else
         StopTimer();
         ExamHeader.Hide();
         _ = JS.InvokeVoidAsync("toeicAudio.stop");
+        _ = ExamSession.SetUnloadWarningAsync(false);
 
         showSetup = true;
         selectByPart = false;
         selectedPartNumbers = new HashSet<int>(exam!.Parts.Select(p => p.PartNumber));
         standardTimeSeconds = exam.TotalTimeSeconds;
         selectedTimeSeconds = exam.TotalTimeSeconds;
+    }
+
+    /// <summary>Kiểm tra localStorage: có bài thi đang làm dở của đề này không.</summary>
+    private async Task TryShowResumePromptAsync()
+    {
+        savedProgress = null;
+        showResumePrompt = false;
+        if (string.IsNullOrWhiteSpace(_progressKey)) return;
+
+        var saved = await ExamSession.LoadProgressAsync<ToeicSavedState>(_progressKey);
+        if (saved is { Answers.Count: > 0 } || (saved?.ActivePageIndex > 0))
+        {
+            savedProgress = saved;
+            showResumePrompt = true;
+        }
+        StateHasChanged();
     }
 
     private IEnumerable<ToeicPart> SetupListeningParts =>
@@ -924,7 +1176,7 @@ else
             else
             {
                 _timer?.Dispose();
-                InvokeAsync(AutoSubmit);
+                InvokeAsync(AutoSubmitAsync);
             }
         }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
@@ -944,8 +1196,26 @@ else
         _ = JS.InvokeVoidAsync("toeicAudio.stop");
     }
 
-    /// <summary>Audio hướng dẫn riêng cho trang giới thiệu Part 1.</summary>
-    private const string Part1IntroAudioUrl = "https://pub-91655bd1442d498b9788d1f8f8575587.r2.dev/Cuongkeng/Part%201.mp3";
+    /// <summary>
+    /// Bấm tab part ở đầu trang: chặn quay lại part nghe khi đã vào phần đọc
+    /// (trừ chế độ xem đáp án).
+    /// </summary>
+    private void OnPartTabClicked(int idx, bool targetIsListening)
+    {
+        if (exam == null || showResult) return;
+        if (!showAnswers && targetIsListening && !IsListeningPart(ActivePart))
+        {
+            showBackWarning = true;
+            return;
+        }
+        SwitchPart(idx);
+    }
+
+    /// <summary>Audio hướng dẫn riêng cho trang giới thiệu các part nghe (đặt tên Part 1.mp3 … Part 4.mp3).</summary>
+    private static string? GetPartIntroAudioUrl(int partNumber) =>
+        partNumber is >= 1 and <= 4
+            ? $"https://pub-91655bd1442d498b9788d1f8f8575587.r2.dev/Cuongkeng/Part%20{partNumber}.mp3"
+            : null;
 
     /// <summary>Directions chuẩn ETS hiển thị ở trang giới thiệu mỗi part.</summary>
     private static readonly Dictionary<int, string> PartDirections = new()
@@ -975,11 +1245,9 @@ else
         string? audioUrl;
         if (ShowIntroPage)
         {
-            // Trang giới thiệu: Part 1 dùng file riêng,
-            // các part nghe khác phát audio nhóm câu hỏi đầu tiên (có lời đọc hướng dẫn)
-            audioUrl = ActivePart.PartNumber == 1
-                ? Part1IntroAudioUrl
-                : ActivePart.QuestionGroups.FirstOrDefault()?.AudioUrl;
+            // Trang giới thiệu: các part nghe (1-4) dùng file audio hướng dẫn riêng,
+            // các part đọc không có audio
+            audioUrl = GetPartIntroAudioUrl(ActivePart.PartNumber);
             if (string.IsNullOrWhiteSpace(audioUrl)) return;
         }
         else
@@ -1003,7 +1271,8 @@ else
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         // Vào thẳng trang giới thiệu (sau khi bấm BẮT ĐẦU): tự phát audio
-        if (exam != null && !showSetup && !showResult && ShowIntroPage
+        // (chế độ xem đáp án không tự phát, chỉ phát khi bấm nút)
+        if (exam != null && !showSetup && !showResult && !showAnswers && ShowIntroPage
             && !_introAudioTriggered && !audioStarted)
         {
             _introAudioTriggered = true;
@@ -1015,7 +1284,8 @@ else
     [JSInvokable]
     public Task OnToeicAudioEnded() => InvokeAsync(() =>
     {
-        if (!audioStarted || exam == null || showResult || _isDisposing) return;
+        // Chế độ xem đáp án: hết audio chỉ dừng lại, không tự chuyển trang
+        if (!audioStarted || exam == null || showResult || showAnswers || _isDisposing) return;
         NextPage();
         StateHasChanged();
     });
@@ -1026,6 +1296,7 @@ else
         {
             activePageIndex++;
             SetCurrentQuestion();
+            StopAudioIfReview();
             PlayNextAudioIfStarted();
             return;
         }
@@ -1033,6 +1304,7 @@ else
         if (activePartIndex < exam!.Parts.Count - 1)
         {
             SwitchPart(activePartIndex + 1);
+            StopAudioIfReview();
             PlayNextAudioIfStarted();
         }
     }
@@ -1043,24 +1315,45 @@ else
         {
             activePageIndex--;
             SetCurrentQuestion();
+            StopAudioIfReview();
             PlayNextAudioIfStarted();
             return;
         }
 
         if (activePartIndex > 0)
         {
+            // Đang ở part đọc mà lùi về part nghe: chặn (trừ chế độ xem đáp án)
+            var prevPart = exam!.Parts[activePartIndex - 1];
+            if (!showAnswers && !IsListeningPart(ActivePart) && IsListeningPart(prevPart))
+            {
+                showBackWarning = true;
+                return;
+            }
+
             SwitchPart(activePartIndex - 1);
             activePageIndex = PageCount - 1;
             SetCurrentQuestion();
+            StopAudioIfReview();
             PlayNextAudioIfStarted();
         }
+    }
+
+    /// <summary>Ở chế độ xem đáp án: ngừng audio đang phát khi chuyển trang.</summary>
+    private void StopAudioIfReview()
+    {
+        if (showAnswers) _ = JS.InvokeVoidAsync("toeicAudio.stop");
     }
 
     private void SetCurrentQuestion() => activeQuestionId = CurrentPageQuestions.FirstOrDefault()?.Id ?? 0;
 
     private void PlayNextAudioIfStarted()
     {
-        var url = CurrentPageGroup?.AudioUrl;
+        // Chế độ xem đáp án không tự phát audio theo trang
+        if (showAnswers) return;
+        // Trang giới thiệu part nghe dùng file audio riêng
+        var url = ShowIntroPage
+            ? GetPartIntroAudioUrl(ActivePart.PartNumber)
+            : CurrentPageGroup?.AudioUrl;
         // Bỏ qua nếu audio nhóm này vừa phát xong (vd: chuyển từ trang giới thiệu sang câu 1)
         if (audioStarted && !string.IsNullOrWhiteSpace(url) && url != _lastPlayedAudioUrl)
             _ = StartCurrentAudio();
@@ -1095,26 +1388,150 @@ else
         catch (Exception ex) { Console.WriteLine($"[ToeicTest] JS Error: {ex.Message}"); }
     }
 
+    /// <summary>
+    /// Bấm số câu ở thanh điều hướng dưới:
+    /// part đọc (5-7) chuyển đến trang chứa câu đó; part nghe chỉ cuộn trong trang hiện tại.
+    /// </summary>
+    private async Task GoToQuestion(ToeicQuestion q)
+    {
+        if (exam == null || showResult) return;
+
+        // Part nghe khi ĐANG LÀM BÀI: câu hỏi hiển thị theo audio,
+        // chỉ đánh dấu active + cuộn trong trang hiện tại
+        if (!showAnswers && IsListeningPart(ActivePart))
+        {
+            activeQuestionId = q.Id;
+            StateHasChanged();
+            StopAudioIfReview();
+            await ScrollToQuestion(q.Id);
+            return;
+        }
+
+        // Xem đáp án (hoặc part đọc): nhảy đến trang chứa câu đó
+        var part = ActivePart;
+        int targetPage = -1;
+        if (IsSingleQuestionPage) // Part 1, 2, 5: mỗi trang 1 câu
+        {
+            int idx = 0;
+            foreach (var g in part.QuestionGroups)
+            {
+                foreach (var item in g.Questions)
+                {
+                    if (item.Id == q.Id) { targetPage = idx; break; }
+                    idx++;
+                }
+                if (targetPage >= 0) break;
+            }
+        }
+        else // Part 3, 4, 6, 7: mỗi trang 1 nhóm
+        {
+            for (int i = 0; i < part.QuestionGroups.Count; i++)
+            {
+                if (part.QuestionGroups[i].Questions.Any(x => x.Id == q.Id))
+                {
+                    targetPage = i;
+                    break;
+                }
+            }
+        }
+
+        if (targetPage < 0) return;
+        activePageIndex = targetPage + (ActivePartHasIntro ? 1 : 0);
+        activeQuestionId = q.Id;
+        StopAudioIfReview();
+        StateHasChanged();
+        await ScrollToQuestion(q.Id);
+    }
+
+    /// <summary>Về trang giới thiệu của part hiện tại (ô GT ở thanh chọn câu).</summary>
+    private void GoToIntroPage()
+    {
+        if (exam == null || showResult) return;
+        activePageIndex = 0;
+        activeQuestionId = ActivePart.QuestionGroups
+            .FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
+        StopAudioIfReview();
+        StateHasChanged();
+    }
+
+    /// <summary>Bật/tắt cờ đánh dấu câu hỏi (part đọc 5-7).</summary>
+    private void ToggleFlag(ToeicQuestion q)
+    {
+        if (exam == null || showResult) return;
+        q.IsFlagged = !q.IsFlagged;
+    }
+
     private void SubmitExam()
     {
         showConfirm = true;
     }
 
-    private void ConfirmSubmit()
+    private async Task ConfirmSubmitAsync()
     {
         showConfirm = false;
         CalculateResult();
+        StopAudioAndReset();
         StopTimer();
+        ExamHeader.SetSecondaryButton(null);
+        _ = ExamSession.SetUnloadWarningAsync(false);
+        if (!string.IsNullOrWhiteSpace(_progressKey)) _ = ExamSession.ClearProgressAsync(_progressKey);
+        await SaveSubmissionAsync(timedOut: false);
         showResult = true;
     }
 
     /// <summary>Hết giờ: tự động nộp bài không cần xác nhận.</summary>
-    private void AutoSubmit()
+    private async Task AutoSubmitAsync()
     {
         showConfirm = false;
         CalculateResult();
+        StopAudioAndReset();
         StopTimer();
+        ExamHeader.SetSecondaryButton(null);
+        _ = ExamSession.SetUnloadWarningAsync(false);
+        if (!string.IsNullOrWhiteSpace(_progressKey)) _ = ExamSession.ClearProgressAsync(_progressKey);
+        await SaveSubmissionAsync(timedOut: true);
         showResult = true;
+    }
+
+    /// <summary>Lưu bài thi vào lịch sử "Bài thi gần đây" (localStorage).</summary>
+    private async Task SaveSubmissionAsync(bool timedOut)
+    {
+        try
+        {
+            if (exam == null) return;
+
+            var totalQuestions = exam.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count));
+            var examUrl = string.IsNullOrWhiteSpace(_lastLoadKey) ? (ExamUrl ?? "") : _lastLoadKey;
+
+            await Submissions.SaveAsync(new IeltsSubmissionRecord
+            {
+                Skill = "Toeic",
+                ExamTitle = string.IsNullOrWhiteSpace(exam.Title) ? "Đề thi TOEIC" : exam.Title,
+                ExamUrl = examUrl,
+                DurationSeconds = Math.Max(0, (exam.TotalTimeSeconds > 0 ? exam.TotalTimeSeconds : secondsLeft) - secondsLeft),
+                Status = timedOut ? "TimedOut" : "Submitted",
+                CorrectCount = listenCorrect + readCorrect,
+                TotalQuestions = totalQuestions,
+                ListeningScore = listenScore,
+                ReadingScore = readScore,
+                TotalScore = totalScore
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ToeicTest] Lỗi lưu bài nộp: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Khi nộp bài: ngừng audio đang phát ngay và reset cờ audioStarted
+    /// để ở chế độ xem đáp án audio chỉ phát khi bấm nút.
+    /// </summary>
+    private void StopAudioAndReset()
+    {
+        _ = JS.InvokeVoidAsync("toeicAudio.stop");
+        audioStarted = false;
+        _lastPlayedAudioUrl = null;
     }
 
     /// <summary>
@@ -1210,6 +1627,8 @@ else
     {
         showAnswers = true;
         showResult = false;
+        // Chế độ xem đáp án: ẩn nút Nộp bài và đồng hồ
+        ExamHeader.Hide();
     }
 
     private string FormatTranslation(string? input)
@@ -1232,7 +1651,9 @@ else
     {
         _isDisposing = true;
         ExamHeader.SubmitRequested -= OnHeaderSubmitRequested;
+        ExamHeader.SecondaryActionRequested -= OnHeaderSaveExitRequested;
         ExamHeader.Hide();
         _timer?.Dispose();
+        _ = ExamSession.SetUnloadWarningAsync(false);
     }
 }
