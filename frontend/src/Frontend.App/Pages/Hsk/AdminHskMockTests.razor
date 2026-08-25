@@ -53,7 +53,7 @@
             <input type="text" placeholder="Tìm kiếm theo tiêu đề, bộ đề HSK..." @bind="searchTerm" @bind:event="oninput" @onkeyup="LoadTests" />
             @if (!string.IsNullOrEmpty(searchTerm))
             {
-                <button class="btn-clear-search" @onclick='() => { searchTerm = ""; LoadTests(); }'><i class="bi bi-x-lg"></i></button>
+                <button class="btn-clear-search" @onclick='async () => { searchTerm = ""; await LoadTests(); }'><i class="bi bi-x-lg"></i></button>
             }
         </div>
     </div>

@@ -73,7 +73,7 @@
             <input type="text" placeholder="Tìm theo Chữ Hán, Pinyin, Nghĩa..." @bind="searchTerm" @bind:event="oninput" @onkeyup="LoadData" />
             @if (!string.IsNullOrEmpty(searchTerm))
             {
-                <button class="btn-clear-search" @onclick='() => { searchTerm = ""; LoadData(); }'><i class="bi bi-x-lg"></i></button>
+                <button class="btn-clear-search" @onclick='async () => { searchTerm = ""; await LoadData(); }'><i class="bi bi-x-lg"></i></button>
             }
         </div>
     </div>

@@ -2,7 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Google.Apis.Auth;
-using System.Text;
 using Backend.Application.Abstractions;
 using Backend.Application.DTOs;
 using Backend.Domain.Entities;
