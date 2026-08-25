@@ -1,0 +1,553 @@
+@page "/admin/ielts-vocab"
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Services
+@using Frontend.App.Models
+@using Microsoft.AspNetCore.Components.Forms
+@inject IeltsService IeltsService
+@inject IJSRuntime JS
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
+<PageTitle>Quản lý Từ vựng IELTS - Admin Hub</PageTitle>
+
+<div class="admin-ielts-vocab-page">
+    <!-- Header -->
+    <div class="page-header">
+        <div class="header-left">
+            <div class="header-icon-badge">
+                <i class="bi bi-journal-bookmark-fill"></i>
+            </div>
+            <div>
+                <h1 class="page-title">Ngân hàng Từ vựng IELTS</h1>
+                <p class="page-subtitle">Quản trị từ vựng học thuật: từ vựng, phiên âm IPA, từ loại, nghĩa tiếng Việt, câu ví dụ và chủ đề.</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="btn-primary-action" @onclick="() => ShowAddModal()">
+                <i class="bi bi-plus-circle-fill"></i>
+                <span>Thêm Từ mới</span>
+            </button>
+            <select class="import-mode-select" @bind="importMode" title="Cách xử lý từ đã tồn tại khi import">
+                <option value="skip">Trùng: bỏ qua</option>
+                <option value="upsert">Trùng: cập nhật (ghi đè)</option>
+            </select>
+            <button class="btn-secondary-action" @onclick="TriggerImportExcel" disabled="@isImporting">
+                <i class="bi bi-file-earmark-excel-fill text-success"></i>
+                <span>@(isImporting ? "Đang nhập..." : "Nhập Excel")</span>
+            </button>
+            <a href="@templateUrl" class="btn-secondary-action" download="IELTS_Vocabulary_Template.xlsx" style="text-decoration:none;">
+                <i class="bi bi-file-earmark-arrow-down text-primary"></i>
+                <span>Tải Mẫu Excel</span>
+            </a>
+        </div>
+    </div>
+
+    <InputFile id="ieltsVocabExcelInput" OnChange="HandleExcelImport" accept=".xlsx" style="display: none;" />
+
+    @if (!string.IsNullOrEmpty(importMessage))
+    {
+        <div class="@(!importSuccess ? "banner banner-error" : "banner banner-success")">
+            <div class="banner-content">
+                <i class="bi @(!importSuccess ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill")"></i>
+                <span>@importMessage</span>
+            </div>
+            <button class="banner-close" @onclick="() => importMessage = null">×</button>
+        </div>
+    }
+
+    <!-- Toolbar -->
+    <div class="toolbar-card">
+        <div class="toolbar-left">
+            <div class="search-box-wrapper">
+                <i class="bi bi-search search-icon"></i>
+                <input type="text" placeholder="Tìm từ, phiên âm, nghĩa..." @bind="searchTerm" @bind:event="oninput" />
+                @if (!string.IsNullOrEmpty(searchTerm))
+                {
+                    <button class="btn-clear-search" @onclick="ClearSearch" title="Xóa tìm kiếm">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                }
+            </div>
+
+            <div class="filter-group">
+                <label><i class="bi bi-tag-fill"></i> Chủ đề:</label>
+                <select @bind="filterTopic">
+                    <option value="">Tất cả chủ đề</option>
+                    @foreach (var t in topics)
+                    {
+                        <option value="@t">@t</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="toolbar-right">
+            <div class="page-size-selector">
+                <label>Hiển thị:</label>
+                <select @bind="pageSize">
+                    <option value="50">50 từ / trang</option>
+                    <option value="100">100 từ / trang</option>
+                    <option value="200">200 từ / trang</option>
+                    <option value="500">500 từ / trang</option>
+                    <option value="999999">Tất cả</option>
+                </select>
+            </div>
+
+            <div class="stats-counter">
+                <i class="bi bi-collection-fill"></i>
+                <span>Tổng: <strong>@FilteredItems.Count</strong> từ</span>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-state">
+            <div class="custom-spinner"></div>
+            <p>Đang tải danh sách từ vựng...</p>
+        </div>
+    }
+    else if (!FilteredItems.Any())
+    {
+        <div class="empty-state">
+            <i class="bi bi-journal-x"></i>
+            <h4>Không tìm thấy từ vựng nào</h4>
+            <p>Thử đổi từ khóa tìm kiếm hoặc thêm từ mới / import từ file Excel.</p>
+            <button class="btn-primary-action mt-3" @onclick="() => ShowAddModal()">
+                <i class="bi bi-plus-circle-fill"></i> Thêm từ mới ngay
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="table-card">
+            <div class="table-responsive">
+                <table class="vocab-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px; text-align: center;">ID</th>
+                            <th style="width: 16%;">TỪ VỰNG</th>
+                            <th style="width: 14%;">PHIÊN ÂM</th>
+                            <th style="width: 10%;">TỪ LOẠI</th>
+                            <th style="width: 22%;">NGHĨA TIẾNG VIỆT</th>
+                            <th>CÂU VÍ DỤ</th>
+                            <th style="width: 12%;">CHỦ ĐỀ</th>
+                            <th style="width: 130px; text-align: center;">THAO TÁC</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in PagedItems)
+                        {
+                            <tr>
+                                <td class="cell-id">#@item.Id</td>
+                                <td class="cell-word">
+                                    <span class="word-text">@item.Word</span>
+                                    <button class="btn-audio" @onclick="() => SpeakEnglish(item.Word)" title="Nghe phát âm">
+                                        <i class="bi bi-volume-up-fill"></i>
+                                    </button>
+                                </td>
+                                <td class="cell-phonetic">@item.Phonetic</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(item.PartOfSpeech))
+                                    {
+                                        <span class="cell-pos">@item.PartOfSpeech</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td class="cell-meaning">@item.Meaning</td>
+                                <td class="cell-example">
+                                    @if (!string.IsNullOrWhiteSpace(item.Example))
+                                    {
+                                        <div class="example-en">@item.Example</div>
+                                        @if (!string.IsNullOrWhiteSpace(item.ExampleMeaning))
+                                        {
+                                            <div class="example-vi">@item.ExampleMeaning</div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(item.Topic))
+                                    {
+                                        <span class="cell-topic">@item.Topic</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td class="cell-actions">
+                                    <button class="btn-edit" @onclick="() => ShowEditModal(item)" title="Chỉnh sửa từ">
+                                        <i class="bi bi-pencil-square"></i>
+                                        <span>Sửa</span>
+                                    </button>
+                                    <button class="btn-delete" @onclick="() => DeleteItem(item.Id)" title="Xóa từ">
+                                        <i class="bi bi-trash3"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            @if (TotalPages > 1)
+            {
+                <div class="pagination-footer">
+                    <div class="pagination-info">
+                        Hiển thị <strong>@((CurrentPage - 1) * pageSize + 1)</strong> - <strong>@(Math.Min(CurrentPage * pageSize, FilteredItems.Count))</strong> trong tổng <strong>@FilteredItems.Count</strong> từ
+                    </div>
+                    <div class="pagination-controls">
+                        <button class="page-btn" @onclick="() => GoToPage(1)" disabled="@(CurrentPage == 1)" title="Trang đầu">
+                            <i class="bi bi-chevron-double-left"></i>
+                        </button>
+                        <button class="page-btn" @onclick="() => GoToPage(CurrentPage - 1)" disabled="@(CurrentPage == 1)" title="Trang trước">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+
+                        @foreach (var p in VisiblePageNumbers)
+                        {
+                            @if (p == -1)
+                            {
+                                <span class="page-ellipsis">...</span>
+                            }
+                            else
+                            {
+                                <button class="page-btn @(p == CurrentPage ? "active" : "")" @onclick="() => GoToPage(p)">
+                                    @p
+                                </button>
+                            }
+                        }
+
+                        <button class="page-btn" @onclick="() => GoToPage(CurrentPage + 1)" disabled="@(CurrentPage >= TotalPages)" title="Trang sau">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                        <button class="page-btn" @onclick="() => GoToPage(TotalPages)" disabled="@(CurrentPage >= TotalPages)" title="Trang cuối">
+                            <i class="bi bi-chevron-double-right"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Add/Edit Modal -->
+@if (showModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-panel">
+            <div class="modal-header">
+                <h3>
+                    <i class="bi @(editingItem == null ? "bi-plus-circle-fill text-success" : "bi-pencil-square text-primary")"></i>
+                    @(editingItem == null ? "Thêm từ vựng mới" : "Chỉnh sửa từ vựng")
+                </h3>
+                <button class="btn-close-modal" @onclick="CloseModal"><i class="bi bi-x-lg"></i></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="form-row two-col">
+                    <div class="form-group">
+                        <label>Từ (Word) *</label>
+                        <input @bind="form.Word" placeholder="VD: achieve, sustainable..." />
+                    </div>
+                    <div class="form-group">
+                        <label>Phiên âm IPA (Phonetic)</label>
+                        <input @bind="form.Phonetic" placeholder="VD: /əˈtʃiːv/, /səˈsteɪnəbl/" />
+                    </div>
+                </div>
+                <div class="form-row two-col">
+                    <div class="form-group">
+                        <label>Từ loại (Part of Speech)</label>
+                        <select @bind="form.PartOfSpeech">
+                            <option value="">— Chọn từ loại —</option>
+                            @foreach (var pos in PosOptions)
+                            {
+                                <option value="@pos">@pos</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Chủ đề (Topic)</label>
+                        <input @bind="form.Topic" placeholder="VD: Education, Environment, Technology..." />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Nghĩa tiếng Việt *</label>
+                    <input @bind="form.Meaning" placeholder="VD: đạt được, hoàn thành..." />
+                </div>
+                <div class="form-group">
+                    <label>Câu ví dụ tiếng Anh (Example)</label>
+                    <textarea rows="2" @bind="form.Example" placeholder="VD: She achieved her goal of becoming a doctor..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Nghĩa tiếng Việt của câu ví dụ</label>
+                    <textarea rows="2" @bind="form.ExampleMeaning" placeholder="VD: Cô ấy đã đạt được mục tiêu trở thành bác sĩ..."></textarea>
+                </div>
+                <div class="form-row two-col">
+                    <div class="form-group">
+                        <label>Thứ tự hiển thị (Display Order)</label>
+                        <input type="number" @bind="form.DisplayOrder" />
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" @bind="form.IsActive" /> Hiển thị cho học viên
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-cancel" @onclick="CloseModal">Hủy</button>
+                <button class="btn-save" @onclick="SaveItem">
+                    <i class="bi bi-check-circle-fill"></i> Lưu Từ Vựng
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly string[] PosOptions = { "noun", "verb", "adjective", "adverb", "phrase", "preposition", "conjunction", "idiom" };
+
+    private List<IeltsVocabularyItem> items = new();
+    private List<string> topics = new();
+    private bool isLoading = true;
+    private string _searchTerm = "";
+    private string searchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            if (_searchTerm != value)
+            {
+                _searchTerm = value;
+                CurrentPage = 1;
+            }
+        }
+    }
+
+    private string? _filterTopic;
+    private string? filterTopic
+    {
+        get => _filterTopic;
+        set
+        {
+            if (_filterTopic != value)
+            {
+                _filterTopic = value;
+                CurrentPage = 1;
+            }
+        }
+    }
+
+    private int _pageSize = 50;
+    private int pageSize
+    {
+        get => _pageSize;
+        set
+        {
+            if (_pageSize != value)
+            {
+                _pageSize = value;
+                CurrentPage = 1;
+            }
+        }
+    }
+
+    private int CurrentPage { get; set; } = 1;
+
+    private bool showModal = false;
+    private IeltsVocabularyItem? editingItem = null;
+    private IeltsVocabularyItem form = new();
+
+    private bool isImporting = false;
+    private string? importMessage;
+    private bool importSuccess;
+    private string importMode = "upsert";
+
+    private List<IeltsVocabularyItem> FilteredItems =>
+        items
+            .Where(x => string.IsNullOrEmpty(filterTopic) || x.Topic == filterTopic)
+            .Where(x => string.IsNullOrWhiteSpace(searchTerm) ||
+                        (x.Word?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (x.Meaning?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (x.Phonetic?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+
+    private int TotalPages => (int)Math.Ceiling((double)FilteredItems.Count / Math.Max(1, pageSize));
+
+    private List<IeltsVocabularyItem> PagedItems =>
+        FilteredItems.Skip((CurrentPage - 1) * pageSize).Take(pageSize).ToList();
+
+    private List<int> VisiblePageNumbers
+    {
+        get
+        {
+            var pages = new List<int>();
+            int total = TotalPages;
+            if (total <= 7)
+            {
+                for (int i = 1; i <= total; i++) pages.Add(i);
+            }
+            else
+            {
+                pages.Add(1);
+                if (CurrentPage > 3) pages.Add(-1);
+
+                int start = Math.Max(2, CurrentPage - 1);
+                int end = Math.Min(total - 1, CurrentPage + 1);
+
+                for (int i = start; i <= end; i++)
+                {
+                    if (!pages.Contains(i)) pages.Add(i);
+                }
+
+                if (CurrentPage < total - 2) pages.Add(-1);
+                if (!pages.Contains(total)) pages.Add(total);
+            }
+            return pages;
+        }
+    }
+
+    private void GoToPage(int page)
+    {
+        if (page < 1) page = 1;
+        if (page > TotalPages) page = TotalPages;
+        CurrentPage = page;
+    }
+
+    private void ClearSearch()
+    {
+        searchTerm = "";
+        CurrentPage = 1;
+    }
+
+    private string templateUrl = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var apiBase = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101";
+        templateUrl = $"{apiBase.TrimEnd('/')}/api/ielts/vocab/template-excel";
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+        items = await IeltsService.GetVocabularyAsync() ?? new List<IeltsVocabularyItem>();
+        topics = items.Where(x => !string.IsNullOrEmpty(x.Topic))
+                      .Select(x => x.Topic!)
+                      .Distinct().OrderBy(t => t).ToList();
+        isLoading = false;
+        CurrentPage = 1;
+        StateHasChanged();
+    }
+
+    private void ShowAddModal()
+    {
+        editingItem = null;
+        form = new IeltsVocabularyItem { IsActive = true, DisplayOrder = items.Count + 1 };
+        showModal = true;
+    }
+
+    private void ShowEditModal(IeltsVocabularyItem item)
+    {
+        editingItem = item;
+        form = new IeltsVocabularyItem
+        {
+            Id = item.Id,
+            Word = item.Word,
+            Phonetic = item.Phonetic,
+            PartOfSpeech = item.PartOfSpeech,
+            Meaning = item.Meaning,
+            Example = item.Example,
+            ExampleMeaning = item.ExampleMeaning,
+            Topic = item.Topic,
+            DisplayOrder = item.DisplayOrder,
+            IsActive = item.IsActive
+        };
+        showModal = true;
+    }
+
+    private async Task SaveItem()
+    {
+        if (string.IsNullOrWhiteSpace(form.Word) || string.IsNullOrWhiteSpace(form.Meaning))
+        {
+            await JS.InvokeVoidAsync("alert", "Vui lòng nhập Từ và Nghĩa tiếng Việt.");
+            return;
+        }
+        if (editingItem == null)
+            await IeltsService.CreateVocabularyAsync(form);
+        else
+            await IeltsService.UpdateVocabularyAsync(form.Id, form);
+        showModal = false;
+        await LoadData();
+    }
+
+    private void CloseModal() => showModal = false;
+
+    private async Task DeleteItem(int id)
+    {
+        var confirm = await JS.InvokeAsync<bool>("confirm", "Xóa từ vựng này?");
+        if (!confirm) return;
+        await IeltsService.DeleteVocabularyAsync(id);
+        await LoadData();
+    }
+
+    private async Task TriggerImportExcel()
+    {
+        await JS.InvokeVoidAsync("eval", "document.getElementById('ieltsVocabExcelInput').click()");
+    }
+
+    private async Task HandleExcelImport(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+        if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        {
+            importMessage = "Vui lòng chọn file Excel (.xlsx).";
+            importSuccess = false;
+            StateHasChanged();
+            return;
+        }
+
+        isImporting = true;
+        importMessage = null;
+        StateHasChanged();
+
+        var result = await IeltsService.ImportVocabularyExcelAsync(file, importMode);
+
+        isImporting = false;
+        if (result == null)
+        {
+            importMessage = "Nhập Excel thất bại. Vui lòng kiểm tra định dạng file rồi thử lại.";
+            importSuccess = false;
+        }
+        else
+        {
+            var parts = new List<string>();
+            if (result.Success > 0) parts.Add($"thêm mới {result.Success} từ");
+            if (result.Updated > 0) parts.Add($"cập nhật {result.Updated} từ");
+            if (result.Duplicate > 0) parts.Add($"bỏ qua {result.Duplicate} trùng");
+            if (result.Fail > 0) parts.Add($"lỗi {result.Fail} dòng");
+            if (parts.Count == 0) parts.Add("Không có dữ liệu hợp lệ nào trong file");
+            if (!string.IsNullOrEmpty(result.JsonUrl)) parts.Add($"File JSON đã lưu tại: {result.JsonUrl}");
+            importMessage = string.Join(", ", parts) + ".";
+            importSuccess = result.Fail == 0;
+        }
+        await LoadData();
+    }
+
+    private async Task SpeakEnglish(string text)
+    {
+        await JS.InvokeVoidAsync("eval", $"if ('speechSynthesis' in window) {{ const u = new SpeechSynthesisUtterance('{text}'); u.lang = 'en-US'; window.speechSynthesis.speak(u); }}");
+    }
+}

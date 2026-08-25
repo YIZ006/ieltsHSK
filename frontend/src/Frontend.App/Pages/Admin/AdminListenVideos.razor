@@ -14,7 +14,7 @@
     <div class="page-top-header">
         <div class="header-titles">
             <h1 class="page-title"><i class="bi bi-camera-video-fill text-primary"></i> Quản lý Video Nghe Điền</h1>
-            <p class="page-subtitle">Duyệt danh sách video luyện nghe điền từ, thêm phụ đề tiếng Anh và nhập hàng loạt từ Excel.</p>
+            <p class="page-subtitle">Duyệt danh sách video luyện nghe điền từ, phân loại cấp độ (A1–C2), thêm phụ đề và nhập hàng loạt từ Excel.</p>
         </div>
         <div class="header-actions">
             <a href="@templateUrl" class="btn btn-secondary-outline" download="ListenVideos_Template.xlsx">
@@ -62,12 +62,21 @@
             }
         </div>
         <div class="filter-controls">
-            <input type="date" class="custom-date-input" @bind="searchDate" />
+            <select class="custom-select" @bind="searchLevel">
+                <option value="All">Tất cả cấp độ</option>
+                <option value="A1">A1 - Sơ cấp</option>
+                <option value="A2">A2 - Cơ bản</option>
+                <option value="B1">B1 - Trung cấp 1</option>
+                <option value="B2">B2 - Trung cấp 2</option>
+                <option value="C1">C1 - Nâng cao</option>
+                <option value="C2">C2 - Thành thạo</option>
+            </select>
             <select class="custom-select" @bind="searchStatus">
                 <option value="All">Tất cả trạng thái</option>
                 <option value="Approved">Đã duyệt</option>
                 <option value="Pending">Chờ duyệt</option>
             </select>
+            <input type="date" class="custom-date-input" @bind="searchDate" />
             <button class="btn btn-secondary-outline btn-sm" @onclick="ClearFilters">
                 <i class="bi bi-x-circle"></i> Xóa lọc
             </button>
@@ -100,11 +109,12 @@
                 <table class="videos-table">
                     <thead>
                         <tr>
-                            <th style="width: 110px;">Thumbnail</th>
+                            <th style="width: 100px;">Thumbnail</th>
                             <th>Thông tin Video & Kênh</th>
-                            <th style="width: 120px;">Trạng thái</th>
-                            <th style="width: 120px;">Ngày gửi</th>
-                            <th style="width: 220px;" class="text-right">Thao tác</th>
+                            <th style="width: 140px;">Cấp độ & Chủ đề</th>
+                            <th style="width: 110px;">Trạng thái</th>
+                            <th style="width: 100px;">Ngày gửi</th>
+                            <th style="width: 230px;" class="text-right">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -112,21 +122,28 @@
                         {
                             <tr>
                                 <td>
-                                    <img src="@video.ThumbnailUrl" alt="@video.Title" class="video-thumb" 
-                                         onerror="this.src='https://placehold.co/120x68/e2e8f0/475569?text=YouTube'" />
+                                    <div class="thumb-wrap">
+                                        <img src="@video.ThumbnailUrl" alt="@video.Title" class="video-thumb" 
+                                             onerror="this.src='https://placehold.co/120x68/e2e8f0/475569?text=YouTube'" />
+                                        @if (!string.IsNullOrEmpty(video.Duration))
+                                        {
+                                            <span class="video-duration-badge">@video.Duration</span>
+                                        }
+                                    </div>
                                 </td>
                                 <td>
                                     <div class="video-title-text" title="@video.Title">
                                         @video.Title
                                     </div>
                                     <div class="video-meta-row">
+                                        <span class="channel-badge"><i class="bi bi-person-video2"></i> @video.ChannelName</span>
                                         <a href="@video.YoutubeUrl" target="_blank" class="youtube-link">
-                                            <i class="bi bi-youtube text-danger"></i> Xem trên YouTube
+                                            <i class="bi bi-youtube text-danger"></i> Link gốc
                                         </a>
                                         @if (video.WordCount > 0)
                                         {
                                             <span class="transcript-tag tag-has-words">
-                                                <i class="bi bi-file-text-fill"></i> @video.WordCount từ phụ đề
+                                                <i class="bi bi-file-text-fill"></i> @video.WordCount từ
                                             </span>
                                         }
                                         else
@@ -135,6 +152,16 @@
                                                 <i class="bi bi-exclamation-circle"></i> Chưa có phụ đề
                                             </span>
                                         }
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="level-category-cell">
+                                        <span class="badge-level level-@(string.IsNullOrWhiteSpace(video.Level) ? "b2" : video.Level.ToLower())">
+                                            @(string.IsNullOrWhiteSpace(video.Level) ? "B2" : video.Level)
+                                        </span>
+                                        <span class="badge-category">
+                                            @(string.IsNullOrWhiteSpace(video.Category) ? "Giao tiếp" : video.Category)
+                                        </span>
                                     </div>
                                 </td>
                                 <td>
@@ -152,6 +179,12 @@
                                 </td>
                                 <td class="text-right">
                                     <div class="action-btn-group">
+                                        <!-- Nút Sửa thông tin (Cấp độ, Chủ đề, Tiêu đề) -->
+                                        <button class="action-btn btn-edit" @onclick="() => OpenEditModal(video)" title="Chỉnh sửa Cấp độ & Thông tin">
+                                            <i class="bi bi-pencil-square"></i> Sửa
+                                        </button>
+
+                                        <!-- Nút Phụ đề -->
                                         <button class="action-btn btn-transcript" @onclick="() => OpenTranscriptModal(video)" title="Thêm / Chỉnh sửa phụ đề">
                                             <i class="bi bi-card-text"></i> Phụ đề
                                         </button>
@@ -165,7 +198,7 @@
                                                 }
                                                 else
                                                 {
-                                                    <i class="bi bi-check-lg"></i> <span>Duyệt</span>
+                                                    <i class="bi bi-check-lg"></i>
                                                 }
                                             </button>
                                         }
@@ -185,7 +218,86 @@
 </div>
 
 <!-- ========================================================================= -->
-<!-- MODAL CHỈNH SỬA PHỤ ĐỀ VIDEO (CLEAN & BEAUTIFUL)                          -->
+<!-- MODAL CHỈNH SỬA THÔNG TIN VIDEO (CẤP ĐỘ, CHỦ ĐỀ, TIÊU ĐỀ)                 -->
+<!-- ========================================================================= -->
+@if (showEditModal && editingVideo != null)
+{
+    <div class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="bi bi-pencil-square text-primary"></i>
+                    <div>
+                        <h3>Chỉnh sửa Video Nghe Điền</h3>
+                        <p class="modal-subtitle">Cập nhật Cấp độ CEFR, Chủ đề và Tiêu đề bài tập luyện nghe.</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn" @onclick="CloseEditModal">×</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="form-group mb-3">
+                    <label class="form-group-label">Tiêu đề bài tập / Video:</label>
+                    <input type="text" class="custom-input" @bind="editTitle" placeholder="Nhập tiêu đề video..." />
+                </div>
+
+                <div class="row-inputs mb-3">
+                    <div class="input-col">
+                        <label class="form-group-label">Cấp độ trình độ (Level):</label>
+                        <select class="custom-select w-100" @bind="editLevel">
+                            <option value="A1">A1 - Sơ cấp (Beginner)</option>
+                            <option value="A2">A2 - Cơ bản (Elementary)</option>
+                            <option value="B1">B1 - Trung cấp 1 (Pre-Intermediate)</option>
+                            <option value="B2">B2 - Trung cấp 2 (Intermediate)</option>
+                            <option value="C1">C1 - Nâng cao (Upper-Intermediate)</option>
+                            <option value="C2">C2 - Thành thạo (Advanced / Mastery)</option>
+                        </select>
+                    </div>
+
+                    <div class="input-col">
+                        <label class="form-group-label">Chủ đề (Category):</label>
+                        <select class="custom-select w-100" @bind="editCategory">
+                            <option value="IELTS">IELTS Academic</option>
+                            <option value="Giao tiếp">Giao tiếp hàng ngày</option>
+                            <option value="Tin tức">Tin tức & Xã hội</option>
+                            <option value="Khoa học">Khoa học & Đời sống</option>
+                            <option value="Công nghệ">Công nghệ & Tương lai</option>
+                            <option value="Văn hóa">Văn hóa & Nghệ thuật</option>
+                            <option value="General">Tổng hợp (General)</option>
+                        </select>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(modalError))
+                {
+                    <div class="custom-alert alert-error mt-2">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span>@modalError</span>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary-outline" @onclick="CloseEditModal">Hủy</button>
+                <button class="btn btn-primary-solid" @onclick="SaveEditDetails" disabled="@isSavingEdit">
+                    @if (isSavingEdit)
+                    {
+                        <span class="mini-spinner"></span>
+                        <span>Đang lưu...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-check2-circle"></i>
+                        <span>Lưu thay đổi</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ========================================================================= -->
+<!-- MODAL CHỈNH SỬA PHỤ ĐỀ VIDEO                                              -->
 <!-- ========================================================================= -->
 @if (showTranscriptModal && selectedVideo != null)
 {
@@ -271,6 +383,7 @@
 
     // Filters
     private string searchTitle = "";
+    private string searchLevel = "All";
     private DateTime? searchDate = null;
     private string searchStatus = "All";
 
@@ -284,6 +397,14 @@
     private bool isSavingTranscript = false;
     private string? modalError = null;
 
+    // Modal Chỉnh Sửa
+    private bool showEditModal = false;
+    private ListenVideoDto? editingVideo = null;
+    private string editTitle = "";
+    private string editLevel = "B2";
+    private string editCategory = "Giao tiếp";
+    private bool isSavingEdit = false;
+
     // Import Excel
     private bool isImporting = false;
 
@@ -296,6 +417,11 @@
             if (!string.IsNullOrWhiteSpace(searchTitle))
             {
                 query = query.Where(v => v.Title.Contains(searchTitle, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (searchLevel != "All")
+            {
+                query = query.Where(v => string.Equals(v.Level, searchLevel, StringComparison.OrdinalIgnoreCase));
             }
 
             if (searchDate.HasValue)
@@ -318,8 +444,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var apiBase = Configuration["ApiBaseUrl"] ?? "https://localhost:7101";
-        templateUrl = $"{apiBase}/api/listen-videos/template";
+        var apiBase = Configuration["BackendApi:BaseUrl"] ?? Configuration["ApiBaseUrl"] ?? "http://localhost:5101";
+        templateUrl = $"{apiBase.TrimEnd('/')}/api/admin/listen-videos/template-excel";
         await LoadVideos();
     }
 
@@ -333,8 +459,57 @@
     private void ClearFilters()
     {
         searchTitle = "";
+        searchLevel = "All";
         searchDate = null;
         searchStatus = "All";
+    }
+
+    private void OpenEditModal(ListenVideoDto video)
+    {
+        editingVideo = video;
+        editTitle = video.Title;
+        editLevel = string.IsNullOrWhiteSpace(video.Level) ? "B2" : video.Level;
+        editCategory = string.IsNullOrWhiteSpace(video.Category) ? "Giao tiếp" : video.Category;
+        modalError = null;
+        showEditModal = true;
+    }
+
+    private void CloseEditModal()
+    {
+        showEditModal = false;
+        editingVideo = null;
+        modalError = null;
+    }
+
+    private async Task SaveEditDetails()
+    {
+        if (editingVideo == null) return;
+
+        if (string.IsNullOrWhiteSpace(editTitle))
+        {
+            modalError = "Tiêu đề video không được để trống.";
+            return;
+        }
+
+        isSavingEdit = true;
+        modalError = null;
+
+        var (success, msg) = await IeltsService.UpdateListenVideoDetailsAsync(editingVideo.Id, editTitle, editLevel, editCategory);
+        isSavingEdit = false;
+
+        if (success)
+        {
+            alertType = "success";
+            alertMessage = "Cập nhật Cấp độ & Thông tin video thành công!";
+            editingVideo.Title = editTitle;
+            editingVideo.Level = editLevel;
+            editingVideo.Category = editCategory;
+            CloseEditModal();
+        }
+        else
+        {
+            modalError = msg ?? "Có lỗi xảy ra khi cập nhật video.";
+        }
     }
 
     private async Task ApproveVideo(int id)

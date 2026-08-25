@@ -1,5 +1,5 @@
 /* ========================================================================= */
-/* IELTS LISTEN FILL DETAIL PAGE (MODERN BRAND THEME #0284C7)                */
+/* IELTS LISTEN FILL DETAIL PAGE                                             */
 /* ========================================================================= */
 .listen-detail-container {
     padding: 24px 20px 60px;
@@ -44,16 +44,6 @@
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
-}
-
-.video-meta .badge {
-    background: #0284c7;
-    color: #ffffff;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-weight: 800;
-    font-size: 0.78rem;
-    letter-spacing: 0.04em;
 }
 
 .video-player-wrapper {
@@ -170,4 +160,223 @@
 }
 .transcript-box::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
+}
+
+/* ========================================================================= */
+/* RECOMMENDED VIDEOS HORIZONTAL CAROUSEL (DẠNG NGANG + MŨI TÊN TRÁI PHẢI)    */
+/* ========================================================================= */
+.recommended-section {
+    margin-top: 36px;
+    padding-top: 24px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.recommended-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.recommended-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 2px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.recommended-subtitle {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.carousel-nav-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.carousel-nav-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    color: #334155;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.carousel-nav-btn:hover {
+    background: #0284c7;
+    color: #ffffff;
+    border-color: #0284c7;
+    transform: scale(1.08);
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+}
+
+.btn-view-all {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #0284c7;
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    margin-left: 6px;
+    transition: all 0.2s;
+}
+
+.btn-view-all:hover {
+    background: #0284c7;
+    color: #ffffff;
+}
+
+.recommended-carousel-wrapper {
+    position: relative;
+    overflow: hidden;
+    margin: 0 -4px;
+    padding: 4px;
+}
+
+.recommended-carousel-track {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding: 4px 2px 14px 2px;
+}
+
+.recommended-carousel-track::-webkit-scrollbar {
+    display: none;
+}
+
+.rec-video-card-compact {
+    flex: 0 0 250px;
+    width: 250px;
+    max-width: 250px;
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 14px;
+    overflow: hidden;
+    text-decoration: none !important;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.rec-video-card-compact:hover {
+    transform: translateY(-4px);
+    border-color: #0284c7;
+    box-shadow: 0 10px 22px rgba(2, 132, 199, 0.12);
+}
+
+.rec-thumb-wrap {
+    position: relative;
+    width: 100%;
+    height: 125px;
+    background: #f1f5f9;
+    overflow: hidden;
+}
+
+.rec-thumbnail {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.rec-video-card-compact:hover .rec-thumbnail {
+    transform: scale(1.06);
+}
+
+.rec-duration {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+
+.rec-badges {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    display: flex;
+    gap: 4px;
+    z-index: 2;
+}
+
+.rec-hover-play {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-size: 2rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.rec-video-card-compact:hover .rec-hover-play {
+    opacity: 1;
+}
+
+.rec-card-body {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    justify-content: space-between;
+}
+
+.rec-video-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 4px 0;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.rec-channel-name {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-bottom: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rec-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 8px;
+    border-top: 1px solid #f1f5f9;
+    font-size: 0.75rem;
 }

@@ -12,6 +12,75 @@ public class IeltsService
         _httpClient = httpClient;
     }
 
+    // === Vocabulary (IELTS) ===
+    public async Task<List<IeltsVocabularyItem>?> GetVocabularyAsync(string? topic = null, string? search = null)
+    {
+        try
+        {
+            var url = "api/ielts/vocab";
+            var qs = new List<string>();
+            if (!string.IsNullOrEmpty(topic)) qs.Add($"topic={Uri.EscapeDataString(topic)}");
+            if (!string.IsNullOrEmpty(search)) qs.Add($"search={Uri.EscapeDataString(search)}");
+            if (qs.Count > 0) url += "?" + string.Join("&", qs);
+            var items = await _httpClient.GetFromJsonAsync<List<IeltsVocabularyItem>>(url);
+            return items ?? new List<IeltsVocabularyItem>();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<bool> CreateVocabularyAsync(IeltsVocabularyItem item)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("api/ielts/vocab", item);
+            return response.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> UpdateVocabularyAsync(int id, IeltsVocabularyItem item)
+    {
+        try
+        {
+            var response = await _httpClient.PutAsJsonAsync($"api/ielts/vocab/{id}", item);
+            return response.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> DeleteVocabularyAsync(int id)
+    {
+        try
+        {
+            var response = await _httpClient.DeleteAsync($"api/ielts/vocab/{id}");
+            return response.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<IeltsImportExcelResponse?> ImportVocabularyExcelAsync(Microsoft.AspNetCore.Components.Forms.IBrowserFile file, string mode = "skip")
+    {
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            var fileContent = new StreamContent(file.OpenReadStream(20 * 1024 * 1024));
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+            content.Add(fileContent, "file", file.Name);
+            content.Add(new StringContent(mode), "mode");
+
+            var response = await _httpClient.PostAsync("api/ielts/vocab/import-excel", content);
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadFromJsonAsync<IeltsImportExcelResponse>();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public async Task<List<CourseDto>> GetCoursesAsync()
     {
         try
@@ -198,6 +267,43 @@ public class IeltsService
         }
     }
 
+    public async Task<(bool Success, string Message)> UpdateListenVideoDetailsAsync(int id, string title, string level, string category)
+    {
+        try
+        {
+            var req = new UpdateListenVideoRequest
+            {
+                Title = title,
+                Level = level,
+                Category = category
+            };
+            var response = await _httpClient.PutAsJsonAsync($"api/admin/listen-videos/{id}", req);
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, "Cập nhật thông tin video thành công.");
+            }
+            else
+            {
+                var errorText = await response.Content.ReadAsStringAsync();
+                try
+                {
+                    var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(errorText, options);
+                    return (false, dict?.GetValueOrDefault("message") ?? dict?.GetValueOrDefault("Message") ?? errorText);
+                }
+                catch
+                {
+                    return (false, errorText);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating video details: {ex.Message}");
+            return (false, $"Lỗi mạng hoặc server: {ex.Message}");
+        }
+    }
+
     public async Task<bool> DeleteListenVideoAsync(int id)
     {
         try
@@ -250,3 +356,20 @@ public class IeltsService
         }
     }
 }
+
+// === DTOs: IELTS Vocabulary ===
+public class IeltsVocabularyItem
+{
+    public int Id { get; set; }
+    public string Word { get; set; } = "";
+    public string? Phonetic { get; set; }
+    public string? PartOfSpeech { get; set; }
+    public string Meaning { get; set; } = "";
+    public string? Example { get; set; }
+    public string? ExampleMeaning { get; set; }
+    public string? Topic { get; set; }
+    public int DisplayOrder { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public record IeltsImportExcelResponse(int Success, int Fail, int Duplicate, int Updated, string? JsonUrl, List<string>? Errors);

@@ -254,6 +254,95 @@ namespace Backend.Infrastructure.Migrations
                     b.ToTable("HskVocabularyProgresses");
                 });
 
+            modelBuilder.Entity("Backend.Domain.Entities.IeltsVocabulary", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Example")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ExampleMeaning")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Meaning")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("PartOfSpeech")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Phonetic")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Topic")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Word")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Topic");
+
+                    b.HasIndex("Word", "Meaning")
+                        .IsUnique();
+
+                    b.ToTable("IeltsVocabularies");
+                });
+
+            modelBuilder.Entity("Backend.Domain.Entities.IeltsVocabularyImport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DuplicateCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FailedCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ImportedCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("JsonUrl")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("TotalRows")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UpdatedCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("IeltsVocabularyImports");
+                });
+
             modelBuilder.Entity("Backend.Domain.Entities.Language", b =>
                 {
                     b.Property<int>("Id")

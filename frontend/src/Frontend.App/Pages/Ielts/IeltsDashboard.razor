@@ -90,13 +90,65 @@
     }
 </div>
 
+<!-- Vocabulary Preview Section -->
+<div class="vocab-preview-section">
+    <div class="vocab-preview-header">
+        <div>
+            <h3>Từ vựng IELTS hôm nay</h3>
+            <p class="section-desc">Vài từ học thuật đáng nhớ — bấm để xem toàn bộ ngân hàng từ vựng.</p>
+        </div>
+        <a href="/ielts/tu-vung" class="btn-see-vocab">
+            Xem tất cả từ vựng <i class="bi bi-arrow-right"></i>
+        </a>
+    </div>
+
+    @if (previewVocab.Any())
+    {
+        <div class="vocab-preview-grid">
+            @foreach (var word in previewVocab)
+            {
+                <div class="vocab-chip">
+                    <div class="chip-word">@word.Word</div>
+                    @if (!string.IsNullOrEmpty(word.Phonetic))
+                    {
+                        <div class="chip-phonetic">@word.Phonetic</div>
+                    }
+                    <div class="chip-meaning">@word.Meaning</div>
+                    @if (!string.IsNullOrEmpty(word.Topic))
+                    {
+                        <span class="chip-topic">@word.Topic</span>
+                    }
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="vocab-preview-empty">
+            <i class="bi bi-journal-bookmark"></i>
+            <span>Ngân hàng từ vựng đang được cập nhật — quay lại sau nhé.</span>
+        </div>
+    }
+</div>
+
 @code {
     private List<LearningSectionDto>? sections;
     private string? currentLevel;
+    private List<IeltsVocabularyItem> previewVocab = new();
 
     protected override async Task OnInitializedAsync()
     {
         sections = await IeltsService.GetSectionsAsync();
         currentLevel = await LocalStorage.GetItemAsync<string>("ielts_level");
+
+        try
+        {
+            var vocab = await IeltsService.GetVocabularyAsync();
+            if (vocab != null && vocab.Any())
+            {
+                previewVocab = vocab.OrderBy(_ => Random.Shared.Next()).Take(6).ToList();
+            }
+        }
+        catch { }
     }
 }
