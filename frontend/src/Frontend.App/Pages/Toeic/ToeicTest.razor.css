@@ -573,7 +573,6 @@
 }
 
 .conversation-transcript div {
-    white-space: pre-wrap;
     line-height: 1.6;
 }
 
@@ -724,6 +723,34 @@
     align-items: flex-start;
     gap: 10px;
     margin-bottom: 12px;
+}
+
+/* ── NÚT ĐÁNH DẤU CỜ (PART 5-7) ── */
+.flag-btn {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+    line-height: 1;
+    padding: 3px 6px;
+    border-radius: var(--radius-sm);
+    color: #9ca3af;
+    opacity: 0.55;
+    filter: grayscale(1);
+    transition: var(--transition);
+    flex-shrink: 0;
+}
+
+.flag-btn:hover {
+    opacity: 1;
+    background: rgba(220,38,38,0.12);
+}
+
+.flag-btn.flagged {
+    opacity: 1;
+    filter: none;
+    color: #dc2626;
 }
 
 .q-text-content {
@@ -897,6 +924,19 @@
 .submit-final-btn:hover {
     box-shadow: 0 6px 24px rgba(255,107,53,0.5);
     color: #ffffff;
+}
+
+/* Nút Lưu và thoát */
+.save-exit-btn {
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.save-exit-btn:hover {
+    background: rgba(220,38,38,0.08);
+    border-color: #dc2626;
+    color: #dc2626;
 }
 
 /* â”€â”€ QUICK NAV OVERLAY â”€â”€ */
@@ -1078,6 +1118,19 @@
     background: var(--answered-bg);
     border-color: var(--accent-blue);
     color: var(--accent-blue);
+}
+
+/* Câu bị đánh dấu cờ: nền đỏ */
+.qnav-num.qnav-flagged {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: #ffffff;
+}
+
+/* Ô trang giới thiệu (GT) ở thanh chọn câu */
+.qnav-num.qnav-intro {
+    border-style: dashed;
+    color: var(--text-muted);
 }
 
 .qnav-num.qnav-active {
@@ -1354,11 +1407,11 @@
     }
 }
 
-.text-red { color: #ff4d4f; font-weight: 500; }
-.text-green { color: #52c41a; font-weight: 500; }
-.text-blue { color: #1890ff; font-weight: 500; }
-.text-orange { color: #fa8c16; font-weight: 500; }
-.text-purple { color: #722ed1; font-weight: 500; }
+::deep .text-red { color: #ff4d4f; font-weight: 500; }
+::deep .text-green { color: #52c41a; font-weight: 500; }
+::deep .text-blue { color: #1890ff; font-weight: 500; }
+::deep .text-orange { color: #fa8c16; font-weight: 500; }
+::deep .text-purple { color: #722ed1; font-weight: 500; }
 
 /* ── TEST LIST PAGE (light background) ── */
 .toeic-test-list-container {

@@ -19,6 +19,9 @@ builder.Services.AddScoped(_ =>
 
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<ExamSessionService>();
+builder.Services.AddScoped<ExamHeaderService>();
+builder.Services.AddScoped<StreakService>();
+builder.Services.AddScoped<ToeicAchievementService>();
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) };

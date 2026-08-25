@@ -62,7 +62,8 @@ window.ExamSession = (() => {
     window.addEventListener('beforeunload', (event) => {
         if (!shouldWarnOnUnload) return;
         event.preventDefault();
-        event.returnValue = '';
+        event.returnValue = 'Bài thi của bạn chưa được nộp. Dữ liệu của bạn có thể không được lưu nếu bạn rời khỏi trang này.';
+        return event.returnValue;
     });
 
     function confirmLeave() {
@@ -77,5 +78,31 @@ window.ExamSession = (() => {
             });
     }
 
-    return { start, get, complete, setUnloadWarning, confirmLeave, lockTestContent };
+    // ── LƯU TIẾN TRÌNH BÀI THI (localStorage) ──
+    function progressKey(storageKey) {
+        return 'exam-progress:' + storageKey;
+    }
+
+    function saveProgress(storageKey, state) {
+        try {
+            window.localStorage.setItem(progressKey(storageKey), JSON.stringify(state));
+        } catch { /* hết chỗ hoặc private mode: bỏ qua */ }
+    }
+
+    function loadProgress(storageKey) {
+        try {
+            const raw = window.localStorage.getItem(progressKey(storageKey));
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    function clearProgress(storageKey) {
+        try {
+            window.localStorage.removeItem(progressKey(storageKey));
+        } catch { /* bỏ qua */ }
+    }
+
+    return { start, get, complete, setUnloadWarning, confirmLeave, lockTestContent, saveProgress, loadProgress, clearProgress };
 })();
