@@ -131,15 +131,16 @@
 ══════════════════════════════════════════════ *@
 @if (state != SpeakingState.Setup && exam != null)
 {
-    var part = exam.Parts[activePartIndex];
+    var curExam = exam;
+    var part = curExam.Parts[activePartIndex];
     var question = part.Questions.ElementAtOrDefault(currentQuestionIndex);
 
     @* TOP BAR *@
     <div class="sp-topbar">
         <span class="sp-exam-title">HSK Speaking Test</span>
-        @if (!string.IsNullOrEmpty(exam?.HskLevel))
+        @if (!string.IsNullOrEmpty(curExam.HskLevel))
         {
-            <span class="hsk-level-badge">@exam.HskLevel</span>
+            <span class="hsk-level-badge">@curExam.HskLevel</span>
         }
         <span class="sp-session-time">@FormatTimer(sessionSecondsLeft) total</span>
         <div class="sp-timer @GetTimerClass()">⏱ @part.TimerSeconds?.ToString() ?? "??": @FormatTimer(partSecondsLeft)</div>
@@ -149,11 +150,11 @@
             {
                 <span class="sp-session-time">@(savedSubmission?.Status ?? "Submitted")</span>
             }
-            @if (activePartIndex < exam.Parts.Count - 1 && (state == SpeakingState.Result || state == SpeakingState.Idle))
+            @if (activePartIndex < curExam.Parts.Count - 1 && (state == SpeakingState.Result || state == SpeakingState.Idle))
             {
                 <button class="sp-btn-next-part" @onclick="NextPart">Next Part ➤</button>
             }
-            else if (activePartIndex == exam.Parts.Count - 1 && state == SpeakingState.Result)
+            else if (activePartIndex == curExam.Parts.Count - 1 && state == SpeakingState.Result)
             {
                 <button class="sp-btn-finish" @onclick="FinishExam">✅ Finish Test</button>
             }
@@ -162,9 +163,9 @@
 
     @* PART TABS *@
     <div class="sp-part-tabs">
-        @for (int i = 0; i < exam.Parts.Count; i++)
+        @for (int i = 0; i < curExam.Parts.Count; i++)
         {
-            var idx = i; var p = exam.Parts[i];
+            var idx = i; var p = curExam.Parts[i];
             <div class="sp-part-tab @(activePartIndex == idx ? "active" : idx < activePartIndex ? "done" : "")">
                 <span class="sp-tab-num">Part @p.PartNumber</span>
                 <span class="sp-tab-cap">@(p.TopicDescription?.Length > 20 ? p.TopicDescription[..20] + "…" : p.TopicDescription ?? "")</span>
@@ -341,7 +342,7 @@
                                 {
                                     <button class="sp-btn-primary" @onclick="NextQuestion">Next Question ➤</button>
                                 }
-                                else if (activePartIndex < exam.Parts.Count - 1)
+                                else if (activePartIndex < curExam.Parts.Count - 1)
                                 {
                                     <button class="sp-btn-primary" @onclick="NextPart">Next Part ➤</button>
                                 }
@@ -416,7 +417,6 @@
     [Parameter][SupplyParameterFromQuery(Name = "Session")] public string? TestSessionId { get; set; }
 
     private HskExamData? exam;
-    private bool isLoading = true;
 
     // Setup state
     private bool micChecked = false;
@@ -481,7 +481,6 @@
                 }
             };
         }
-        isLoading = false;
         _dotNetRef = DotNetObjectReference.Create(this);
     }
 

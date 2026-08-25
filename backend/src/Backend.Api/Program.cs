@@ -188,7 +188,7 @@ app.MapPost("/api/listen-videos/submit", async (Backend.Application.DTOs.ListenV
         duration = info.Duration.ToString(@"mm\:ss");
         thumbnail = info.ThumbnailUrl;
     }
-    catch (Exception ex)
+    catch (Exception)
     {
         // Nếu không lấy được info, fallback lại parse ID cơ bản
         var videoId = "";

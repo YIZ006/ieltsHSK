@@ -30,15 +30,16 @@ else if (exam == null)
 }
 else
 {
-    var activeTask = exam.Tasks[activeTaskIndex];
+    var curExam = exam;
+    var activeTask = curExam.Tasks[activeTaskIndex];
 
     @* ── TOP BAR ── *@
     <div class="writing-topbar">
         <div class="topbar-left">
-            <span class="exam-title-short">@exam.Title</span>
-            @if (!string.IsNullOrEmpty(exam?.HskLevel))
+            <span class="exam-title-short">@curExam.Title</span>
+            @if (!string.IsNullOrEmpty(curExam.HskLevel))
             {
-                <span class="hsk-level-badge">@exam.HskLevel</span>
+                <span class="hsk-level-badge">@curExam.HskLevel</span>
             }
         </div>
         <div class="topbar-center">
@@ -61,10 +62,10 @@ else
 
     @* ── TASK TABS ── *@
     <div class="writing-task-tabs">
-        @for (int i = 0; i < exam.Tasks.Count; i++)
+        @for (int i = 0; i < curExam.Tasks.Count; i++)
         {
             var idx = i;
-            var task = exam.Tasks[i];
+            var task = curExam.Tasks[i];
             <button class="task-tab-btn @(activeTaskIndex == idx ? "active" : "")"
                     @onclick="() => SwitchTask(idx)">
                 @task.TaskTitle
