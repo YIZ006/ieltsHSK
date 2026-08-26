@@ -104,5 +104,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasForeignKey(p => p.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+        // JSONB: tiến trình học tập có cấu trúc động (bài nghe lưu đáp án,
+        // bài đọc lưu chi tiết câu hỏi...) -> dùng kiểu jsonb của PostgreSQL
+        modelBuilder.Entity<TestSubmission>(entity =>
+        {
+            entity.Property(s => s.DetailsJson).HasColumnType("jsonb");
+            entity.HasIndex(s => new { s.UserId, s.Skill });
+        });
+
+        // JSONB cho nội dung truyện (paragraphs / vocabulary / questions)
+        modelBuilder.Entity<Story>(entity =>
+        {
+            entity.Property(s => s.ContentJson).HasColumnType("jsonb");
+            entity.Property(s => s.VocabularyJson).HasColumnType("jsonb");
+            entity.Property(s => s.QuestionsJson).HasColumnType("jsonb");
+        });
     }
 }

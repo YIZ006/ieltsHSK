@@ -11,8 +11,14 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, Microsoft.Extensions.Configuration.IConfiguration configuration)
     {
-        services.AddDbContext<AppDbContext>(options => 
-            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"), npgsqlOptions =>
+                {
+                    // Supabase gói Free giới hạn số connection -> client-side pooling qua Port 6543
+                    npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5,
+                        maxRetryDelay: TimeSpan.FromSeconds(10), errorCodesToAdd: null);
+                })
+                .UseSnakeCaseNamingConvention());
         services.AddScoped<IAuthService, Backend.Infrastructure.Services.AuthService>();
         services.AddScoped<Backend.Application.Abstractions.IR2StorageService, Backend.Infrastructure.Services.R2StorageService>();
         services.AddScoped<Backend.Infrastructure.Services.YoutubeTranscriptService>();
