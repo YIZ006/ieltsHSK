@@ -41,7 +41,10 @@ builder.Services.AddScoped(sp =>
 
 builder.Services.AddScoped(sp =>
 {
-    var httpClient = new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) };
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
     return new IeltsService(httpClient);
 });
 
@@ -55,7 +58,10 @@ builder.Services.AddScoped(sp =>
 
 builder.Services.AddScoped(sp =>
 {
-    var httpClient = new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) };
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
     return new MockTestService(httpClient);
 });
 
@@ -76,14 +82,20 @@ builder.Services.AddScoped(sp =>
 // ToeicBuilderService: upload ảnh/audio per câu, lưu đề thi JSON lên Cloudflare R2
 builder.Services.AddScoped(sp =>
 {
-    var httpClient = new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) };
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
     return new ToeicBuilderService(httpClient);
 });
 
 // StoryService: quản lý và đọc truyện tiếng Anh (Graded Readers)
 builder.Services.AddScoped(sp =>
 {
-    var httpClient = new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) };
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
     return new StoryService(httpClient);
 });
 
