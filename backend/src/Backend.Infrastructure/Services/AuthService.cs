@@ -17,7 +17,9 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
 {
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
-        if (await dbContext.Users.AnyAsync(u => u.Username == request.Username || u.Email == request.Email, cancellationToken))
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+
+        if (await dbContext.Users.AnyAsync(u => u.Username == request.Username || u.Email == normalizedEmail, cancellationToken))
         {
             throw new Exception("Username or Email already exists.");
         }
@@ -25,7 +27,7 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
         var user = new User
         {
             Username = request.Username,
-            Email = request.Email,
+            Email = normalizedEmail,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password)
         };
 
@@ -90,7 +92,7 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             throw new Exception("Invalid Google token.");
         }
 
-        var user = await dbContext.Users.SingleOrDefaultAsync(u => u.Email == payload.Email, cancellationToken);
+        var user = await dbContext.Users.SingleOrDefaultAsync(u => u.Email == payload.Email.Trim().ToLowerInvariant(), cancellationToken);
         
         if (user == null)
         {
