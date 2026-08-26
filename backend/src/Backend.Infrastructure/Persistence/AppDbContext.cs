@@ -33,6 +33,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         base.OnModelCreating(modelBuilder);
 
+        modelBuilder.Entity<TestSubmission>(entity =>
+        {
+            entity.Property(t => t.DetailsJson).HasColumnType("jsonb");
+            entity.HasIndex(t => new { t.UserId, t.SubmittedAt });
+        });
+
         // Story
         modelBuilder.Entity<Story>(entity =>
         {
