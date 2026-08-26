@@ -1,3 +1,4 @@
+using Backend.Api;
 using Backend.Application.Abstractions;
 using Backend.Application.DTOs;
 using Backend.Infrastructure;
@@ -39,6 +40,27 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = jwtSettings["Issuer"],
             ValidAudience = jwtSettings["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]!))
+        };
+        // Chặn token của tài khoản bị khoá/xoá ngay cả khi JWT còn hạn
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var dbContext = context.HttpContext.RequestServices
+                    .GetRequiredService<Backend.Infrastructure.Persistence.AppDbContext>();
+                var userIdClaim = context.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+                if (!int.TryParse(userIdClaim, out var userId))
+                {
+                    context.Fail("Invalid token subject.");
+                    return;
+                }
+
+                var user = await dbContext.Users.FindAsync(new object[] { userId }, context.HttpContext.RequestAborted);
+                if (user == null || !user.IsActive)
+                {
+                    context.Fail("Account is disabled or no longer exists.");
+                }
+            }
         };
     });
 builder.Services.AddAuthorization();
@@ -161,8 +183,19 @@ app.MapGet("/api/listen-videos/{id}", async (int id, Backend.Infrastructure.Pers
     });
 });
 
-app.MapPost("/api/listen-videos/submit", async (Backend.Application.DTOs.ListenVideoSubmitRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService ytService, CancellationToken cancellationToken) =>
+app.MapPost("/api/listen-videos/submit",
+        [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.ListenVideoSubmitRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService ytService, CancellationToken cancellationToken) =>
 {
+    // Chỉ chấp nhận đường dẫn YouTube https để tránh injection qua URL
+    if (string.IsNullOrWhiteSpace(req.YoutubeUrl)
+        || !Uri.TryCreate(req.YoutubeUrl, UriKind.Absolute, out var ytUri)
+        || ytUri.Scheme != Uri.UriSchemeHttps
+        || (ytUri.Host != "www.youtube.com" && ytUri.Host != "youtube.com" && ytUri.Host != "youtu.be"
+            && ytUri.Host != "m.youtube.com" && ytUri.Host != "music.youtube.com"))
+    {
+        return Results.BadRequest("Chỉ chấp nhận đường dẫn YouTube hợp lệ (https://www.youtube.com hoặc https://youtu.be).");
+    }
+
     var videoIdToCheck = "";
     if (req.YoutubeUrl.Contains("v=")) videoIdToCheck = req.YoutubeUrl.Split("v=")[1].Split("&")[0];
     else if (req.YoutubeUrl.Contains("youtu.be/")) videoIdToCheck = req.YoutubeUrl.Split("youtu.be/")[1].Split("?")[0];
@@ -220,7 +253,8 @@ app.MapPost("/api/listen-videos/submit", async (Backend.Application.DTOs.ListenV
     return Results.Ok(new { Message = "Video submitted and pending approval" });
 });
 
-app.MapGet("/api/admin/listen-videos", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapGet("/api/admin/listen-videos",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var videos = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
         dbContext.ListenVideos
@@ -243,7 +277,8 @@ app.MapGet("/api/admin/listen-videos", async (Backend.Infrastructure.Persistence
     return Results.Ok(videos);
 });
 
-app.MapPut("/api/admin/listen-videos/{id}/approve", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapPut("/api/admin/listen-videos/{id}/approve",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var video = await dbContext.ListenVideos.FindAsync(new object[] { id }, cancellationToken);
     if (video == null) return Results.NotFound();
@@ -253,7 +288,8 @@ app.MapPut("/api/admin/listen-videos/{id}/approve", async (int id, Backend.Infra
     return Results.Ok(new { Message = "Đã duyệt video thành công" });
 });
 
-app.MapPut("/api/admin/listen-videos/{id}/transcript", async (int id, Backend.Application.DTOs.ManualTranscriptRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService transcriptService, Backend.Application.Abstractions.IR2StorageService r2Storage, CancellationToken cancellationToken) =>
+app.MapPut("/api/admin/listen-videos/{id}/transcript",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Application.DTOs.ManualTranscriptRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService transcriptService, Backend.Application.Abstractions.IR2StorageService r2Storage, CancellationToken cancellationToken) =>
 {
     var video = await dbContext.ListenVideos.FindAsync(new object[] { id }, cancellationToken);
     if (video == null) return Results.NotFound();
@@ -294,7 +330,8 @@ app.MapPut("/api/admin/listen-videos/{id}/transcript", async (int id, Backend.Ap
     }
 });
 
-app.MapDelete("/api/admin/listen-videos/{id}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Application.Abstractions.IR2StorageService r2Storage, CancellationToken cancellationToken) =>
+app.MapDelete("/api/admin/listen-videos/{id}",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Application.Abstractions.IR2StorageService r2Storage, CancellationToken cancellationToken) =>
 {
     var video = await dbContext.ListenVideos.FindAsync(new object[] { id }, cancellationToken);
     if (video == null) return Results.NotFound();
@@ -314,7 +351,8 @@ app.MapDelete("/api/admin/listen-videos/{id}", async (int id, Backend.Infrastruc
     return Results.Ok(new { Message = "Video removed successfully" });
 });
 
-app.MapGet("/api/admin/listen-videos/template-excel", () =>
+app.MapGet("/api/admin/listen-videos/template-excel",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] () =>
 {
     using var workbook = new ClosedXML.Excel.XLWorkbook();
     var worksheet = workbook.Worksheets.Add("ListenVideos");
@@ -342,7 +380,8 @@ app.MapGet("/api/admin/listen-videos/template-excel", () =>
     return Results.File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "ListenVideos_Template.xlsx");
 });
 
-app.MapPost("/api/admin/listen-videos/import-excel", async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService transcriptService, Backend.Application.Abstractions.IR2StorageService r2Storage, CancellationToken cancellationToken) =>
+app.MapPost("/api/admin/listen-videos/import-excel",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService transcriptService, Backend.Application.Abstractions.IR2StorageService r2Storage, CancellationToken cancellationToken) =>
 {
     if (file == null || file.Length == 0)
         return Results.BadRequest(new { Message = "File không hợp lệ hoặc trống." });
@@ -458,7 +497,8 @@ app.MapPost("/api/admin/listen-videos/import-excel", async (Microsoft.AspNetCore
 
 
 
-app.MapPost("/api/ielts/exams", async (CreateExamRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapPost("/api/ielts/exams",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (CreateExamRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var exam = new Backend.Domain.Entities.Exam
     {
@@ -573,7 +613,8 @@ app.MapGet("/api/mock-tests", async (Backend.Infrastructure.Persistence.AppDbCon
     return Results.Ok(dtos);
 });
 
-app.MapPost("/api/mock-tests", async (Backend.Application.DTOs.CreateMockTestRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapPost("/api/mock-tests",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Backend.Application.DTOs.CreateMockTestRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var newTest = new Backend.Domain.Entities.MockTest
     {
@@ -596,7 +637,8 @@ app.MapPost("/api/mock-tests", async (Backend.Application.DTOs.CreateMockTestReq
     return Results.Ok(new { Id = newTest.Id });
 });
 
-app.MapPut("/api/mock-tests/{id}", async (int id, Backend.Application.DTOs.CreateMockTestRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapPut("/api/mock-tests/{id}",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Application.DTOs.CreateMockTestRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var test = await dbContext.MockTests.FindAsync(new object[] { id }, cancellationToken);
     if (test == null) return Results.NotFound();
@@ -617,7 +659,8 @@ app.MapPut("/api/mock-tests/{id}", async (int id, Backend.Application.DTOs.Creat
     return Results.Ok();
 });
 
-app.MapDelete("/api/mock-tests/{id}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Application.Abstractions.IR2StorageService r2Service, CancellationToken cancellationToken) =>
+app.MapDelete("/api/mock-tests/{id}",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Application.Abstractions.IR2StorageService r2Service, CancellationToken cancellationToken) =>
 {
     var test = await dbContext.MockTests.FindAsync(new object[] { id }, cancellationToken);
     if (test == null) return Results.NotFound();
@@ -638,17 +681,30 @@ app.MapDelete("/api/mock-tests/{id}", async (int id, Backend.Infrastructure.Pers
     return Results.Ok();
 });
 
-app.MapPost("/api/mock-tests/upload", async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Application.Abstractions.IR2StorageService r2Service, CancellationToken cancellationToken) =>
+app.MapPost("/api/mock-tests/upload",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Application.Abstractions.IR2StorageService r2Service, CancellationToken cancellationToken) =>
 {
     if (file == null || file.Length == 0)
         return Results.BadRequest("No file uploaded.");
         
     var fileName = $"{Guid.NewGuid()}_{file.FileName}";
-    using var stream = file.OpenReadStream();
-    
+
     try
     {
-        var url = await r2Service.UploadFileAsync(stream, fileName, file.ContentType, cancellationToken);
+        string payload;
+        using (var reader = new StreamReader(file.OpenReadStream()))
+        {
+            payload = await reader.ReadToEndAsync(cancellationToken);
+        }
+
+        // Chống stored XSS: làm sạch nội dung JSON đề thi trước khi lưu lên R2
+        var isJson = (file.ContentType ?? "").Contains("json", StringComparison.OrdinalIgnoreCase)
+                     || file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
+        var clean = isJson ? HtmlGuard.SanitizeJsonStrings(payload) : payload;
+
+        var contentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(clean));
+        var url = await r2Service.UploadFileAsync(stream, fileName, contentType, cancellationToken);
         return Results.Ok(new { Url = url });
     }
     catch (Exception ex)
@@ -679,7 +735,8 @@ app.MapPost("/api/test-submissions", async (Backend.Application.DTOs.CreateTestS
 });
 
 // ─── TOEIC: Upload media (ảnh/audio) lên R2 ───
-app.MapPost("/api/toeic/upload-media", async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Application.Abstractions.IR2StorageService r2Service, CancellationToken cancellationToken) =>
+app.MapPost("/api/toeic/upload-media",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Application.Abstractions.IR2StorageService r2Service, CancellationToken cancellationToken) =>
 {
     if (file == null || file.Length == 0)
         return Results.BadRequest("No file uploaded.");
@@ -700,7 +757,8 @@ app.MapPost("/api/toeic/upload-media", async (Microsoft.AspNetCore.Http.IFormFil
 }).DisableAntiforgery();
 
 // ─── TOEIC: Lưu đề thi JSON lên R2 và ghi URL vào DB ───
-app.MapPost("/api/toeic/save-exam", async (
+app.MapPost("/api/toeic/save-exam",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
         SaveToeicExamRequest req,
         Backend.Application.Abstractions.IR2StorageService r2Service,
         Backend.Infrastructure.Persistence.AppDbContext dbContext,
@@ -709,8 +767,8 @@ app.MapPost("/api/toeic/save-exam", async (
     if (string.IsNullOrWhiteSpace(req.CollectionName) || string.IsNullOrWhiteSpace(req.Title))
         return Results.BadRequest("CollectionName and Title are required.");
 
-    var json = System.Text.Json.JsonSerializer.Serialize(req.ExamData,
-        new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
+    var json = HtmlGuard.SanitizeJsonStrings(System.Text.Json.JsonSerializer.Serialize(req.ExamData,
+        new System.Text.Json.JsonSerializerOptions { WriteIndented = false }));
     var jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
     var fileId = Guid.NewGuid().ToString("N");
     var safeCollection = req.CollectionName.Replace("/", "-").Replace("\\", "-");
@@ -919,7 +977,8 @@ app.MapPost("/api/stories/{id}/quiz-submit", async (int id, Backend.Application.
 });
 
 // ADMIN STORIES API
-app.MapGet("/api/admin/stories", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapGet("/api/admin/stories",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var stories = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
         dbContext.Stories.OrderByDescending(s => s.CreatedAt), cancellationToken);
@@ -950,7 +1009,8 @@ app.MapGet("/api/admin/stories", async (Backend.Infrastructure.Persistence.AppDb
 });
 
 // Upload story JSON to Cloudflare R2
-app.MapPost("/api/admin/stories/upload-json", async (
+app.MapPost("/api/admin/stories/upload-json",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
     Microsoft.AspNetCore.Http.IFormFile file,
     Backend.Application.Abstractions.IR2StorageService r2Service,
     CancellationToken cancellationToken) =>
@@ -987,7 +1047,8 @@ app.MapPost("/api/admin/stories/upload-json", async (
     return Results.Ok(new { Url = r2Url, JsonContent = jsonContent, Message = "Tải file lên Cloudflare R2 thành công!" });
 });
 
-app.MapPost("/api/admin/stories", async (
+app.MapPost("/api/admin/stories",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
     Backend.Application.DTOs.CreateStoryRequest req,
     Backend.Application.Abstractions.IR2StorageService r2Service,
     Backend.Infrastructure.Persistence.AppDbContext dbContext,
@@ -1064,7 +1125,8 @@ app.MapPost("/api/admin/stories", async (
     return Results.Ok(new { Id = story.Id, Slug = story.Slug, JsonUrl = story.JsonUrl, Message = "Tạo truyện và lưu lên Cloudflare R2 thành công!" });
 });
 
-app.MapPut("/api/admin/stories/{id}", async (
+app.MapPut("/api/admin/stories/{id}",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
     int id,
     Backend.Application.DTOs.CreateStoryRequest req,
     Backend.Application.Abstractions.IR2StorageService r2Service,
@@ -1135,7 +1197,8 @@ app.MapPut("/api/admin/stories/{id}", async (
     return Results.Ok(new { JsonUrl = story.JsonUrl, Message = "Cập nhật truyện lên Cloudflare R2 thành công!" });
 });
 
-app.MapDelete("/api/admin/stories/{id}", async (
+app.MapDelete("/api/admin/stories/{id}",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
     int id,
     Backend.Infrastructure.Persistence.AppDbContext dbContext,
     Backend.Application.Abstractions.IR2StorageService r2Service,
@@ -1154,7 +1217,8 @@ app.MapDelete("/api/admin/stories/{id}", async (
     return Results.Ok(new { Message = "Đã xóa truyện và tệp tin trên Cloudflare R2." });
 });
 
-app.MapPost("/api/admin/stories/sync-to-r2", async (
+app.MapPost("/api/admin/stories/sync-to-r2",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
     Backend.Infrastructure.Persistence.AppDbContext dbContext,
     Backend.Application.Abstractions.IR2StorageService r2Service,
     CancellationToken cancellationToken) =>
@@ -1196,7 +1260,8 @@ app.MapPost("/api/admin/stories/sync-to-r2", async (
     return Results.Ok(new { Count = count, Message = $"Đã đồng bộ {count} truyện lên Cloudflare R2 trong thư mục stories/" });
 });
 
-app.MapGet("/api/admin/stories/template-json", () =>
+app.MapGet("/api/admin/stories/template-json",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] () =>
 {
     var sampleTemplate = new
     {
@@ -1252,7 +1317,8 @@ app.MapGet("/api/admin/stories/template-json", () =>
     return Results.Ok(sampleTemplate);
 });
 
-app.MapPost("/api/admin/stories/import-json", async (
+app.MapPost("/api/admin/stories/import-json",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
     Backend.Application.DTOs.ImportStoryJsonRequest req,
     Backend.Application.Abstractions.IR2StorageService r2Service,
     Backend.Infrastructure.Persistence.AppDbContext dbContext,
@@ -1366,7 +1432,8 @@ app.MapPost("/api/admin/stories/import-json", async (
 
 // --- ADMIN USER MANAGEMENT ENDPOINTS ---
 
-app.MapGet("/api/admin/users", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapGet("/api/admin/users",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var users = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
         dbContext.Users.OrderByDescending(u => u.CreatedAt), cancellationToken);
@@ -1383,7 +1450,8 @@ app.MapGet("/api/admin/users", async (Backend.Infrastructure.Persistence.AppDbCo
     }));
 });
 
-app.MapPut("/api/admin/users/{id}/toggle-active", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapPut("/api/admin/users/{id}/toggle-active",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var user = await dbContext.Users.FindAsync(new object[] { id }, cancellationToken);
     if (user == null) return Results.NotFound();
@@ -1401,7 +1469,8 @@ app.MapPut("/api/admin/users/{id}/toggle-active", async (int id, Backend.Infrast
     return Results.Ok(new { user.IsActive });
 });
 
-app.MapPut("/api/admin/users/{id}", async (int id, Backend.Application.DTOs.UpdateUserRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapPut("/api/admin/users/{id}",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Application.DTOs.UpdateUserRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var user = await dbContext.Users.FindAsync(new object[] { id }, cancellationToken);
     if (user == null) return Results.NotFound();
@@ -1442,7 +1511,8 @@ app.MapGet("/api/hsk/sections", async (Backend.Infrastructure.Persistence.AppDbC
 });
 
 // ─── HSK: Upload media (image/audio) ───
-app.MapPost("/api/hsk/upload-media", async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Application.Abstractions.IR2StorageService r2Service, CancellationToken cancellationToken) =>
+app.MapPost("/api/hsk/upload-media",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Application.Abstractions.IR2StorageService r2Service, CancellationToken cancellationToken) =>
 {
     if (file == null || file.Length == 0)
         return Results.BadRequest("No file uploaded.");
@@ -1463,7 +1533,8 @@ app.MapPost("/api/hsk/upload-media", async (Microsoft.AspNetCore.Http.IFormFile 
 }).DisableAntiforgery();
 
 // ─── HSK: Save exam JSON ───
-app.MapPost("/api/hsk/save-exam", async (
+app.MapPost("/api/hsk/save-exam",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
         HskSaveExamRequest req,
         Backend.Application.Abstractions.IR2StorageService r2Service,
         Backend.Infrastructure.Persistence.AppDbContext dbContext,
@@ -1472,8 +1543,8 @@ app.MapPost("/api/hsk/save-exam", async (
     if (string.IsNullOrWhiteSpace(req.CollectionName) || string.IsNullOrWhiteSpace(req.Title))
         return Results.BadRequest("CollectionName and Title are required.");
 
-    var json = System.Text.Json.JsonSerializer.Serialize(req.ExamData,
-        new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
+    var json = HtmlGuard.SanitizeJsonStrings(System.Text.Json.JsonSerializer.Serialize(req.ExamData,
+        new System.Text.Json.JsonSerializerOptions { WriteIndented = false }));
     var jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
     var fileId = Guid.NewGuid().ToString("N");
     var fileName = $"hsk/exams/{fileId}.json";
@@ -1544,7 +1615,8 @@ app.MapGet("/api/hsk/vocab", async (string? level, Backend.Infrastructure.Persis
     }));
 });
 
-app.MapPost("/api/hsk/vocab", async (HskVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapPost("/api/hsk/vocab",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (HskVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var existing = await dbContext.HskVocabularies
         .FirstOrDefaultAsync(v => v.HskLevel == req.HskLevel && v.Hanzi == req.Hanzi, cancellationToken);
@@ -1570,7 +1642,8 @@ app.MapPost("/api/hsk/vocab", async (HskVocabularyRequest req, Backend.Infrastru
     return Results.Ok(new { Id = vocab.Id });
 });
 
-app.MapPut("/api/hsk/vocab/{id}", async (int id, HskVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapPut("/api/hsk/vocab/{id}",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, HskVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var vocab = await dbContext.HskVocabularies.FindAsync(new object[] { id }, cancellationToken);
     if (vocab == null) return Results.NotFound();
@@ -1599,7 +1672,8 @@ app.MapPut("/api/hsk/vocab/{id}", async (int id, HskVocabularyRequest req, Backe
     return Results.Ok();
 });
 
-app.MapPost("/api/admin/users/{id}/reset-password", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapPost("/api/admin/users/{id}/reset-password",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var user = await dbContext.Users.FindAsync(new object[] { id }, cancellationToken);
     if (user == null) return Results.NotFound();
@@ -1619,7 +1693,8 @@ app.MapPost("/api/admin/users/{id}/reset-password", async (int id, Backend.Infra
     return Results.Ok(new { TempPassword = tempPassword });
 });
 
-app.MapGet("/api/admin/users/{id}/logs", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapGet("/api/admin/users/{id}/logs",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var logs = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
         dbContext.UserActivityLogs
@@ -1631,7 +1706,8 @@ app.MapGet("/api/admin/users/{id}/logs", async (int id, Backend.Infrastructure.P
     return Results.Ok(logs);
 });
 
-app.MapDelete("/api/hsk/vocab/{id}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapDelete("/api/hsk/vocab/{id}",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var vocab = await dbContext.HskVocabularies.FindAsync(new object[] { id }, cancellationToken);
     if (vocab == null) return Results.NotFound();
@@ -1698,7 +1774,8 @@ app.MapPost("/api/hsk/vocab/progress/{vocabularyId:int}", [Microsoft.AspNetCore.
 });
 
 // ─── HSK Vocabulary Excel Import ───
-app.MapGet("/api/hsk/vocab/template-excel", () =>
+app.MapGet("/api/hsk/vocab/template-excel",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] () =>
 {
     using var workbook = new ClosedXML.Excel.XLWorkbook();
     var worksheet = workbook.Worksheets.Add("HSK Vocabulary");
@@ -1740,7 +1817,8 @@ app.MapGet("/api/hsk/vocab/template-excel", () =>
     return Results.File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "HSK_Vocabulary_Template.xlsx");
 });
 
-app.MapPost("/api/hsk/vocab/import-excel", async (Microsoft.AspNetCore.Http.IFormFile file,
+app.MapPost("/api/hsk/vocab/import-excel",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Microsoft.AspNetCore.Http.IFormFile file,
         Backend.Infrastructure.Persistence.AppDbContext dbContext,
         Backend.Application.Abstractions.IR2StorageService r2Storage,
         HttpContext httpContext,

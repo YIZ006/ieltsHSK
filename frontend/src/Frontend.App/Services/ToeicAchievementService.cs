@@ -45,13 +45,13 @@ public class ToeicAchievementService(
             .Count();
         var bestScore = toeicSubs
             .Where(s => s.TotalScore.HasValue)
-            .Select(s => s.TotalScore!.Value)
+            .Select(s => s.TotalScore.GetValueOrDefault())
             .DefaultIfEmpty(0)
             .Max();
         var hasPerfect = toeicSubs.Any(s =>
             s.CorrectCount.HasValue
             && s.TotalQuestions.GetValueOrDefault() > 0
-            && s.CorrectCount.Value == s.TotalQuestions.Value);
+            && s.CorrectCount.GetValueOrDefault() == s.TotalQuestions.GetValueOrDefault());
 
         var currentStreak = await streak.GetCurrentStreakAsync();
         var bestStreak = Math.Max(currentStreak, await streak.GetBestStreakAsync());

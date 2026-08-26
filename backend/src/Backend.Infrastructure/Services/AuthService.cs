@@ -128,7 +128,8 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.UniqueName, user.Username),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim("level", user.Level ?? "A1")
+            new Claim("level", user.Level ?? "A1"),
+            new Claim(ClaimTypes.Role, string.IsNullOrWhiteSpace(user.Role) ? "user" : user.Role)
         };
 
         var token = new JwtSecurityToken(
