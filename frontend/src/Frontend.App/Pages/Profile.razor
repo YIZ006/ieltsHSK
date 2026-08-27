@@ -1,0 +1,533 @@
+@page "/profile"
+@using Frontend.App.Services
+@using Frontend.App.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ProfileService ProfileSvc
+@inject AuthService AuthSvc
+@inject ExamSubmissionService Submissions
+@inject StreakService StreakSvc
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
+
+<PageTitle>Hồ sơ cá nhân - ieltsHSK</PageTitle>
+
+@if (showToast)
+{
+    <div class="profile-toast">
+        <i class="bi bi-hand-thumbs-up-fill"></i>
+        <span>@toastMessage</span>
+    </div>
+}
+
+<div class="profile-root">
+
+    @if (isLoading)
+    {
+        <div class="profile-loading">
+            <div class="profile-spinner"></div>
+            <p>Đang tải hồ sơ...</p>
+        </div>
+    }
+    else
+    {
+        @* ── HERO BANNER ── *@
+        <div class="profile-hero">
+            <div class="hero-bg-pattern"></div>
+            <div class="hero-content">
+                @* Avatar *@
+                <div class="avatar-wrapper @(editingAvatar ? "editing" : "")" @onclick="() => editingAvatar = !editingAvatar">
+                    <div class="avatar-display" style="background: @profile.AvatarColor;">
+                        <span class="avatar-emoji">@profile.AvatarEmoji</span>
+                    </div>
+                    <div class="avatar-edit-hint">
+                        <i class="bi bi-pencil-fill"></i>
+                    </div>
+                </div>
+
+                @* User Info *@
+                <div class="hero-info">
+                    @if (editingProfile)
+                    {
+                        <div class="hero-edit-form">
+                            <label class="hero-form-label">Họ tên</label>
+                            <input class="name-input" @bind="editedFullName" placeholder="Nhập họ và tên..." maxlength="80" />
+
+                            <label class="hero-form-label">Bio</label>
+                            <textarea class="name-input hero-bio-input" @bind="editedBio" placeholder="Giới thiệu bản thân..." rows="2" maxlength="160"></textarea>
+
+                            <div class="hero-form-row">
+                                <div class="hero-form-col">
+                                    <label class="hero-form-label">Mục tiêu thi</label>
+                                    <div class="form-select-group">
+                                        @foreach (var exam in new[] { "TOEIC", "IELTS", "HSK" })
+                                        {
+                                            <button class="select-chip @(editedTarget == exam ? "active" : "")" @onclick="() => editedTarget = exam">@exam</button>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="hero-form-col">
+                                    <label class="hero-form-label">Điểm mục tiêu</label>
+                                    <input class="name-input" @bind="editedScore" placeholder="VD: 800, 7.0..." maxlength="10" />
+                                </div>
+                            </div>
+
+                            <label class="hero-form-label">Trình độ</label>
+                            <div class="form-select-group flex-wrap">
+                                @foreach (var lvl in new[] { "Beginner", "Elementary", "Intermediate", "Upper-Intermediate", "Advanced" })
+                                {
+                                    <button class="select-chip @(editedLevel == lvl ? "active" : "")" @onclick="() => editedLevel = lvl">@lvl</button>
+                                }
+                            </div>
+
+                            <div class="hero-form-actions">
+                                <button class="name-save-btn" @onclick="SaveProfile"><i class="bi bi-check-lg"></i> Lưu</button>
+                                <button class="name-cancel-btn" @onclick="() => editingProfile = false"><i class="bi bi-x-lg"></i> Hủy</button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="display-name-row">
+                            <h1 class="hero-display-name">@(string.IsNullOrWhiteSpace(profile.FullName) ? (string.IsNullOrWhiteSpace(profile.DisplayName) ? username : profile.DisplayName) : profile.FullName)</h1>
+                            <button class="name-edit-btn" @onclick="BeginEditProfile" title="Sửa thông tin">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                        </div>
+                        <div class="hero-username-row">
+                            <span class="hero-username" title="Username — dùng để chia sẻ profile & kết bạn">@($"@{username}")</span>
+                            <button class="username-copy-btn" @onclick="CopyUsername" title="Sao chép username">
+                                <i class="bi @(copiedUsername ? "bi-check-lg" : "bi-copy")"></i>
+                            </button>
+                            @if (copiedUsername)
+                            {
+                                <span class="copy-feedback">Đã sao chép!</span>
+                            }
+                            <button class="username-share-btn" @onclick="CopyProfileLink" title="Sao chép link profile">
+                                <i class="bi bi-link-45deg"></i> Chia sẻ
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(profile.Bio))
+                        {
+                            <p class="hero-bio">@profile.Bio</p>
+                        }
+                        <div class="hero-meta-tags">
+                            <span class="meta-tag">🎯 @profile.TargetExam @profile.TargetScore</span>
+                            <span class="meta-tag">📊 @profile.StudyLevel</span>
+                        </div>
+                    }
+                </div>
+
+                @* Quick Stats *@
+                <div class="hero-stats">
+                    <div class="hero-stat">
+                        <span class="stat-icon">🔥</span>
+                        <span class="stat-val">@currentStreak</span>
+                        <span class="stat-label">Streak</span>
+                    </div>
+                    <div class="hero-stat">
+                        <span class="stat-icon">📝</span>
+                        <span class="stat-val">@totalSubmissions</span>
+                        <span class="stat-label">Bài đã làm</span>
+                    </div>
+                    <div class="hero-stat">
+                        <span class="stat-icon">🏆</span>
+                        <span class="stat-val">@bestStreak</span>
+                        <span class="stat-label">Best Streak</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* ── AVATAR PICKER PANEL ── *@
+        @if (editingAvatar)
+        {
+            <div class="avatar-picker-overlay" @onclick="CloseAvatarPicker">
+                <div class="avatar-picker-panel" @onclick:stopPropagation>
+                    <h3 class="picker-title">🎨 Tuỳ chỉnh Avatar</h3>
+
+                    <div class="picker-section">
+                        <p class="picker-label">Chọn Emoji</p>
+                        <div class="emoji-grid">
+                            @foreach (var emoji in AvatarEmojis)
+                            {
+                                <button class="emoji-btn @(profile.AvatarEmoji == emoji ? "selected" : "")"
+                                        @onclick="() => SelectEmoji(emoji)">@emoji</button>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="picker-section">
+                        <p class="picker-label">Chọn màu nền</p>
+                        <div class="color-grid">
+                            @foreach (var color in AvatarColors)
+                            {
+                                <button class="color-swatch @(profile.AvatarColor == color ? "selected" : "")"
+                                        style="background: @color;"
+                                        @onclick="() => SelectColor(color)">
+                                    @if (profile.AvatarColor == color)
+                                    {
+                                        <i class="bi bi-check-lg"></i>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <button class="picker-done-btn" @onclick="CloseAvatarPicker">✓ Xong</button>
+                </div>
+            </div>
+        }
+
+        @* ── MAIN CONTENT GRID ── *@
+        <div class="profile-grid">
+
+            @* LEFT COLUMN *@
+            <div class="profile-col-left">
+
+                @* Streak Calendar Card *@
+                <div class="profile-card">
+                    <div class="card-header">
+                        <span class="card-icon">🔥</span>
+                        <h2 class="card-title">Chuỗi ngày học</h2>
+                    </div>
+                    <div class="streak-stats-row">
+                        <div class="streak-stat-item">
+                            <span class="streak-stat-num fire">@currentStreak</span>
+                            <span class="streak-stat-lbl">Hiện tại</span>
+                        </div>
+                        <div class="streak-stat-item">
+                            <span class="streak-stat-num gold">@bestStreak</span>
+                            <span class="streak-stat-lbl">Kỷ lục</span>
+                        </div>
+                        <div class="streak-stat-item">
+                            <span class="streak-stat-num blue">@activeDays.Count</span>
+                            <span class="streak-stat-lbl">Tổng ngày</span>
+                        </div>
+                    </div>
+                    <div class="streak-calendar">
+                        @for (int w = 0; w < CalendarWeeks; w++)
+                        {
+                            <div class="cal-week">
+                                @for (int d = 0; d < 7; d++)
+                                {
+                                    var date = CalendarStart.AddDays(w * 7 + d);
+                                    var isActive = activeDays.Contains(date.Date);
+                                    var isToday = date.Date == DateTime.Today;
+                                    var isFuture = date.Date > DateTime.Today;
+                                    var dateStr = date.ToString("dd/MM/yyyy");
+                                    var titleText = isActive ? $"{dateStr} ✓" : dateStr;
+                                    <div class="cal-day @(isActive ? "active" : "") @(isToday ? "today" : "") @(isFuture ? "future" : "")"
+                                         title="@titleText"></div>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="cal-legend">
+                        <span class="cal-legend-cell"></span>
+                        <span class="cal-legend-text">Chưa học</span>
+                        <span class="cal-legend-cell active"></span>
+                        <span class="cal-legend-text">Đã học</span>
+                    </div>
+                </div>
+
+            </div>
+
+            @* RIGHT COLUMN *@
+            <div class="profile-col-right">
+
+                @* Score Summary Cards *@
+                <div class="score-summary-grid">
+                    <div class="score-card toeic-card">
+                        <div class="score-card-icon">🎧</div>
+                        <div class="score-card-info">
+                            <p class="score-card-label">TOEIC tốt nhất</p>
+                            <p class="score-card-val">@(bestToeicScore > 0 ? bestToeicScore.ToString() : "—")<span class="score-card-unit">@(bestToeicScore > 0 ? "/990" : "")</span></p>
+                        </div>
+                    </div>
+                    <div class="score-card ielts-card">
+                        <div class="score-card-icon">📚</div>
+                        <div class="score-card-info">
+                            <p class="score-card-label">IELTS tốt nhất</p>
+                            <p class="score-card-val">@(bestIeltsScore > 0 ? bestIeltsScore.ToString("0.0") : "—")</p>
+                        </div>
+                    </div>
+                    <div class="score-card done-card">
+                        <div class="score-card-icon">✅</div>
+                        <div class="score-card-info">
+                            <p class="score-card-label">Bài hoàn thành</p>
+                            <p class="score-card-val">@totalSubmissions</p>
+                        </div>
+                    </div>
+                    <div class="score-card streak-card">
+                        <div class="score-card-icon">🔥</div>
+                        <div class="score-card-info">
+                            <p class="score-card-label">Streak hiện tại</p>
+                            <p class="score-card-val">@currentStreak<span class="score-card-unit"> ngày</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                @* Recent Activity *@
+                <div class="profile-card">
+                    <div class="card-header">
+                        <span class="card-icon">📋</span>
+                        <h2 class="card-title">Lịch sử làm bài gần đây</h2>
+                    </div>
+
+                    @if (recentSubmissions.Count == 0)
+                    {
+                        <div class="empty-activity">
+                            <div class="empty-icon">📝</div>
+                            <p>Chưa có bài thi nào. <a href="/toeic" class="start-link">Bắt đầu ngay!</a></p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="activity-list">
+                            @foreach (var sub in recentSubmissions)
+                            {
+                                <div class="activity-item">
+                                    <div class="activity-icon skill-@sub.Skill.ToLower()">
+                                        @GetSkillIcon(sub.Skill)
+                                    </div>
+                                    <div class="activity-info">
+                                        <p class="activity-title">@sub.ExamTitle</p>
+                                        <p class="activity-meta">@GetSkillLabel(sub.Skill) · @sub.SubmittedAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm")</p>
+                                    </div>
+                                    <div class="activity-score">
+                                        @if (sub.TotalScore.HasValue)
+                                        {
+                                            <span class="score-badge toeic-badge">@sub.TotalScore/990</span>
+                                        }
+                                        else if (sub.Score != null)
+                                        {
+                                            <span class="score-badge ielts-badge">@sub.Score.Overall.ToString("0.0")</span>
+                                        }
+                                        else if (sub.CorrectCount.HasValue && sub.TotalQuestions.HasValue)
+                                        {
+                                            <span class="score-badge generic-badge">@sub.CorrectCount/@sub.TotalQuestions</span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @* Skill Progress *@
+                <div class="profile-card">
+                    <div class="card-header">
+                        <span class="card-icon">📈</span>
+                        <h2 class="card-title">Phân bổ kỹ năng</h2>
+                    </div>
+                    <div class="skill-progress-list">
+                        @foreach (var item in SkillProgress)
+                        {
+                            var pct = totalSubmissions == 0 ? 0 : Math.Min((int)((double)item.Count / totalSubmissions * 100), 100);
+                            <div class="skill-progress-item">
+                                <div class="skill-progress-header">
+                                    <span class="skill-icon">@item.Icon</span>
+                                    <span class="skill-name">@item.Skill</span>
+                                    <span class="skill-count">@item.Count bài</span>
+                                </div>
+                                <div class="skill-bar-track">
+                                    <div class="skill-bar-fill" style="width: @pct%; background: @item.Color;"></div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private UserProfile profile = new();
+    private bool isLoading = true;
+
+    private string username = "User";
+    private int currentStreak;
+    private int bestStreak;
+    private HashSet<DateTime> activeDays = new();
+    private List<IeltsSubmissionRecord> recentSubmissions = new();
+    private int totalSubmissions;
+    private int bestToeicScore;
+    private double bestIeltsScore;
+
+    // Editing states
+    private bool editingAvatar;
+    private bool editingProfile;
+    private string editedFullName = "";
+    private string editedBio = "";
+    private string editedTarget = "TOEIC";
+    private string editedScore = "";
+    private string editedLevel = "Intermediate";
+
+    // Toast notification
+    private bool showToast;
+    private string toastMessage = "";
+    private bool copiedUsername;
+
+    // Calendar
+    private const int CalendarWeeks = 18;
+    private DateTime CalendarStart => DateTime.Today.AddDays(-(CalendarWeeks * 7 - 1));
+
+    // Avatar options
+    private static readonly string[] AvatarEmojis =
+    [
+        "🎓","🦁","🐯","🐻","🦊","🐼","🦋","🐬",
+        "🚀","⚡","🔥","💎","🌟","🎯","🏆","🎮",
+        "🌸","🍀","🌊","🦅","🧠","💡","📚","🎵"
+    ];
+
+    private static readonly string[] AvatarColors =
+    [
+        "#6c5ce7","#0984e3","#00b894","#fdcb6e","#e17055",
+        "#fd79a8","#636e72","#2d3436","#6ab04c","#eb4d4b",
+        "#7ed6df","#f0932b","#686de0","#30336b","#badc58"
+    ];
+
+    private List<(string Skill, int Count, string Color, string Icon)> SkillProgress =>
+        new()
+        {
+            ("TOEIC", recentSubmissions.Count(s => s.Skill == "Toeic"), "#6c5ce7", "🎧"),
+            ("IELTS Listening", recentSubmissions.Count(s => s.Skill == "Listening"), "#0984e3", "👂"),
+            ("IELTS Reading", recentSubmissions.Count(s => s.Skill == "Reading"), "#00b894", "📖"),
+            ("IELTS Writing", recentSubmissions.Count(s => s.Skill == "Writing"), "#fdcb6e", "✍️"),
+            ("IELTS Speaking", recentSubmissions.Count(s => s.Skill == "Speaking"), "#e17055", "🗣️"),
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated != true)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        username = authState.User.FindFirst(c => c.Type == "unique_name")?.Value
+                   ?? authState.User.Identity?.Name ?? "User";
+
+        var profileTask = ProfileSvc.GetAsync();
+        var streakTask = StreakSvc.GetCurrentStreakAsync();
+        var bestStreakTask = StreakSvc.GetBestStreakAsync();
+        var activeDaysTask = StreakSvc.GetActiveDaysAsync();
+        var submissionsTask = Submissions.GetAllAsync();
+
+        await Task.WhenAll(profileTask, streakTask, bestStreakTask, activeDaysTask, submissionsTask);
+
+        profile = profileTask.Result;
+        currentStreak = streakTask.Result;
+        bestStreak = bestStreakTask.Result;
+        activeDays = activeDaysTask.Result;
+
+        var all = submissionsTask.Result;
+        totalSubmissions = all.Count;
+        recentSubmissions = all.Take(8).ToList();
+
+        bestToeicScore = all.Where(s => s.TotalScore.HasValue)
+                            .Select(s => s.TotalScore!.Value)
+                            .DefaultIfEmpty(0).Max();
+        bestIeltsScore = all.Where(s => s.Score != null)
+                            .Select(s => s.Score!.Overall)
+                            .DefaultIfEmpty(0).Max();
+
+        isLoading = false;
+    }
+
+    private void BeginEditProfile()
+    {
+        editedFullName = profile.FullName;
+        editedBio = profile.Bio;
+        editedTarget = profile.TargetExam;
+        editedScore = profile.TargetScore;
+        editedLevel = profile.StudyLevel;
+        editingProfile = true;
+    }
+
+    private async Task SaveProfile()
+    {
+        profile.FullName = editedFullName.Trim();
+        profile.Bio = editedBio.Trim();
+        profile.TargetExam = editedTarget;
+        profile.TargetScore = editedScore.Trim();
+        profile.StudyLevel = editedLevel;
+        await ProfileSvc.SaveAsync(profile);
+        editingProfile = false;
+
+        if (!string.IsNullOrWhiteSpace(profile.FullName))
+        {
+            toastMessage = $"Xin chào, {profile.FullName}!";
+            showToast = true;
+            StateHasChanged();
+            await Task.Delay(3000);
+            showToast = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SelectEmoji(string emoji)
+    {
+        profile.AvatarEmoji = emoji;
+        await ProfileSvc.SaveAsync(profile);
+    }
+
+    private async Task SelectColor(string color)
+    {
+        profile.AvatarColor = color;
+        await ProfileSvc.SaveAsync(profile);
+    }
+
+    private async Task CloseAvatarPicker()
+    {
+        editingAvatar = false;
+        await ProfileSvc.SaveAsync(profile);
+    }
+
+    private async Task CopyUsername()
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", username); } catch { }
+        copiedUsername = true;
+        StateHasChanged();
+        await Task.Delay(1800);
+        copiedUsername = false;
+        StateHasChanged();
+    }
+
+    private async Task CopyProfileLink()
+    {
+        var link = $"{Nav.BaseUri.TrimEnd('/')}/u/{Uri.EscapeDataString(username)}";
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", link); } catch { }
+        toastMessage = "Đã sao chép link profile!";
+        showToast = true;
+        StateHasChanged();
+        await Task.Delay(2500);
+        showToast = false;
+        StateHasChanged();
+    }
+
+
+    private static string GetSkillIcon(string skill) => skill switch
+    {
+        "Toeic" => "🎧",
+        "Listening" => "👂",
+        "Reading" => "📖",
+        "Writing" => "✍️",
+        "Speaking" => "🗣️",
+        _ => "📝"
+    };
+
+    private static string GetSkillLabel(string skill) => skill switch
+    {
+        "Toeic" => "TOEIC",
+        "Listening" => "IELTS Listening",
+        "Reading" => "IELTS Reading",
+        "Writing" => "IELTS Writing",
+        "Speaking" => "IELTS Speaking",
+        _ => skill
+    };
+}

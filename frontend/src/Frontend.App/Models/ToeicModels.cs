@@ -59,6 +59,8 @@ public class ToeicQuestion
     public List<ToeicOption> Options { get; set; } = new();
     public int CorrectOptionId { get; set; }
     public int? SelectedOptionId { get; set; }
+    /// <summary>Cờ đánh dấu câu hỏi (chỉ dùng ở part đọc 5-7, không lưu trong JSON đề).</summary>
+    public bool IsFlagged { get; set; }
 }
 
 /// <summary>
@@ -71,4 +73,26 @@ public class ToeicOption
     public string Label { get; set; } = "";
     /// <summary>Nội dung đáp án (Part 5-7); để trống với Part 1-4 vì đọc từ audio</summary>
     public string Text { get; set; } = "";
+}
+
+/// <summary>
+/// Một từ vựng TOEIC trong bộ flashcard
+/// </summary>
+public class ToeicVocabItem
+{
+    public int Id { get; set; }
+    public string Word { get; set; } = "";
+    public string Ipa { get; set; } = "";
+    public string Meaning { get; set; } = "";
+    public string Example { get; set; } = "";
+    public string Topic { get; set; } = "";
+}
+
+/// <summary>
+/// Trạng thái học flashcard (lưu localStorage)
+/// </summary>
+public class ToeicFlashcardState
+{
+    public List<int> Learned { get; set; } = new();
+    public List<int> Again { get; set; } = new();
 }

@@ -7,9 +7,9 @@ namespace Frontend.App.Services;
 
 public class RegisterRequest
 {
-    [Required(ErrorMessage = "Vui lòng nhập tài khoản.")]
-    [StringLength(15, MinimumLength = 6, ErrorMessage = "Tài khoản phải từ 6 đến 15 ký tự.")]
-    public string Username { get; set; } = string.Empty;
+    [Required(ErrorMessage = "Vui lòng nhập họ và tên.")]
+    [StringLength(50, MinimumLength = 2, ErrorMessage = "Họ và tên phải từ 2 đến 50 ký tự.")]
+    public string FullName { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập email.")]
     [EmailAddress(ErrorMessage = "Email không đúng định dạng.")]
@@ -23,14 +23,18 @@ public class RegisterRequest
 
 public class LoginRequest
 {
-    public string Username { get; set; } = string.Empty;
+    [Required(ErrorMessage = "Vui lòng nhập email.")]
+    [EmailAddress(ErrorMessage = "Email không đúng định dạng.")]
+    public string Email { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng nhập mật khẩu.")]
     public string Password { get; set; } = string.Empty;
 }
 
 public class AuthResponse
 {
     public string Token { get; set; } = string.Empty;
-    public string Username { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
 }
 

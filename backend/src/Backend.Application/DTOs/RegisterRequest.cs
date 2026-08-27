@@ -1,3 +1,3 @@
 namespace Backend.Application.DTOs;
 
-public record RegisterRequest(string Username, string Email, string Password);
+public record RegisterRequest(string FullName, string Email, string Password);

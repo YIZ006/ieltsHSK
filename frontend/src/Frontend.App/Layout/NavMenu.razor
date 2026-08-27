@@ -1,5 +1,9 @@
 @inject AuthService AuthService
 @inject NavigationManager NavigationManager
+@inject ExamHeaderService ExamHeader
+@inject ProfileService ProfileSvc
+@inject StreakService StreakSvc
+@implements IDisposable
 
 <nav class="navbar">
     <div class="navbar-brand">
@@ -19,16 +23,81 @@
             </li>
         </ul>
 
-        <ul class="navbar-nav ms-auto auth-nav">
+        <div class="exam-toolbar exam-toolbar-desktop">
+            @if (ExamHeader.Visible)
+            {
+                @if (!string.IsNullOrEmpty(ExamHeader.SecondaryButtonText))
+                {
+                    <button class="exam-secondary-btn" @onclick="() => ExamHeader.RequestSecondaryAction()" @onclick:stopPropagation>@ExamHeader.SecondaryButtonText</button>
+                }
+                <button class="exam-submit-btn" @onclick="() => ExamHeader.RequestSubmit()" @onclick:stopPropagation>NỘP BÀI</button>
+                <span class="exam-timer-chip @(ExamHeader.TimerUrgent ? "urgent" : "")">@ExamHeader.TimerText</span>
+            }
+        </div>
+
+        <ul class="navbar-nav auth-nav">
             <AuthorizeView>
                 <Authorized>
-                    <li class="nav-item">
-                        <span class="nav-link welcome-text">Xin chào, @(context.User?.FindFirst(c => c.Type == "unique_name")?.Value ?? context.User?.Identity?.Name ?? "User")!</span>
-                    </li>
-                    <li class="nav-item">
-                        <button class="nav-link btn-logout" @onclick="Logout" @onclick:stopPropagation>
-                            <i class="bi bi-box-arrow-right"></i> Logout
+                    <li class="nav-item streak-menu">
+                        <button class="streak-btn" @onclick="ToggleStreakMenu" @onclick:stopPropagation title="Xem chuỗi học tập">
+                            <span class="streak-chip">🔥 @currentStreak</span>
                         </button>
+                        @if (showStreakMenu)
+                        {
+                            <div class="user-backdrop" @onclick="() => showStreakMenu = false" @onclick:stopPropagation></div>
+                            <div class="streak-popover">
+                                <div class="streak-popover-header">
+                                    <span class="streak-popover-icon">🔥</span>
+                                    <span class="streak-popover-title">Chuỗi học tập</span>
+                                </div>
+                                <div class="streak-popover-body">
+                                    <div class="streak-stat-row">
+                                        <span class="streak-stat-label">Chuỗi hiện tại</span>
+                                        <span class="streak-stat-value streak-current">@currentStreak ngày</span>
+                                    </div>
+                                    <div class="streak-stat-row">
+                                        <span class="streak-stat-label">Chuỗi dài nhất</span>
+                                        <span class="streak-stat-value">@bestStreak ngày</span>
+                                    </div>
+                                    <div class="streak-popover-hint">
+                                        @if (currentStreak == 0)
+                                        {
+                                            <span>Hãy bắt đầu học ngay hôm nay để tạo chuỗi!</span>
+                                        }
+                                        else if (currentStreak == 1)
+                                        {
+                                            <span>Tuyệt vời! Duy trì mỗi ngày nhé 💪</span>
+                                        }
+                                        else if (currentStreak < 7)
+                                        {
+                                            <span>Tiếp tục nhé, sắp đạt mốc 7 ngày! 🎯</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Xuất sắc! Bạn đang rất kiên trì 🌟</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </li>
+                    <li class="nav-item user-menu">
+                        <button class="nav-link welcome-toggle" @onclick="ToggleUserMenu" @onclick:stopPropagation>
+                            Xin chào, @welcomeName!
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                        @if (showUserMenu)
+                        {
+                            <div class="user-backdrop" @onclick="() => showUserMenu = false" @onclick:stopPropagation></div>
+                            <div class="user-dropdown">
+                                <a class="dropdown-item" href="/profile" @onclick="() => showUserMenu = false" @onclick:stopPropagation>
+                                    <i class="bi bi-person-circle"></i> Hồ sơ cá nhân
+                                </a>
+                                <button class="dropdown-item btn-logout" @onclick="Logout" @onclick:stopPropagation>
+                                    <i class="bi bi-box-arrow-right"></i> Logout
+                                </button>
+                            </div>
+                        }
                     </li>
                 </Authorized>
                 <NotAuthorized>
@@ -46,6 +115,18 @@
             </AuthorizeView>
         </ul>
     </div>
+
+    <div class="exam-toolbar exam-toolbar-mobile">
+        @if (ExamHeader.Visible)
+        {
+            @if (!string.IsNullOrEmpty(ExamHeader.SecondaryButtonText))
+            {
+                <button class="exam-secondary-btn" @onclick="() => ExamHeader.RequestSecondaryAction()" @onclick:stopPropagation>@ExamHeader.SecondaryButtonText</button>
+            }
+            <button class="exam-submit-btn" @onclick="() => ExamHeader.RequestSubmit()">NỘP BÀI</button>
+            <span class="exam-timer-chip @(ExamHeader.TimerUrgent ? "urgent" : "")">@ExamHeader.TimerText</span>
+        }
+    </div>
 </nav>
 
 @code {
@@ -56,16 +137,59 @@
     public EventCallback OnShowRegister { get; set; }
 
     private bool collapseNavMenu = true;
+    private bool showUserMenu = false;
+    private bool showStreakMenu = false;
+    private string welcomeName = "User";
+    private int currentStreak;
+    private int bestStreak;
 
     private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var profile = await ProfileSvc.GetAsync();
+        if (!string.IsNullOrWhiteSpace(profile.FullName))
+        {
+            welcomeName = profile.FullName;
+        }
+        else if (!string.IsNullOrWhiteSpace(profile.DisplayName))
+        {
+            welcomeName = profile.DisplayName;
+        }
+
+        currentStreak = await StreakSvc.GetCurrentStreakAsync();
+        bestStreak = await StreakSvc.GetBestStreakAsync();
+
+        ExamHeader.OnChange += OnExamHeaderChanged;
+    }
 
     private void ToggleNavMenu()
     {
         collapseNavMenu = !collapseNavMenu;
     }
 
+    private void ToggleUserMenu()
+    {
+        showUserMenu = !showUserMenu;
+        if (showUserMenu) showStreakMenu = false;
+    }
+
+    private void ToggleStreakMenu()
+    {
+        showStreakMenu = !showStreakMenu;
+        if (showStreakMenu) showUserMenu = false;
+    }
+
+    private void OnExamHeaderChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        ExamHeader.OnChange -= OnExamHeaderChanged;
+    }
+
     private async Task Logout()
     {
+        showUserMenu = false;
         await AuthService.LogoutAsync();
         NavigationManager.NavigateTo("/", true);
     }
