@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +15,7 @@ const string frontendHttpUrl = "http://localhost:5102";
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpClient();
+builder.Services.AddMemoryCache();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
@@ -188,7 +190,7 @@ app.MapPost("/api/listen-videos/submit", async (Backend.Application.DTOs.ListenV
         duration = info.Duration.ToString(@"mm\:ss");
         thumbnail = info.ThumbnailUrl;
     }
-    catch (Exception ex)
+    catch (Exception)
     {
         // Nếu không lấy được info, fallback lại parse ID cơ bản
         var videoId = "";
@@ -434,7 +436,7 @@ app.MapPost("/api/admin/listen-videos/import-excel", async (Microsoft.AspNetCore
                 safeTitle = System.Text.RegularExpressions.Regex.Replace(safeTitle, @"\s+", "-").ToLower();
                 if (safeTitle.Length > 30) safeTitle = safeTitle.Substring(0, 30);
                 
-                var fileName = $"listen-videos/transcript_{Guid.NewGuid().ToString().Substring(0, 4)}_{safeTitle}.json";
+                var fileName = $"listen-videos/transcript_{safeTitle}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json";
                 r2Url = await r2Storage.UploadFileAsync(jsonStream, fileName, "application/json", cancellationToken);
             }
 
@@ -599,8 +601,7 @@ app.MapPost("/api/ielts/speak-along/upload-file", async (
         return Results.BadRequest("No file uploaded.");
 
     var cleanPart = (part ?? "100sentences").ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
-    var fileId = Guid.NewGuid().ToString("N")[..8];
-    var fileName = $"ielts/speak-along/{cleanPart}_{fileId}.json";
+    var fileName = $"ielts/speak-along/{cleanPart}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json";
 
     using var stream = file.OpenReadStream();
     string jsonUrl;
@@ -662,8 +663,7 @@ app.MapPost("/api/ielts/audio-shadowing/save", async (
 {
     var json = payload.GetRawText();
     var jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
-    var fileId = Guid.NewGuid().ToString("N")[..8];
-    var fileName = $"ielts/audio-shadowing/catalog_{fileId}.json";
+    var fileName = $"ielts/audio-shadowing/catalog_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json";
 
     string jsonUrl;
     try
@@ -822,7 +822,8 @@ app.MapPost("/api/mock-tests", async (Backend.Application.DTOs.CreateMockTestReq
         ReadingAnswerUrl = request.ReadingAnswerUrl,
         WritingAnswerUrl = request.WritingAnswerUrl,
         SpeakingAnswerUrl = request.SpeakingAnswerUrl,
-        ToeicUrl = request.ToeicUrl
+        ToeicUrl = request.ToeicUrl,
+        HskUrl = request.HskUrl
     };
     
     dbContext.MockTests.Add(newTest);
@@ -847,6 +848,7 @@ app.MapPut("/api/mock-tests/{id}", async (int id, Backend.Application.DTOs.Creat
     test.WritingAnswerUrl = request.WritingAnswerUrl;
     test.SpeakingAnswerUrl = request.SpeakingAnswerUrl;
     test.ToeicUrl = request.ToeicUrl;
+    test.HskUrl = request.HskUrl;
 
     await dbContext.SaveChangesAsync(cancellationToken);
     return Results.Ok();
@@ -878,7 +880,9 @@ app.MapPost("/api/mock-tests/upload", async (Microsoft.AspNetCore.Http.IFormFile
     if (file == null || file.Length == 0)
         return Results.BadRequest("No file uploaded.");
         
-    var fileName = $"{Guid.NewGuid()}_{file.FileName}";
+    var safeFileName = System.Text.RegularExpressions.Regex.Replace(Path.GetFileNameWithoutExtension(file.FileName), @"[^\w\-]", "_");
+    var fileExt = Path.GetExtension(file.FileName);
+    var fileName = $"{safeFileName}_{DateTime.UtcNow:yyyyMMdd_HHmmss}{fileExt}";
     using var stream = file.OpenReadStream();
     
     try
@@ -891,6 +895,97 @@ app.MapPost("/api/mock-tests/upload", async (Microsoft.AspNetCore.Http.IFormFile
         return Results.BadRequest(ex.Message);
     }
 }).DisableAntiforgery(); // Disable Anti-forgery for API upload if needed
+
+// HSK MOCK TESTS API
+app.MapGet("/api/hsk-mock-tests", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var tests = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.HskMockTests.Where(m => m.IsActive).OrderByDescending(m => m.CreatedAt), 
+        cancellationToken);
+        
+    var dtos = tests.Select(m => new Backend.Application.DTOs.MockTestDto
+    {
+        Id = m.Id,
+        CollectionName = m.CollectionName,
+        Title = m.Title,
+        ListeningUrl = m.ListeningUrl,
+        ReadingUrl = m.ReadingUrl,
+        WritingUrl = m.WritingUrl,
+        SpeakingUrl = m.SpeakingUrl,
+        ListeningAnswerUrl = m.ListeningAnswerUrl,
+        ReadingAnswerUrl = m.ReadingAnswerUrl,
+        WritingAnswerUrl = m.WritingAnswerUrl,
+        SpeakingAnswerUrl = m.SpeakingAnswerUrl,
+        HskUrl = m.HskUrl
+    }).ToList();
+    
+    return Results.Ok(dtos);
+});
+
+app.MapPost("/api/hsk-mock-tests", async (Backend.Application.DTOs.CreateMockTestRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var newTest = new Backend.Domain.Entities.HskMockTest
+    {
+        CollectionName = request.CollectionName,
+        Title = request.Title,
+        ListeningUrl = request.ListeningUrl,
+        ReadingUrl = request.ReadingUrl,
+        WritingUrl = request.WritingUrl,
+        SpeakingUrl = request.SpeakingUrl,
+        ListeningAnswerUrl = request.ListeningAnswerUrl,
+        ReadingAnswerUrl = request.ReadingAnswerUrl,
+        WritingAnswerUrl = request.WritingAnswerUrl,
+        SpeakingAnswerUrl = request.SpeakingAnswerUrl,
+        HskUrl = request.HskUrl
+    };
+    
+    dbContext.HskMockTests.Add(newTest);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    
+    return Results.Ok(new { Id = newTest.Id });
+});
+
+app.MapPut("/api/hsk-mock-tests/{id}", async (int id, Backend.Application.DTOs.CreateMockTestRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var test = await dbContext.HskMockTests.FindAsync(new object[] { id }, cancellationToken);
+    if (test == null) return Results.NotFound();
+
+    test.CollectionName = request.CollectionName;
+    test.Title = request.Title;
+    test.ListeningUrl = request.ListeningUrl;
+    test.ReadingUrl = request.ReadingUrl;
+    test.WritingUrl = request.WritingUrl;
+    test.SpeakingUrl = request.SpeakingUrl;
+    test.ListeningAnswerUrl = request.ListeningAnswerUrl;
+    test.ReadingAnswerUrl = request.ReadingAnswerUrl;
+    test.WritingAnswerUrl = request.WritingAnswerUrl;
+    test.SpeakingAnswerUrl = request.SpeakingAnswerUrl;
+    test.HskUrl = request.HskUrl;
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok();
+});
+
+app.MapDelete("/api/hsk-mock-tests/{id}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Application.Abstractions.IR2StorageService r2Service, CancellationToken cancellationToken) =>
+{
+    var test = await dbContext.HskMockTests.FindAsync(new object[] { id }, cancellationToken);
+    if (test == null) return Results.NotFound();
+
+    // Delete associated files from Cloudflare R2 if they exist
+    if (!string.IsNullOrEmpty(test.ListeningUrl)) await r2Service.DeleteFileAsync(test.ListeningUrl, cancellationToken);
+    if (!string.IsNullOrEmpty(test.ReadingUrl)) await r2Service.DeleteFileAsync(test.ReadingUrl, cancellationToken);
+    if (!string.IsNullOrEmpty(test.WritingUrl)) await r2Service.DeleteFileAsync(test.WritingUrl, cancellationToken);
+    if (!string.IsNullOrEmpty(test.SpeakingUrl)) await r2Service.DeleteFileAsync(test.SpeakingUrl, cancellationToken);
+    if (!string.IsNullOrEmpty(test.ListeningAnswerUrl)) await r2Service.DeleteFileAsync(test.ListeningAnswerUrl, cancellationToken);
+    if (!string.IsNullOrEmpty(test.ReadingAnswerUrl)) await r2Service.DeleteFileAsync(test.ReadingAnswerUrl, cancellationToken);
+    if (!string.IsNullOrEmpty(test.WritingAnswerUrl)) await r2Service.DeleteFileAsync(test.WritingAnswerUrl, cancellationToken);
+    if (!string.IsNullOrEmpty(test.SpeakingAnswerUrl)) await r2Service.DeleteFileAsync(test.SpeakingAnswerUrl, cancellationToken);
+    if (!string.IsNullOrEmpty(test.HskUrl)) await r2Service.DeleteFileAsync(test.HskUrl, cancellationToken);
+
+    dbContext.HskMockTests.Remove(test);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok();
+});
 
 app.MapPost("/api/test-submissions", async (Backend.Application.DTOs.CreateTestSubmissionRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
@@ -947,8 +1042,9 @@ app.MapPost("/api/toeic/save-exam", async (
     var json = System.Text.Json.JsonSerializer.Serialize(req.ExamData,
         new System.Text.Json.JsonSerializerOptions { WriteIndented = false });
     var jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
-    var fileId = Guid.NewGuid().ToString("N");
-    var fileName = $"toeic/exams/{fileId}.json";
+    var safeCollection = System.Text.RegularExpressions.Regex.Replace(req.CollectionName, @"[^\w\-]", "_");
+    var safeTitle = System.Text.RegularExpressions.Regex.Replace(req.Title, @"[^\w\-]", "_");
+    var fileName = $"toeic/exams/{safeCollection}_{safeTitle}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json";
 
     string jsonUrl;
     try
@@ -961,9 +1057,10 @@ app.MapPost("/api/toeic/save-exam", async (
         // Fallback: lưu local nếu R2 lỗi (dev only)
         var dir = Path.Combine("wwwroot", "exports");
         Directory.CreateDirectory(dir);
-        var localPath = Path.Combine(dir, $"{fileId}.json");
+        var localFileName = Path.GetFileName(fileName);
+        var localPath = Path.Combine(dir, localFileName);
         await File.WriteAllBytesAsync(localPath, jsonBytes, cancellationToken);
-        jsonUrl = $"/exports/{fileId}.json";
+        jsonUrl = $"/exports/{localFileName}";
     }
 
     // Cập nhật hoặc tạo mới MockTest
@@ -1196,9 +1293,8 @@ app.MapPost("/api/admin/stories/upload-json", async (
     if (file == null || file.Length == 0)
         return Results.BadRequest(new { Message = "File không hợp lệ hoặc trống." });
 
-    var fileId = Guid.NewGuid().ToString("N").Substring(0, 8);
     var safeFileName = System.Text.RegularExpressions.Regex.Replace(file.FileName, @"[^a-zA-Z0-9_\.-]", "_");
-    var fileName = $"stories/{fileId}_{safeFileName}";
+    var fileName = $"stories/{safeFileName}";
 
     string jsonContent = "";
     using (var reader = new StreamReader(file.OpenReadStream()))
@@ -1217,9 +1313,9 @@ app.MapPost("/api/admin/stories/upload-json", async (
         // Fallback: lưu local nếu R2 lỗi / dev
         var dir = Path.Combine("wwwroot", "sample-data", "stories");
         Directory.CreateDirectory(dir);
-        var localPath = Path.Combine(dir, $"{fileId}_{safeFileName}");
+        var localPath = Path.Combine(dir, safeFileName);
         await File.WriteAllTextAsync(localPath, jsonContent, cancellationToken);
-        r2Url = $"/sample-data/stories/{fileId}_{safeFileName}";
+        r2Url = $"/sample-data/stories/{safeFileName}";
     }
 
     return Results.Ok(new { Url = r2Url, JsonContent = jsonContent, Message = "Tải file lên Cloudflare R2 thành công!" });
@@ -1271,7 +1367,7 @@ app.MapPost("/api/admin/stories", async (
             var fullJson = System.Text.Json.JsonSerializer.Serialize(exportObj, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
             var jsonBytes = System.Text.Encoding.UTF8.GetBytes(fullJson);
             using var ms = new MemoryStream(jsonBytes);
-            jsonUrl = await r2Service.UploadFileAsync(ms, $"stories/{slug}_{Guid.NewGuid().ToString("N").Substring(0, 6)}.json", "application/json", cancellationToken);
+            jsonUrl = await r2Service.UploadFileAsync(ms, $"stories/{slug}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json", "application/json", cancellationToken);
         }
         catch { }
     }
@@ -1346,7 +1442,7 @@ app.MapPut("/api/admin/stories/{id}", async (
         var jsonBytes = System.Text.Encoding.UTF8.GetBytes(fullJson);
         using var ms = new MemoryStream(jsonBytes);
         var oldJsonUrl = story.JsonUrl;
-        jsonUrl = await r2Service.UploadFileAsync(ms, $"stories/{story.Slug}_{Guid.NewGuid().ToString("N").Substring(0, 6)}.json", "application/json", cancellationToken);
+        jsonUrl = await r2Service.UploadFileAsync(ms, $"stories/{story.Slug}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json", "application/json", cancellationToken);
         if (!string.IsNullOrEmpty(oldJsonUrl) && oldJsonUrl != jsonUrl)
         {
             try { await r2Service.DeleteFileAsync(oldJsonUrl, cancellationToken); } catch { }
@@ -1566,7 +1662,7 @@ app.MapPost("/api/admin/stories/import-json", async (
             {
                 var jsonBytes = System.Text.Encoding.UTF8.GetBytes(req.JsonContent);
                 using var ms = new MemoryStream(jsonBytes);
-                jsonUrl = await r2Service.UploadFileAsync(ms, $"stories/{slug}_{Guid.NewGuid().ToString("N").Substring(0, 6)}.json", "application/json", cancellationToken);
+                jsonUrl = await r2Service.UploadFileAsync(ms, $"stories/{slug}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json", "application/json", cancellationToken);
             }
             catch { }
         }
@@ -1757,23 +1853,37 @@ app.MapPost("/api/hsk/save-exam", async (
 });
 
 // ─── IELTS: Vocabulary CRUD ───
-app.MapGet("/api/ielts/vocab", async (string? topic, string? search, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapGet("/api/ielts/vocab", async (string? topic, string? search, Backend.Infrastructure.Persistence.AppDbContext dbContext, HttpContext httpContext, CancellationToken cancellationToken) =>
 {
-    var query = dbContext.IeltsVocabularies.AsQueryable();
+    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
+    const string cacheKey = "IeltsVocabularyList";
+    var cacheOptions = new MemoryCacheEntryOptions()
+        .SetSlidingExpiration(TimeSpan.FromMinutes(5))
+        .SetAbsoluteExpiration(TimeSpan.FromMinutes(30));
+
+    var allItems = await cache.GetOrCreateAsync(cacheKey, async entry =>
+    {
+        entry.SetOptions(cacheOptions);
+        var items = await dbContext.IeltsVocabularies
+            .OrderBy(v => v.DisplayOrder).ThenBy(v => v.Id)
+            .ToListAsync(cancellationToken);
+        return items.Select(v => new
+        {
+            v.Id, v.Word, v.Phonetic, v.PartOfSpeech, v.Meaning,
+            v.Example, v.ExampleMeaning, v.Topic, v.DisplayOrder, v.IsActive, v.CreatedAt
+        }).ToList();
+    });
+
+    var query = allItems!.AsEnumerable();
     if (!string.IsNullOrEmpty(topic))
         query = query.Where(v => v.Topic == topic);
     if (!string.IsNullOrEmpty(search))
-        query = query.Where(v => v.Word.Contains(search) || v.Meaning.Contains(search));
-    var items = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
-        query.OrderBy(v => v.DisplayOrder).ThenBy(v => v.Id), cancellationToken);
-    return Results.Ok(items.Select(v => new
-    {
-        v.Id, v.Word, v.Phonetic, v.PartOfSpeech, v.Meaning,
-        v.Example, v.ExampleMeaning, v.Topic, v.DisplayOrder, v.IsActive, v.CreatedAt
-    }));
+        query = query.Where(v => v.Word.Contains(search, StringComparison.OrdinalIgnoreCase) || v.Meaning.Contains(search, StringComparison.OrdinalIgnoreCase));
+
+    return Results.Ok(query);
 });
 
-app.MapPost("/api/ielts/vocab", async (IeltsVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapPost("/api/ielts/vocab", async (IeltsVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, HttpContext httpContext, CancellationToken cancellationToken) =>
 {
     bool exists = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
         dbContext.IeltsVocabularies, v => v.Word == req.Word && v.Meaning == req.Meaning, cancellationToken);
@@ -1793,10 +1903,14 @@ app.MapPost("/api/ielts/vocab", async (IeltsVocabularyRequest req, Backend.Infra
     };
     dbContext.IeltsVocabularies.Add(vocab);
     await dbContext.SaveChangesAsync(cancellationToken);
+
+    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
+    cache.Remove("IeltsVocabularyList");
+
     return Results.Ok(new { Id = vocab.Id });
 });
 
-app.MapPut("/api/ielts/vocab/{id:int}", async (int id, IeltsVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapPut("/api/ielts/vocab/{id:int}", async (int id, IeltsVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, HttpContext httpContext, CancellationToken cancellationToken) =>
 {
     var vocab = await dbContext.IeltsVocabularies.FindAsync(new object[] { id }, cancellationToken);
     if (vocab == null) return Results.NotFound();
@@ -1815,15 +1929,23 @@ app.MapPut("/api/ielts/vocab/{id:int}", async (int id, IeltsVocabularyRequest re
     if (req.DisplayOrder.HasValue) vocab.DisplayOrder = req.DisplayOrder.Value;
     if (req.IsActive.HasValue) vocab.IsActive = req.IsActive.Value;
     await dbContext.SaveChangesAsync(cancellationToken);
+
+    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
+    cache.Remove("IeltsVocabularyList");
+
     return Results.Ok();
 });
 
-app.MapDelete("/api/ielts/vocab/{id:int}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapDelete("/api/ielts/vocab/{id:int}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, HttpContext httpContext, CancellationToken cancellationToken) =>
 {
     var vocab = await dbContext.IeltsVocabularies.FindAsync(new object[] { id }, cancellationToken);
     if (vocab == null) return Results.NotFound();
     dbContext.IeltsVocabularies.Remove(vocab);
     await dbContext.SaveChangesAsync(cancellationToken);
+
+    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
+    cache.Remove("IeltsVocabularyList");
+
     return Results.Ok();
 });
 
@@ -1912,6 +2034,13 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
         }
     }
 
+    if (rows.Count == 0)
+        return Results.BadRequest("File không có dữ liệu hợp lệ.");
+
+    // Lấy tất cả từ vựng hiện có trong DB để kiểm tra tồn tại
+    var existingVocabs = await dbContext.IeltsVocabularies.ToListAsync(cancellationToken);
+    var existingDict = existingVocabs.ToDictionary(v => $"{v.Word}|{v.Meaning}", v => v, StringComparer.OrdinalIgnoreCase);
+
     int success = 0, fail = 0, duplicate = 0, updated = 0;
     var errors = new List<string>();
     var jsonItems = new List<object>();
@@ -1926,7 +2055,10 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
             var meaning = cells[3];
             if (string.IsNullOrEmpty(word) || string.IsNullOrEmpty(meaning)) continue;
 
-            jsonItems.Add(new
+            var key = $"{word}|{meaning}";
+            if (!seenInFile.Add(key)) { duplicate++; continue; }
+
+            var jsonItem = new
             {
                 word,
                 phonetic = HskVocabCsvParser.NullIfEmpty(cells[1]),
@@ -1936,25 +2068,38 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
                 exampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]),
                 topic = HskVocabCsvParser.NullIfEmpty(cells[6]),
                 displayOrder = int.TryParse(cells[7], out int ordVal) ? ordVal : 0
-            });
+            };
 
-            var dedupeKey = $"{word}|{meaning}".ToLowerInvariant();
-            if (!seenInFile.Add(dedupeKey)) { duplicate++; continue; }
-
-            var existing = await dbContext.IeltsVocabularies.FirstOrDefaultAsync(
-                v => v.Word == word && v.Meaning == meaning, cancellationToken);
-
-            if (existing != null)
+            if (existingDict.TryGetValue(key, out var existing))
             {
                 if (mode == "upsert")
                 {
-                    existing.Phonetic = HskVocabCsvParser.NullIfEmpty(cells[1]);
-                    existing.PartOfSpeech = HskVocabCsvParser.NullIfEmpty(cells[2]);
-                    existing.Example = HskVocabCsvParser.NullIfEmpty(cells[4]);
-                    existing.ExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]);
-                    existing.Topic = HskVocabCsvParser.NullIfEmpty(cells[6]);
-                    if (int.TryParse(cells[7], out int ord)) existing.DisplayOrder = ord;
+                    var newPhonetic = HskVocabCsvParser.NullIfEmpty(cells[1]);
+                    var newPos = HskVocabCsvParser.NullIfEmpty(cells[2]);
+                    var newExample = HskVocabCsvParser.NullIfEmpty(cells[4]);
+                    var newExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]);
+                    var newTopic = HskVocabCsvParser.NullIfEmpty(cells[6]);
+                    int newOrd = int.TryParse(cells[7], out int ord) ? ord : existing.DisplayOrder;
+
+                    if (existing.Phonetic == newPhonetic &&
+                        existing.PartOfSpeech == newPos &&
+                        existing.Example == newExample &&
+                        existing.ExampleMeaning == newExampleMeaning &&
+                        existing.Topic == newTopic &&
+                        existing.DisplayOrder == newOrd)
+                    {
+                        duplicate++;
+                        continue;
+                    }
+
+                    existing.Phonetic = newPhonetic;
+                    existing.PartOfSpeech = newPos;
+                    existing.Example = newExample;
+                    existing.ExampleMeaning = newExampleMeaning;
+                    existing.Topic = newTopic;
+                    existing.DisplayOrder = newOrd;
                     updated++;
+                    jsonItems.Add(jsonItem);
                 }
                 else duplicate++;
                 continue;
@@ -1973,6 +2118,7 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
                 IsActive = true
             });
             success++;
+            jsonItems.Add(jsonItem);
         }
         catch (Exception ex)
         {
@@ -1991,33 +2137,39 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
     }
 
     // Serialize toàn bộ dòng hợp lệ -> JSON -> upload R2 ielts-vocab/
-    string jsonUrl;
-    var fileId = Guid.NewGuid().ToString("N");
-    var vocabJson = System.Text.Json.JsonSerializer.Serialize(new
+    string jsonUrl = string.Empty;
+    if (jsonItems.Count > 0)
     {
-        fileName = file.FileName,
-        importedAt = DateTime.UtcNow,
-        mode,
-        totalCount = jsonItems.Count,
-        items = jsonItems
-    }, new System.Text.Json.JsonSerializerOptions
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-    });
-    var jsonBytes = System.Text.Encoding.UTF8.GetBytes(vocabJson);
+        var baseName = Path.GetFileNameWithoutExtension(file.FileName);
+        var safeName = System.Text.RegularExpressions.Regex.Replace(baseName, @"[^\w\-]", "_");
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+        var fileId = $"{safeName}_{timestamp}";
+        var vocabJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            fileName = file.FileName,
+            importedAt = DateTime.UtcNow,
+            mode,
+            totalCount = jsonItems.Count,
+            items = jsonItems
+        }, new System.Text.Json.JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+        });
+        var jsonBytes = System.Text.Encoding.UTF8.GetBytes(vocabJson);
 
-    try
-    {
-        using var ms = new MemoryStream(jsonBytes);
-        jsonUrl = await r2Storage.UploadFileAsync(ms, $"ielts-vocab/{fileId}.json", "application/json", cancellationToken);
-    }
-    catch
-    {
-        var dir = Path.Combine("wwwroot", "exports");
-        Directory.CreateDirectory(dir);
-        await File.WriteAllBytesAsync(Path.Combine(dir, $"{fileId}.json"), jsonBytes, cancellationToken);
-        jsonUrl = $"/exports/{fileId}.json";
+        try
+        {
+            using var ms = new MemoryStream(jsonBytes);
+            jsonUrl = await r2Storage.UploadFileAsync(ms, $"ielts-vocab/{fileId}.json", "application/json", cancellationToken);
+        }
+        catch
+        {
+            var dir = Path.Combine("wwwroot", "exports");
+            Directory.CreateDirectory(dir);
+            await File.WriteAllBytesAsync(Path.Combine(dir, $"{fileId}.json"), jsonBytes, cancellationToken);
+            jsonUrl = $"/exports/{fileId}.json";
+        }
     }
 
     var batch = new Backend.Domain.Entities.IeltsVocabularyImport
@@ -2033,8 +2185,276 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
     dbContext.IeltsVocabularyImports.Add(batch);
     await dbContext.SaveChangesAsync(cancellationToken);
 
+    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
+    cache.Remove("IeltsVocabularyList");
+
     return Results.Ok(new { Success = success, Fail = fail, Duplicate = duplicate, Updated = updated, Errors = errors, JsonUrl = jsonUrl });
 }).DisableAntiforgery();
+
+// ─── IELTS: Vocabulary import multiple files ───
+app.MapPost("/api/ielts/vocab/import-multiple", async (Microsoft.AspNetCore.Http.IFormFileCollection files,
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        Backend.Application.Abstractions.IR2StorageService r2Storage,
+        HttpContext httpContext,
+        CancellationToken cancellationToken) =>
+{
+    if (files == null || files.Count == 0)
+        return Results.BadRequest("Không có file nào được upload.");
+
+    var mode = httpContext.Request.Form.TryGetValue("mode", out var modeValue) &&
+               modeValue.ToString().Trim().Equals("upsert", StringComparison.OrdinalIgnoreCase)
+        ? "upsert"
+        : "skip";
+
+    var allRows = new List<(string[] cells, string fileName)>();
+    foreach (var file in files)
+    {
+        if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+            continue;
+
+        using var stream = file.OpenReadStream();
+        using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+        var worksheet = workbook.Worksheet(1);
+        var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+        for (int i = 2; i <= lastRow; i++)
+        {
+            var r = worksheet.Row(i);
+            allRows.Add((new[]
+            {
+                r.Cell(1).GetString()?.Trim() ?? "",
+                r.Cell(2).GetString()?.Trim() ?? "",
+                r.Cell(3).GetString()?.Trim() ?? "",
+                r.Cell(4).GetString()?.Trim() ?? "",
+                r.Cell(5).GetString()?.Trim() ?? "",
+                r.Cell(6).GetString()?.Trim() ?? "",
+                r.Cell(7).GetString()?.Trim() ?? "",
+                r.Cell(8).GetString()?.Trim() ?? ""
+            }, file.FileName));
+        }
+    }
+
+    if (allRows.Count == 0)
+        return Results.BadRequest("Không có dữ liệu hợp lệ trong các file.");
+
+    // Get all existing vocabulary for O(1) lookup
+    var existingVocabs = await dbContext.IeltsVocabularies.ToListAsync(cancellationToken);
+    var existingDict = existingVocabs.ToDictionary(v => $"{v.Word}|{v.Meaning}", v => v, StringComparer.OrdinalIgnoreCase);
+
+    int success = 0, fail = 0, duplicate = 0, updated = 0;
+    var errors = new List<string>();
+    var jsonItems = new List<object>();
+    var seenInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    for (int i = 0; i < allRows.Count; i++)
+    {
+        var (cells, fileName) = allRows[i];
+        try
+        {
+            var word = cells[0];
+            var meaning = cells[3];
+            if (string.IsNullOrEmpty(word) || string.IsNullOrEmpty(meaning)) continue;
+
+            var dedupeKey = $"{word}|{meaning}".ToLowerInvariant();
+            if (!seenInFile.Add(dedupeKey)) { duplicate++; continue; }
+
+            var jsonItem = new
+            {
+                word,
+                phonetic = HskVocabCsvParser.NullIfEmpty(cells[1]),
+                partOfSpeech = HskVocabCsvParser.NullIfEmpty(cells[2]),
+                meaning,
+                example = HskVocabCsvParser.NullIfEmpty(cells[4]),
+                exampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]),
+                topic = HskVocabCsvParser.NullIfEmpty(cells[6]),
+                displayOrder = int.TryParse(cells[7], out int ordVal) ? ordVal : 0
+            };
+
+            if (existingDict.TryGetValue(dedupeKey, out var existing))
+            {
+                if (mode == "upsert")
+                {
+                    var newPhonetic = HskVocabCsvParser.NullIfEmpty(cells[1]);
+                    var newPos = HskVocabCsvParser.NullIfEmpty(cells[2]);
+                    var newExample = HskVocabCsvParser.NullIfEmpty(cells[4]);
+                    var newExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]);
+                    var newTopic = HskVocabCsvParser.NullIfEmpty(cells[6]);
+                    int newOrd = int.TryParse(cells[7], out int ord) ? ord : existing.DisplayOrder;
+
+                    if (existing.Phonetic == newPhonetic &&
+                        existing.PartOfSpeech == newPos &&
+                        existing.Example == newExample &&
+                        existing.ExampleMeaning == newExampleMeaning &&
+                        existing.Topic == newTopic &&
+                        existing.DisplayOrder == newOrd)
+                    {
+                        duplicate++;
+                        continue;
+                    }
+
+                    existing.Phonetic = newPhonetic;
+                    existing.PartOfSpeech = newPos;
+                    existing.Example = newExample;
+                    existing.ExampleMeaning = newExampleMeaning;
+                    existing.Topic = newTopic;
+                    existing.DisplayOrder = newOrd;
+                    updated++;
+                    jsonItems.Add(jsonItem);
+                }
+                else duplicate++;
+                continue;
+            }
+
+            dbContext.IeltsVocabularies.Add(new Backend.Domain.Entities.IeltsVocabulary
+            {
+                Word = word,
+                Phonetic = HskVocabCsvParser.NullIfEmpty(cells[1]),
+                PartOfSpeech = HskVocabCsvParser.NullIfEmpty(cells[2]),
+                Meaning = meaning,
+                Example = HskVocabCsvParser.NullIfEmpty(cells[4]),
+                ExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]),
+                Topic = HskVocabCsvParser.NullIfEmpty(cells[6]),
+                DisplayOrder = int.TryParse(cells[7], out int order) ? order : 0,
+                IsActive = true
+            });
+            success++;
+            jsonItems.Add(jsonItem);
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"Dòng {i + 1} (file {fileName}): {ex.Message}");
+            fail++;
+        }
+    }
+
+    try
+    {
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Lỗi khi lưu từ vựng vào database: {ex.Message}");
+    }
+
+    // Serialize toàn bộ dòng hợp lệ -> JSON -> upload R2
+    string jsonUrl = string.Empty;
+    var fileNames = string.Join(", ", files.Select(f => f.FileName));
+    if (jsonItems.Count > 0)
+    {
+        // Tạo tên file có ý nghĩa: nếu 1 file thì dùng tên file đó, nhiều file thì ghép lại (tối đa 2)
+        var excelFiles = files.Where(f => f.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)).ToList();
+        string baseNameRaw = excelFiles.Count == 1
+            ? Path.GetFileNameWithoutExtension(excelFiles[0].FileName)
+            : string.Join("_and_", excelFiles.Take(2).Select(f => Path.GetFileNameWithoutExtension(f.FileName)));
+        var safeName = System.Text.RegularExpressions.Regex.Replace(baseNameRaw, @"[^\w\-]", "_");
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+        var fileId = $"{safeName}_{timestamp}";
+        var vocabJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            fileNames = fileNames,
+            importedAt = DateTime.UtcNow,
+            mode,
+            totalCount = jsonItems.Count,
+            items = jsonItems
+        }, new System.Text.Json.JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+        });
+        var jsonBytes = System.Text.Encoding.UTF8.GetBytes(vocabJson);
+
+        try
+        {
+            using var ms = new MemoryStream(jsonBytes);
+            jsonUrl = await r2Storage.UploadFileAsync(ms, $"ielts-vocab/{fileId}.json", "application/json", cancellationToken);
+        }
+        catch
+        {
+            var dir = Path.Combine("wwwroot", "exports");
+            Directory.CreateDirectory(dir);
+            await File.WriteAllBytesAsync(Path.Combine(dir, $"{fileId}.json"), jsonBytes, cancellationToken);
+            jsonUrl = $"/exports/{fileId}.json";
+        }
+    }
+
+    var batch = new Backend.Domain.Entities.IeltsVocabularyImport
+    {
+        FileName = fileNames,
+        JsonUrl = jsonUrl,
+        TotalRows = allRows.Count,
+        ImportedCount = success,
+        UpdatedCount = updated,
+        DuplicateCount = duplicate,
+        FailedCount = fail
+    };
+    dbContext.IeltsVocabularyImports.Add(batch);
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
+    cache.Remove("IeltsVocabularyList");
+
+    var msg = $"Thêm mới {success}, cập nhật {updated}, thất bại {fail}, bỏ qua {duplicate} trùng.";
+    if (errors.Any()) msg += " Chi tiết: " + string.Join(" | ", errors.Take(3));
+    return Results.Ok(new { Success = success, Fail = fail, Duplicate = duplicate, Updated = updated, Errors = errors, JsonUrl = jsonUrl });
+}).DisableAntiforgery();
+
+// ─── IELTS: Delete all vocabulary ───
+app.MapDelete("/api/ielts/vocab/all", async (Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        ILogger<Program> logger,
+        Backend.Application.Abstractions.IR2StorageService r2Storage,
+        HttpContext httpContext,
+        CancellationToken cancellationToken) =>
+{
+    logger.LogInformation("Delete all vocabulary called");
+    try
+    {
+        // Xóa file JSON trên R2 hoặc local từ bảng IeltsVocabularyImports
+        var imports = await dbContext.IeltsVocabularyImports
+            .Where(i => !string.IsNullOrEmpty(i.JsonUrl))
+            .ToListAsync(cancellationToken);
+        foreach (var import in imports)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(import.JsonUrl))
+                {
+                    if (import.JsonUrl.StartsWith("/exports/"))
+                    {
+                        var localPath = Path.Combine("wwwroot", import.JsonUrl.TrimStart('/'));
+                        if (File.Exists(localPath)) File.Delete(localPath);
+                    }
+                    else
+                    {
+                        await r2Storage.DeleteFileAsync(import.JsonUrl, cancellationToken);
+                        logger.LogInformation("Deleted R2 file: {JsonUrl}", import.JsonUrl);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to delete file: {JsonUrl}", import.JsonUrl);
+            }
+        }
+        dbContext.IeltsVocabularyImports.RemoveRange(imports);
+
+        // Xóa toàn bộ từ vựng trong DB
+        var all = await dbContext.IeltsVocabularies.ToListAsync(cancellationToken);
+        var count = all.Count;
+        logger.LogInformation("Deleting {Count} vocabulary items", count);
+        dbContext.IeltsVocabularies.RemoveRange(all);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        // Invalidate cache
+        var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
+        cache.Remove("IeltsVocabularyList");
+
+        return Results.Ok(new { Deleted = count, R2FilesDeleted = imports.Count });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Delete all vocabulary failed");
+        return Results.Problem($"Xóa thất bại: {ex.Message}");
+    }
+});
 
 // ─── HSK: Vocabulary CRUD ───
 app.MapGet("/api/hsk/vocab", async (string? level, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
@@ -2156,6 +2576,47 @@ app.MapDelete("/api/hsk/vocab/{id}", async (int id, Backend.Infrastructure.Persi
     dbContext.HskVocabularies.Remove(vocab);
     await dbContext.SaveChangesAsync(cancellationToken);
     return Results.Ok();
+});
+
+// ─── HSK: Delete all vocabulary ───
+app.MapDelete("/api/hsk/vocab/all", async (Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        ILogger<Program> logger,
+        Backend.Application.Abstractions.IR2StorageService r2Storage,
+        CancellationToken cancellationToken) =>
+{
+    logger.LogInformation("Delete all HSK vocabulary called");
+    try
+    {
+        var imports = await dbContext.HskVocabularyImports
+            .Where(i => !string.IsNullOrEmpty(i.JsonUrl))
+            .ToListAsync(cancellationToken);
+        foreach (var import in imports)
+        {
+            try
+            {
+                await r2Storage.DeleteFileAsync(import.JsonUrl!, cancellationToken);
+                logger.LogInformation("Deleted R2 file: {JsonUrl}", import.JsonUrl);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to delete R2 file: {JsonUrl}", import.JsonUrl);
+            }
+        }
+        dbContext.HskVocabularyImports.RemoveRange(imports);
+
+        var all = await dbContext.HskVocabularies.ToListAsync(cancellationToken);
+        var count = all.Count;
+        logger.LogInformation("Deleting {Count} HSK vocabulary items", count);
+        dbContext.HskVocabularies.RemoveRange(all);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return Results.Ok(new { Deleted = count, R2FilesDeleted = imports.Count });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Delete all HSK vocabulary failed");
+        return Results.Problem($"Xóa thất bại: {ex.Message}");
+    }
 });
 
 // ─── HSK Vocabulary Progress (lưu theo tài khoản người dùng) ───
@@ -2394,7 +2855,10 @@ app.MapPost("/api/hsk/vocab/import-excel", async (Microsoft.AspNetCore.Http.IFor
             // JSON xuất ra gồm TOÀN BỘ dòng hợp lệ trong file (kể cả từ đã tồn tại)
             string? wordType = HskVocabCsvParser.NullIfEmpty(cells[4]);
             int displayOrder = int.TryParse(cells[9], out int orderVal) ? orderVal : 0;
-            jsonItems.Add(new
+            // Trùng trong cùng file import (cùng cấp độ + cùng chữ Hán)
+            if (!seenInFile.Add($"{level}|{hanzi}")) { duplicate++; continue; }
+
+            var jsonItem = new
             {
                 hskLevel = level,
                 hanzi,
@@ -2406,10 +2870,7 @@ app.MapPost("/api/hsk/vocab/import-excel", async (Microsoft.AspNetCore.Http.IFor
                 exampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[7]),
                 audioUrl = HskVocabCsvParser.NullIfEmpty(cells[8]),
                 displayOrder
-            });
-
-            // Trùng trong cùng file import (cùng cấp độ + cùng chữ Hán)
-            if (!seenInFile.Add($"{level}|{hanzi}")) { duplicate++; continue; }
+            };
 
             // Tìm từ đã tồn tại trong DB theo (cấp độ, chữ Hán)
             var existing = await dbContext.HskVocabularies.FirstOrDefaultAsync(
@@ -2419,15 +2880,36 @@ app.MapPost("/api/hsk/vocab/import-excel", async (Microsoft.AspNetCore.Http.IFor
             {
                 if (mode == "upsert")
                 {
-                    existing.Pinyin = cells[2];
-                    existing.Meaning = cells[3];
+                    var newPinyin = cells[2];
+                    var newMeaning = cells[3];
+                    var newExampleSentence = HskVocabCsvParser.NullIfEmpty(cells[5]);
+                    var newExamplePinyin = HskVocabCsvParser.NullIfEmpty(cells[6]);
+                    var newExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[7]);
+                    var newAudioUrl = HskVocabCsvParser.NullIfEmpty(cells[8]);
+
+                    if (existing.Pinyin == newPinyin &&
+                        existing.Meaning == newMeaning &&
+                        existing.WordType == wordType &&
+                        existing.ExampleSentence == newExampleSentence &&
+                        existing.ExamplePinyin == newExamplePinyin &&
+                        existing.ExampleMeaning == newExampleMeaning &&
+                        (string.IsNullOrEmpty(newAudioUrl) || existing.AudioUrl == newAudioUrl) &&
+                        existing.DisplayOrder == displayOrder)
+                    {
+                        duplicate++;
+                        continue;
+                    }
+
+                    existing.Pinyin = newPinyin;
+                    existing.Meaning = newMeaning;
                     existing.WordType = wordType;
-                    existing.ExampleSentence = HskVocabCsvParser.NullIfEmpty(cells[5]);
-                    existing.ExamplePinyin = HskVocabCsvParser.NullIfEmpty(cells[6]);
-                    existing.ExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[7]);
-                    if (!string.IsNullOrEmpty(cells[8])) existing.AudioUrl = cells[8];
+                    existing.ExampleSentence = newExampleSentence;
+                    existing.ExamplePinyin = newExamplePinyin;
+                    existing.ExampleMeaning = newExampleMeaning;
+                    if (!string.IsNullOrEmpty(newAudioUrl)) existing.AudioUrl = newAudioUrl;
                     existing.DisplayOrder = displayOrder;
                     updated++;
+                    jsonItems.Add(jsonItem);
                 }
                 else duplicate++;
                 continue;
@@ -2449,6 +2931,7 @@ app.MapPost("/api/hsk/vocab/import-excel", async (Microsoft.AspNetCore.Http.IFor
             };
             dbContext.HskVocabularies.Add(vocab);
             success++;
+            jsonItems.Add(jsonItem);
         }
         catch (Exception ex)
         {
@@ -2464,33 +2947,39 @@ app.MapPost("/api/hsk/vocab/import-excel", async (Microsoft.AspNetCore.Http.IFor
     {
         return Results.Problem($"Lỗi khi lưu từ vựng vào database: {ex.Message}");
     }
-    string jsonUrl;
-    var fileId = Guid.NewGuid().ToString("N");
-    var vocabJson = System.Text.Json.JsonSerializer.Serialize(new
+    string jsonUrl = string.Empty;
+    if (jsonItems.Count > 0)
     {
-        fileName = file.FileName,
-        importedAt = DateTime.UtcNow,
-        mode,
-        totalCount = jsonItems.Count,
-        items = jsonItems
-    }, new System.Text.Json.JsonSerializerOptions
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-    });
-    var jsonBytes = System.Text.Encoding.UTF8.GetBytes(vocabJson);
+        var hskBaseName = Path.GetFileNameWithoutExtension(file.FileName);
+        var hskSafeName = System.Text.RegularExpressions.Regex.Replace(hskBaseName, @"[^\w\-]", "_");
+        var hskTimestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+        var fileId = $"{hskSafeName}_{hskTimestamp}";
+        var vocabJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            fileName = file.FileName,
+            importedAt = DateTime.UtcNow,
+            mode,
+            totalCount = jsonItems.Count,
+            items = jsonItems
+        }, new System.Text.Json.JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+        });
+        var jsonBytes = System.Text.Encoding.UTF8.GetBytes(vocabJson);
 
-    try
-    {
-        using var ms = new MemoryStream(jsonBytes);
-        jsonUrl = await r2Storage.UploadFileAsync(ms, $"hsk-vocab/{fileId}.json", "application/json", cancellationToken);
-    }
-    catch
-    {
-        var dir = Path.Combine("wwwroot", "exports");
-        Directory.CreateDirectory(dir);
-        await File.WriteAllBytesAsync(Path.Combine(dir, $"{fileId}.json"), jsonBytes, cancellationToken);
-        jsonUrl = $"/exports/{fileId}.json";
+        try
+        {
+            using var ms = new MemoryStream(jsonBytes);
+            jsonUrl = await r2Storage.UploadFileAsync(ms, $"hsk-vocab/{fileId}.json", "application/json", cancellationToken);
+        }
+        catch
+        {
+            var dir = Path.Combine("wwwroot", "exports");
+            Directory.CreateDirectory(dir);
+            await File.WriteAllBytesAsync(Path.Combine(dir, $"hsk-vocab_{fileId}.json"), jsonBytes, cancellationToken);
+            jsonUrl = $"/exports/hsk-vocab_{fileId}.json";
+        }
     }
 
     var batch = new Backend.Domain.Entities.HskVocabularyImport

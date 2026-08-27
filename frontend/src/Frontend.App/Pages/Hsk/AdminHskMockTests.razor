@@ -279,12 +279,12 @@
 
         try
         {
-            var apiUrl = GetApiUrl("api/mock-tests");
+            var apiUrl = GetApiUrl("api/hsk-mock-tests");
             var all = await Http.GetFromJsonAsync<List<MockTestDto>>(apiUrl);
-            var hskTests = all?.Where(t => !string.IsNullOrEmpty(t.HskUrl) || (t.Title != null && t.Title.Contains("HSK", StringComparison.OrdinalIgnoreCase))).ToList() ?? new();
+            var hskTests = all ?? new();
 
             if (!string.IsNullOrEmpty(filterLevel))
-                hskTests = hskTests.Where(t => t.Title.Contains(filterLevel, StringComparison.OrdinalIgnoreCase)).ToList();
+                hskTests = hskTests.Where(t => t.Title != null && t.Title.Contains(filterLevel, StringComparison.OrdinalIgnoreCase)).ToList();
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
                 hskTests = hskTests.Where(t => (t.Title != null && t.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
@@ -424,7 +424,7 @@
                     SpeakingAnswerUrl = form.SpeakingAnswerUrl
                 };
 
-                var createUrl = GetApiUrl("api/mock-tests");
+                var createUrl = GetApiUrl("api/hsk-mock-tests");
                 var response = await Http.PostAsJsonAsync(createUrl, createDto);
                 if (response.IsSuccessStatusCode)
                 {
@@ -455,7 +455,7 @@
                     SpeakingAnswerUrl = form.SpeakingAnswerUrl
                 };
 
-                var updateUrl = GetApiUrl($"api/mock-tests/{editingTest.Id}");
+                var updateUrl = GetApiUrl($"api/hsk-mock-tests/{editingTest.Id}");
                 var response = await Http.PutAsJsonAsync(updateUrl, updateDto);
                 if (response.IsSuccessStatusCode)
                 {
@@ -482,7 +482,7 @@
 
         try
         {
-            var delUrl = GetApiUrl($"api/mock-tests/{id}");
+            var delUrl = GetApiUrl($"api/hsk-mock-tests/{id}");
             var response = await Http.DeleteAsync(delUrl);
             if (response.IsSuccessStatusCode)
             {

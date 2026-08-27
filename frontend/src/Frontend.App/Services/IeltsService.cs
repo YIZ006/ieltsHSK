@@ -61,6 +61,21 @@ public class IeltsService
         catch { return false; }
     }
 
+    public async Task<(bool Success, int Deleted)> DeleteAllVocabularyAsync()
+    {
+        try
+        {
+            var response = await _httpClient.DeleteAsync("api/ielts/vocab/all");
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<Dictionary<string, int>>();
+                return (true, result?.GetValueOrDefault("Deleted") ?? 0);
+            }
+            return (false, 0);
+        }
+        catch { return (false, 0); }
+    }
+
     public async Task<IeltsImportExcelResponse?> ImportVocabularyExcelAsync(Microsoft.AspNetCore.Components.Forms.IBrowserFile file, string mode = "skip")
     {
         try
@@ -72,6 +87,29 @@ public class IeltsService
             content.Add(new StringContent(mode), "mode");
 
             var response = await _httpClient.PostAsync("api/ielts/vocab/import-excel", content);
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadFromJsonAsync<IeltsImportExcelResponse>();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<IeltsImportExcelResponse?> ImportMultipleVocabularyExcelAsync(IReadOnlyList<Microsoft.AspNetCore.Components.Forms.IBrowserFile> files, string mode = "skip")
+    {
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            foreach (var file in files)
+            {
+                var fileContent = new StreamContent(file.OpenReadStream(20 * 1024 * 1024));
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+                content.Add(fileContent, "files", file.Name);
+            }
+            content.Add(new StringContent(mode), "mode");
+
+            var response = await _httpClient.PostAsync("api/ielts/vocab/import-multiple", content);
             if (!response.IsSuccessStatusCode) return null;
             return await response.Content.ReadFromJsonAsync<IeltsImportExcelResponse>();
         }

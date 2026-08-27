@@ -17,6 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ListenVideo> ListenVideos { get; set; }
     public DbSet<Exam> Exams { get; set; }
     public DbSet<MockTest> MockTests { get; set; }
+    public DbSet<HskMockTest> HskMockTests { get; set; }
     public DbSet<TestSubmission> TestSubmissions { get; set; }
     public DbSet<Story> Stories { get; set; }
     
