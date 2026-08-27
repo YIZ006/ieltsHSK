@@ -32,7 +32,7 @@
             </select>
             <button class="btn-secondary-action" @onclick="TriggerImportExcel" disabled="@isImporting">
                 <i class="bi bi-file-earmark-excel-fill text-success"></i>
-                <span>@(isImporting ? "Đang nhập..." : "Nhập Excel")</span>
+                <span>@(isImporting ? "Đang nhập..." : "Nhập Excel (nhiều file)")</span>
             </button>
             <a href="@templateUrl" class="btn-secondary-action" download="IELTS_Vocabulary_Template.xlsx" style="text-decoration:none;">
                 <i class="bi bi-file-earmark-arrow-down text-primary"></i>
@@ -41,7 +41,7 @@
         </div>
     </div>
 
-    <InputFile id="ieltsVocabExcelInput" OnChange="HandleExcelImport" accept=".xlsx" style="display: none;" />
+    <InputFile id="ieltsVocabExcelInput" OnChange="HandleExcelImport" accept=".xlsx" multiple style="display: none;" />
 
     @if (!string.IsNullOrEmpty(importMessage))
     {
@@ -96,6 +96,11 @@
                 <i class="bi bi-collection-fill"></i>
                 <span>Tổng: <strong>@FilteredItems.Count</strong> từ</span>
             </div>
+
+            <button class="btn-danger-action" @onclick="DeleteAll" title="Xóa toàn bộ từ vựng trong database" disabled="@(!items.Any() || isImporting)">
+                <i class="bi bi-trash3-fill"></i>
+                <span>Xóa hết</span>
+            </button>
         </div>
     </div>
 
@@ -509,21 +514,26 @@
 
     private async Task HandleExcelImport(InputFileChangeEventArgs e)
     {
-        var file = e.File;
-        if (file == null) return;
-        if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        var files = e.GetMultipleFiles();
+        if (files == null || files.Count == 0) return;
+
+        // Validate all files
+        foreach (var file in files)
         {
-            importMessage = "Vui lòng chọn file Excel (.xlsx).";
-            importSuccess = false;
-            StateHasChanged();
-            return;
+            if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+            {
+                importMessage = $"File '{file.Name}' không phải Excel (.xlsx). Vui lòng chọn đúng định dạng.";
+                importSuccess = false;
+                StateHasChanged();
+                return;
+            }
         }
 
         isImporting = true;
         importMessage = null;
         StateHasChanged();
 
-        var result = await IeltsService.ImportVocabularyExcelAsync(file, importMode);
+        var result = await IeltsService.ImportMultipleVocabularyExcelAsync(files, importMode);
 
         isImporting = false;
         if (result == null)
@@ -538,7 +548,7 @@
             if (result.Updated > 0) parts.Add($"cập nhật {result.Updated} từ");
             if (result.Duplicate > 0) parts.Add($"bỏ qua {result.Duplicate} trùng");
             if (result.Fail > 0) parts.Add($"lỗi {result.Fail} dòng");
-            if (parts.Count == 0) parts.Add("Không có dữ liệu hợp lệ nào trong file");
+            if (parts.Count == 0) parts.Add("Không có dữ liệu hợp lệ nào trong các file");
             if (!string.IsNullOrEmpty(result.JsonUrl)) parts.Add($"File JSON đã lưu tại: {result.JsonUrl}");
             importMessage = string.Join(", ", parts) + ".";
             importSuccess = result.Fail == 0;
@@ -549,5 +559,27 @@
     private async Task SpeakEnglish(string text)
     {
         await JS.InvokeVoidAsync("eval", $"if ('speechSynthesis' in window) {{ const u = new SpeechSynthesisUtterance('{text}'); u.lang = 'en-US'; window.speechSynthesis.speak(u); }}");
+    }
+
+    private async Task DeleteAll()
+    {
+        var confirm = await JS.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn xóa TOÀN BỘ từ vựng IELTS trong database? Hành động này không thể hoàn tác.");
+        if (!confirm) return;
+        isImporting = true;
+        importMessage = null;
+        StateHasChanged();
+        var (success, deleted) = await IeltsService.DeleteAllVocabularyAsync();
+        isImporting = false;
+        if (success)
+        {
+            importMessage = $"Đã xóa {deleted} từ vựng thành công.";
+            importSuccess = true;
+        }
+        else
+        {
+            importMessage = "Xóa toàn bộ từ vựng thất bại.";
+            importSuccess = false;
+        }
+        await LoadData();
     }
 }

@@ -4,6 +4,7 @@
 @using Frontend.App.Services
 @inject MockTestService MockTestService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 
 <PageTitle>Quản lý Mock Tests - Admin</PageTitle>
 
@@ -174,6 +175,7 @@
                             <td>@(string.IsNullOrEmpty(t.SpeakingAnswerUrl) ? "❌" : "✅")</td>
                             <td>
                                 <button class="btn-sm btn-edit" @onclick="() => OpenForm(t)">Sửa</button>
+                                <button class="btn-sm btn-danger" @onclick="() => DeleteTest(t.Id)" style="background-color: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-left: 5px;">Xóa</button>
                             </td>
                         </tr>
                     }
@@ -203,7 +205,14 @@
     {
         isLoading = true;
         var allTests = await MockTestService.GetMockTestsAsync();
-        tests = allTests.Where(t => string.IsNullOrEmpty(t.ToeicUrl)).ToList();
+        tests = allTests.Where(t => 
+            string.IsNullOrEmpty(t.ToeicUrl) && 
+            string.IsNullOrEmpty(t.HskUrl) &&
+            !(t.Title != null && t.Title.Contains("HSK", StringComparison.OrdinalIgnoreCase)) &&
+            !(t.CollectionName != null && t.CollectionName.Contains("HSK", StringComparison.OrdinalIgnoreCase)) &&
+            !(t.Title != null && t.Title.Contains("TOEIC", StringComparison.OrdinalIgnoreCase)) &&
+            !(t.CollectionName != null && t.CollectionName.Contains("TOEIC", StringComparison.OrdinalIgnoreCase))
+        ).ToList();
         isLoading = false;
     }
 
@@ -312,5 +321,28 @@
         }
         
         isSaving = false;
+    }
+
+    private async Task DeleteTest(int id)
+    {
+        bool confirm = await JS.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn xóa đề thi này không?");
+        if (!confirm) return;
+
+        try
+        {
+            var success = await MockTestService.DeleteMockTestAsync(id);
+            if (success)
+            {
+                await LoadTests();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Lỗi khi xóa bài thi. Vui lòng thử lại.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Lỗi hệ thống: {ex.Message}");
+        }
     }
 }
