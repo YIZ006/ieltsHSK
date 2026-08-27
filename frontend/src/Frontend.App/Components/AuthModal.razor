@@ -29,12 +29,13 @@
                 <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
                     <DataAnnotationsValidator />
                     <div class="form-group">
-                        <label>Username</label>
-                        <InputText class="form-control" @bind-Value="loginModel.Username" placeholder="Enter username" />
+                        <label>Email</label>
+                        <InputText type="email" class="form-control" @bind-Value="loginModel.Email" placeholder="Nhập email của bạn" />
+                        <ValidationMessage For="@(() => loginModel.Email)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
                     </div>
                     <div class="form-group">
                         <label>Password</label>
-                        <InputText type="password" class="form-control" @bind-Value="loginModel.Password" placeholder="Enter password" />
+                        <InputText type="password" class="form-control" @bind-Value="loginModel.Password" placeholder="Nhập mật khẩu" />
                     </div>
                     <button type="submit" class="btn-primary" disabled="@IsLoading">
                         @(IsLoading ? "Processing..." : "Login")
@@ -49,9 +50,9 @@
                 <EditForm Model="registerModel" OnValidSubmit="HandleRegister">
                     <DataAnnotationsValidator />
                     <div class="form-group">
-                        <label>Username</label>
-                        <InputText class="form-control" @bind-Value="registerModel.Username" placeholder="Choose a username" />
-                        <ValidationMessage For="@(() => registerModel.Username)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                        <label>Họ và tên</label>
+                        <InputText class="form-control" @bind-Value="registerModel.FullName" placeholder="Nhập họ và tên của bạn" />
+                        <ValidationMessage For="@(() => registerModel.FullName)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
                     </div>
                     <div class="form-group">
                         <label>Email</label>
@@ -140,7 +141,7 @@
         }
         else
         {
-            ErrorMessage = "Invalid username or password.";
+            ErrorMessage = "Email hoặc mật khẩu không chính xác.";
         }
         
         IsLoading = false;
@@ -155,11 +156,11 @@
         if (success)
         {
             IsLogin = true; // Switch to login after successful registration
-            ErrorMessage = "Registration successful! Please login.";
+            ErrorMessage = "Đăng ký thành công! Vui lòng đăng nhập.";
         }
         else
         {
-            ErrorMessage = "Registration failed. Username or email might be taken.";
+            ErrorMessage = "Đăng ký thất bại. Email có thể đã được sử dụng.";
         }
         
         IsLoading = false;
@@ -188,7 +189,7 @@
                     var email = emailParts[1].Trim('"', '\r', '\n');
                     SwitchMode(false); // Switch to register mode
                     registerModel.Email = email;
-                    ErrorMessage = "Tài khoản chưa được đăng ký. Vui lòng tạo tài khoản mới (Username & Password).";
+                    ErrorMessage = "Tài khoản chưa được đăng ký. Vui lòng tạo tài khoản mới.";
                 }
             }
             else

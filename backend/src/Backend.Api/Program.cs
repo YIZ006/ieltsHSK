@@ -48,7 +48,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             {
                 var dbContext = context.HttpContext.RequestServices
                     .GetRequiredService<Backend.Infrastructure.Persistence.AppDbContext>();
-                var userIdClaim = context.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+                // Tuỳ cấu hình MapInboundClaims, claim "sub" có thể bị đổi tên thành NameIdentifier
+                var userIdClaim = context.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                    ?? context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 if (!int.TryParse(userIdClaim, out var userId))
                 {
                     context.Fail("Invalid token subject.");

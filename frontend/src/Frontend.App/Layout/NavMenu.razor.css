@@ -203,6 +203,12 @@
     background: rgba(0, 0, 0, 0.05);
 }
 
+a.dropdown-item {
+    text-decoration: none;
+    color: var(--ig-text);
+    box-sizing: border-box;
+}
+
 /* ── EXAM TOOLBAR (Nộp bài + đồng hồ) ── */
 .exam-toolbar {
     display: flex;
@@ -352,4 +358,120 @@
         text-align: center;
         width: auto;
     }
+}
+
+/* ── STREAK CHIP & POPOVER ── */
+.streak-menu {
+    position: relative;
+}
+
+.streak-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    transition: transform 0.15s, filter 0.15s;
+}
+
+.streak-btn:hover {
+    transform: scale(1.05);
+    filter: brightness(1.05);
+}
+
+.streak-btn:active {
+    transform: scale(0.97);
+}
+
+.streak-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #fff8e8, #fffae8);
+    border: 1.5px solid #e17055;
+    color: #e17055;
+    font-size: 0.8rem;
+    font-weight: 700;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(225, 112, 85, 0.2);
+}
+
+.streak-popover {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    min-width: 240px;
+    background: #ffffff;
+    border: 1px solid var(--ig-border, #d0d7de);
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(31, 35, 40, 0.14);
+    padding: 14px 16px;
+    z-index: 1001;
+    animation: streak-pop-in 0.18s ease;
+}
+
+@keyframes streak-pop-in {
+    from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.streak-popover-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.streak-popover-icon {
+    font-size: 1.3rem;
+}
+
+.streak-popover-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--ig-text);
+}
+
+.streak-popover-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.streak-stat-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.88rem;
+}
+
+.streak-stat-label {
+    color: var(--ig-text-secondary, #8e8e8e);
+}
+
+.streak-stat-value {
+    font-weight: 700;
+    color: var(--ig-text);
+}
+
+.streak-stat-value.streak-current {
+    color: #e17055;
+    font-size: 0.95rem;
+}
+
+.streak-popover-hint {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: #fff8e8;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    color: #8b5a2b;
+    text-align: center;
+    line-height: 1.4;
 }

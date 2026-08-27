@@ -32,34 +32,20 @@ public static class DependencyInjection
         
         await dbContext.Database.MigrateAsync();
 
-        // Seed Admin User (needed for CreatedById)
-        if (!dbContext.Users.Any(u => u.Email == "admin@ielts.hsk"))
+        // Seed Admin User (cuongnane)
+        if (!dbContext.Users.Any(u => u.Email == "cuong20067@gmail.com"))
         {
             var adminUser = new User
             {
-                Username = "Admin System",
-                Email = "admin@ielts.hsk",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123456"),
+                Username = "cuongnane",
+                Email = "cuong20067@gmail.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Aa@cuongnane"),
                 Role = "admin",
                 Level = "C2",
                 IsActive = true,
                 LastLoginAt = DateTime.UtcNow
             };
             dbContext.Users.Add(adminUser);
-            await dbContext.SaveChangesAsync();
-        }
-
-        // Seed Sample Students across IELTS, TOEIC, HSK
-        if (!dbContext.Users.Any(u => u.Email == "chienpham@example.com"))
-        {
-            dbContext.Users.AddRange(new[]
-            {
-                new User { Username = "chienpham", Email = "chienpham@example.com", PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456@Aa"), Role = "user", Level = "B2", IsActive = true, LastLoginAt = DateTime.UtcNow.AddHours(-2) },
-                new User { Username = "nguyenvanan", Email = "nguyenvanan@gmail.com", PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456@Aa"), Role = "user", Level = "A2", IsActive = true, LastLoginAt = DateTime.UtcNow.AddDays(-1) },
-                new User { Username = "tranthibich", Email = "tranthibich@gmail.com", PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456@Aa"), Role = "user", Level = "C1", IsActive = true, LastLoginAt = DateTime.UtcNow.AddHours(-5) },
-                new User { Username = "lequocviet", Email = "lequocviet@gmail.com", PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456@Aa"), Role = "user", Level = "B1", IsActive = false, LastLoginAt = DateTime.UtcNow.AddDays(-14) },
-                new User { Username = "hoangthimai", Email = "hoangthimai@gmail.com", PasswordHash = BCrypt.Net.BCrypt.HashPassword("123456@Aa"), Role = "user", Level = "A1", IsActive = true, LastLoginAt = DateTime.UtcNow.AddMinutes(-30) }
-            });
             await dbContext.SaveChangesAsync();
         }
 
@@ -114,7 +100,7 @@ public static class DependencyInjection
         // Seed Course
         if (!dbContext.Courses.Any(c => c.Slug == "ielts-listening-master"))
         {
-            var admin = dbContext.Users.First(u => u.Email == "admin@ielts.hsk");
+            var admin = dbContext.Users.First(u => u.Email == "cuong20067@gmail.com");
             dbContext.Courses.Add(new Course
             {
                 Title = "IELTS Listening Masterclass",
