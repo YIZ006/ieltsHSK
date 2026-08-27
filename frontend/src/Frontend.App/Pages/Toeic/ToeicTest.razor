@@ -648,7 +648,7 @@ else
                     ⏱ Thời gian đã dùng: @ElapsedTime
                 </div>
                 <button class="result-close-btn" @onclick="ShowAnswers">Xem đáp án</button>
-                <button class="btn-cancel" style="margin-top: 12px;" @onclick="() => showResult = false">Đóng</button>
+                <button class="btn-cancel" style="margin-top: 12px;" @onclick="CloseResultModal">Đóng</button>
             </div>
         </div>
     }
@@ -1621,6 +1621,12 @@ else
         {
             return s;
         }
+    }
+
+    private void CloseResultModal()
+    {
+        showResult = false;
+        NavManager.NavigateTo("/toeic/test");
     }
 
     private void ShowAnswers()

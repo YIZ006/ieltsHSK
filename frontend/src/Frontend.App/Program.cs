@@ -21,6 +21,7 @@ builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<ExamSessionService>();
 builder.Services.AddScoped<ExamHeaderService>();
 builder.Services.AddScoped<StreakService>();
+builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<ToeicAchievementService>();
 builder.Services.AddScoped(sp =>
 {
