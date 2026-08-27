@@ -411,7 +411,6 @@
     [Parameter][SupplyParameterFromQuery(Name = "Session")] public string? TestSessionId { get; set; }
 
     private SpeakingExamData? exam;
-    private bool isLoading = true;
 
     // Setup state
     private bool micChecked = false;
@@ -462,7 +461,6 @@
         string finalUrl = string.IsNullOrWhiteSpace(url) ? "sample-data/speaking-test-1.json" : Uri.UnescapeDataString(url);
         currentExamUrl = finalUrl;
         try { exam = await Http.GetFromJsonAsync<SpeakingExamData>(finalUrl); } catch { exam = null; }
-        isLoading = false;
         _dotNetRef = DotNetObjectReference.Create(this);
     }
 

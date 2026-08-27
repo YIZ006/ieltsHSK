@@ -34,18 +34,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.Entity<TestSubmission>(entity =>
-        {
-            entity.Property(t => t.DetailsJson).HasColumnType("jsonb");
-            entity.HasIndex(t => new { t.UserId, t.SubmittedAt });
-        });
-
-        // Story
-        modelBuilder.Entity<Story>(entity =>
-        {
-            entity.HasIndex(s => s.Slug).IsUnique();
-        });
-
         // User
         modelBuilder.Entity<User>(entity =>
         {
@@ -119,6 +107,24 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.HasIndex(v => new { v.Word, v.Meaning }).IsUnique();
             entity.HasIndex(v => v.Topic);
+        });
+
+        // JSONB: tiến trình học tập có cấu trúc động (bài nghe lưu đáp án,
+        // bài đọc lưu chi tiết câu hỏi...) -> dùng kiểu jsonb của PostgreSQL
+        modelBuilder.Entity<TestSubmission>(entity =>
+        {
+            entity.Property(s => s.DetailsJson).HasColumnType("jsonb");
+            entity.HasIndex(s => new { s.UserId, s.Skill });
+            entity.HasIndex(s => new { s.UserId, s.SubmittedAt });
+        });
+
+        // JSONB cho nội dung truyện (paragraphs / vocabulary / questions)
+        modelBuilder.Entity<Story>(entity =>
+        {
+            entity.HasIndex(s => s.Slug).IsUnique();
+            entity.Property(s => s.ContentJson).HasColumnType("jsonb");
+            entity.Property(s => s.VocabularyJson).HasColumnType("jsonb");
+            entity.Property(s => s.QuestionsJson).HasColumnType("jsonb");
         });
     }
 }

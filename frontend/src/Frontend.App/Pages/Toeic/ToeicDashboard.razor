@@ -1,0 +1,376 @@
+@page "/toeic"
+@page "/toeic/dashboard"
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject MockTestService MockTestService
+@inject ExamSubmissionService Submissions
+@inject StreakService Streak
+@inject ToeicAchievementService Achievements
+
+<PageTitle>TOEIC Dashboard - ieltsHSK</PageTitle>
+
+<div class="td-page">
+    @* ===== HERO ===== *@
+    <div class="td-hero td-anim-up">
+        <div class="td-hero-title">Chào mừng đến với <span>ieltsHSK</span></div>
+        <div class="td-hero-sub">Luyện thi TOEIC Listening &amp; Reading với đề thi chuẩn format, chấm điểm tự động và xem lại đáp án chi tiết.</div>
+        <div class="td-hero-actions">
+            <a href="/toeic/test" class="td-btn td-btn-primary"><i class="bi bi-play-fill"></i> Làm bài thi ngay</a>
+            <a href="/toeic/test" class="td-btn td-btn-outline"><i class="bi bi-journal-text"></i> Danh sách @toeicTests.Count đề</a>
+        </div>
+    </div>
+
+    @* ===== STATS ===== *@
+    <div class="td-grid-4 td-mb">
+        <div class="td-stat td-anim-up td-delay-1">
+            <div class="td-stat-icon purple"><i class="bi bi-journal-check"></i></div>
+            <div class="td-stat-info">
+                <div class="td-stat-value">@toeicTests.Count</div>
+                <div class="td-stat-label">Đề thi khả dụng</div>
+                <div class="td-stat-change up"><i class="bi bi-check-circle"></i> Sẵn sàng làm ngay</div>
+            </div>
+        </div>
+        <div class="td-stat amber td-anim-up td-delay-2">
+            <div class="td-stat-icon amber"><i class="bi bi-clipboard-data"></i></div>
+            <div class="td-stat-info">
+                <div class="td-stat-value">@recentSubmissions.Count</div>
+                <div class="td-stat-label">Bài đã làm</div>
+                <div class="td-stat-change @(recentSubmissions.Count > 0 ? "up" : "")">
+                    @(recentSubmissions.Count > 0 ? "Tiếp tục duy trì nhé!" : "Bắt đầu bài đầu tiên")
+                </div>
+            </div>
+        </div>
+        <div class="td-stat green td-anim-up td-delay-3">
+            <div class="td-stat-icon green"><i class="bi bi-list-check"></i></div>
+            <div class="td-stat-info">
+                <div class="td-stat-value">200</div>
+                <div class="td-stat-label">Câu hỏi mỗi đề</div>
+                <div class="td-stat-change up"><i class="bi bi-clock-history"></i> 120 phút</div>
+            </div>
+        </div>
+        <div class="td-stat blue td-anim-up td-delay-4">
+            <div class="td-stat-icon blue"><i class="bi bi-collection-play"></i></div>
+            <div class="td-stat-info">
+                <div class="td-stat-value">7</div>
+                <div class="td-stat-label">Part luyện tập</div>
+                <div class="td-stat-change up"><i class="bi bi-headphones"></i> 4 Listening + 3 Reading</div>
+            </div>
+        </div>
+    </div>
+
+    @* ===== SKILLS + WORD/STREAK ===== *@
+    <div class="td-grid-2 td-mb">
+        <div>
+            <div class="td-section-header">
+                <div class="td-section-title">Kỹ năng luyện tập</div>
+                <a href="/toeic/test" class="td-section-link">Vào phòng thi <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="td-grid-2 td-grid-tight">
+                <a href="/toeic/test" class="td-skill td-anim-up td-delay-1">
+                    <div class="td-skill-top">
+                        <div class="td-skill-icon" style="background:rgba(59,130,246,0.14);color:#3b82f6;"><i class="bi bi-headphones"></i></div>
+                        <i class="bi bi-arrow-up-right td-skill-arrow"></i>
+                    </div>
+                    <div class="td-skill-name">Listening</div>
+                    <div class="td-skill-desc">Part 1–4 · Ảnh, hỏi - đáp, hội thoại, bài nói</div>
+                    <div class="td-progress-wrap">
+                        <div class="td-progress-info"><span>45 phút · 100 câu</span><span style="color:#3b82f6">4 parts</span></div>
+                        <div class="td-progress-bar"><div class="td-progress-fill blue" style="width:100%"></div></div>
+                    </div>
+                </a>
+                <a href="/toeic/test" class="td-skill td-anim-up td-delay-2">
+                    <div class="td-skill-top">
+                        <div class="td-skill-icon" style="background:rgba(108,99,255,0.14);color:#6c63ff;"><i class="bi bi-file-earmark-text"></i></div>
+                        <i class="bi bi-arrow-up-right td-skill-arrow"></i>
+                    </div>
+                    <div class="td-skill-name">Reading</div>
+                    <div class="td-skill-desc">Part 5–7 · Điền từ, điền đoạn, đọc hiểu</div>
+                    <div class="td-progress-wrap">
+                        <div class="td-progress-info"><span>75 phút · 100 câu</span><span style="color:#6c63ff">3 parts</span></div>
+                        <div class="td-progress-bar"><div class="td-progress-fill purple" style="width:100%"></div></div>
+                    </div>
+                </a>
+                <a href="/toeic/test" class="td-skill td-anim-up td-delay-3">
+                    <div class="td-skill-top">
+                        <div class="td-skill-icon" style="background:rgba(245,158,11,0.16);color:#f59e0b;"><i class="bi bi-stopwatch"></i></div>
+                        <i class="bi bi-arrow-up-right td-skill-arrow"></i>
+                    </div>
+                    <div class="td-skill-name">Full Test</div>
+                    <div class="td-skill-desc">Đề đầy đủ 7 part, hẹn giờ chuẩn thật</div>
+                    <div class="td-progress-wrap">
+                        <div class="td-progress-info"><span>120 phút · 200 câu</span><span style="color:#f59e0b">7 parts</span></div>
+                        <div class="td-progress-bar"><div class="td-progress-fill amber" style="width:100%"></div></div>
+                    </div>
+                </a>
+                <a href="/toeic/flashcards" class="td-skill td-anim-up td-delay-4">
+                    <div class="td-skill-top">
+                        <div class="td-skill-icon" style="background:rgba(16,185,129,0.14);color:#10b981;"><i class="bi bi-layers"></i></div>
+                        <i class="bi bi-arrow-up-right td-skill-arrow"></i>
+                    </div>
+                    <div class="td-skill-name">Flashcard từ vựng</div>
+                    <div class="td-skill-desc">Lật thẻ, phát âm, học thuộc từ mới</div>
+                    <div class="td-progress-wrap">
+                        <div class="td-progress-info"><span>70 từ theo chủ đề</span><span style="color:#10b981">Học ngay</span></div>
+                        <div class="td-progress-bar"><div class="td-progress-fill green" style="width:100%"></div></div>
+                    </div>
+                </a>
+                <a href="/toeic/test" class="td-skill td-anim-up td-delay-4">
+                    <div class="td-skill-top">
+                        <div class="td-skill-icon" style="background:rgba(16,185,129,0.14);color:#10b981;"><i class="bi bi-check2-square"></i></div>
+                        <i class="bi bi-arrow-up-right td-skill-arrow"></i>
+                    </div>
+                    <div class="td-skill-name">Xem lại &amp; đáp án</div>
+                    <div class="td-skill-desc">Chấm điểm, transcript, dịch chi tiết</div>
+                    <div class="td-progress-wrap">
+                        <div class="td-progress-info"><span>Review sau khi thi</span><span style="color:#10b981">Miễn phí</span></div>
+                        <div class="td-progress-bar"><div class="td-progress-fill green" style="width:100%"></div></div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <div class="td-side-col">
+            @* Word of the day *@
+            <div class="td-word td-anim-up td-delay-2">
+                <div class="td-word-label"><i class="bi bi-brightness-high"></i> TỪ VỰNG TOEIC TRONG NGÀY</div>
+                <div class="td-word-en">@wordOfDay.Word</div>
+                <div class="td-word-ipa">@wordOfDay.Ipa</div>
+                <div class="td-word-vi">@wordOfDay.Meaning</div>
+                <div class="td-word-example">"@wordOfDay.Example"</div>
+            </div>
+
+            @* Streak calendar *@
+            <div class="td-card td-anim-up td-delay-3">
+                <div class="td-section-header td-section-header-tight">
+                    <div class="td-section-title td-section-title-sm"><i class="bi bi-calendar-check td-accent"></i> Chuỗi học tập</div>
+                    <span class="td-streak-badge">🔥 @streakCount ngày@(bestStreak > streakCount ? $" · Kỷ lục {bestStreak}" : "")</span>
+                </div>
+                <div class="td-streak-grid">
+                    @foreach (var d in StreakDays())
+                    {
+                        <div class="td-streak-day @(d.Done ? "done" : "") @(d.Today ? "today" : "")" title="@d.Date.ToString("dd/MM/yyyy")"></div>
+                    }
+                </div>
+                <div class="td-streak-note">
+                    @if (streakCount > 0)
+                    {
+                        <text><i class="bi bi-lightning-charge"></i> Ô xanh = ngày bạn truy cập ieltsHSK</text>
+                    }
+                    else
+                    {
+                        <text><i class="bi bi-info-circle"></i> Đăng nhập mỗi ngày để bắt đầu chuỗi học tập</text>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ===== RECENT + EXAM STRUCTURE ===== *@
+    <div class="td-grid-2">
+        <div class="td-card td-anim-up td-delay-2">
+            <div class="td-section-header">
+                <div class="td-section-title">Bài thi gần đây</div>
+                <a href="/toeic/test" class="td-section-link">Làm bài <i class="bi bi-arrow-right"></i></a>
+            </div>
+            @if (recentSubmissions.Count == 0)
+            {
+                <div class="td-empty">
+                    <div class="td-empty-icon">📝</div>
+                    <div class="td-empty-title">Chưa có bài thi nào</div>
+                    <div class="td-empty-sub">Làm bài thi đầu tiên để xem lịch sử và tiến độ tại đây.</div>
+                    <a href="/toeic/test" class="td-btn td-btn-primary td-btn-sm"><i class="bi bi-play-fill"></i> Bắt đầu ngay</a>
+                </div>
+            }
+            else
+            {
+                <div class="td-lesson-list">
+                    @foreach (var s in recentSubmissions.Take(5))
+                    {
+                        <div class="td-lesson">
+                            <div class="td-lesson-thumb">📘</div>
+                            <div class="td-lesson-body">
+                                <div class="td-lesson-title">@s.ExamTitle</div>
+                                <div class="td-lesson-meta">
+                                    @s.SubmittedAt.ToString("d MMM yyyy, HH:mm", Vi) · @FormatDuration(s.DurationSeconds)@(s.CorrectCount.HasValue && s.TotalQuestions.HasValue ? $" · Đúng {s.CorrectCount}/{s.TotalQuestions} câu" : "")
+                                </div>
+                            </div>
+                            @if (s.TotalScore.HasValue)
+                            {
+                                <div class="td-score-badge @ScoreClass(s.TotalScore)">@s.TotalScore.Value<span>/990</span></div>
+                            }
+                            else
+                            {
+                                <div class="td-lesson-badge @(s.TimedOut ? "td-badge-ongoing" : "td-badge-done")">@(s.TimedOut ? "Hết giờ" : "Đã nộp")</div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="td-card td-anim-up td-delay-3">
+            <div class="td-section-header">
+                <div class="td-section-title">Cấu trúc đề thi TOEIC</div>
+                <span class="td-total-badge">200 câu · 120 phút</span>
+            </div>
+            <div class="td-lesson-list">
+                @foreach (var p in ExamStructure)
+                {
+                    <div class="td-lesson">
+                        <div class="td-part-num">@p.Number</div>
+                        <div class="td-lesson-body">
+                            <div class="td-lesson-title">@p.Name</div>
+                            <div class="td-lesson-meta">@p.Desc</div>
+                        </div>
+                        <div class="td-part-count">@p.Questions câu</div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ===== ACHIEVEMENTS ===== *@
+    @if (achievements.Count > 0)
+    {
+        <div class="td-card td-mt td-anim-up td-delay-2">
+            <div class="td-section-header">
+                <div class="td-section-title">🏅 Thành tích đạt được</div>
+                <span class="td-total-badge">Đã đạt @achUnlocked/@achTotal</span>
+            </div>
+            <div class="td-grid-4 td-grid-tight">
+                @foreach (var a in achievements)
+                {
+                    <div class="td-ach @(a.Unlocked ? "unlocked" : "locked")">
+                        @if (a.Unlocked)
+                        {
+                            <span class="td-ach-check"><i class="bi bi-check-lg"></i></span>
+                        }
+                        <div class="td-ach-icon">@a.Icon</div>
+                        <div class="td-ach-title">@a.Title</div>
+                        <div class="td-ach-desc">@a.Description</div>
+                        <div class="td-progress-bar"><div class="td-progress-fill @(a.Unlocked ? "green" : "purple")" style="width:@a.ProgressPercent%"></div></div>
+                        <span class="td-ach-progress-text">@a.ProgressText</span>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private sealed record ToeicWord(string Word, string Ipa, string Meaning, string Example);
+    private sealed record ToeicPartInfo(string Number, string Name, string Desc, int Questions);
+
+    private static readonly List<ToeicWord> ToeicWords = new()
+    {
+        new("Negotiate", "/nɪˈɡoʊʃieɪt/", "Đàm phán, thương lượng", "We need to negotiate the terms of the contract."),
+        new("Invoice", "/ˈɪnvɔɪs/", "Hóa đơn", "Please send the invoice to the accounting department."),
+        new("Implement", "/ˈɪmplɪment/", "Triển khai, thực hiện", "The company will implement a new policy next month."),
+        new("Revenue", "/ˈrevənuː/", "Doanh thu", "Revenue increased by 15% this quarter."),
+        new("Maintenance", "/ˈmeɪntənəns/", "Bảo trì, bảo dưỡng", "The elevator is under maintenance until Friday."),
+        new("Qualification", "/ˌkwɑːlɪfɪˈkeɪʃn/", "Bằng cấp, trình độ", "She has the right qualifications for the job."),
+        new("Reliable", "/rɪˈlaɪəbl/", "Đáng tin cậy", "They are a reliable supplier with fast delivery."),
+        new("Expand", "/ɪkˈspænd/", "Mở rộng", "The firm plans to expand its business to Asia."),
+        new("Deadline", "/ˈdedlaɪn/", "Hạn chót", "The deadline for the report is this Friday."),
+        new("Appointment", "/əˈpɔɪntmənt/", "Cuộc hẹn", "I have an appointment with the manager at 3 p.m."),
+    };
+
+    private static readonly List<ToeicPartInfo> ExamStructure = new()
+    {
+        new("P1", "Photographs", "Miêu tả tranh ảnh", 6),
+        new("P2", "Question - Response", "Hỏi và đáp", 25),
+        new("P3", "Conversations", "Hội thoại ngắn", 39),
+        new("P4", "Talks", "Bài nói chuyện", 30),
+        new("P5", "Incomplete Sentences", "Điền từ vào câu", 30),
+        new("P6", "Text Completion", "Điền vào đoạn văn", 16),
+        new("P7", "Reading Comprehension", "Đọc hiểu", 54),
+    };
+
+    private List<MockTestDto> toeicTests = new();
+    private List<IeltsSubmissionRecord> recentSubmissions = new();
+    private HashSet<DateTime> activeDays = new();
+    private int streakCount;
+    private int bestStreak;
+    private List<ToeicAchievement> achievements = new();
+
+    private int achUnlocked => achievements.Count(a => a.Unlocked);
+    private int achTotal => achievements.Count;
+    private ToeicWord wordOfDay = ToeicWords[0];
+
+    private static System.Globalization.CultureInfo Vi => new("vi-VN");
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var tests = await MockTestService.GetMockTestsAsync();
+            toeicTests = tests
+                .Where(t => !string.IsNullOrEmpty(t.ToeicUrl)
+                            && t.CollectionName.Contains("TOEIC", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+        catch
+        {
+            toeicTests = new();
+        }
+
+        try
+        {
+            var subs = await Submissions.GetAllAsync();
+            recentSubmissions = subs
+                .Where(s => (s.ExamUrl ?? "").Contains("toeic", StringComparison.OrdinalIgnoreCase)
+                            || (s.Skill ?? "").Contains("toeic", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(s => s.SubmittedAt)
+                .ToList();
+        }
+        catch
+        {
+            recentSubmissions = new();
+        }
+
+        try
+        {
+            activeDays = await Streak.GetActiveDaysAsync();
+            streakCount = await Streak.GetCurrentStreakAsync();
+            bestStreak = await Streak.GetBestStreakAsync();
+        }
+        catch
+        {
+            activeDays = new();
+        }
+
+        try
+        {
+            achievements = await Achievements.GetAllAsync();
+        }
+        catch
+        {
+            achievements = new();
+        }
+
+        wordOfDay = ToeicWords[DateTime.Now.DayOfYear % ToeicWords.Count];
+    }
+
+    private IEnumerable<(DateTime Date, bool Done, bool Today)> StreakDays()
+    {
+        var today = DateTime.Today;
+        for (var i = 34; i >= 0; i--)
+        {
+            var date = today.AddDays(-i);
+            yield return (date, activeDays.Contains(date), date == today);
+        }
+    }
+
+    private static string FormatDuration(int seconds)
+    {
+        if (seconds <= 0) return "—";
+        return $"{seconds / 60} phút {seconds % 60}s";
+    }
+
+    private static string ScoreClass(int? score) => score switch
+    {
+        >= 780 => "td-score-high",
+        >= 500 => "td-score-mid",
+        _ => "td-score-low"
+    };
+}

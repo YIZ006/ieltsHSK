@@ -74,7 +74,7 @@ else
 
     @* ── PART TABS ── *@
     <div class="part-tabs-bar">
-        @for (int i = 0; i < exam.Parts.Count; i++)
+        @for (int i = 0; i < exam!.Parts.Count; i++)
         {
             var idx  = i;
             var part = exam.Parts[i];
@@ -323,7 +323,7 @@ else
     {
         isLoading = true;
 
-        string actualUrl = ExamUrl;
+        string? actualUrl = ExamUrl;
         if (string.IsNullOrWhiteSpace(actualUrl)) actualUrl = QueryExamUrl;
 
         string url = string.IsNullOrWhiteSpace(actualUrl) ? DefaultExamUrl : Uri.UnescapeDataString(actualUrl);

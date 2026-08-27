@@ -2,7 +2,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Google.Apis.Auth;
-using System.Text;
 using Backend.Application.Abstractions;
 using Backend.Application.DTOs;
 using Backend.Domain.Entities;
@@ -19,14 +18,24 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
     {
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
-        if (await dbContext.Users.AnyAsync(u => u.Username == request.Username || u.Email == normalizedEmail, cancellationToken))
+        if (await dbContext.Users.AnyAsync(u => u.Email == normalizedEmail, cancellationToken))
         {
-            throw new Exception("Username or Email already exists.");
+            throw new Exception("Email này đã được sử dụng. Vui lòng dùng email khác hoặc đăng nhập.");
+        }
+
+        // Auto-generate a unique username from email (internal, not shown to user)
+        var baseUsername = normalizedEmail.Split('@')[0];
+        var username = baseUsername;
+        var suffix = 1;
+        while (await dbContext.Users.AnyAsync(u => u.Username == username, cancellationToken))
+        {
+            username = $"{baseUsername}{suffix++}";
         }
 
         var user = new User
         {
-            Username = request.Username,
+            Username = username,
+            FullName = string.IsNullOrWhiteSpace(request.FullName) ? username : request.FullName.Trim(),
             Email = normalizedEmail,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password)
         };
@@ -35,21 +44,21 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var token = GenerateJwtToken(user);
-        return new AuthResponse(token, user.Username, user.Email);
+        return new AuthResponse(token, user.FullName, user.Email);
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
-        var user = await dbContext.Users.SingleOrDefaultAsync(u => u.Username == request.Username, cancellationToken);
+        var user = await dbContext.Users.SingleOrDefaultAsync(u => u.Email == request.Email, cancellationToken);
         
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
-            throw new Exception("Invalid username or password.");
+            throw new Exception("Email hoặc mật khẩu không đúng.");
         }
 
         if (!user.IsActive)
         {
-            throw new Exception("Account is disabled. Please contact admin.");
+            throw new Exception("Tài khoản bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.");
         }
 
         string? tempPassword = null;
@@ -71,8 +80,8 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var token = GenerateJwtToken(user, 30); // 30 days for normal login
-        return new AuthResponse(token, user.Username, user.Email, tempPassword);
+        var token = GenerateJwtToken(user, 30);
+        return new AuthResponse(token, user.FullName, user.Email, tempPassword);
     }
 
     public async Task<AuthResponse> LoginWithGoogleAsync(GoogleLoginRequest request, CancellationToken cancellationToken = default)
@@ -117,7 +126,7 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var token = GenerateJwtToken(user, 1.0 / 24.0); // 1 hour for Google login
-        return new AuthResponse(token, user.Username, user.Email);
+        return new AuthResponse(token, user.FullName, user.Email);
     }
 
     private string GenerateJwtToken(User user, double expireDays = 30)
@@ -129,9 +138,10 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.UniqueName, user.Username),
+            new Claim(JwtRegisteredClaimNames.UniqueName, user.FullName),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim("level", user.Level ?? "A1")
+            new Claim("level", user.Level ?? "A1"),
+            new Claim(ClaimTypes.Role, string.IsNullOrWhiteSpace(user.Role) ? "user" : user.Role)
         };
 
         var token = new JwtSecurityToken(
