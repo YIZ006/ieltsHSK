@@ -3,9 +3,10 @@
 @using Frontend.App.Models
 @using Frontend.App.Services
 @inject MockTestService MockTestService
+@inject ExamSubmissionService SubmissionService
 @inject NavigationManager NavigationManager
 
-<PageTitle>IELTS Mock Tests</PageTitle>
+<PageTitle>IELTS Mock Tests - Luyện Thi Thử</PageTitle>
 
 <div class="mocktests-container">
     <div class="main-content">
@@ -17,19 +18,19 @@
             <div class="collection-info">
                 <h1>IELTS Mock Test 2025 December</h1>
                 <div class="rating">
-                    <span class="score">3.7</span>
+                    <span class="score">4.8</span>
                     <span class="stars">
                         <i class="bi bi-star-fill"></i>
                         <i class="bi bi-star-fill"></i>
                         <i class="bi bi-star-fill"></i>
+                        <i class="bi bi-star-fill"></i>
                         <i class="bi bi-star-half"></i>
-                        <i class="bi bi-star"></i>
                     </span>
-                    <span class="votes">(408 votes)</span>
+                    <span class="votes">(1,420 votes)</span>
                 </div>
                 <div class="meta">
-                    <p><i class="bi bi-calendar"></i> Published on: <strong>13 Jan 2026</strong></p>
-                    <p><i class="bi bi-lightning-charge"></i> Tests taken: <strong>130,816</strong></p>
+                    <p><i class="bi bi-calendar"></i> Xuất bản: <strong>Tháng 12/2025 - 2026</strong></p>
+                    <p><i class="bi bi-lightning-charge"></i> Lượt thi: <strong>130,816</strong></p>
                 </div>
             </div>
         </div>
@@ -48,59 +49,142 @@
             <div class="tests-grid">
                 @foreach (var test in mockTests)
                 {
+                    var lSub = GetLatestSub("Listening", test.ListeningUrl, test.Id);
+                    var rSub = GetLatestSub("Reading", test.ReadingUrl, test.Id);
+                    var wSub = GetLatestSub("Writing", test.WritingUrl, test.Id);
+                    var sSub = GetLatestSub("Speaking", test.SpeakingUrl, test.Id);
+                    bool hasAnyAttempt = lSub != null || rSub != null || wSub != null || sSub != null;
+
                     <div class="test-block">
-                        <h2>@test.Title</h2>
+                        <div class="test-block-header">
+                            <h2>@test.Title</h2>
+                            <button class="btn-summary-link @(hasAnyAttempt ? "has-data" : "")"
+                                    @onclick="() => OpenSummary(test)">
+                                <i class="bi bi-bar-chart-fill"></i> Tổng hợp kết quả
+                            </button>
+                        </div>
+
                         <div class="skills-grid">
                             <!-- Listening -->
-                            <div class="skill-card listening">
+                            <div class="skill-card listening @(lSub != null ? "attempted" : "")">
                                 <div class="skill-header">
-                                    <i class="bi bi-headphones"></i>
-                                    <span>Listening</span>
+                                    <div class="sh-left">
+                                        <i class="bi bi-headphones"></i>
+                                        <span>Listening</span>
+                                    </div>
+                                    @if (lSub != null)
+                                    {
+                                        <span class="skill-score-badge">Band @(lSub.BandScore?.ToString("0.0") ?? lSub.Score?.Overall.ToString("0.0") ?? "—")</span>
+                                    }
                                 </div>
-                                <button class="btn-take-test" 
-                                        disabled="@string.IsNullOrEmpty(test.ListeningUrl)"
-                                        @onclick="() => TakeListeningTest(test.ListeningUrl, test.ListeningAnswerUrl)">
-                                    <i class="bi bi-lightning-charge-fill"></i> Take Test
-                                </button>
+                                <div class="skill-btn-group">
+                                    <button class="btn-take-test" 
+                                            disabled="@string.IsNullOrEmpty(test.ListeningUrl)"
+                                            @onclick="() => TakeListeningTest(test)">
+                                        <i class="bi bi-play-circle-fill"></i> @(lSub != null ? "Làm lại" : "Làm bài")
+                                    </button>
+                                    @if (lSub != null)
+                                    {
+                                        <button class="btn-review-mini" @onclick="() => ReviewListening(test, lSub)">
+                                            <i class="bi bi-search"></i> Xem đáp án
+                                        </button>
+                                    }
+                                </div>
                             </div>
                             
                             <!-- Reading -->
-                            <div class="skill-card reading">
+                            <div class="skill-card reading @(rSub != null ? "attempted" : "")">
                                 <div class="skill-header">
-                                    <i class="bi bi-file-text"></i>
-                                    <span>Reading</span>
+                                    <div class="sh-left">
+                                        <i class="bi bi-file-text"></i>
+                                        <span>Reading</span>
+                                    </div>
+                                    @if (rSub != null)
+                                    {
+                                        <span class="skill-score-badge">Band @(rSub.BandScore?.ToString("0.0") ?? rSub.Score?.Overall.ToString("0.0") ?? "—")</span>
+                                    }
                                 </div>
-                                <button class="btn-take-test" 
-                                        disabled="@string.IsNullOrEmpty(test.ReadingUrl)"
-                                        @onclick="() => TakeReadingTest(test.ReadingUrl, test.ReadingAnswerUrl)">
-                                    <i class="bi bi-lightning-charge-fill"></i> Take Test
-                                </button>
+                                <div class="skill-btn-group">
+                                    <button class="btn-take-test" 
+                                            disabled="@string.IsNullOrEmpty(test.ReadingUrl)"
+                                            @onclick="() => TakeReadingTest(test)">
+                                        <i class="bi bi-play-circle-fill"></i> @(rSub != null ? "Làm lại" : "Làm bài")
+                                    </button>
+                                    @if (rSub != null)
+                                    {
+                                        <button class="btn-review-mini" @onclick="() => ReviewReading(test, rSub)">
+                                            <i class="bi bi-search"></i> Xem đáp án
+                                        </button>
+                                    }
+                                </div>
                             </div>
 
                             <!-- Writing -->
-                            <div class="skill-card writing">
+                            <div class="skill-card writing @(wSub != null ? "attempted" : "")">
                                 <div class="skill-header">
-                                    <i class="bi bi-pen"></i>
-                                    <span>Writing</span>
+                                    <div class="sh-left">
+                                        <i class="bi bi-pen"></i>
+                                        <span>Writing</span>
+                                    </div>
+                                    @if (wSub != null)
+                                    {
+                                        @if (wSub.Status == "Graded" && wSub.BandScore.HasValue && wSub.BandScore.Value > 0)
+                                        {
+                                            <span class="skill-score-badge">Band @wSub.BandScore.Value.ToString("0.0")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="skill-score-badge pending"><i class="bi bi-hourglass-split"></i> Chờ chấm</span>
+                                        }
+                                    }
                                 </div>
-                                <button class="btn-take-test" 
-                                        disabled="@string.IsNullOrEmpty(test.WritingUrl)"
-                                        @onclick="() => TakeWritingTest(test.WritingUrl)">
-                                    <i class="bi bi-lightning-charge-fill"></i> Take Test
-                                </button>
+                                <div class="skill-btn-group">
+                                    <button class="btn-take-test" 
+                                            disabled="@string.IsNullOrEmpty(test.WritingUrl)"
+                                            @onclick="() => TakeWritingTest(test)">
+                                        <i class="bi bi-play-circle-fill"></i> @(wSub != null ? "Viết lại" : "Làm bài")
+                                    </button>
+                                    @if (wSub != null)
+                                    {
+                                        <button class="btn-review-mini" @onclick="() => ReviewWriting(test, wSub)">
+                                            <i class="bi bi-file-text"></i> Xem bài viết
+                                        </button>
+                                    }
+                                </div>
                             </div>
 
                             <!-- Speaking -->
-                            <div class="skill-card speaking">
+                            <div class="skill-card speaking @(sSub != null ? "attempted" : "")">
                                 <div class="skill-header">
-                                    <i class="bi bi-mic"></i>
-                                    <span>Speaking</span>
+                                    <div class="sh-left">
+                                        <i class="bi bi-mic"></i>
+                                        <span>Speaking</span>
+                                    </div>
+                                    @if (sSub != null)
+                                    {
+                                        @if (sSub.Status == "Graded" && sSub.BandScore.HasValue && sSub.BandScore.Value > 0)
+                                        {
+                                            <span class="skill-score-badge">Band @sSub.BandScore.Value.ToString("0.0")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="skill-score-badge pending"><i class="bi bi-hourglass-split"></i> Chờ chấm</span>
+                                        }
+                                    }
                                 </div>
-                                <button class="btn-take-test"
-                                        disabled="@string.IsNullOrEmpty(test.SpeakingUrl)"
-                                        @onclick="() => TakeSpeakingTest(test.SpeakingUrl)">
-                                    <i class="bi bi-lightning-charge-fill"></i> Take Test
-                                </button>
+                                <div class="skill-btn-group">
+                                    <button class="btn-take-test"
+                                            disabled="@string.IsNullOrEmpty(test.SpeakingUrl)"
+                                            @onclick="() => TakeSpeakingTest(test)">
+                                        <i class="bi bi-play-circle-fill"></i> @(sSub != null ? "Thi lại" : "Làm bài")
+                                    </button>
+                                    @if (sSub != null)
+                                    {
+                                        <button class="btn-review-mini" @onclick="() => ReviewSpeaking(test, sSub)">
+                                            <i class="bi bi-soundwave"></i> Xem bài nói
+                                        </button>
+                                    }
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -109,53 +193,129 @@
         }
     </div>
 
-    <!-- Sidebar Banner (Optional) -->
+    <!-- Sidebar Banner -->
     <div class="sidebar">
         <div class="ad-banner">
-            <h3>Tuyển dụng<br/><span class="highlight">Giảng viên IELTS</span></h3>
-            <p>Thu nhập 40-50 triệu/tháng</p>
-            <button class="btn-learn-more">Tìm hiểu thêm</button>
-            <img src="https://placehold.co/300x200/1e1e1e/FFF?text=Join+Our+Team" alt="Join Team" />
+            <h3>Luyện Thi IELTS<br/><span class="highlight">Đạt Target Band</span></h3>
+            <p>Hệ thống chấm điểm thông minh 4 kỹ năng chuẩn Cambridge.</p>
+            <button class="btn-learn-more" @onclick="@(() => NavigationManager.NavigateTo("/ielts/vocab"))">Học từ vựng IELTS</button>
+            <img src="https://placehold.co/300x200/1e1e1e/FFF?text=IELTS+Preparation" alt="IELTS Prep" />
         </div>
     </div>
 </div>
 
 @code {
     private List<MockTestDto> mockTests = new();
+    private List<IeltsSubmissionRecord> submissions = new();
     private bool isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
         isLoading = true;
-        mockTests = await MockTestService.GetMockTestsAsync();
-        isLoading = false;
+        try
+        {
+            var allTests = await MockTestService.GetMockTestsAsync();
+            mockTests = allTests.Where(t => 
+                string.IsNullOrEmpty(t.ToeicUrl) && 
+                string.IsNullOrEmpty(t.HskUrl) &&
+                !(t.Title != null && t.Title.Contains("HSK", StringComparison.OrdinalIgnoreCase)) &&
+                !(t.CollectionName != null && t.CollectionName.Contains("HSK", StringComparison.OrdinalIgnoreCase)) &&
+                !(t.Title != null && t.Title.Contains("TOEIC", StringComparison.OrdinalIgnoreCase)) &&
+                !(t.CollectionName != null && t.CollectionName.Contains("TOEIC", StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+
+            submissions = await SubmissionService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading mock tests: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private IeltsSubmissionRecord? GetLatestSub(string skill, string? examUrl, int? mockTestId = null)
+    {
+        if (string.IsNullOrEmpty(examUrl) && !mockTestId.HasValue) return null;
+        var normExam = ExamSubmissionService.NormalizeUrl(examUrl);
+        return submissions
+            .Where(s => string.Equals(s.Skill, skill, StringComparison.OrdinalIgnoreCase))
+            .Where(s => (mockTestId.HasValue && s.MockTestId == mockTestId) || (!string.IsNullOrEmpty(normExam) && ExamSubmissionService.NormalizeUrl(s.ExamUrl) == normExam))
+            .OrderByDescending(s => s.SubmittedAt)
+            .FirstOrDefault();
     }
 
     private static string NewSessionQuery() => $"Session={Guid.NewGuid():N}";
 
-    private void TakeReadingTest(string? url, string? answerUrl)
+    private void OpenSummary(MockTestDto test)
     {
-        if (string.IsNullOrEmpty(url)) return;
-        var extra = string.IsNullOrWhiteSpace(answerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(answerUrl)}";
-        NavigationManager.NavigateTo($"/ielts/reading/preview?ExamUrl={Uri.EscapeDataString(url)}{extra}&{NewSessionQuery()}");
+        var coll = string.IsNullOrWhiteSpace(test.CollectionName) ? "IELTS Mock Test 2025 December" : test.CollectionName;
+        NavigationManager.NavigateTo($"/ielts/mock-test/summary?MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}");
     }
 
-    private void TakeListeningTest(string? url, string? answerUrl)
+    private void TakeReadingTest(MockTestDto test)
     {
-        if (string.IsNullOrEmpty(url)) return;
-        var extra = string.IsNullOrWhiteSpace(answerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(answerUrl)}";
-        NavigationManager.NavigateTo($"/ielts/listening/preview?ExamUrl={Uri.EscapeDataString(url)}{extra}&{NewSessionQuery()}");
+        if (string.IsNullOrEmpty(test.ReadingUrl)) return;
+        var extra = string.IsNullOrWhiteSpace(test.ReadingAnswerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(test.ReadingAnswerUrl)}";
+        var coll = string.IsNullOrWhiteSpace(test.CollectionName) ? "IELTS Mock Test 2025 December" : test.CollectionName;
+        NavigationManager.NavigateTo($"/ielts/reading/preview?ExamUrl={Uri.EscapeDataString(test.ReadingUrl)}{extra}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}&{NewSessionQuery()}");
     }
 
-    private void TakeWritingTest(string? url)
+    private void ReviewReading(MockTestDto test, IeltsSubmissionRecord sub)
     {
-        if (string.IsNullOrEmpty(url)) return;
-        NavigationManager.NavigateTo($"/ielts/writing/preview?ExamUrl={Uri.EscapeDataString(url)}&{NewSessionQuery()}");
+        var extra = string.IsNullOrWhiteSpace(test.ReadingAnswerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(test.ReadingAnswerUrl)}";
+        var coll = string.IsNullOrWhiteSpace(test.CollectionName) ? "IELTS Mock Test 2025 December" : test.CollectionName;
+        var sess = string.IsNullOrWhiteSpace(sub.SessionId) ? "" : $"&Session={Uri.EscapeDataString(sub.SessionId)}";
+        var subId = string.IsNullOrWhiteSpace(sub.Id) ? "" : $"&SubmissionId={Uri.EscapeDataString(sub.Id)}";
+        NavigationManager.NavigateTo($"/ielts/review?Skill=Reading&ExamUrl={Uri.EscapeDataString(test.ReadingUrl ?? "")}{extra}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}{sess}{subId}");
     }
 
-    private void TakeSpeakingTest(string? url)
+    private void TakeListeningTest(MockTestDto test)
     {
-        if (string.IsNullOrEmpty(url)) return;
-        NavigationManager.NavigateTo($"/ielts/speaking/preview?ExamUrl={Uri.EscapeDataString(url)}&{NewSessionQuery()}");
+        if (string.IsNullOrEmpty(test.ListeningUrl)) return;
+        var extra = string.IsNullOrWhiteSpace(test.ListeningAnswerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(test.ListeningAnswerUrl)}";
+        var coll = string.IsNullOrWhiteSpace(test.CollectionName) ? "IELTS Mock Test 2025 December" : test.CollectionName;
+        NavigationManager.NavigateTo($"/ielts/listening/preview?ExamUrl={Uri.EscapeDataString(test.ListeningUrl)}{extra}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}&{NewSessionQuery()}");
+    }
+
+    private void ReviewListening(MockTestDto test, IeltsSubmissionRecord sub)
+    {
+        var extra = string.IsNullOrWhiteSpace(test.ListeningAnswerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(test.ListeningAnswerUrl)}";
+        var coll = string.IsNullOrWhiteSpace(test.CollectionName) ? "IELTS Mock Test 2025 December" : test.CollectionName;
+        var sess = string.IsNullOrWhiteSpace(sub.SessionId) ? "" : $"&Session={Uri.EscapeDataString(sub.SessionId)}";
+        var subId = string.IsNullOrWhiteSpace(sub.Id) ? "" : $"&SubmissionId={Uri.EscapeDataString(sub.Id)}";
+        NavigationManager.NavigateTo($"/ielts/review?Skill=Listening&ExamUrl={Uri.EscapeDataString(test.ListeningUrl ?? "")}{extra}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}{sess}{subId}");
+    }
+
+    private void TakeWritingTest(MockTestDto test)
+    {
+        if (string.IsNullOrEmpty(test.WritingUrl)) return;
+        var coll = string.IsNullOrWhiteSpace(test.CollectionName) ? "IELTS Mock Test 2025 December" : test.CollectionName;
+        NavigationManager.NavigateTo($"/ielts/writing/preview?ExamUrl={Uri.EscapeDataString(test.WritingUrl)}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}&{NewSessionQuery()}");
+    }
+
+    private void ReviewWriting(MockTestDto test, IeltsSubmissionRecord sub)
+    {
+        var coll = string.IsNullOrWhiteSpace(test.CollectionName) ? "IELTS Mock Test 2025 December" : test.CollectionName;
+        var sess = string.IsNullOrWhiteSpace(sub.SessionId) ? "" : $"&Session={Uri.EscapeDataString(sub.SessionId)}";
+        var subId = string.IsNullOrWhiteSpace(sub.Id) ? "" : $"&SubmissionId={Uri.EscapeDataString(sub.Id)}";
+        NavigationManager.NavigateTo($"/ielts/review?Skill=Writing&ExamUrl={Uri.EscapeDataString(test.WritingUrl ?? "")}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}{sess}{subId}");
+    }
+
+    private void TakeSpeakingTest(MockTestDto test)
+    {
+        if (string.IsNullOrEmpty(test.SpeakingUrl)) return;
+        var coll = string.IsNullOrWhiteSpace(test.CollectionName) ? "IELTS Mock Test 2025 December" : test.CollectionName;
+        NavigationManager.NavigateTo($"/ielts/speaking/preview?ExamUrl={Uri.EscapeDataString(test.SpeakingUrl)}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}&{NewSessionQuery()}");
+    }
+
+    private void ReviewSpeaking(MockTestDto test, IeltsSubmissionRecord sub)
+    {
+        var coll = string.IsNullOrWhiteSpace(test.CollectionName) ? "IELTS Mock Test 2025 December" : test.CollectionName;
+        var sess = string.IsNullOrWhiteSpace(sub.SessionId) ? "" : $"&Session={Uri.EscapeDataString(sub.SessionId)}";
+        var subId = string.IsNullOrWhiteSpace(sub.Id) ? "" : $"&SubmissionId={Uri.EscapeDataString(sub.Id)}";
+        NavigationManager.NavigateTo($"/ielts/review?Skill=Speaking&ExamUrl={Uri.EscapeDataString(test.SpeakingUrl ?? "")}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}{sess}{subId}");
     }
 }

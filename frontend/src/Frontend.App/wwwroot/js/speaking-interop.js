@@ -181,47 +181,77 @@ window.SpeakingInterop = (() => {
         });
     }
 
+    let currentRecordedBlob = null;
+    let selectedDeviceId = '';
+
     // ══════════════════════════════════════════
     // RECORDING + SPEECH RECOGNITION
     // ══════════════════════════════════════════
 
-    function startRecording(canvasId, netRef) {
-        if (!mediaStream) return false;
+    async function startRecording(canvasId, netRef, deviceId) {
         dotNetRef = netRef;
         transcript = '';
         audioChunks = [];
+        currentRecordedBlob = null;
         recordingStartTime = Date.now();
 
-        // MediaRecorder
-        mediaRecorder = new MediaRecorder(mediaStream);
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-        mediaRecorder.start(100);
+        // Ensure active microphone mediaStream
+        if (!mediaStream || mediaStream.getAudioTracks().length === 0 || mediaStream.getAudioTracks().every(t => t.readyState === 'ended')) {
+            const micRes = await openMicrophone(deviceId || selectedDeviceId);
+            if (!micRes.success) {
+                console.error('Failed to open microphone for recording:', micRes.error);
+                return false;
+            }
+        }
+
+        try {
+            // MediaRecorder
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                ? 'audio/webm;codecs=opus'
+                : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : ''));
+            
+            mediaRecorder = mimeType ? new MediaRecorder(mediaStream, { mimeType }) : new MediaRecorder(mediaStream);
+            mediaRecorder.ondataavailable = e => {
+                if (e.data && e.data.size > 0) {
+                    audioChunks.push(e.data);
+                }
+            };
+            mediaRecorder.start(100);
+        } catch (recErr) {
+            console.warn('MediaRecorder error:', recErr);
+        }
 
         // Web Speech API
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (SpeechRecognition) {
-            recognition = new SpeechRecognition();
-            recognition.lang = 'en-US';
-            recognition.continuous = true;
-            recognition.interimResults = true;
+        try {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.lang = 'en-US';
+                recognition.continuous = true;
+                recognition.interimResults = true;
 
-            recognition.onresult = (event) => {
-                let interim = '';
-                let final = '';
-                for (let i = event.resultIndex; i < event.results.length; i++) {
-                    if (event.results[i].isFinal) final += event.results[i][0].transcript + ' ';
-                    else interim += event.results[i][0].transcript;
-                }
-                if (final) transcript += final;
-                const display = transcript + interim;
-                dotNetRef.invokeMethodAsync('OnTranscriptUpdate', display.trim());
-            };
+                recognition.onresult = (event) => {
+                    let interim = '';
+                    let final = '';
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        if (event.results[i].isFinal) final += event.results[i][0].transcript + ' ';
+                        else interim += event.results[i][0].transcript;
+                    }
+                    if (final) transcript += final;
+                    const display = transcript + interim;
+                    if (dotNetRef) {
+                        dotNetRef.invokeMethodAsync('OnTranscriptUpdate', display.trim());
+                    }
+                };
 
-            recognition.onerror = (e) => {
-                if (e.error !== 'no-speech') console.warn('Speech recognition error:', e.error);
-            };
+                recognition.onerror = (e) => {
+                    console.warn('Web Speech API note:', e.error);
+                };
 
-            recognition.start();
+                recognition.start();
+            }
+        } catch (speechErr) {
+            console.warn('SpeechRecognition initialization note:', speechErr);
         }
 
         // Waveform during recording
@@ -234,39 +264,43 @@ window.SpeakingInterop = (() => {
         if (!canvas || !mediaStream) return;
 
         if (audioContext && audioContext.state !== 'closed') {
-            audioContext.close();
+            try { audioContext.close(); } catch (e) {}
         }
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(mediaStream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 512;
-        source.connect(analyser);
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(mediaStream);
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 512;
+            source.connect(analyser);
 
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-        const ctx = canvas.getContext('2d');
-        const w = canvas.width, h = canvas.height;
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width, h = canvas.height;
 
-        function draw() {
-            animFrameId = requestAnimationFrame(draw);
-            analyser.getByteTimeDomainData(dataArray);
-            ctx.fillStyle = 'rgba(17, 24, 39, 0.85)';
-            ctx.fillRect(0, 0, w, h);
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#f472b6';
-            ctx.beginPath();
-            const sliceWidth = w / bufferLength;
-            let x = 0;
-            for (let i = 0; i < bufferLength; i++) {
-                const v = dataArray[i] / 128.0;
-                const y = (v * h) / 2;
-                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-                x += sliceWidth;
+            function draw() {
+                animFrameId = requestAnimationFrame(draw);
+                analyser.getByteTimeDomainData(dataArray);
+                ctx.fillStyle = 'rgba(17, 24, 39, 0.85)';
+                ctx.fillRect(0, 0, w, h);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#f472b6';
+                ctx.beginPath();
+                const sliceWidth = w / bufferLength;
+                let x = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 128.0;
+                    const y = (v * h) / 2;
+                    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                    x += sliceWidth;
+                }
+                ctx.lineTo(w, h / 2);
+                ctx.stroke();
             }
-            ctx.lineTo(w, h / 2);
-            ctx.stroke();
+            draw();
+        } catch (e) {
+            console.warn('Waveform audio context error:', e);
         }
-        draw();
     }
 
     function stopRecording() {
@@ -274,17 +308,73 @@ window.SpeakingInterop = (() => {
             stopVisualizer();
             const durationMs = Date.now() - (recordingStartTime || Date.now());
 
-            if (recognition) { try { recognition.stop(); } catch (e) {} recognition = null; }
+            if (recognition) {
+                try { recognition.stop(); } catch (e) {}
+                recognition = null;
+            }
 
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.onstop = () => {
-                    resolve({ transcript: transcript.trim(), durationMs });
+                    currentRecordedBlob = new Blob(audioChunks, {
+                        type: mediaRecorder.mimeType || 'audio/webm'
+                    });
+                    resolve({
+                        transcript: transcript.trim(),
+                        durationMs,
+                        hasAudioBlob: currentRecordedBlob.size > 0,
+                        blobSize: currentRecordedBlob.size
+                    });
                 };
                 mediaRecorder.stop();
             } else {
-                resolve({ transcript: transcript.trim(), durationMs });
+                currentRecordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                resolve({
+                    transcript: transcript.trim(),
+                    durationMs,
+                    hasAudioBlob: currentRecordedBlob.size > 0,
+                    blobSize: currentRecordedBlob.size
+                });
             }
         });
+    }
+
+    async function uploadCurrentRecording(uploadUrl, authToken, questionId, partNumber, durationMs, sessionId, examUrl) {
+        if (!currentRecordedBlob || currentRecordedBlob.size === 0) {
+            return { success: false, error: 'No audio recorded' };
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('audioFile', currentRecordedBlob, `recording_${questionId || Date.now()}.webm`);
+            formData.append('questionId', questionId || 0);
+            formData.append('partNumber', partNumber || 1);
+            formData.append('durationMs', Math.round(durationMs || 0));
+            formData.append('sessionId', sessionId || '');
+            formData.append('examUrl', examUrl || '');
+            formData.append('transcript', transcript.trim());
+
+            const headers = {};
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            const res = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: headers,
+                body: formData
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                return { success: true, data };
+            } else {
+                const errText = await res.text();
+                return { success: false, error: errText };
+            }
+        } catch (err) {
+            console.error('Audio upload error:', err);
+            return { success: false, error: err.message || 'Network error' };
+        }
     }
 
     // ══════════════════════════════════════════
@@ -428,6 +518,7 @@ window.SpeakingInterop = (() => {
         evaluate,
         bindVideoEnded,
         playVideo,
-        stopMicStream
+        stopMicStream,
+        uploadCurrentRecording
     };
 })();

@@ -1,0 +1,768 @@
+@page "/ielts/review"
+@page "/ielts/dap-an"
+@page "/ielts/xem-dap-an"
+@layout Frontend.App.Layout.IeltsLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using System.Net.Http.Json
+@inject ExamSubmissionService SubmissionService
+@inject ExamService ExamService
+@inject AnswerKeyService AnswerKeyService
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<PageTitle>Đáp án & Giải thích chi tiết: @(examTitle ?? "IELTS Test Review") - ieltsHSK</PageTitle>
+
+<div class="review-page-container">
+    @if (isLoading)
+    {
+        <div class="review-loading">
+            <div class="spinner"></div>
+            <p>Đang tải dữ liệu đáp án và bài làm...</p>
+        </div>
+    }
+    else if (submission == null && examData == null && writingData == null && speakingData == null)
+    {
+        <div class="review-empty">
+            <div class="empty-icon">📭</div>
+            <h3>Không tìm thấy dữ liệu bài làm hoặc đáp án</h3>
+            <p>Vui lòng kiểm tra lại liên kết hoặc quay về kho đề thi.</p>
+            <button class="btn-primary" @onclick="GoBackToTests">Quay lại danh sách đề</button>
+        </div>
+    }
+    else
+    {
+        <!-- Breadcrumb & Top Bar -->
+        <div class="review-header-card">
+            <nav class="review-breadcrumb">
+                <a href="/ielts/luyen-de"><i class="bi bi-collection"></i> Kho đề thi</a>
+                <span>/</span>
+                <span>@(collectionName ?? "IELTS Mock Test")</span>
+                <span>/</span>
+                <span class="active">@(testTitle ?? examTitle ?? "Practise Test")</span>
+            </nav>
+
+            <div class="review-header-content">
+                <div class="title-section">
+                    <div class="skill-badge-header @currentSkill.ToLower()">
+                        <i class="@GetSkillIconClass(currentSkill)"></i> @currentSkill.ToUpper()
+                    </div>
+                    <h1>@(testTitle ?? examTitle ?? $"{currentSkill} Review")</h1>
+                    @if (submission != null)
+                    {
+                        <div class="submission-meta">
+                            <span><i class="bi bi-clock-history"></i> Nộp lúc: @submission.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                            @if (submission.DurationSeconds > 0)
+                            {
+                                <span><i class="bi bi-stopwatch"></i> Thời gian làm: @FormatDuration(submission.DurationSeconds)</span>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="header-actions">
+                    <button class="btn-action-outline" @onclick="GoToSummary">
+                        <i class="bi bi-bar-chart-fill"></i> Tổng hợp 4 kỹ năng
+                    </button>
+                    <button class="btn-action-primary" @onclick="RetakeExam">
+                        <i class="bi bi-arrow-counterclockwise"></i> Làm lại đề này
+                    </button>
+                    <button class="btn-action-back" @onclick="GoBackToTests">
+                        <i class="bi bi-arrow-left"></i> Danh sách đề
+                    </button>
+                </div>
+            </div>
+
+            <!-- Score Summary Hero -->
+            <div class="review-score-hero @currentSkill.ToLower()">
+                @if (currentSkill.Equals("Writing", StringComparison.OrdinalIgnoreCase) || currentSkill.Equals("Speaking", StringComparison.OrdinalIgnoreCase))
+                {
+                    <div class="hero-score-box">
+                        <span class="score-lbl">KẾT QUẢ @currentSkill.ToUpper()</span>
+                        @if (submission?.Status == "Graded" && submission.BandScore.HasValue && submission.BandScore.Value > 0)
+                        {
+                            <span class="score-val">Band @submission.BandScore.Value.ToString("0.0")</span>
+                            <span class="score-status-badge graded"><i class="bi bi-check-circle-fill"></i> Đã có điểm chính thức</span>
+                        }
+                        else
+                        {
+                            <span class="score-val pending"><i class="bi bi-hourglass-split"></i></span>
+                            <span class="score-status-badge pending"><i class="bi bi-clock"></i> Đang chờ giáo viên chấm điểm</span>
+                        }
+                    </div>
+
+                    <div class="hero-info-pane">
+                        @if (submission?.Status == "Graded" && submission.BandScore.HasValue)
+                        {
+                            <div class="criteria-summary-grid">
+                                @if (submission.Score?.Criteria != null && submission.Score.Criteria.Count > 0)
+                                {
+                                    @foreach (var c in submission.Score.Criteria)
+                                    {
+                                        <div class="crit-pill">
+                                            <span class="crit-title">@c.Name</span>
+                                            <span class="crit-val">Band @c.Score.ToString("0.0")</span>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(submission.TeacherFeedback))
+                            {
+                                <div class="teacher-feedback-card">
+                                    <strong><i class="bi bi-chat-left-quote-fill"></i> Nhận xét & Đánh giá từ Giáo viên:</strong>
+                                    <p>@submission.TeacherFeedback</p>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="pending-notice">
+                                <p><i class="bi bi-info-circle-fill"></i> Bài thi <strong>@currentSkill</strong> của bạn đã được ghi nhận và đang chờ Admin/Giáo viên chấm điểm 4 tiêu chí chuẩn Cambridge IELTS.</p>
+                                <p class="sub-text">Bạn có thể xem lại nội dung bài đã nộp và tham khảo bài mẫu điểm cao ở các tab bên dưới.</p>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <!-- Reading & Listening Score Box -->
+                    <div class="hero-score-box">
+                        <span class="score-lbl">OVERALL BAND</span>
+                        <span class="score-val">@((submission?.BandScore ?? gradingResult?.BandScore ?? 0).ToString("0.0"))</span>
+                        <span class="score-status-badge graded"><i class="bi bi-check-circle-fill"></i> Đã hoàn thành</span>
+                    </div>
+
+                    <div class="hero-stats-grid">
+                        <div class="stat-box correct">
+                            <span class="stat-icon"><i class="bi bi-check-lg"></i></span>
+                            <div class="stat-detail">
+                                <span class="stat-num">@GetCorrectCount() / @GetTotalCount()</span>
+                                <span class="stat-name">Số câu đúng</span>
+                            </div>
+                        </div>
+                        <div class="stat-box wrong">
+                            <span class="stat-icon"><i class="bi bi-x-lg"></i></span>
+                            <div class="stat-detail">
+                                <span class="stat-num">@GetWrongCount()</span>
+                                <span class="stat-name">Số câu sai</span>
+                            </div>
+                        </div>
+                        <div class="stat-box blank">
+                            <span class="stat-icon"><i class="bi bi-dash-lg"></i></span>
+                            <div class="stat-detail">
+                                <span class="stat-num">@GetBlankCount()</span>
+                                <span class="stat-name">Bỏ trống</span>
+                            </div>
+                        </div>
+                        <div class="stat-box accuracy">
+                            <span class="stat-icon"><i class="bi bi-pie-chart-fill"></i></span>
+                            <div class="stat-detail">
+                                <span class="stat-num">@(GetTotalCount() == 0 ? 0 : Math.Round((double)GetCorrectCount() / GetTotalCount() * 100))%</span>
+                                <span class="stat-name">Độ chính xác</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* ════════════════════════════════════════════════════════════════════
+           SKILL: READING & LISTENING REVIEW
+           ════════════════════════════════════════════════════════════════════ *@
+        @if (currentSkill.Equals("Reading", StringComparison.OrdinalIgnoreCase) || currentSkill.Equals("Listening", StringComparison.OrdinalIgnoreCase))
+        {
+            @if (examData != null && examData.Parts.Count > 0)
+            {
+                var activePart = examData.Parts.ElementAtOrDefault(activePartIndex) ?? examData.Parts[0];
+                var activeGroups = GetQuestionGroups(activePart);
+                int qStart = examData.Parts.Take(activePartIndex).Sum(p => GetQuestionGroups(p).Sum(g => g.Questions.Count)) + 1;
+                int qEnd = qStart + activeGroups.Sum(g => g.Questions.Count) - 1;
+
+                <!-- Part Tabs & Filter Toolbar -->
+                <div class="review-toolbar">
+                    <div class="part-tabs-group">
+                        @for (int i = 0; i < examData.Parts.Count; i++)
+                        {
+                            var idx = i;
+                            var p = examData.Parts[i];
+                            var pGroups = GetQuestionGroups(p);
+                            int pCorrect = pGroups.Sum(g => g.Questions.Count(q => IsQuestionCorrect(q.Id)));
+                            int pTotal = pGroups.Sum(g => g.Questions.Count);
+
+                            <button class="part-tab-btn @(activePartIndex == idx ? "active" : "")"
+                                    @onclick="() => activePartIndex = idx">
+                                <span>Part @p.PartNumber</span>
+                                <span class="part-score-pill">@pCorrect/@pTotal</span>
+                            </button>
+                        }
+                    </div>
+
+                    <!-- Question Filter (All / Correct / Wrong / Blank) -->
+                    <div class="filter-pills-group">
+                        <span class="filter-lbl"><i class="bi bi-funnel-fill"></i> Lọc câu:</span>
+                        <button class="filter-btn @(questionFilter == "all" ? "active" : "")" @onclick='() => questionFilter = "all"'>
+                            Tất cả (@GetTotalCount())
+                        </button>
+                        <button class="filter-btn correct @(questionFilter == "correct" ? "active" : "")" @onclick='() => questionFilter = "correct"'>
+                            ✓ Đúng (@GetCorrectCount())
+                        </button>
+                        <button class="filter-btn wrong @(questionFilter == "wrong" ? "active" : "")" @onclick='() => questionFilter = "wrong"'>
+                            ✕ Sai (@GetWrongCount())
+                        </button>
+                        <button class="filter-btn blank @(questionFilter == "blank" ? "active" : "")" @onclick='() => questionFilter = "blank"'>
+                            ⚪ Chưa làm (@GetBlankCount())
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Main Split Layout for Reading / Listening -->
+                <div class="review-split-layout">
+                    <!-- Left: Passage or Audio Player + Transcript -->
+                    <div class="passage-pane">
+                        @if (currentSkill.Equals("Listening", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <div class="listening-audio-box">
+                                <div class="audio-header">
+                                    <i class="bi bi-headphones"></i>
+                                    <span>File âm thanh bài nghe</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(examData.AudioUrl))
+                                {
+                                    <audio controls class="review-audio-player" src="@examData.AudioUrl"></audio>
+                                }
+                                else
+                                {
+                                    <p class="no-audio">Đề thi này không có file audio đính kèm.</p>
+                                }
+                            </div>
+                        }
+
+                        <div class="passage-content-card">
+                            <div class="part-header-tag">
+                                PART @activePart.PartNumber (Câu hỏi @qStart - @qEnd)
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(activePart.PassageTitle))
+                            {
+                                <h2 class="passage-title">@activePart.PassageTitle</h2>
+                            }
+                            <div class="passage-html-body">
+                                @((MarkupString)activePart.PassageHtml)
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Questions with Student Answer vs Correct Answer -->
+                    <div class="questions-pane">
+                        @foreach (var group in activeGroups)
+                        {
+                            var filteredGroupQuestions = group.Questions.Where(PassesFilter).ToList();
+                            if (filteredGroupQuestions.Count == 0 && questionFilter != "all") continue;
+
+                            <div class="question-group-card">
+                                @if (!string.IsNullOrWhiteSpace(group.Instruction))
+                                {
+                                    <div class="group-instruction">
+                                        @((MarkupString)group.Instruction)
+                                    </div>
+                                }
+
+                                @foreach (var q in filteredGroupQuestions)
+                                {
+                                    var qResult = GetQuestionResult(q.Id);
+                                    bool isCorrect = qResult?.IsCorrect ?? false;
+                                    bool isBlank = qResult?.IsBlank ?? true;
+
+                                    <div class="review-question-card @(isCorrect ? "is-correct" : isBlank ? "is-blank" : "is-wrong")"
+                                         id="q-@q.Id">
+                                        <div class="q-header">
+                                            <span class="q-num-badge @(isCorrect ? "badge-correct" : isBlank ? "badge-blank" : "badge-wrong")">
+                                                Câu @q.Id
+                                            </span>
+                                            <span class="q-verdict">
+                                                @(isCorrect ? "✓ Chính xác" : isBlank ? "⚪ Chưa trả lời" : "✕ Chưa chính xác")
+                                            </span>
+                                        </div>
+
+                                        <div class="q-body-text">
+                                            @((MarkupString)q.Text)
+                                        </div>
+
+                                        @if (q.Options != null && q.Options.Count > 0)
+                                        {
+                                            <div class="options-review-list">
+                                                @foreach (var opt in q.Options)
+                                                {
+                                                    bool isStudentPick = string.Equals(opt.Label, qResult?.StudentAnswer, StringComparison.OrdinalIgnoreCase) ||
+                                                                        string.Equals(opt.Text, qResult?.StudentAnswer, StringComparison.OrdinalIgnoreCase);
+                                                    bool isCorrectOpt = string.Equals(opt.Label, qResult?.CorrectAnswer, StringComparison.OrdinalIgnoreCase) ||
+                                                                       (qResult?.AcceptedAnswers != null && qResult.AcceptedAnswers.Any(a => string.Equals(a, opt.Label, StringComparison.OrdinalIgnoreCase)));
+
+                                                    <div class="opt-review-item @(isCorrectOpt ? "opt-correct" : isStudentPick && !isCorrect ? "opt-wrong" : "")">
+                                                        <span class="opt-label">@opt.Label</span>
+                                                        <span class="opt-text">@opt.Text</span>
+                                                        @if (isCorrectOpt)
+                                                        {
+                                                            <span class="opt-tag correct">✓ Đáp án đúng</span>
+                                                        }
+                                                        @if (isStudentPick && !isCorrect)
+                                                        {
+                                                            <span class="opt-tag wrong">✕ Bạn đã chọn</span>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+
+                                        <!-- Comparison Box for Student vs Correct Answer -->
+                                        <div class="answer-comparison-box @(isCorrect ? "box-correct" : isBlank ? "box-blank" : "box-wrong")">
+                                            <div class="answer-row">
+                                                <span class="ans-lbl"><i class="bi bi-person-fill"></i> Đáp án của bạn:</span>
+                                                <strong class="ans-val student @(isCorrect ? "c-correct" : "c-wrong")">
+                                                    @(string.IsNullOrWhiteSpace(qResult?.StudentAnswer) ? "— (Bỏ trống)" : qResult.StudentAnswer)
+                                                </strong>
+                                            </div>
+                                            @if (!isCorrect)
+                                            {
+                                                <div class="answer-row">
+                                                    <span class="ans-lbl"><i class="bi bi-check-circle-fill"></i> Đáp án chính xác:</span>
+                                                    <strong class="ans-val correct">
+                                                        @(qResult?.CorrectAnswer ?? "—")
+                                                        @if (qResult?.AcceptedAnswers != null && qResult.AcceptedAnswers.Count > 1)
+                                                        {
+                                                            <span class="accepted-hint">(Chấp nhận: @string.Join(" / ", qResult.AcceptedAnswers))</span>
+                                                        }
+                                                    </strong>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Bottom Sticky Question Navigator -->
+                <div class="bottom-navigator-bar">
+                    <div class="nav-left">
+                        <span class="nav-title">Danh sách câu hỏi:</span>
+                        <div class="nav-legend">
+                            <span class="legend-dot correct"></span> Đúng
+                            <span class="legend-dot wrong"></span> Sai
+                            <span class="legend-dot blank"></span> Chưa làm
+                        </div>
+                    </div>
+                    <div class="nav-numbers-track">
+                        @foreach (var part in examData.Parts)
+                        {
+                            foreach (var g in GetQuestionGroups(part))
+                            {
+                                foreach (var q in g.Questions)
+                                {
+                                    var qRes = GetQuestionResult(q.Id);
+                                    string stateClass = qRes == null ? "blank" : (qRes.IsCorrect ? "correct" : qRes.IsBlank ? "blank" : "wrong");
+
+                                    <button class="q-nav-btn @stateClass" @onclick="() => ScrollToQuestion(part.PartNumber, q.Id)">
+                                        @q.Id
+                                    </button>
+                                }
+                            }
+                        }
+                    </div>
+                </div>
+            }
+        }
+
+        @* ════════════════════════════════════════════════════════════════════
+           SKILL: WRITING REVIEW
+           ════════════════════════════════════════════════════════════════════ *@
+        @if (currentSkill.Equals("Writing", StringComparison.OrdinalIgnoreCase))
+        {
+            @if (writingData != null && writingData.Tasks.Count > 0)
+            {
+                var activeTask = writingData.Tasks.ElementAtOrDefault(activeTaskIndex) ?? writingData.Tasks[0];
+                var userTaskSub = submission?.Writing?.Tasks?.FirstOrDefault(t => t.TaskNumber == activeTask.TaskNumber);
+
+                <div class="writing-review-container">
+                    <div class="writing-task-tabs">
+                        @for (int i = 0; i < writingData.Tasks.Count; i++)
+                        {
+                            var idx = i;
+                            var t = writingData.Tasks[i];
+                            <button class="w-tab-btn @(activeTaskIndex == idx ? "active" : "")" @onclick="() => activeTaskIndex = idx">
+                                @t.TaskTitle
+                            </button>
+                        }
+                        <div class="tabs-right-toggle">
+                            <button class="view-pill-btn @(writingViewMode == "student" ? "active" : "")" @onclick='() => writingViewMode = "student"'>
+                                📝 Bài làm của bạn
+                            </button>
+                            <button class="view-pill-btn model @(writingViewMode == "model" ? "active" : "")" @onclick='() => writingViewMode = "model"'>
+                                🏆 Bài mẫu Band @(activeTask.ExaminerBand?.ToString("0.0") ?? "8.5")
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="writing-split-review">
+                        <!-- Left: Prompt & Instruction -->
+                        <div class="w-prompt-pane">
+                            <div class="w-prompt-card">
+                                <h3>@activeTask.TaskTitle</h3>
+                                <p class="w-instruction">@((MarkupString)activeTask.Instruction)</p>
+                                <div class="w-prompt-body">@((MarkupString)activeTask.Prompt)</div>
+                                <div class="w-word-req">
+                                    Yêu cầu tối thiểu: <strong>@activeTask.MinWords từ</strong>
+                                </div>
+                                @if (!string.IsNullOrEmpty(activeTask.ImageUrl))
+                                {
+                                    <div class="w-prompt-img-box">
+                                        <img src="@activeTask.ImageUrl" alt="@activeTask.ImageAlt" />
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Right: Student Essay OR Model Answer -->
+                        <div class="w-content-pane">
+                            @if (writingViewMode == "student")
+                            {
+                                <div class="essay-paper student-paper">
+                                    <div class="paper-header">
+                                        <h4>📄 Bài viết bạn đã nộp</h4>
+                                        <span class="word-counter">
+                                            Số từ đã viết: <strong>@(userTaskSub?.WordCount ?? activeTask.WordCount)</strong> từ
+                                        </span>
+                                    </div>
+                                    <div class="paper-body">
+                                        @if (!string.IsNullOrWhiteSpace(userTaskSub?.Answer) || !string.IsNullOrWhiteSpace(activeTask.Answer))
+                                        {
+                                            <p class="essay-text">@(string.IsNullOrWhiteSpace(userTaskSub?.Answer) ? activeTask.Answer : userTaskSub.Answer)</p>
+                                        }
+                                        else
+                                        {
+                                            <div class="no-essay-alert">
+                                                <i class="bi bi-pencil-square"></i> Bạn chưa nhập nội dung cho phần thi này.
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="essay-paper model-paper">
+                                    <div class="paper-header">
+                                        <h4>🏆 Bài mẫu tham khảo Band @(activeTask.ExaminerBand?.ToString("0.0") ?? "8.5+")</h4>
+                                    </div>
+                                    <div class="paper-body">
+                                        @if (!string.IsNullOrEmpty(activeTask.SampleAnswer))
+                                        {
+                                            <div class="model-essay-text">
+                                                @((MarkupString)activeTask.SampleAnswer)
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <p class="no-essay-alert">Chưa có bài mẫu cho đề thi này.</p>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+
+        @* ════════════════════════════════════════════════════════════════════
+           SKILL: SPEAKING REVIEW
+           ════════════════════════════════════════════════════════════════════ *@
+        @if (currentSkill.Equals("Speaking", StringComparison.OrdinalIgnoreCase))
+        {
+            @if (speakingData != null && speakingData.Parts.Count > 0)
+            {
+                <div class="speaking-review-container">
+                    @foreach (var part in speakingData.Parts)
+                    {
+                        <div class="sp-review-part-card">
+                            <div class="sp-part-header">
+                                <h3>@part.PartTitle</h3>
+                                <span class="sp-caption">@part.Caption</span>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(part.TopicDescription))
+                            {
+                                <div class="sp-topic-box">
+                                    @((MarkupString)part.TopicDescription)
+                                </div>
+                            }
+
+                            <div class="sp-questions-list">
+                                @foreach (var q in part.Questions)
+                                {
+                                    var ansSub = submission?.Speaking?.Answers?.FirstOrDefault(a => a.PartNumber == part.PartNumber && a.QuestionId == q.Id);
+
+                                    <div class="sp-q-card">
+                                        <div class="sp-q-top">
+                                            <span class="sp-q-badge">Câu hỏi @q.Id</span>
+                                            <h4>"@q.Question"</h4>
+                                        </div>
+
+                                        @if (ansSub != null)
+                                        {
+                                            <div class="sp-student-answer">
+                                                <div class="transcript-row">
+                                                    <strong><i class="bi bi-mic-fill"></i> Transcript nhận diện:</strong>
+                                                    <p class="transcript-text">@ansSub.Transcript</p>
+                                                </div>
+                                                @if (ansSub.DurationMs > 0)
+                                                {
+                                                    <span class="sp-duration"><i class="bi bi-stopwatch"></i> Thời lượng nói: @((ansSub.DurationMs / 1000).ToString("0.0"))s</span>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="sp-no-recording">
+                                                <i class="bi bi-mic-mute"></i> Chưa có dữ liệu ghi âm cho câu hỏi này.
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    [Parameter][SupplyParameterFromQuery(Name = "Skill")] public string? QuerySkill { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "ExamUrl")] public string? QueryExamUrl { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "AnswerUrl")] public string? QueryAnswerUrl { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "SubmissionId")] public string? QuerySubmissionId { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "Session")] public string? QuerySessionId { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "MockTestId")] public int? QueryMockTestId { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "CollectionName")] public string? QueryCollectionName { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "Title")] public string? QueryTitle { get; set; }
+
+    private string currentSkill = "Reading";
+    private string? examTitle;
+    private string? collectionName;
+    private string? testTitle;
+    private bool isLoading = true;
+
+    private IeltsSubmissionRecord? submission;
+    private ExamData? examData;
+    private WritingExamData? writingData;
+    private SpeakingExamData? speakingData;
+    private GradingResult? gradingResult;
+
+    private int activePartIndex = 0;
+    private int activeTaskIndex = 0;
+    private string questionFilter = "all";
+    private string writingViewMode = "student";
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        currentSkill = string.IsNullOrWhiteSpace(QuerySkill) ? "Reading" : QuerySkill;
+        collectionName = QueryCollectionName;
+        testTitle = QueryTitle;
+
+        try
+        {
+            var allSubmissions = await SubmissionService.GetAllAsync();
+            var normExam = ExamSubmissionService.NormalizeUrl(QueryExamUrl);
+
+            // Tìm bài nộp phù hợp
+            submission = allSubmissions.FirstOrDefault(s =>
+                (!string.IsNullOrEmpty(QuerySubmissionId) && s.Id == QuerySubmissionId) ||
+                (!string.IsNullOrEmpty(QuerySessionId) && s.SessionId == QuerySessionId && string.Equals(s.Skill, currentSkill, StringComparison.OrdinalIgnoreCase)) ||
+                (QueryMockTestId.HasValue && s.MockTestId == QueryMockTestId && string.Equals(s.Skill, currentSkill, StringComparison.OrdinalIgnoreCase)) ||
+                (string.Equals(s.Skill, currentSkill, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(normExam) && ExamSubmissionService.NormalizeUrl(s.ExamUrl) == normExam)
+            );
+
+            examTitle = submission?.ExamTitle ?? QueryTitle;
+            collectionName ??= submission?.CollectionName;
+
+            string examUrlToLoad = !string.IsNullOrWhiteSpace(QueryExamUrl) 
+                ? QueryExamUrl 
+                : submission?.ExamUrl ?? GetDefaultExamUrl(currentSkill);
+
+            // Tải dữ liệu đề thi theo kỹ năng
+            if (currentSkill.Equals("Reading", StringComparison.OrdinalIgnoreCase) || currentSkill.Equals("Listening", StringComparison.OrdinalIgnoreCase))
+            {
+                examData = await ExamService.LoadExamAsync(examUrlToLoad);
+                if (examData != null)
+                {
+                    examTitle = examData.Title;
+                }
+
+                // Tải đáp án
+                var answerUrl = !string.IsNullOrWhiteSpace(QueryAnswerUrl) ? QueryAnswerUrl : submission?.AnswerUrl;
+                var answerKey = !string.IsNullOrWhiteSpace(answerUrl)
+                    ? await AnswerKeyService.LoadAsync(answerUrl)
+                    : await AnswerKeyService.LoadFromExamUrlAsync(examUrlToLoad);
+
+                if (answerKey != null && submission?.Grading?.Questions != null)
+                {
+                    gradingResult = new GradingResult
+                    {
+                        CorrectCount = submission.Grading.CorrectCount,
+                        TotalCount = submission.Grading.TotalCount,
+                        BandScore = submission.Grading.BandScore,
+                        Questions = submission.Grading.Questions.ToDictionary(
+                            kv => kv.Key,
+                            kv => new QuestionResult
+                            {
+                                QuestionNumber = kv.Value.QuestionNumber,
+                                StudentAnswer = kv.Value.StudentAnswer,
+                                CorrectAnswer = kv.Value.CorrectAnswer,
+                                AcceptedAnswers = kv.Value.AcceptedAnswers,
+                                IsCorrect = kv.Value.IsCorrect,
+                                IsBlank = kv.Value.IsBlank
+                            })
+                    };
+                }
+                else if (answerKey != null)
+                {
+                    var emptyAnswers = new Dictionary<int, string>();
+                    gradingResult = AnswerKeyService.Grade(answerKey, emptyAnswers);
+                }
+            }
+            else if (currentSkill.Equals("Writing", StringComparison.OrdinalIgnoreCase))
+            {
+                writingData = await Http.GetFromJsonAsync<WritingExamData>(examUrlToLoad);
+            }
+            else if (currentSkill.Equals("Speaking", StringComparison.OrdinalIgnoreCase))
+            {
+                speakingData = await Http.GetFromJsonAsync<SpeakingExamData>(examUrlToLoad);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[IeltsExamReview] Error loading review data: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static string GetDefaultExamUrl(string skill) => skill.ToLower() switch
+    {
+        "listening" => "sample-data/listening-test-1.json",
+        "reading" => "sample-data/reading-test-v2.json",
+        "writing" => "sample-data/writing-test-1.json",
+        "speaking" => "sample-data/speaking-test-1.json",
+        _ => "sample-data/reading-test-v2.json"
+    };
+
+    private static string GetSkillIconClass(string skill) => skill.ToLower() switch
+    {
+        "listening" => "bi bi-headphones",
+        "reading" => "bi bi-file-text-fill",
+        "writing" => "bi bi-pen-fill",
+        "speaking" => "bi bi-mic-fill",
+        _ => "bi bi-journal-text"
+    };
+
+    private QuestionResult? GetQuestionResult(int qId)
+    {
+        if (gradingResult?.Questions != null && gradingResult.Questions.TryGetValue(qId, out var res))
+            return res;
+        if (submission?.Grading?.Questions != null && submission.Grading.Questions.TryGetValue(qId, out var gRes))
+        {
+            return new QuestionResult
+            {
+                QuestionNumber = gRes.QuestionNumber,
+                StudentAnswer = gRes.StudentAnswer,
+                CorrectAnswer = gRes.CorrectAnswer,
+                AcceptedAnswers = gRes.AcceptedAnswers,
+                IsCorrect = gRes.IsCorrect,
+                IsBlank = gRes.IsBlank
+            };
+        }
+        return null;
+    }
+
+    private bool IsQuestionCorrect(int qId) => GetQuestionResult(qId)?.IsCorrect ?? false;
+
+    private bool PassesFilter(QuestionData q)
+    {
+        if (questionFilter == "all") return true;
+        var qr = GetQuestionResult(q.Id);
+        if (questionFilter == "correct") return qr?.IsCorrect == true;
+        if (questionFilter == "wrong") return qr != null && !qr.IsCorrect && !qr.IsBlank;
+        if (questionFilter == "blank") return qr == null || qr.IsBlank;
+        return true;
+    }
+
+    private int GetCorrectCount() => gradingResult?.CorrectCount ?? submission?.CorrectCount ?? submission?.Grading?.CorrectCount ?? 0;
+    private int GetTotalCount() => gradingResult?.TotalCount ?? submission?.TotalQuestions ?? submission?.Grading?.TotalCount ?? 40;
+    private int GetBlankCount() => gradingResult?.Questions.Values.Count(q => q.IsBlank) ?? submission?.Grading?.Questions.Values.Count(q => q.IsBlank) ?? 0;
+    private int GetWrongCount() => Math.Max(GetTotalCount() - GetCorrectCount() - GetBlankCount(), 0);
+
+    private static List<QuestionGroup> GetQuestionGroups(ExamPart part)
+    {
+        if (part.QuestionGroups.Count > 0) return part.QuestionGroups;
+        if (part.Questions.Count == 0) return [];
+        return [new QuestionGroup { Questions = part.Questions }];
+    }
+
+    private async Task ScrollToQuestion(int partNumber, int qId)
+    {
+        if (examData != null)
+        {
+            int pIdx = examData.Parts.FindIndex(p => p.PartNumber == partNumber);
+            if (pIdx >= 0) activePartIndex = pIdx;
+        }
+        await Task.Delay(50);
+        try
+        {
+            await JS.InvokeVoidAsync("scrollToElementId", $"q-{qId}");
+        }
+        catch { }
+    }
+
+    private void GoBackToTests() => Navigation.NavigateTo("/ielts/luyen-de");
+
+    private void GoToSummary()
+    {
+        var coll = Uri.EscapeDataString(collectionName ?? "IELTS Mock Test");
+        var title = Uri.EscapeDataString(testTitle ?? examTitle ?? "Practise Test");
+        var sess = Uri.EscapeDataString(submission?.SessionId ?? QuerySessionId ?? "");
+        var mockId = QueryMockTestId.HasValue ? $"&MockTestId={QueryMockTestId.Value}" : "";
+        Navigation.NavigateTo($"/ielts/mock-test/summary?CollectionName={coll}&Title={title}&Session={sess}{mockId}");
+    }
+
+    private void RetakeExam()
+    {
+        var newSession = Guid.NewGuid().ToString("N");
+        var coll = Uri.EscapeDataString(collectionName ?? "IELTS Mock Test");
+        var title = Uri.EscapeDataString(testTitle ?? examTitle ?? "Practise Test");
+        var mockId = QueryMockTestId.HasValue ? $"&MockTestId={QueryMockTestId.Value}" : "";
+        var examUrl = Uri.EscapeDataString(QueryExamUrl ?? submission?.ExamUrl ?? "");
+        var ansUrl = !string.IsNullOrWhiteSpace(QueryAnswerUrl) ? $"&AnswerUrl={Uri.EscapeDataString(QueryAnswerUrl)}" : "";
+
+        var route = currentSkill.ToLower() switch
+        {
+            "listening" => $"/ielts/listening/preview?ExamUrl={examUrl}{ansUrl}&CollectionName={coll}&Title={title}&Session={newSession}{mockId}",
+            "reading" => $"/ielts/reading/preview?ExamUrl={examUrl}{ansUrl}&CollectionName={coll}&Title={title}&Session={newSession}{mockId}",
+            "writing" => $"/ielts/writing/preview?ExamUrl={examUrl}&CollectionName={coll}&Title={title}&Session={newSession}{mockId}",
+            "speaking" => $"/ielts/speaking/preview?ExamUrl={examUrl}&CollectionName={coll}&Title={title}&Session={newSession}{mockId}",
+            _ => "/ielts/luyen-de"
+        };
+        Navigation.NavigateTo(route);
+    }
+
+    private static string FormatDuration(int seconds)
+    {
+        int m = seconds / 60;
+        int s = seconds % 60;
+        return $"{m:D2}:{s:D2}";
+    }
+}

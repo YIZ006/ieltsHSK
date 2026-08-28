@@ -1,15 +1,16 @@
 .mocktests-container {
     display: flex;
     gap: 30px;
-    padding: 20px;
-    max-width: 1200px;
+    padding: 24px 32px;
+    max-width: 1400px;
     margin: 0 auto;
-    color: #2c3e50;
-    font-family: 'Inter', 'Roboto', sans-serif;
+    color: #1e293b;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 .main-content {
     flex: 1;
+    min-width: 0;
 }
 
 .sidebar {
@@ -20,12 +21,12 @@
 .collection-header {
     display: flex;
     gap: 30px;
-    margin-bottom: 40px;
+    margin-bottom: 32px;
     background: #ffffff;
-    padding: 30px;
+    padding: 28px 32px;
     border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-    border: 1px solid #e9ecef;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+    border: 1px solid #e2e8f0;
 }
 
 .collection-image img {
@@ -98,16 +99,16 @@
 /* Tests List Grid */
 .tests-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
     gap: 25px;
 }
 
 /* Test Blocks */
 .test-block {
     background-color: #ffffff;
-    border: 1px solid #e9ecef;
+    border: 1px solid #e2e8f0;
     border-radius: 20px;
-    padding: 25px;
+    padding: 24px;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
     display: flex;
     flex-direction: column;
@@ -116,23 +117,62 @@
 
 .test-block:hover {
     transform: translateY(-4px);
-    box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-    border-color: #dee2e6;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.08);
+    border-color: #cbd5e1;
 }
 
-.test-block h2 {
+.test-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 14px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.test-block-header h2 {
     font-size: 1.35rem;
+    font-weight: 800;
+    margin: 0;
+    color: #0f172a;
+}
+
+.btn-summary-link {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.82rem;
     font-weight: 700;
-    margin: 0 0 20px;
-    color: #2c3e50;
-    border-bottom: 1px solid #f1f3f5;
-    padding-bottom: 15px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+.btn-summary-link:hover {
+    background: #e0e7ff;
+    color: #4338ca;
+    border-color: #a5b4fc;
+}
+.btn-summary-link.has-data {
+    background: linear-gradient(135deg, #4f46e5, #6366f1);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+}
+.btn-summary-link.has-data:hover {
+    background: linear-gradient(135deg, #4338ca, #4f46e5);
+    transform: translateY(-1px);
 }
 
 .skills-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
+    gap: 16px;
     flex: 1;
 }
 
@@ -141,46 +181,92 @@
     padding: 16px;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    background: #f8f9fa;
-    border: 1px solid #f1f3f5;
+    justify-content: space-between;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
     transition: all 0.2s ease;
+    min-height: 142px;
 }
 
 .skill-card:hover {
-    background: #e9ecef;
+    background: #f1f5f9;
+}
+.skill-card.attempted {
+    border-color: #cbd5e1;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
 }
 
 .skill-header {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    justify-content: space-between;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 15px;
-    font-weight: 600;
-    font-size: 0.95rem;
-    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+    font-weight: 700;
+    font-size: 0.88rem;
+    letter-spacing: 0.3px;
     text-transform: uppercase;
+    gap: 8px;
+    min-height: 28px;
+}
+.sh-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sh-left i {
+    font-size: 1.15rem;
 }
 
-.skill-header i {
-    font-size: 1.8rem;
-    margin-bottom: 4px;
+.skill-score-badge {
+    font-size: 0.72rem;
+    font-weight: 800;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    padding: 3px 8px;
+    border-radius: 12px;
+    text-transform: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    line-height: 1.2;
+}
+
+.skill-score-badge.pending {
+    background: #fffbeb;
+    color: #b45309;
+    border-color: #fde68a;
+    font-weight: 700;
 }
 
 /* Colors for specific skills */
-.listening .skill-header { color: #3498db; }
-.reading .skill-header { color: #2ecc71; }
-.writing .skill-header { color: #e74c3c; }
-.speaking .skill-header { color: #e67e22; }
+.listening .skill-header { color: #2563eb; }
+.reading .skill-header { color: #16a34a; }
+.writing .skill-header { color: #9333ea; }
+.speaking .skill-header { color: #ea580c; }
+
+.skill-btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: auto;
+}
 
 .btn-take-test {
     width: 100%;
-    padding: 10px;
+    height: 36px;
+    padding: 6px 12px;
     border-radius: 8px;
     border: none;
-    font-weight: 600;
-    font-size: 0.9rem;
+    font-weight: 700;
+    font-size: 0.82rem;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -188,18 +274,18 @@
     gap: 6px;
     transition: all 0.2s ease;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
 }
 
-/* Premium Gradient Buttons - Light Theme versions */
-.listening .btn-take-test { background: #3498db; color: #fff; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3); }
-.reading .btn-take-test { background: #2ecc71; color: #fff; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3); }
-.writing .btn-take-test { background: #e74c3c; color: #fff; box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3); }
-.speaking .btn-take-test { background: #e67e22; color: #fff; box-shadow: 0 4px 15px rgba(230, 126, 34, 0.3); }
+/* Colors for buttons */
+.listening .btn-take-test { background: #2563eb; color: #fff; box-shadow: 0 3px 10px rgba(37, 99, 235, 0.25); }
+.reading .btn-take-test { background: #16a34a; color: #fff; box-shadow: 0 3px 10px rgba(22, 163, 74, 0.25); }
+.writing .btn-take-test { background: #9333ea; color: #fff; box-shadow: 0 3px 10px rgba(147, 51, 234, 0.25); }
+.speaking .btn-take-test { background: #ea580c; color: #fff; box-shadow: 0 3px 10px rgba(234, 88, 12, 0.25); }
 
 .btn-take-test:hover:not(:disabled) {
-    transform: translateY(-2px);
-    filter: brightness(1.1);
+    transform: translateY(-1px);
+    filter: brightness(1.08);
 }
 
 .btn-take-test:disabled {
@@ -208,6 +294,29 @@
     box-shadow: none !important;
     cursor: not-allowed;
     border: 1px solid #dee2e6;
+}
+
+.btn-review-mini {
+    width: 100%;
+    height: 30px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+.btn-review-mini:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+    border-color: #94a3b8;
 }
 
 .loading-spinner {

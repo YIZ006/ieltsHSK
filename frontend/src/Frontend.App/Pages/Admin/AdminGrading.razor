@@ -1,0 +1,614 @@
+@page "/admin/grading"
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Models
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
+<PageTitle>Quản lý Chấm điểm Writing & Speaking - Admin Hub</PageTitle>
+
+<div class="admin-grading-container">
+    <!-- Header -->
+    <div class="grading-header">
+        <div>
+            <h2>📝 Quản lý & Chấm điểm Bài thi</h2>
+            <p class="subtitle">Duyệt bài làm học viên, nghe ghi âm Speaking, chấm điểm 4 tiêu chí và tích hợp AI Grading.</p>
+        </div>
+        <div class="header-stats">
+            <div class="stat-pill pending">
+                <span class="stat-num">@submissions.Count(s => s.Status != "Graded")</span>
+                <span class="stat-lbl">Chờ chấm</span>
+            </div>
+            <div class="stat-pill graded">
+                <span class="stat-num">@submissions.Count(s => s.Status == "Graded")</span>
+                <span class="stat-lbl">Đã chấm</span>
+            </div>
+            <div class="stat-pill total">
+                <span class="stat-num">@submissions.Count</span>
+                <span class="stat-lbl">Tổng số bài</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="grading-toolbar">
+        <div class="filter-group">
+            <label>Kỹ năng:</label>
+            <div class="filter-pills">
+                <button class="pill-btn @(selectedSkillFilter == "all" ? "active" : "")" @onclick='() => ChangeSkillFilter("all")'>Tất cả</button>
+                <button class="pill-btn @(selectedSkillFilter == "writing" ? "active" : "")" @onclick='() => ChangeSkillFilter("writing")'>✍️ Writing</button>
+                <button class="pill-btn @(selectedSkillFilter == "speaking" ? "active" : "")" @onclick='() => ChangeSkillFilter("speaking")'>🗣️ Speaking</button>
+                <button class="pill-btn @(selectedSkillFilter == "reading" ? "active" : "")" @onclick='() => ChangeSkillFilter("reading")'>📖 Reading</button>
+                <button class="pill-btn @(selectedSkillFilter == "listening" ? "active" : "")" @onclick='() => ChangeSkillFilter("listening")'>🎧 Listening</button>
+            </div>
+        </div>
+
+        <div class="filter-group">
+            <label>Trạng thái:</label>
+            <div class="filter-pills">
+                <button class="pill-btn @(selectedStatusFilter == "all" ? "active" : "")" @onclick='() => ChangeStatusFilter("all")'>Tất cả</button>
+                <button class="pill-btn @(selectedStatusFilter == "pending" ? "active" : "")" @onclick='() => ChangeStatusFilter("pending")'>Chờ chấm</button>
+                <button class="pill-btn @(selectedStatusFilter == "graded" ? "active" : "")" @onclick='() => ChangeStatusFilter("graded")'>Đã chấm</button>
+            </div>
+        </div>
+
+        <button class="btn-refresh" @onclick="LoadSubmissionsAsync">
+            <i class="bi bi-arrow-clockwise"></i> Làm mới
+        </button>
+    </div>
+
+    <!-- Submissions Table -->
+    @if (isLoading)
+    {
+        <div class="loading-box">
+            <div class="spinner"></div>
+            <p>Đang tải danh sách bài làm...</p>
+        </div>
+    }
+    else if (filteredSubmissions.Count == 0)
+    {
+        <div class="empty-box">
+            <div class="empty-icon">📭</div>
+            <h4>Không tìm thấy bài nộp nào</h4>
+            <p>Hiện chưa có bài làm nào phù hợp với bộ lọc được chọn.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-card">
+            <table class="grading-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Thí sinh</th>
+                        <th>Kỹ năng</th>
+                        <th>Đề thi</th>
+                        <th>Lần làm</th>
+                        <th>R2 Private</th>
+                        <th>Điểm Band</th>
+                        <th>Trạng thái</th>
+                        <th>Thời gian nộp</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var sub in filteredSubmissions)
+                    {
+                        <tr>
+                            <td class="id-cell">#@sub.Id</td>
+                            <td>
+                                <div class="student-info-cell">
+                                    <strong>@(string.IsNullOrWhiteSpace(sub.StudentName) ? (sub.UserId.HasValue ? $"Học viên #{sub.UserId}" : "Thí sinh tự do") : sub.StudentName)</strong>
+                                    @if (!string.IsNullOrWhiteSpace(sub.UserEmail))
+                                    {
+                                        <small class="student-email">@sub.UserEmail</small>
+                                    }
+                                </div>
+                            </td>
+                            <td>
+                                <span class="skill-badge skill-@sub.Skill.ToLower()">
+                                    @GetSkillIcon(sub.Skill) @sub.Skill.ToUpper()
+                                </span>
+                            </td>
+                            <td class="exam-cell" title="@sub.ExamUrl">
+                                @(!string.IsNullOrWhiteSpace(sub.ExamTitle) ? sub.ExamTitle : GetExamDisplayName(sub.ExamUrl))
+                            </td>
+                            <td>
+                                <span class="attempt-badge">Lần @(sub.AttemptNumber > 0 ? sub.AttemptNumber : 1)</span>
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(sub.R2StorageKey))
+                                {
+                                    <a href="@GetApiUrl($"api/test-submissions/{sub.Id}/r2-json")" target="_blank" class="r2-link-btn" title="@sub.R2StorageKey">
+                                        <i class="bi bi-cloud-check-fill"></i> R2 JSON
+                                    </a>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td>
+                                <span class="band-tag @(sub.BandScore >= 6.5 ? "high" : "normal")">
+                                    @(sub.BandScore > 0 ? $"Band {sub.BandScore:0.0}" : "—")
+                                </span>
+                            </td>
+                            <td>
+                                <span class="status-tag @sub.Status.ToLower()">
+                                    @(sub.Status == "Graded" ? "Đã chấm" : "Chờ chấm")
+                                </span>
+                            </td>
+                            <td class="time-cell">
+                                @sub.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                            </td>
+                            <td>
+                                <button class="btn-grade" @onclick="() => OpenGradingModal(sub)">
+                                    <i class="bi bi-pencil-square"></i> @(sub.Status == "Graded" ? "Xem & Sửa điểm" : "Chấm bài")
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- Modal Chấm điểm chi tiết -->
+@if (activeSubmission != null)
+{
+    <div class="modal-backdrop" @onclick="CloseGradingModal">
+        <div class="grading-modal-content" @onclick:stopPropagation>
+            <div class="modal-header">
+                <div class="modal-title-box">
+                    <h3>
+                        @GetSkillIcon(activeSubmission.Skill) Chấm bài thi @activeSubmission.Skill.ToUpper() (#@activeSubmission.Id)
+                    </h3>
+                    <div class="sub-meta-tags">
+                        <span class="sub-meta-pill"><i class="bi bi-person-fill"></i> @(string.IsNullOrWhiteSpace(activeSubmission.StudentName) ? "Thí sinh tự do" : activeSubmission.StudentName)</span>
+                        <span class="sub-meta-pill"><i class="bi bi-arrow-repeat"></i> Lần @activeSubmission.AttemptNumber</span>
+                        <span class="sub-meta-pill"><i class="bi bi-clock"></i> @activeSubmission.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</span>
+                        @if (!string.IsNullOrEmpty(activeSubmission.R2StorageKey))
+                        {
+                            <a href="@GetApiUrl($"api/test-submissions/{activeSubmission.Id}/r2-json")" target="_blank" class="sub-meta-pill r2-pill">
+                                <i class="bi bi-cloud-arrow-down-fill"></i> Tải JSON từ R2
+                            </a>
+                        }
+                    </div>
+                </div>
+                <button class="btn-close-modal" @onclick="CloseGradingModal">✕</button>
+            </div>
+
+            <div class="modal-body-split">
+                <!-- Cột trái: Nội dung bài làm học viên -->
+                <div class="submission-content-pane">
+                    <h4>📄 Nội dung bài làm của học viên</h4>
+
+                    @if (activeSubmission.Skill.Equals("Writing", StringComparison.OrdinalIgnoreCase))
+                    {
+                        @if (writingData?.Tasks != null && writingData.Tasks.Count > 0)
+                        {
+                            @foreach (var task in writingData.Tasks)
+                            {
+                                <div class="task-review-card">
+                                    <div class="task-review-header">
+                                        <h5>Task @task.TaskNumber: @task.TaskTitle</h5>
+                                        <span class="task-words">@task.WordCount từ / Tối thiểu @task.MinWords từ</span>
+                                    </div>
+                                    <div class="task-prompt-box">
+                                        <strong>Đề bài:</strong> @((MarkupString)task.Prompt)
+                                    </div>
+                                    <div class="task-answer-box">
+                                        <strong>Bài viết học viên:</strong>
+                                        <div class="essay-text">
+                                            @if (!string.IsNullOrWhiteSpace(task.Answer))
+                                            {
+                                                <p>@task.Answer</p>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">(Học viên chưa nhập bài viết)</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="raw-content">
+                                <p>@(activeSubmission.DetailsJson ?? "Không có nội dung chi tiết.")</p>
+                            </div>
+                        }
+                    }
+                    else if (activeSubmission.Skill.Equals("Speaking", StringComparison.OrdinalIgnoreCase))
+                    {
+                        @if (speakingData?.Answers != null && speakingData.Answers.Count > 0)
+                        {
+                            @foreach (var ans in speakingData.Answers)
+                            {
+                                <div class="speaking-review-card">
+                                    <div class="speaking-review-header">
+                                        <h5>Part @ans.PartNumber: Câu hỏi @ans.QuestionId</h5>
+                                        <span class="speaking-duration">⏱ @((ans.DurationMs / 1000).ToString("0.0"))s</span>
+                                    </div>
+                                    <p class="speaking-q"><strong>Câu hỏi:</strong> @ans.Question</p>
+                                    <div class="speaking-transcript-box">
+                                        <strong>Transcript nhận diện:</strong>
+                                        <p>@ans.Transcript</p>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        @if (!string.IsNullOrWhiteSpace(activeSubmission.AudioKey))
+                        {
+                            <div class="audio-player-box">
+                                <strong>🎧 File ghi âm bài nói:</strong>
+                                <audio controls class="admin-audio-player" src="@($"/api/speaking/audio/{Uri.EscapeDataString(activeSubmission.AudioKey)}")"></audio>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="reading-listening-review">
+                            <p>Số câu đúng: <strong>@activeSubmission.CorrectCount / @activeSubmission.TotalCount</strong></p>
+                            <p>Band Score hệ thống: <strong>@activeSubmission.BandScore.ToString("0.0")</strong></p>
+                        </div>
+                    }
+                </div>
+
+                <!-- Cột phải: Khung chấm điểm & AI Assistant -->
+                <div class="grading-form-pane">
+                    <div class="ai-assistant-card">
+                        <div class="ai-card-top">
+                            <div>
+                                <h5>🤖 Trợ lý Chấm thi AI</h5>
+                                <p>Tự động phân tích theo 4 tiêu chí chuẩn Cambridge IELTS</p>
+                            </div>
+                            <button class="btn-ai-grade" disabled="@isAiScoring" @onclick="AutoGradeWithAiAsync">
+                                @if (isAiScoring)
+                                {
+                                    <span>⏳ Đang chấm AI...</span>
+                                }
+                                else
+                                {
+                                    <span>⚡ Chấm bằng AI</span>
+                                }
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrEmpty(aiGeneralFeedback))
+                        {
+                            <div class="ai-feedback-preview">
+                                <strong>Nhận xét từ AI:</strong>
+                                <p>@aiGeneralFeedback</p>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="criteria-form">
+                        <h4>📊 Đánh giá 4 Tiêu chí IELTS</h4>
+
+                        <div class="form-row">
+                            <label>@(activeSubmission.Skill.Equals("Writing", StringComparison.OrdinalIgnoreCase) ? "Task Response / Achievement:" : "Fluency & Coherence:")</label>
+                            <div class="score-input-group">
+                                <input type="number" step="0.5" min="0" max="9" @bind="crit1Score" @bind:after="RecalculateOverall" />
+                                <span class="score-hint">Band 0 - 9</span>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <label>@(activeSubmission.Skill.Equals("Writing", StringComparison.OrdinalIgnoreCase) ? "Coherence & Cohesion:" : "Lexical Resource:")</label>
+                            <div class="score-input-group">
+                                <input type="number" step="0.5" min="0" max="9" @bind="crit2Score" @bind:after="RecalculateOverall" />
+                                <span class="score-hint">Band 0 - 9</span>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <label>@(activeSubmission.Skill.Equals("Writing", StringComparison.OrdinalIgnoreCase) ? "Lexical Resource:" : "Grammar Range & Accuracy:")</label>
+                            <div class="score-input-group">
+                                <input type="number" step="0.5" min="0" max="9" @bind="crit3Score" @bind:after="RecalculateOverall" />
+                                <span class="score-hint">Band 0 - 9</span>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <label>@(activeSubmission.Skill.Equals("Writing", StringComparison.OrdinalIgnoreCase) ? "Grammatical Range & Accuracy:" : "Pronunciation:")</label>
+                            <div class="score-input-group">
+                                <input type="number" step="0.5" min="0" max="9" @bind="crit4Score" @bind:after="RecalculateOverall" />
+                                <span class="score-hint">Band 0 - 9</span>
+                            </div>
+                        </div>
+
+                        <div class="overall-band-highlight">
+                            <span>OVERALL BAND SCORE:</span>
+                            <strong>Band @overallScore.ToString("0.0")</strong>
+                        </div>
+
+                        <div class="form-row feedback-row">
+                            <label>Nhận xét của Giảng viên:</label>
+                            <textarea class="teacher-feedback-input" placeholder="Nhập nhận xét chi tiết và lời khuyên cho học viên..." @bind="teacherFeedback"></textarea>
+                        </div>
+
+                        <div class="modal-footer-actions">
+                            <button class="btn-cancel" @onclick="CloseGradingModal">Hủy</button>
+                            <button class="btn-save-grade" disabled="@isSaving" @onclick="SaveGradeAsync">
+                                @(isSaving ? "Đang lưu..." : "💾 Lưu kết quả chấm thi")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<SubmissionRecordDto> submissions = new();
+    private List<SubmissionRecordDto> filteredSubmissions = new();
+    private SubmissionRecordDto? activeSubmission;
+    private WritingSubmissionData? writingData;
+    private SpeakingSubmissionData? speakingData;
+
+    private string selectedSkillFilter = "all";
+    private string selectedStatusFilter = "all";
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private bool isAiScoring = false;
+
+    private double crit1Score = 6.0;
+    private double crit2Score = 6.0;
+    private double crit3Score = 6.0;
+    private double crit4Score = 6.0;
+    private double overallScore = 6.0;
+    private string teacherFeedback = "";
+    private string aiGeneralFeedback = "";
+
+    private string GetApiUrl(string path)
+    {
+        var baseUrl = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101/";
+        return $"{baseUrl.TrimEnd('/')}/{path.TrimStart('/')}";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSubmissionsAsync();
+    }
+
+    private async Task LoadSubmissionsAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var res = await Http.GetFromJsonAsync<List<SubmissionRecordDto>>(GetApiUrl("api/admin/test-submissions"));
+            submissions = res ?? new();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading test submissions: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        filteredSubmissions = submissions.Where(s =>
+            (selectedSkillFilter == "all" || s.Skill.Equals(selectedSkillFilter, StringComparison.OrdinalIgnoreCase)) &&
+            (selectedStatusFilter == "all" || 
+             (selectedStatusFilter == "pending" && s.Status != "Graded") ||
+             (selectedStatusFilter == "graded" && s.Status == "Graded"))
+        ).ToList();
+    }
+
+    private void ChangeSkillFilter(string skill)
+    {
+        selectedSkillFilter = skill;
+        ApplyFilters();
+    }
+
+    private void ChangeStatusFilter(string status)
+    {
+        selectedStatusFilter = status;
+        ApplyFilters();
+    }
+
+    private void OpenGradingModal(SubmissionRecordDto sub)
+    {
+        activeSubmission = sub;
+        overallScore = sub.BandScore;
+        crit1Score = sub.BandScore;
+        crit2Score = sub.BandScore;
+        crit3Score = sub.BandScore;
+        crit4Score = sub.BandScore;
+        teacherFeedback = sub.TeacherFeedback ?? "";
+        aiGeneralFeedback = "";
+
+        writingData = null;
+        speakingData = null;
+
+        if (!string.IsNullOrEmpty(sub.DetailsJson))
+        {
+            try
+            {
+                if (sub.Skill.Equals("Writing", StringComparison.OrdinalIgnoreCase))
+                {
+                    writingData = System.Text.Json.JsonSerializer.Deserialize<WritingSubmissionData>(sub.DetailsJson);
+                }
+                else if (sub.Skill.Equals("Speaking", StringComparison.OrdinalIgnoreCase))
+                {
+                    speakingData = System.Text.Json.JsonSerializer.Deserialize<SpeakingSubmissionData>(sub.DetailsJson);
+                }
+            }
+            catch { }
+        }
+    }
+
+    private void CloseGradingModal()
+    {
+        activeSubmission = null;
+    }
+
+    private void RecalculateOverall()
+    {
+        double avg = (crit1Score + crit2Score + crit3Score + crit4Score) / 4.0;
+        overallScore = RoundHalfBand(avg);
+    }
+
+    private async Task AutoGradeWithAiAsync()
+    {
+        if (activeSubmission == null || isAiScoring) return;
+        isAiScoring = true;
+
+        try
+        {
+            if (activeSubmission.Skill.Equals("Writing", StringComparison.OrdinalIgnoreCase))
+            {
+                var task = writingData?.Tasks.FirstOrDefault(t => !string.IsNullOrEmpty(t.Answer)) ?? writingData?.Tasks.FirstOrDefault();
+                var req = new
+                {
+                    TaskNumber = task?.TaskNumber ?? 1,
+                    Prompt = task?.Prompt ?? "IELTS Writing Task",
+                    EssayText = task?.Answer ?? "",
+                    MinWords = task?.MinWords ?? 150
+                };
+
+                var res = await Http.PostAsJsonAsync(GetApiUrl("api/ai/grade-writing"), req);
+                if (res.IsSuccessStatusCode)
+                {
+                    var result = await res.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                    overallScore = result.GetProperty("overallBand").GetDouble();
+                    crit1Score = result.GetProperty("taskResponseBand").GetDouble();
+                    crit2Score = result.GetProperty("coherenceBand").GetDouble();
+                    crit3Score = result.GetProperty("lexicalBand").GetDouble();
+                    crit4Score = result.GetProperty("grammarBand").GetDouble();
+                    aiGeneralFeedback = result.GetProperty("generalFeedback").GetString() ?? "";
+                    if (string.IsNullOrWhiteSpace(teacherFeedback))
+                    {
+                        teacherFeedback = aiGeneralFeedback;
+                    }
+                }
+            }
+            else if (activeSubmission.Skill.Equals("Speaking", StringComparison.OrdinalIgnoreCase))
+            {
+                var ans = speakingData?.Answers.FirstOrDefault();
+                var req = new
+                {
+                    PartNumber = ans?.PartNumber ?? 1,
+                    QuestionText = ans?.Question ?? "IELTS Speaking Question",
+                    Transcript = ans?.Transcript ?? "",
+                    DurationMs = ans?.DurationMs ?? 15000
+                };
+
+                var res = await Http.PostAsJsonAsync(GetApiUrl("api/ai/grade-speaking"), req);
+                if (res.IsSuccessStatusCode)
+                {
+                    var result = await res.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                    overallScore = result.GetProperty("overallBand").GetDouble();
+                    crit1Score = result.GetProperty("fluencyBand").GetDouble();
+                    crit2Score = result.GetProperty("lexicalBand").GetDouble();
+                    crit3Score = result.GetProperty("grammarBand").GetDouble();
+                    crit4Score = result.GetProperty("pronunciationBand").GetDouble();
+                    aiGeneralFeedback = result.GetProperty("generalFeedback").GetString() ?? "";
+                    if (string.IsNullOrWhiteSpace(teacherFeedback))
+                    {
+                        teacherFeedback = aiGeneralFeedback;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error auto-grading: {ex.Message}");
+        }
+        finally
+        {
+            isAiScoring = false;
+        }
+    }
+
+    private async Task SaveGradeAsync()
+    {
+        if (activeSubmission == null || isSaving) return;
+        isSaving = true;
+
+        try
+        {
+            var req = new
+            {
+                BandScore = overallScore,
+                Status = "Graded",
+                TeacherFeedback = teacherFeedback
+            };
+
+            var res = await Http.PutAsJsonAsync(GetApiUrl($"api/admin/test-submissions/{activeSubmission.Id}/grade"), req);
+            if (res.IsSuccessStatusCode)
+            {
+                activeSubmission.BandScore = overallScore;
+                activeSubmission.Status = "Graded";
+                activeSubmission.TeacherFeedback = teacherFeedback;
+                ApplyFilters();
+                CloseGradingModal();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving grade: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private static double RoundHalfBand(double score)
+    {
+        double floor = Math.Floor(score);
+        double frac = score - floor;
+        if (frac >= 0.75) return floor + 1.0;
+        if (frac >= 0.25) return floor + 0.5;
+        return floor;
+    }
+
+    private static string GetSkillIcon(string skill) => skill.ToLower() switch
+    {
+        "writing" => "✍️",
+        "speaking" => "🗣️",
+        "reading" => "📖",
+        "listening" => "🎧",
+        _ => "📝"
+    };
+
+    private static string GetExamDisplayName(string examUrl)
+    {
+        if (string.IsNullOrWhiteSpace(examUrl)) return "IELTS Mock Test";
+        var fileName = Path.GetFileNameWithoutExtension(examUrl);
+        return fileName.Replace("-", " ").Replace("_", " ");
+    }
+
+    public sealed class SubmissionRecordDto
+    {
+        public int Id { get; set; }
+        public int? UserId { get; set; }
+        public string? StudentName { get; set; }
+        public string? UserEmail { get; set; }
+        public string? ExamTitle { get; set; }
+        public int AttemptNumber { get; set; } = 1;
+        public string? R2StorageKey { get; set; }
+        public string? SessionId { get; set; }
+        public string Skill { get; set; } = "";
+        public string ExamUrl { get; set; } = "";
+        public double BandScore { get; set; }
+        public int CorrectCount { get; set; }
+        public int TotalCount { get; set; }
+        public string? DetailsJson { get; set; }
+        public string Status { get; set; } = "Pending";
+        public string? TeacherFeedback { get; set; }
+        public string? AudioKey { get; set; }
+        public DateTimeOffset SubmittedAt { get; set; }
+    }
+}

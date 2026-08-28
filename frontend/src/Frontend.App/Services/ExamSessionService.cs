@@ -37,6 +37,9 @@ public sealed class ExamSessionService(IJSRuntime js)
     public Task ClearProgressAsync(string storageKey)
         => js.InvokeVoidAsync("ExamSession.clearProgress", storageKey).AsTask();
 
+    public Task ClearAsync(string storageKey)
+        => js.InvokeVoidAsync("ExamSession.clearProgress", storageKey).AsTask();
+
     public static string CreateStorageKey(string skill, string? sessionId, string examUrl)
     {
         var identity = string.IsNullOrWhiteSpace(sessionId) ? examUrl : sessionId;

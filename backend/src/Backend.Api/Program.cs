@@ -1044,25 +1044,321 @@ app.MapDelete("/api/hsk-mock-tests/{id}", async (int id, Backend.Infrastructure.
     return Results.Ok();
 });
 
-app.MapPost("/api/test-submissions", async (Backend.Application.DTOs.CreateTestSubmissionRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapPost("/api/test-submissions", async (
+    Backend.Application.DTOs.CreateTestSubmissionRequest request,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    Backend.Application.Abstractions.IR2StorageService r2Storage,
+    HttpContext httpContext,
+    CancellationToken cancellationToken) =>
 {
+    // Xác định thông tin thí sinh từ Token hoặc từ Request
+    int? userId = null;
+    string? studentName = request.StudentName;
+    string? userEmail = request.UserEmail;
+
+    if (httpContext.User.Identity?.IsAuthenticated == true)
+    {
+        var subClaim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                       ?? httpContext.User.FindFirst("sub")?.Value;
+        if (int.TryParse(subClaim, out var parsedUid)) userId = parsedUid;
+
+        var nameClaim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+                        ?? httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.UniqueName)?.Value;
+        if (!string.IsNullOrWhiteSpace(nameClaim)) studentName = nameClaim;
+
+        var emailClaim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                         ?? httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Email)?.Value;
+        if (!string.IsNullOrWhiteSpace(emailClaim)) userEmail = emailClaim;
+    }
+
+    userId ??= request.UserId;
+    if (string.IsNullOrWhiteSpace(studentName))
+    {
+        studentName = userId.HasValue ? $"Học viên #{userId}" : "Thí sinh tự do";
+    }
+
+    var examTitle = !string.IsNullOrWhiteSpace(request.ExamTitle)
+        ? request.ExamTitle
+        : Path.GetFileNameWithoutExtension(request.ExamUrl).Replace("-", " ").Replace("_", " ");
+
+    // Tính lần thi (Attempt Number)
+    int attemptNumber = request.AttemptNumber.HasValue && request.AttemptNumber.Value > 0
+        ? request.AttemptNumber.Value
+        : (await dbContext.TestSubmissions.CountAsync(s =>
+            s.Skill.ToLower() == request.Skill.ToLower() &&
+            s.ExamUrl == request.ExamUrl &&
+            ((userId.HasValue && s.UserId == userId) || s.StudentName == studentName || (!string.IsNullOrEmpty(request.SessionId) && s.SessionId == request.SessionId)),
+            cancellationToken)) + 1;
+
+    // Chuẩn bị nội dung JSON hoàn chỉnh của bài thi lưu lên R2
+    object? parsedDetails = null;
+    if (!string.IsNullOrWhiteSpace(request.DetailsJson))
+    {
+        try
+        {
+            parsedDetails = System.Text.Json.JsonSerializer.Deserialize<object>(request.DetailsJson);
+        }
+        catch
+        {
+            parsedDetails = request.DetailsJson;
+        }
+    }
+
+    var submissionPackage = new
+    {
+        StudentName = studentName,
+        UserId = userId,
+        UserEmail = userEmail,
+        SessionId = request.SessionId,
+        Skill = request.Skill,
+        ExamTitle = examTitle,
+        ExamUrl = request.ExamUrl,
+        AttemptNumber = attemptNumber,
+        Status = string.IsNullOrWhiteSpace(request.Status) ? "Pending" : request.Status,
+        BandScore = request.BandScore,
+        CorrectCount = request.CorrectCount,
+        TotalCount = request.TotalCount,
+        TeacherFeedback = request.TeacherFeedback,
+        AudioKey = request.AudioKey,
+        SubmittedAt = DateTimeOffset.UtcNow,
+        Details = parsedDetails
+    };
+
+    string jsonString = System.Text.Json.JsonSerializer.Serialize(submissionPackage, new System.Text.Json.JsonSerializerOptions
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    });
+
+    // Upload JSON vào Cloudflare R2 Private Bucket
+    string? r2Key = null;
+    try
+    {
+        var safeStudent = System.Text.RegularExpressions.Regex.Replace(
+            studentName.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD), @"[^a-z0-9]", "_").Trim('_');
+        if (string.IsNullOrEmpty(safeStudent)) safeStudent = "student";
+        var safeSkill = request.Skill.ToLowerInvariant();
+        var safeTitle = System.Text.RegularExpressions.Regex.Replace(
+            examTitle.ToLowerInvariant(), @"[^a-z0-9]", "_").Trim('_');
+        if (string.IsNullOrEmpty(safeTitle)) safeTitle = "exam";
+
+        var fileName = $"submissions/{safeSkill}/{safeStudent}_{safeTitle}_attempt_{attemptNumber}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json";
+
+        using var ms = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(jsonString));
+        r2Key = await r2Storage.UploadPrivateFileAsync(ms, fileName, "application/json", cancellationToken);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[TestSubmission] Warning: Failed to upload submission json to R2 private: {ex.Message}");
+    }
+
     var submission = new Backend.Domain.Entities.TestSubmission
     {
-        UserId = request.UserId,
+        UserId = userId,
+        StudentName = studentName,
+        UserEmail = userEmail,
         SessionId = request.SessionId,
         Skill = request.Skill,
         ExamUrl = request.ExamUrl,
+        ExamTitle = examTitle,
+        AttemptNumber = attemptNumber,
         BandScore = request.BandScore,
         CorrectCount = request.CorrectCount,
         TotalCount = request.TotalCount,
         DetailsJson = request.DetailsJson,
+        R2StorageKey = r2Key,
+        Status = string.IsNullOrWhiteSpace(request.Status) ? "Pending" : request.Status,
+        TeacherFeedback = request.TeacherFeedback,
+        AudioKey = request.AudioKey,
         SubmittedAt = DateTimeOffset.UtcNow
     };
 
     dbContext.TestSubmissions.Add(submission);
     await dbContext.SaveChangesAsync(cancellationToken);
 
-    return Results.Ok(new { Id = submission.Id });
+    return Results.Ok(new
+    {
+        Id = submission.Id,
+        StudentName = submission.StudentName,
+        Skill = submission.Skill,
+        ExamTitle = submission.ExamTitle,
+        AttemptNumber = submission.AttemptNumber,
+        Status = submission.Status,
+        R2StorageKey = submission.R2StorageKey
+    });
+});
+
+// Endpoint cho User / Client đồng bộ các bài nộp và cập nhật điểm đã được Admin chấm
+app.MapGet("/api/test-submissions/sync", async (
+    string? sessionId,
+    int? userId,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var query = dbContext.TestSubmissions.AsQueryable();
+
+    if (userId.HasValue && userId.Value > 0)
+    {
+        query = query.Where(s => s.UserId == userId.Value);
+    }
+    else if (!string.IsNullOrEmpty(sessionId))
+    {
+        query = query.Where(s => s.SessionId == sessionId);
+    }
+
+    var list = await query
+        .OrderByDescending(s => s.SubmittedAt)
+        .Take(100)
+        .ToListAsync(cancellationToken);
+
+    return Results.Ok(list);
+});
+
+// Tải / Đọc file JSON bài làm trực tiếp từ R2 Private Storage
+app.MapGet("/api/test-submissions/{id:int}/r2-json", async (
+    int id,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    Backend.Application.Abstractions.IR2StorageService r2Storage,
+    CancellationToken cancellationToken) =>
+{
+    var sub = await dbContext.TestSubmissions.FindAsync(new object[] { id }, cancellationToken);
+    if (sub == null) return Results.NotFound(new { Message = "Không tìm thấy bài nộp." });
+    if (string.IsNullOrEmpty(sub.R2StorageKey)) return Results.NotFound(new { Message = "Bài nộp chưa có file R2 private." });
+
+    var stream = await r2Storage.GetPrivateFileStreamAsync(sub.R2StorageKey, cancellationToken);
+    if (stream == null) return Results.NotFound(new { Message = "Không thể đọc file từ Cloudflare R2." });
+
+    var downloadName = Path.GetFileName(sub.R2StorageKey);
+    return Results.File(stream, "application/json", downloadName);
+});
+
+// ─── ADMIN: Quản lý và danh sách bài nộp Test Submissions ───
+app.MapGet("/api/admin/test-submissions", async (
+    string? skill,
+    string? status,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var query = dbContext.TestSubmissions.AsQueryable();
+
+    if (!string.IsNullOrEmpty(skill) && skill != "all")
+    {
+        query = query.Where(s => s.Skill.ToLower() == skill.ToLower());
+    }
+
+    if (!string.IsNullOrEmpty(status) && status != "all")
+    {
+        query = query.Where(s => s.Status.ToLower() == status.ToLower());
+    }
+
+    var list = await query
+        .OrderByDescending(s => s.SubmittedAt)
+        .Take(100)
+        .ToListAsync(cancellationToken);
+
+    return Results.Ok(list);
+});
+
+// Admin: Lấy chi tiết 1 bài nộp
+app.MapGet("/api/admin/test-submissions/{id:int}", async (
+    int id,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var item = await dbContext.TestSubmissions.FindAsync(new object[] { id }, cancellationToken);
+    if (item == null) return Results.NotFound();
+    return Results.Ok(item);
+});
+
+// Admin: Cập nhật điểm & nhận xét cho bài nộp
+app.MapPut("/api/admin/test-submissions/{id:int}/grade", async (
+    int id,
+    Backend.Application.DTOs.UpdateSubmissionGradeRequest request,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var item = await dbContext.TestSubmissions.FindAsync(new object[] { id }, cancellationToken);
+    if (item == null) return Results.NotFound();
+
+    item.BandScore = request.BandScore;
+    item.Status = string.IsNullOrWhiteSpace(request.Status) ? "Graded" : request.Status;
+    item.TeacherFeedback = request.TeacherFeedback;
+    if (!string.IsNullOrWhiteSpace(request.DetailsJson))
+    {
+        item.DetailsJson = request.DetailsJson;
+    }
+    item.GradedAt = DateTimeOffset.UtcNow;
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(item);
+});
+
+// ─── AI GRADING ENDPOINTS ───
+app.MapPost("/api/ai/grade-writing", async (
+    Backend.Application.DTOs.GradeWritingRequest request,
+    Backend.Application.Abstractions.IAiGradingService aiService,
+    CancellationToken cancellationToken) =>
+{
+    var result = await aiService.GradeWritingAsync(request, cancellationToken);
+    return Results.Ok(result);
+});
+
+app.MapPost("/api/ai/grade-speaking", async (
+    Backend.Application.DTOs.GradeSpeakingRequest request,
+    Backend.Application.Abstractions.IAiGradingService aiService,
+    CancellationToken cancellationToken) =>
+{
+    var result = await aiService.GradeSpeakingAsync(request, cancellationToken);
+    return Results.Ok(result);
+});
+
+// ─── SPEAKING: Upload audio riêng tư lên R2 Private ───
+app.MapPost("/api/speaking/upload-audio", async (
+    Microsoft.AspNetCore.Http.HttpRequest httpRequest,
+    Backend.Application.Abstractions.IR2StorageService r2Service,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    if (!httpRequest.HasFormContentType)
+        return Results.BadRequest("Expected multipart/form-data");
+
+    var form = await httpRequest.ReadFormAsync(cancellationToken);
+    var file = form.Files.GetFile("audioFile");
+    if (file == null || file.Length == 0)
+        return Results.BadRequest("No audio file uploaded.");
+
+    int.TryParse(form["questionId"], out var questionId);
+    int.TryParse(form["partNumber"], out var partNumber);
+    int.TryParse(form["durationMs"], out var durationMs);
+    var sessionId = form["sessionId"].ToString();
+    var examUrl = form["examUrl"].ToString();
+    var transcript = form["transcript"].ToString();
+
+    var storageKey = $"speaking/user_audio/{Guid.NewGuid():N}_q{questionId}_p{partNumber}.webm";
+    
+    using var stream = file.OpenReadStream();
+    var key = await r2Service.UploadPrivateAudioAsync(stream, storageKey, file.ContentType ?? "audio/webm", cancellationToken);
+
+    return Results.Ok(new
+    {
+        StorageKey = key,
+        FileSizeBytes = file.Length,
+        DurationMs = durationMs,
+        Transcript = transcript
+    });
+}).DisableAntiforgery();
+
+// ─── SPEAKING: Stream private audio ───
+app.MapGet("/api/speaking/audio/{*key}", async (
+    string key,
+    Backend.Application.Abstractions.IR2StorageService r2Service,
+    CancellationToken cancellationToken) =>
+{
+    var decodedKey = System.Net.WebUtility.UrlDecode(key);
+    var stream = await r2Service.GetPrivateFileStreamAsync(decodedKey, cancellationToken);
+    if (stream == null) return Results.NotFound("Audio file not found.");
+
+    return Results.File(stream, "audio/webm", enableRangeProcessing: true);
 });
 
 // ─── TOEIC: Upload media (ảnh/audio) lên R2 ───

@@ -13,7 +13,7 @@
 @inject NavigationManager Navigation
 @implements IDisposable
 
-<PageTitle>@(exam?.Title ?? "IELTS Reading") - IeltsHSK</PageTitle>
+<PageTitle>@(isFinished ? "Đáp án & Chấm điểm: " : "")@(exam?.Title ?? "IELTS Reading") - IeltsHSK</PageTitle>
 
 @if (isLoading)
 {
@@ -28,23 +28,7 @@ else if (exam == null)
         <div class="error-icon">📭</div>
         <h3>Không tải được đề thi</h3>
         <p>Vui lòng thử lại hoặc chọn đề khác.</p>
-    </div>
-}
-<PageTitle>@(exam?.Title ?? "IELTS Reading") - IeltsHSK</PageTitle>
-
-@if (isLoading)
-{
-    <div class="reading-loading">
-        <div class="loading-ring"></div>
-        <p>Đang tải đề thi...</p>
-    </div>
-}
-else if (exam == null)
-{
-    <div class="reading-error">
-        <div class="error-icon">📭</div>
-        <h3>Không tải được đề thi</h3>
-        <p>Vui lòng thử lại hoặc chọn đề khác.</p>
+        <button class="nav-part-btn submit" style="margin-top:16px;" @onclick="ExitExam">Quay lại danh sách</button>
     </div>
 }
 else
@@ -54,28 +38,70 @@ else
     int qStart = exam.Parts.Take(activePartIndex).Sum(p => GetQuestionGroups(p).Sum(g => g.Questions.Count)) + 1;
     int qEnd   = qStart + activeGroups.Sum(g => g.Questions.Count) - 1;
 
-    @* ── TOP BAR ── *@
-    @if (!isFinished || showReview)
+    @* ── TOP BAR / REVIEW BANNER ── *@
+    @if (isFinished && gradingResult != null)
     {
-        <div class="reading-topbar">
-        <div class="topbar-left">
-            <span class="exam-title-short">@exam.Title</span>
-        </div>
-        <div class="topbar-center">
-            <div class="timer-box @(secondsLeft < 600 ? "timer-warning" : "")">
-                <span class="timer-icon">⏱</span>
-                <span class="timer-text">@TimerDisplay remaining</span>
+        <div class="reading-review-topbar">
+            <div class="review-top-left">
+                <span class="review-badge">✨ KẾT QUẢ ĐÁP ÁN READING</span>
+                <span class="exam-title-short">@exam.Title</span>
+            </div>
+            <div class="review-top-stats">
+                <div class="stat-pill band">
+                    <span class="stat-lbl">Band</span>
+                    <span class="stat-val">@gradingResult.BandScore.ToString("0.0")</span>
+                </div>
+                <div class="stat-pill correct">
+                    <span class="stat-lbl">Đúng</span>
+                    <span class="stat-val">@gradingResult.CorrectCount/@gradingResult.TotalCount</span>
+                </div>
+                <div class="stat-pill wrong">
+                    <span class="stat-lbl">Sai</span>
+                    <span class="stat-val">@(gradingResult.TotalCount - gradingResult.CorrectCount - gradingResult.Questions.Values.Count(q => q.IsBlank))</span>
+                </div>
+                <div class="stat-pill blank">
+                    <span class="stat-lbl">Bỏ trống</span>
+                    <span class="stat-val">@gradingResult.Questions.Values.Count(q => q.IsBlank)</span>
+                </div>
+            </div>
+            <div class="review-top-actions">
+                <button class="btn-action review-btn" style="background:#2563eb; color:#fff; font-weight:700;" @onclick="NavigateToReviewDetail">
+                    <i class="bi bi-file-earmark-check-fill"></i> Xem giải thích chi tiết
+                </button>
+                <button class="btn-action summary-btn" @onclick="NavigateToSummary">
+                    <i class="bi bi-bar-chart-fill"></i> Tổng hợp kết quả
+                </button>
+                <button class="btn-action next-btn" @onclick="NavigateToNextSkill">
+                    <i class="bi bi-arrow-right-circle-fill"></i> Phần thi tiếp theo
+                </button>
+                <button class="btn-action retake-btn" @onclick="RetakeExam">
+                    <i class="bi bi-arrow-counterclockwise"></i> Làm lại
+                </button>
+                <button class="btn-action exit-btn" @onclick="ExitExam">
+                    <i class="bi bi-x-lg"></i> Thoát
+                </button>
             </div>
         </div>
-        <div class="topbar-right">
-            <button class="btn-exit-exam" @onclick="ExitExam">Exit test</button>
-            @if (isFinished)
-            {
-                <span class="test-session-status">@(timedOut ? "Time is up" : "Submitted")</span>
-            }
-            <button class="btn-submit-exam" disabled="@isSubmitting" @onclick="SubmitExam">@(isSubmitting ? "Submitting..." : "Submit ➤")</button>
+    }
+    else
+    {
+        <div class="reading-topbar">
+            <div class="topbar-left">
+                <span class="exam-title-short">@exam.Title</span>
+            </div>
+            <div class="topbar-center">
+                <div class="timer-box @(secondsLeft < 600 ? "timer-warning" : "")">
+                    <span class="timer-icon">⏱</span>
+                    <span class="timer-text">@TimerDisplay remaining</span>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <button class="btn-exit-exam" @onclick="ExitExam">Exit test</button>
+                <button class="btn-submit-exam" disabled="@isSubmitting" @onclick="SubmitExam">
+                    @(isSubmitting ? "Đang chấm..." : "Nộp bài ➤")
+                </button>
+            </div>
         </div>
-    </div>
     }
 
     @* ── PART TABS ── *@
@@ -97,8 +123,18 @@ else
         </span>
     </div>
 
+    @* ── MOBILE VIEW TOGGLE (Passage vs Questions) ── *@
+    <div class="mobile-section-toggle">
+        <button class="m-toggle-btn @(mobileTab == "passage" ? "active" : "")" @onclick='() => mobileTab = "passage"'>
+            📖 Đề bài & Bài đọc
+        </button>
+        <button class="m-toggle-btn @(mobileTab == "questions" ? "active" : "")" @onclick='() => mobileTab = "questions"'>
+            📝 Câu hỏi (@qStart–@qEnd)
+        </button>
+    </div>
+
     @* ── MAIN SPLIT LAYOUT ── *@
-    <div class="reading-split">
+    <div class="reading-split @(mobileTab == "passage" ? "mobile-show-passage" : "mobile-show-questions")">
 
         @* ── LEFT: PASSAGE ── *@
         <div class="passage-col" id="passage-scroll">
@@ -131,11 +167,22 @@ else
                     @foreach (var q in group.Questions)
                     {
                         bool isActive = q.Id == activeQuestionId;
-                        <div class="question-block @(IsAnswered(q) ? "answered" : "") @(isActive ? "q-focused" : "")"
+                        var qr = (isFinished && gradingResult != null && gradingResult.Questions.TryGetValue(q.Id, out var qRes)) ? qRes : null;
+                        var reviewClass = qr == null ? "" : (qr.IsCorrect ? "q-review-correct" : qr.IsBlank ? "q-review-blank" : "q-review-wrong");
+
+                        <div class="question-block @(IsAnswered(q) ? "answered" : "") @(isActive ? "q-focused" : "") @reviewClass"
                              id="q-@q.Id"
                              @onclick="() => activeQuestionId = q.Id">
 
-                            <div class="q-text">@((MarkupString)q.Text)</div>
+                            <div class="q-header-row">
+                                <div class="q-text">@((MarkupString)q.Text)</div>
+                                @if (qr != null)
+                                {
+                                    <span class="q-badge @(qr.IsCorrect ? "badge-correct" : qr.IsBlank ? "badge-blank" : "badge-wrong")">
+                                        @(qr.IsCorrect ? "✓ Đúng" : qr.IsBlank ? "⚪ Chưa làm" : "✕ Sai")
+                                    </span>
+                                }
+                            </div>
 
                             @if (q.Options.Count > 0)
                             {
@@ -148,6 +195,7 @@ else
                                     <div class="q-inline-dropdown">
                                         <select class="q-select @(q.SelectedOptionId.HasValue ? "q-select--answered" : "")"
                                                 value="@(q.SelectedOptionId?.ToString() ?? "")"
+                                                disabled="@isFinished"
                                                 @onchange="(e) => OnSelectChange(q, e)">
                                             <option value="">— Chọn đáp án —</option>
                                             @foreach (var opt in q.Options)
@@ -163,10 +211,18 @@ else
                                     <ul class="q-option-list">
                                         @foreach (var opt in q.Options)
                                         {
-                                            <li class="q-option @(q.SelectedOptionId == opt.Id ? "selected" : "")"
+                                            bool isOptSelected = q.SelectedOptionId == opt.Id;
+                                            bool isOptCorrectAnswer = qr != null && (string.Equals(opt.Label, qr.CorrectAnswer, StringComparison.OrdinalIgnoreCase) || qr.AcceptedAnswers.Any(a => string.Equals(a, opt.Label, StringComparison.OrdinalIgnoreCase)));
+                                            bool isOptWrongSelected = qr != null && !qr.IsCorrect && isOptSelected;
+
+                                            <li class="q-option @(isOptSelected ? "selected" : "") @(isOptCorrectAnswer ? "opt-is-correct" : "") @(isOptWrongSelected ? "opt-is-wrong" : "")"
                                                 @onclick="() => SelectOption(q, opt.Id)">
                                                 <span class="opt-badge">@opt.Label</span>
                                                 <span class="opt-body">@opt.Text</span>
+                                                @if (isOptCorrectAnswer)
+                                                {
+                                                    <span class="opt-correct-tag">✓ Đáp án đúng</span>
+                                                }
                                             </li>
                                         }
                                     </ul>
@@ -175,12 +231,30 @@ else
                             else
                             {
                                 @* Fill-in-blank *@
-                                <input class="q-fill-input"
+                                <input class="q-fill-input @(qr != null ? (qr.IsCorrect ? "fill-correct" : "fill-wrong") : "")"
                                        type="text"
                                        placeholder="Write your answer..."
                                        value="@q.FillAnswer"
                                        disabled="@isFinished"
                                        @oninput="(e) => SetFillAnswer(q, e)" />
+                            }
+
+                            @* Chế độ xem đáp án & giải thích *@
+                            @if (qr != null)
+                            {
+                                <div class="q-answer-feedback @(qr.IsCorrect ? "fb-correct" : qr.IsBlank ? "fb-blank" : "fb-wrong")">
+                                    <div class="fb-row">
+                                        <span class="fb-label">Đáp án của bạn:</span>
+                                        <span class="fb-val student">@(string.IsNullOrWhiteSpace(qr.StudentAnswer) ? "— (Bỏ trống)" : qr.StudentAnswer)</span>
+                                    </div>
+                                    @if (!qr.IsCorrect)
+                                    {
+                                        <div class="fb-row">
+                                            <span class="fb-label">Đáp án chính xác:</span>
+                                            <span class="fb-val correct">@qr.CorrectAnswer @(qr.AcceptedAnswers.Count > 1 ? $"(chấp nhận: {string.Join(" / ", qr.AcceptedAnswers)})" : "")</span>
+                                        </div>
+                                    }
+                                </div>
                             }
                         </div>
                     }
@@ -203,9 +277,17 @@ else
                         Part @(exam.Parts[activePartIndex + 1].PartNumber) →
                     </button>
                 }
+                else if (!isFinished)
+                {
+                    <button class="nav-part-btn submit" disabled="@isSubmitting" @onclick="SubmitExam">
+                        @(isSubmitting ? "Đang chấm..." : "Nộp bài ✓")
+                    </button>
+                }
                 else
                 {
-                    <button class="nav-part-btn submit" disabled="@isSubmitting" @onclick="SubmitExam">@(isSubmitting ? "Submitting..." : "Nộp bài ✓")</button>
+                    <button class="nav-part-btn summary-btn" @onclick="NavigateToSummary">
+                        📊 Xem tổng hợp kết quả
+                    </button>
                 }
             </div>
         </div>
@@ -219,7 +301,12 @@ else
             {
                 @foreach (var q in group.Questions)
                 {
-                    <button class="q-nav-num @(IsAnswered(q) ? "nav-answered" : "") @(q.Id == activeQuestionId ? "nav-active" : "")"
+                    var qr = (isFinished && gradingResult != null && gradingResult.Questions.TryGetValue(q.Id, out var qRes)) ? qRes : null;
+                    var navStateClass = qr == null 
+                        ? (IsAnswered(q) ? "nav-answered" : "") 
+                        : (qr.IsCorrect ? "nav-correct" : qr.IsBlank ? "nav-blank" : "nav-wrong");
+
+                    <button class="q-nav-num @navStateClass @(q.Id == activeQuestionId ? "nav-active" : "")"
                             @onclick="async () => { activeQuestionId = q.Id; await ScrollToQuestion(q.Id); }">
                         @q.Id
                     </button>
@@ -237,78 +324,12 @@ else
     </div>
 }
 
-
-@* ── RESULT PANEL (shown after submit) ── *@
-@if (isFinished && gradingResult != null)
-{
-    <div class="result-panel">
-        <div class="result-header">
-            <h2>📊 Kết quả Reading</h2>
-            <div class="result-score-row">
-                <div class="result-score-card band">
-                    <span class="rs-label">Band Score</span>
-                    <span class="rs-value band-val">@gradingResult.BandScore.ToString("0.0")</span>
-                </div>
-                <div class="result-score-card correct">
-                    <span class="rs-label">Đúng</span>
-                    <span class="rs-value">@gradingResult.CorrectCount / @gradingResult.TotalCount</span>
-                </div>
-                <div class="result-score-card wrong">
-                    <span class="rs-label">Sai</span>
-                    <span class="rs-value">@(gradingResult.TotalCount - gradingResult.CorrectCount - gradingResult.Questions.Values.Count(q => q.IsBlank))</span>
-                </div>
-                <div class="result-score-card blank">
-                    <span class="rs-label">Bỏ trống</span>
-                    <span class="rs-value">@gradingResult.Questions.Values.Count(q => q.IsBlank)</span>
-                </div>
-            </div>
-        </div>
-        <div class="result-answer-grid">
-            @foreach (var kv in gradingResult.Questions.OrderBy(x => x.Key))
-            {
-                var qr = kv.Value;
-                <div class="result-answer-item @(qr.IsCorrect ? "correct" : qr.IsBlank ? "blank" : "wrong")">
-                    <span class="ra-num">@qr.QuestionNumber</span>
-                    <span class="ra-student">@(string.IsNullOrEmpty(qr.StudentAnswer) ? "—" : qr.StudentAnswer)</span>
-                    @if (!qr.IsCorrect && !qr.IsBlank)
-                    {
-                        <span class="ra-correct">✓ @qr.CorrectAnswer</span>
-                    }
-                    else if (qr.IsCorrect)
-                    {
-                        <span class="ra-tick">✓</span>
-                    }
-                </div>
-            }
-        </div>
-        @if (gradingResult.DebugLines.Count > 0)
-        {
-            <div class="result-debug-log" style="margin-top: 20px; padding: 16px; background: #0f172a; color: #e2e8f0; border-radius: 14px; font-size: 0.82rem; line-height: 1.5;">
-                <div style="font-weight: 700; margin-bottom: 10px;">Debug log</div>
-                @foreach (var line in gradingResult.DebugLines)
-                {
-                    <div>@line</div>
-                }
-            </div>
-        }
-        @if (!showReview)
-        {
-            <div style="text-align: center; margin-top: 24px;">
-                <button class="nav-part-btn submit" @onclick="() => showReview = true">🔍 Xem lại bài làm</button>
-            </div>
-        }
-    </div>
-}
-else if (isFinished && !string.IsNullOrWhiteSpace(_statusMessage))
+@if (isFinished && !string.IsNullOrWhiteSpace(_statusMessage))
 {
     <div class="reading-error">
         <div class="error-icon">!</div>
         <h3>Không thể chấm bài Reading</h3>
         <p>@_statusMessage</p>
-        @if (!string.IsNullOrWhiteSpace(_answerUrlLoaded))
-        {
-            <p style="font-size: 0.85rem; color: #666; word-break: break-all;">AnswerUrl: @_answerUrlLoaded</p>
-        }
         <button class="nav-part-btn submit" @onclick="() => { isFinished = false; _statusMessage = null; }">Quay lại bài làm</button>
     </div>
 }
@@ -318,11 +339,15 @@ else if (isFinished && !string.IsNullOrWhiteSpace(_statusMessage))
     [Parameter][SupplyParameterFromQuery(Name = "ExamUrl")] public string? QueryExamUrl { get; set; }
     [Parameter][SupplyParameterFromQuery(Name = "AnswerUrl")] public string? QueryAnswerUrl { get; set; }
     [Parameter][SupplyParameterFromQuery(Name = "Session")] public string? TestSessionId { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "CollectionName")] public string? QueryCollectionName { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "Title")] public string? QueryTitle { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "MockTestId")] public int? QueryMockTestId { get; set; }
 
     private ExamData? exam;
     private bool isLoading = true;
     private int activePartIndex = 0;
     private int activeQuestionId = 0;
+    private string mobileTab = "questions";
 
     // Timer: 60 phút
     private int secondsLeft = 60 * 60;
@@ -330,7 +355,7 @@ else if (isFinished && !string.IsNullOrWhiteSpace(_statusMessage))
     private IDisposable? _navigationRegistration;
     private string? _sessionKey;
     private bool isFinished;
-    private bool showReview = false;
+    private bool showReview = true;
     private bool isSubmitting;
     private GradingResult? gradingResult;
     private string? _examUrlLoaded;
@@ -360,17 +385,42 @@ else if (isFinished && !string.IsNullOrWhiteSpace(_statusMessage))
             activeQuestionId = FirstQuestionId(exam.Parts[0]);
         isLoading = false;
 
-        // Bắt đầu đếm ngược
+        // Bắt đầu đếm ngược hoặc khôi phục session
         _sessionKey = ExamSessionService.CreateStorageKey("reading", TestSessionId, url);
         var session = await ExamSession.StartAsync(_sessionKey, 60 * 60);
         secondsLeft = session.SecondsRemaining;
         isFinished = session.IsCompleted || session.IsExpired;
         timedOut = session.IsTimedOut || session.IsExpired;
-        if (isFinished) return;
+
+        if (isFinished)
+        {
+            await LoadGradingResultOnRestoreAsync();
+            return;
+        }
 
         _navigationRegistration = Navigation.RegisterLocationChangingHandler(ConfirmLeave);
         await ExamSession.SetUnloadWarningAsync(true);
         _timer = new System.Threading.Timer(_ => _ = UpdateTimerAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private async Task LoadGradingResultOnRestoreAsync()
+    {
+        try
+        {
+            var answerKey = !string.IsNullOrWhiteSpace(_answerUrlLoaded)
+                ? await answerKeyService.LoadAsync(_answerUrlLoaded)
+                : await answerKeyService.LoadFromExamUrlAsync(_examUrlLoaded ?? "");
+
+            if (answerKey != null)
+            {
+                var studentAnswers = CollectStudentAnswers();
+                gradingResult = AnswerKeyService.Grade(answerKey, studentAnswers);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Reading] Error restoring grading result: {ex.Message}");
+        }
     }
 
     private void SelectOption(QuestionData q, int optionId)
@@ -418,13 +468,6 @@ else if (isFinished && !string.IsNullOrWhiteSpace(_statusMessage))
 
     private Task SubmitExam() => FinishExamAsync(false);
 
-    private void LogSubmit()
-    {
-        int total    = exam!.Parts.Sum(p => GetQuestionGroups(p).Sum(g => g.Questions.Count));
-        int answered = exam.Parts.Sum(p => AnsweredCount(p));
-        Console.WriteLine($"Nộp bài: {answered}/{total} câu đã trả lời.");
-    }
-
     private async Task UpdateTimerAsync()
     {
         if (isFinished || string.IsNullOrEmpty(_sessionKey)) return;
@@ -454,9 +497,6 @@ else if (isFinished && !string.IsNullOrWhiteSpace(_statusMessage))
                 return;
             }
 
-            Console.WriteLine($"[Reading] ExamUrl={_examUrlLoaded}");
-            Console.WriteLine($"[Reading] AnswerUrl={_answerUrlLoaded ?? "(fallback from exam url)"}");
-
             var answerKey = !string.IsNullOrWhiteSpace(_answerUrlLoaded)
                 ? await answerKeyService.LoadAsync(_answerUrlLoaded)
                 : await answerKeyService.LoadFromExamUrlAsync(_examUrlLoaded);
@@ -478,7 +518,22 @@ else if (isFinished && !string.IsNullOrWhiteSpace(_statusMessage))
 
             try
             {
-                await SubmissionService.SaveToDbAsync("Reading", _examUrlLoaded, _sessionKey ?? "", gradingResult.BandScore, gradingResult.CorrectCount, gradingResult.TotalCount);
+                var duration = Math.Max(60 * 60 - secondsLeft, 0);
+                var submission = new IeltsSubmissionRecord
+                {
+                    Skill = "Reading",
+                    ExamTitle = exam?.Title ?? QueryTitle ?? "IELTS Reading",
+                    ExamUrl = _examUrlLoaded,
+                    SessionId = TestSessionId,
+                    MockTestId = QueryMockTestId,
+                    CollectionName = QueryCollectionName,
+                    TestTitle = QueryTitle,
+                    AnswerUrl = _answerUrlLoaded,
+                    TimedOut = timeExpired,
+                    DurationSeconds = duration
+                };
+
+                await SubmissionService.SaveReadingSubmissionAsync(submission, gradingResult);
             }
             catch (Exception ex)
             {
@@ -496,6 +551,39 @@ else if (isFinished && !string.IsNullOrWhiteSpace(_statusMessage))
             isSubmitting = false;
             await InvokeAsync(StateHasChanged);
         }
+    }
+
+    private void NavigateToReviewDetail()
+    {
+        var coll = QueryCollectionName ?? "IELTS Mock Test 2025 December";
+        var title = QueryTitle ?? exam?.Title ?? "Practise Test 1";
+        var sess = TestSessionId ?? "";
+        var extraAnswer = string.IsNullOrWhiteSpace(QueryAnswerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(QueryAnswerUrl)}";
+        var extraMockId = QueryMockTestId.HasValue ? $"&MockTestId={QueryMockTestId.Value}" : "";
+        Navigation.NavigateTo($"/ielts/review?Skill=Reading&ExamUrl={Uri.EscapeDataString(_examUrlLoaded ?? "")}{extraAnswer}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(title)}&Session={Uri.EscapeDataString(sess)}{extraMockId}");
+    }
+
+    private void NavigateToSummary()
+    {
+        var coll = QueryCollectionName ?? "IELTS Mock Test 2025 December";
+        var title = QueryTitle ?? exam?.Title ?? "Practise Test 1";
+        var sess = TestSessionId ?? "";
+        Navigation.NavigateTo($"/ielts/mock-test/summary?CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(title)}&Session={Uri.EscapeDataString(sess)}");
+    }
+
+    private void NavigateToNextSkill()
+    {
+        Navigation.NavigateTo("/ielts/luyen-de");
+    }
+
+    private void RetakeExam()
+    {
+        var newSession = Guid.NewGuid().ToString("N");
+        var extraAnswer = string.IsNullOrWhiteSpace(QueryAnswerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(QueryAnswerUrl)}";
+        var extraColl = string.IsNullOrWhiteSpace(QueryCollectionName) ? "" : $"&CollectionName={Uri.EscapeDataString(QueryCollectionName)}";
+        var extraTitle = string.IsNullOrWhiteSpace(QueryTitle) ? "" : $"&Title={Uri.EscapeDataString(QueryTitle)}";
+        var extraMockId = QueryMockTestId.HasValue ? $"&MockTestId={QueryMockTestId.Value}" : "";
+        Navigation.NavigateTo($"/ielts/reading/preview?ExamUrl={Uri.EscapeDataString(_examUrlLoaded ?? "")}{extraAnswer}{extraColl}{extraTitle}{extraMockId}&Session={newSession}", forceLoad: true);
     }
 
     private Dictionary<int, string> CollectStudentAnswers()

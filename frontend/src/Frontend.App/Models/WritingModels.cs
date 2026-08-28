@@ -19,6 +19,8 @@ public class WritingTask
     public string RequireWords { get; set; } = "";
     public string? ImageUrl { get; set; }
     public string? ImageAlt { get; set; }
+    public string? SampleAnswer { get; set; }
+    public double? ExaminerBand { get; set; }
 
     // User's essay answer (not from JSON)
     [System.Text.Json.Serialization.JsonIgnore]

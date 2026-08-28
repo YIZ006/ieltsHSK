@@ -103,4 +103,117 @@ public class R2StorageService : IR2StorageService
             return false;
         }
     }
+
+    public async Task<string> UploadPrivateAudioAsync(Stream fileStream, string key, string contentType, CancellationToken cancellationToken = default)
+    {
+        var accessKey = _config["CloudflareR2:AccessKey"];
+        var secretKey = _config["CloudflareR2:SecretKey"];
+        var endpoint = _config["CloudflareR2:Endpoint"];
+        // Private bucket name, falls back to default bucket if not specified
+        var bucketName = _config["CloudflareR2:UserAudioBucketName"] ?? _config["CloudflareR2:BucketName"];
+
+        var config = new AmazonS3Config
+        {
+            ServiceURL = endpoint,
+            AuthenticationRegion = "auto",
+            ForcePathStyle = true
+        };
+
+        using var client = new AmazonS3Client(accessKey, secretKey, config);
+
+        var putRequest = new PutObjectRequest
+        {
+            BucketName = bucketName,
+            Key = key,
+            InputStream = fileStream,
+            ContentType = contentType,
+            DisablePayloadSigning = true
+        };
+
+        var response = await client.PutObjectAsync(putRequest, cancellationToken);
+
+        if (response.HttpStatusCode == System.Net.HttpStatusCode.OK)
+        {
+            return key; // Return private storage key, NEVER public URL
+        }
+
+        throw new Exception("Lỗi khi upload private audio lên R2");
+    }
+
+    public async Task<string> UploadPrivateFileAsync(Stream fileStream, string key, string contentType = "application/json", CancellationToken cancellationToken = default)
+    {
+        return await UploadPrivateAudioAsync(fileStream, key, contentType, cancellationToken);
+    }
+
+    public async Task<Stream?> GetPrivateFileStreamAsync(string key, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return null;
+
+        var accessKey = _config["CloudflareR2:AccessKey"];
+        var secretKey = _config["CloudflareR2:SecretKey"];
+        var endpoint = _config["CloudflareR2:Endpoint"];
+        var bucketName = _config["CloudflareR2:UserAudioBucketName"] ?? _config["CloudflareR2:BucketName"];
+
+        var config = new AmazonS3Config
+        {
+            ServiceURL = endpoint,
+            AuthenticationRegion = "auto",
+            ForcePathStyle = true
+        };
+
+        var client = new AmazonS3Client(accessKey, secretKey, config);
+
+        var getRequest = new GetObjectRequest
+        {
+            BucketName = bucketName,
+            Key = key
+        };
+
+        try
+        {
+            var response = await client.GetObjectAsync(getRequest, cancellationToken);
+            return response.ResponseStream;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error retrieving private file {key} from R2: {ex.Message}");
+            return null;
+        }
+    }
+
+    public async Task<bool> DeletePrivateFileAsync(string key, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return false;
+
+        var accessKey = _config["CloudflareR2:AccessKey"];
+        var secretKey = _config["CloudflareR2:SecretKey"];
+        var endpoint = _config["CloudflareR2:Endpoint"];
+        var bucketName = _config["CloudflareR2:UserAudioBucketName"] ?? _config["CloudflareR2:BucketName"];
+
+        var config = new AmazonS3Config
+        {
+            ServiceURL = endpoint,
+            AuthenticationRegion = "auto",
+            ForcePathStyle = true
+        };
+
+        using var client = new AmazonS3Client(accessKey, secretKey, config);
+
+        var deleteRequest = new DeleteObjectRequest
+        {
+            BucketName = bucketName,
+            Key = key
+        };
+
+        try
+        {
+            var response = await client.DeleteObjectAsync(deleteRequest, cancellationToken);
+            return response.HttpStatusCode == System.Net.HttpStatusCode.NoContent || response.HttpStatusCode == System.Net.HttpStatusCode.OK;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting private file {key} from R2: {ex.Message}");
+            return false;
+        }
+    }
 }

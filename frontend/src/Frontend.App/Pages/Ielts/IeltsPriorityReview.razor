@@ -1,0 +1,517 @@
+@page "/ielts/uu-tien"
+@layout Frontend.App.Layout.IeltsLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject ExamSubmissionService SubmissionService
+@inject IeltsService IeltsService
+@inject NavigationManager Navigation
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<PageTitle>Ưu Tiên Ôn Tập - IeltsHSK</PageTitle>
+
+<div class="priority-container">
+    @if (isLoading)
+    {
+        <div class="priority-loading">
+            <div class="spinner"></div>
+            <p>Đang phân tích dữ liệu luyện tập của bạn...</p>
+        </div>
+    }
+    else
+    {
+        <!-- Header -->
+        <div class="priority-header">
+            <div>
+                <h1>Ưu Tiên Ôn Tập</h1>
+                <p class="header-sub">Dựa trên @totalAttempts bài thi gần nhất của bạn — hệ thống chỉ đúng điểm cần cải thiện.</p>
+            </div>
+            @if (!string.IsNullOrEmpty(currentLevel))
+            {
+                <span class="level-badge">Trình độ hiện tại: <strong>@currentLevel</strong></span>
+            }
+        </div>
+
+        @if (totalAttempts == 0)
+        {
+            <!-- Empty State -->
+            <div class="priority-empty">
+                <div class="empty-icon">🎯</div>
+                <h3>Chưa có dữ liệu để phân tích</h3>
+                <p>Hãy làm ít nhất một bài Mock Test để hệ thống phân tích điểm mạnh, điểm yếu và đưa ra khuyến nghị ôn tập cá nhân hoá cho bạn.</p>
+                <button class="btn-go-test" @onclick='() => Navigation.NavigateTo("/ielts/luyen-de")'>
+                    <i class="bi bi-play-circle-fill"></i> Bắt đầu làm đề thi ngay
+                </button>
+            </div>
+        }
+        else
+        {
+            <!-- Overall Band Score Hero -->
+            <div class="hero-band-card">
+                <div class="hero-band-box">
+                    <span class="hero-band-title">OVERALL BAND (TB)</span>
+                    <span class="hero-band-score">@overallBand.ToString("0.0")</span>
+                    <span class="hero-cefr-badge">@GetCefrLevel(overallBand)</span>
+                </div>
+                <div class="hero-details">
+                    <h3>Phân tích năng lực tổng thể</h3>
+                    <p class="hero-desc">@GetBandDescription(overallBand)</p>
+                    <div class="hero-meta">
+                        <span><i class="bi bi-journal-check"></i> @totalAttempts lần làm bài đã phân tích</span>
+                        <span><i class="bi bi-calendar3"></i> Cập nhật: @DateTime.Now.ToString("dd/MM/yyyy")</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Skills Chart — đồng bộ Trading Terminal từ IeltsMockTestSummary -->
+            <div class="section-header">
+                <h2>Phân Tích 4 Kỹ Năng</h2>
+                <p>Điểm trung bình từ các lần làm bài — kỹ năng thấp nhất là nơi ưu tiên cải thiện.</p>
+            </div>
+
+            <div class="trading-terminal-card">
+                <!-- Terminal Header -->
+                <div class="terminal-header">
+                    <div class="terminal-title-group">
+                        <div class="ticker-badge">
+                            <span class="live-dot"></span>
+                            <span class="ticker-code">IELTS-INDEX : 4-SKILLS (TB)</span>
+                        </div>
+                        <span class="terminal-tag">AVG PERFORMANCE CHART</span>
+                    </div>
+                    <div class="terminal-stats-group">
+                        <div class="stat-item">
+                            <span class="stat-lbl">CURRENT BAND</span>
+                            <span class="stat-val bullish">@overallBand.ToString("0.0")</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-lbl">TARGET BAND</span>
+                            <span class="stat-val neutral">@TargetBandScore.ToString("0.0")</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-lbl">VS TARGET</span>
+                            <span class="stat-badge @(GetTargetDelta() >= 0 ? "gain" : "loss")">
+                                @(GetTargetDelta() >= 0 ? $"▲ +{GetTargetDelta():0.0}" : $"▼ {GetTargetDelta():0.0}") Band
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SVG Chart -->
+                <div class="chart-wrapper">
+                    <svg class="trading-svg" viewBox="0 0 800 260" preserveAspectRatio="none">
+                        <defs>
+                            <linearGradient id="pr-neonLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#00f2fe" />
+                                <stop offset="35%" stop-color="#10b981" />
+                                <stop offset="70%" stop-color="#818cf8" />
+                                <stop offset="100%" stop-color="#fb923c" />
+                            </linearGradient>
+                            <linearGradient id="pr-areaGlowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#10b981" stop-opacity="0.45" />
+                                <stop offset="60%" stop-color="#00f2fe" stop-opacity="0.15" />
+                                <stop offset="100%" stop-color="#0f172a" stop-opacity="0.0" />
+                            </linearGradient>
+                            <filter id="pr-neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+
+                        <!-- Gridlines -->
+                        <line x1="50" y1="@GetChartY(8.5)" x2="750" y2="@GetChartY(8.5)" stroke="#334155" stroke-dasharray="4,4" stroke-width="1" />
+                        <text x="755" y="@(GetChartY(8.5) + 4)" fill="#64748b" font-size="10" font-family="monospace">8.5 R2</text>
+
+                        <line x1="50" y1="@GetChartY(TargetBandScore)" x2="750" y2="@GetChartY(TargetBandScore)" stroke="#3b82f6" stroke-dasharray="6,4" stroke-width="1.5" />
+                        <text x="755" y="@(GetChartY(TargetBandScore) + 4)" fill="#60a5fa" font-size="10" font-weight="bold" font-family="monospace">7.0 TARGET</text>
+
+                        <line x1="50" y1="@GetChartY(5.5)" x2="750" y2="@GetChartY(5.5)" stroke="#334155" stroke-dasharray="4,4" stroke-width="1" />
+                        <text x="755" y="@(GetChartY(5.5) + 4)" fill="#64748b" font-size="10" font-family="monospace">5.5 S1</text>
+
+                        <!-- Vertical gridlines -->
+                        <line x1="120" y1="20" x2="120" y2="220" stroke="#1e293b" stroke-width="1" />
+                        <line x1="300" y1="20" x2="300" y2="220" stroke="#1e293b" stroke-width="1" />
+                        <line x1="480" y1="20" x2="480" y2="220" stroke="#1e293b" stroke-width="1" />
+                        <line x1="660" y1="20" x2="660" y2="220" stroke="#1e293b" stroke-width="1" />
+
+                        <!-- Candlestick Wicks -->
+                        <line x1="120" y1="@(GetSkillAvgY("Listening") - 15)" x2="120" y2="@(GetSkillAvgY("Listening") + 20)" stroke="#00f2fe" stroke-width="2" opacity="0.6"/>
+                        <rect x="112" y="@(GetSkillAvgY("Listening") - 8)" width="16" height="16" rx="3" fill="#00f2fe" opacity="0.25" stroke="#00f2fe" stroke-width="1.5"/>
+
+                        <line x1="300" y1="@(GetSkillAvgY("Reading") - 15)" x2="300" y2="@(GetSkillAvgY("Reading") + 20)" stroke="#10b981" stroke-width="2" opacity="0.6"/>
+                        <rect x="292" y="@(GetSkillAvgY("Reading") - 8)" width="16" height="16" rx="3" fill="#10b981" opacity="0.25" stroke="#10b981" stroke-width="1.5"/>
+
+                        <line x1="480" y1="@(GetSkillAvgY("Writing") - 15)" x2="480" y2="@(GetSkillAvgY("Writing") + 20)" stroke="#818cf8" stroke-width="2" opacity="0.6"/>
+                        <rect x="472" y="@(GetSkillAvgY("Writing") - 8)" width="16" height="16" rx="3" fill="#818cf8" opacity="0.25" stroke="#818cf8" stroke-width="1.5"/>
+
+                        <line x1="660" y1="@(GetSkillAvgY("Speaking") - 15)" x2="660" y2="@(GetSkillAvgY("Speaking") + 20)" stroke="#fb923c" stroke-width="2" opacity="0.6"/>
+                        <rect x="652" y="@(GetSkillAvgY("Speaking") - 8)" width="16" height="16" rx="3" fill="#fb923c" opacity="0.25" stroke="#fb923c" stroke-width="1.5"/>
+
+                        <!-- Area & Trend Curve -->
+                        <path d="@GetAreaPath()" fill="url(#pr-areaGlowGrad)" />
+                        <path d="@GetTrendPath()" fill="none" stroke="url(#pr-neonLineGrad)" stroke-width="4" filter="url(#pr-neonGlow)" stroke-linecap="round" />
+
+                        <!-- Data Nodes -->
+                        <circle cx="120" cy="@GetSkillAvgY("Listening")" r="6" fill="#00f2fe" filter="url(#pr-neonGlow)" />
+                        <circle cx="120" cy="@GetSkillAvgY("Listening")" r="10" fill="none" stroke="#00f2fe" stroke-width="1.5" opacity="0.6" />
+                        <circle cx="300" cy="@GetSkillAvgY("Reading")" r="6" fill="#10b981" filter="url(#pr-neonGlow)" />
+                        <circle cx="300" cy="@GetSkillAvgY("Reading")" r="10" fill="none" stroke="#10b981" stroke-width="1.5" opacity="0.6" />
+                        <circle cx="480" cy="@GetSkillAvgY("Writing")" r="6" fill="#818cf8" filter="url(#pr-neonGlow)" />
+                        <circle cx="480" cy="@GetSkillAvgY("Writing")" r="10" fill="none" stroke="#818cf8" stroke-width="1.5" opacity="0.6" />
+                        <circle cx="660" cy="@GetSkillAvgY("Speaking")" r="6" fill="#fb923c" filter="url(#pr-neonGlow)" />
+                        <circle cx="660" cy="@GetSkillAvgY("Speaking")" r="10" fill="none" stroke="#fb923c" stroke-width="1.5" opacity="0.6" />
+
+                        <!-- X-Axis Labels -->
+                        <text x="120" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">🎧 L (@(listeningAvg > 0 ? listeningAvg.ToString("0.0") : "—"))</text>
+                        <text x="300" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">📖 R (@(readingAvg > 0 ? readingAvg.ToString("0.0") : "—"))</text>
+                        <text x="480" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">✍️ W (@(writingAvg > 0 ? writingAvg.ToString("0.0") : "—"))</text>
+                        <text x="660" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">🗣️ S (@(speakingAvg > 0 ? speakingAvg.ToString("0.0") : "—"))</text>
+                    </svg>
+                </div>
+
+                <!-- Asset Breakdown Cards -->
+                <div class="terminal-assets-grid">
+                    <div class="asset-card @(listeningAvg > 0 && listeningAvg == GetMinScore() ? "asset-weak" : "")">
+                        <div class="asset-top">
+                            <span class="asset-name">🎧 LISTENING</span>
+                            <span class="asset-signal @(listeningAvg >= 7 ? "buy" : listeningAvg >= 5.5 ? "hold" : "sell")">@(listeningAvg >= 7 ? "BULLISH" : listeningAvg >= 5.5 ? "NEUTRAL" : "FOCUS")</span>
+                        </div>
+                        <div class="asset-value">Band @(listeningAvg > 0 ? listeningAvg.ToString("0.0") : "—")</div>
+                        <div class="asset-sub">TB @totalAttempts lần | @(listeningAvg > 0 && listeningAvg == GetMinScore() ? "⚠ Ưu tiên cải thiện" : "Ổn định")</div>
+                    </div>
+                    <div class="asset-card @(readingAvg > 0 && readingAvg == GetMinScore() ? "asset-weak" : "")">
+                        <div class="asset-top">
+                            <span class="asset-name">📖 READING</span>
+                            <span class="asset-signal @(readingAvg >= 7 ? "buy" : readingAvg >= 5.5 ? "hold" : "sell")">@(readingAvg >= 7 ? "BULLISH" : readingAvg >= 5.5 ? "NEUTRAL" : "FOCUS")</span>
+                        </div>
+                        <div class="asset-value">Band @(readingAvg > 0 ? readingAvg.ToString("0.0") : "—")</div>
+                        <div class="asset-sub">TB @totalAttempts lần | @(readingAvg > 0 && readingAvg == GetMinScore() ? "⚠ Ưu tiên cải thiện" : "Ổn định")</div>
+                    </div>
+                    <div class="asset-card @(writingAvg > 0 && writingAvg == GetMinScore() ? "asset-weak" : "")">
+                        <div class="asset-top">
+                            <span class="asset-name">✍️ WRITING</span>
+                            <span class="asset-signal @(writingAvg >= 7 ? "buy" : writingAvg >= 5.5 ? "hold" : "sell")">@(writingAvg >= 7 ? "BULLISH" : writingAvg >= 5.5 ? "NEUTRAL" : "FOCUS")</span>
+                        </div>
+                        <div class="asset-value">Band @(writingAvg > 0 ? writingAvg.ToString("0.0") : "—")</div>
+                        <div class="asset-sub">TB @totalAttempts lần | AI Evaluated</div>
+                    </div>
+                    <div class="asset-card @(speakingAvg > 0 && speakingAvg == GetMinScore() ? "asset-weak" : "")">
+                        <div class="asset-top">
+                            <span class="asset-name">🗣️ SPEAKING</span>
+                            <span class="asset-signal @(speakingAvg >= 7 ? "buy" : speakingAvg >= 5.5 ? "hold" : "sell")">@(speakingAvg >= 7 ? "BULLISH" : speakingAvg >= 5.5 ? "NEUTRAL" : "FOCUS")</span>
+                        </div>
+                        <div class="asset-value">Band @(speakingAvg > 0 ? speakingAvg.ToString("0.0") : "—")</div>
+                        <div class="asset-sub">TB @totalAttempts lần | Fluency & Lexical</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Today's Action Plan -->
+            <div class="section-header">
+                <h2>Kế Hoạch Ôn Tập Hôm Nay</h2>
+                <p>Hệ thống đã sắp xếp theo thứ tự ưu tiên — bắt đầu từ thẻ đỏ trước nhé.</p>
+            </div>
+
+            <div class="tasks-grid">
+                @foreach (var task in reviewTasks)
+                {
+                    <div class="task-card priority-@task.Priority">
+                        <div class="task-top">
+                            <div class="task-icon-wrap priority-icon-@task.Priority">
+                                <i class="bi @task.Icon"></i>
+                            </div>
+                            <span class="priority-badge @task.Priority">@task.PriorityLabel</span>
+                        </div>
+                        <h4 class="task-title">@task.Title</h4>
+                        <p class="task-desc">@task.Description</p>
+                        <button class="task-btn priority-btn-@task.Priority" @onclick="() => Navigation.NavigateTo(task.Route)">
+                            @task.ActionLabel <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <!-- History Summary (last 5 attempts) -->
+            @if (recentResults.Any())
+            {
+                <div class="section-header" style="margin-top: 48px;">
+                    <h2>Lịch Sử Gần Nhất</h2>
+                    <p>5 bài làm gần nhất được dùng để tính điểm trung bình ở trên.</p>
+                </div>
+
+                <div class="history-table-wrap">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Kỹ năng</th>
+                                <th>Band</th>
+                                <th>Đúng</th>
+                                <th>Thời gian làm</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in recentResults)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="skill-chip @r.Skill.ToLower()">
+                                            <i class="bi @GetSkillIcon(r.Skill)"></i> @r.Skill
+                                        </span>
+                                    </td>
+                                    <td><strong class="band-val">@r.BandScore.ToString("0.0")</strong></td>
+                                    <td>@r.CorrectCount/@r.TotalCount</td>
+                                    <td class="time-ago">@GetTimeAgo(r.SubmittedAt)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private string? currentLevel;
+    private int totalAttempts = 0;
+    private double overallBand = 0;
+    private double listeningAvg = 0;
+    private double readingAvg = 0;
+    private double writingAvg = 0;
+    private double speakingAvg = 0;
+    private List<SubmissionSummaryDto> recentResults = new();
+    private List<ReviewTask> reviewTasks = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        currentLevel = await LocalStorage.GetItemAsync<string>("ielts_level");
+
+        try
+        {
+            var submissions = await SubmissionService.GetMyRecentSubmissionsAsync(10);
+            if (submissions != null && submissions.Any())
+            {
+                totalAttempts = submissions.Count;
+                recentResults = submissions.Take(5).ToList();
+
+                var listening = submissions.Where(s => s.Skill == "Listening").ToList();
+                var reading   = submissions.Where(s => s.Skill == "Reading").ToList();
+                var writing   = submissions.Where(s => s.Skill == "Writing").ToList();
+                var speaking  = submissions.Where(s => s.Skill == "Speaking").ToList();
+
+                listeningAvg = listening.Any() ? listening.Average(s => s.BandScore) : 0;
+                readingAvg   = reading.Any()   ? reading.Average(s => s.BandScore)   : 0;
+                writingAvg   = writing.Any()   ? writing.Average(s => s.BandScore)   : 0;
+                speakingAvg  = speaking.Any()  ? speaking.Average(s => s.BandScore)  : 0;
+
+                var scores = new[] { listeningAvg, readingAvg, writingAvg, speakingAvg }.Where(x => x > 0).ToList();
+                overallBand = scores.Any() ? Math.Round(scores.Average() * 2) / 2.0 : 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Priority] Error loading submissions: {ex.Message}");
+        }
+
+        BuildReviewTasks();
+        isLoading = false;
+    }
+
+    private void BuildReviewTasks()
+    {
+        reviewTasks.Clear();
+
+        // Task 1: Weakest skill – HIGH priority
+        var weakestSkill = GetWeakestSkill();
+        if (!string.IsNullOrEmpty(weakestSkill))
+        {
+            reviewTasks.Add(new ReviewTask
+            {
+                Priority = "high",
+                PriorityLabel = "🔥 Ưu tiên cao",
+                Icon = "bi-bullseye",
+                Title = $"Cải thiện kỹ năng {weakestSkill}",
+                Description = $"Đây là kỹ năng yếu nhất của bạn (Band {GetSkillAvg(weakestSkill):0.0}). Làm thêm đề để tăng điểm nhanh nhất.",
+                ActionLabel = "Luyện tập ngay",
+                Route = GetSkillRoute(weakestSkill)
+            });
+        }
+
+        // Task 2: Review recent wrong answers – HIGH priority
+        if (recentResults.Any())
+        {
+            reviewTasks.Add(new ReviewTask
+            {
+                Priority = "high",
+                PriorityLabel = "🔥 Ưu tiên cao",
+                Icon = "bi-clipboard-x",
+                Title = "Xem lại kết quả bài thi gần nhất",
+                Description = $"Bài {recentResults.First().Skill} gần nhất của bạn đạt Band {recentResults.First().BandScore:0.0}. Xem lại từng câu sai để hiểu rõ lỗi.",
+                ActionLabel = "Xem tổng hợp kết quả",
+                Route = "/ielts/luyen-de"
+            });
+        }
+
+        // Task 3: Vocab review – MEDIUM priority
+        reviewTasks.Add(new ReviewTask
+        {
+            Priority = "medium",
+            PriorityLabel = "🧠 Ôn luyện",
+            Icon = "bi-book",
+            Title = "Ôn tập từ vựng IELTS học thuật",
+            Description = "Từ vựng học thuật đóng vai trò quan trọng trong cả 4 kỹ năng. Ôn mỗi ngày 10-15 từ để xây nền vững chắc.",
+            ActionLabel = "Xem kho từ vựng",
+            Route = "/ielts/tu-vung"
+        });
+
+        // Task 4: Listen & Fill – MEDIUM priority
+        reviewTasks.Add(new ReviewTask
+        {
+            Priority = "medium",
+            PriorityLabel = "🧠 Ôn luyện",
+            Icon = "bi-headphones",
+            Title = "Nghe & điền từ",
+            Description = "Luyện nghe chép chính tả giúp cải thiện cả Listening lẫn kỹ năng nhớ từ vựng trong ngữ cảnh thực.",
+            ActionLabel = "Bắt đầu luyện nghe",
+            Route = "/ielts/nghe-dien"
+        });
+
+        // Task 5: Mock test – LOW priority
+        reviewTasks.Add(new ReviewTask
+        {
+            Priority = "low",
+            PriorityLabel = "🎯 Khuyến nghị",
+            Icon = "bi-journal-text",
+            Title = "Thử sức với đề Mock Test mới",
+            Description = "Làm thêm đề toàn diện để cập nhật dữ liệu phân tích và theo dõi tiến bộ theo thời gian.",
+            ActionLabel = "Chọn đề thi",
+            Route = "/ielts/luyen-de"
+        });
+    }
+
+    private string GetWeakestSkill()
+    {
+        var scores = new Dictionary<string, double>
+        {
+            ["Listening"] = listeningAvg,
+            ["Reading"]   = readingAvg,
+            ["Writing"]   = writingAvg,
+            ["Speaking"]  = speakingAvg
+        };
+        var valid = scores.Where(x => x.Value > 0).ToList();
+        return valid.Any() ? valid.OrderBy(x => x.Value).First().Key : "";
+    }
+
+    private double GetSkillAvg(string skill) => skill switch
+    {
+        "Listening" => listeningAvg,
+        "Reading"   => readingAvg,
+        "Writing"   => writingAvg,
+        "Speaking"  => speakingAvg,
+        _ => 0
+    };
+
+    private string GetSkillRoute(string skill) => skill switch
+    {
+        "Listening" => "/ielts/luyen-de",
+        "Reading"   => "/ielts/luyen-de",
+        "Writing"   => "/ielts/luyen-de",
+        "Speaking"  => "/ielts/luyen-de",
+        _ => "/ielts/luyen-de"
+    };
+
+    private string GetSkillIcon(string skill) => skill switch
+    {
+        "Listening" => "bi-headphones",
+        "Reading"   => "bi-file-text",
+        "Writing"   => "bi-pen",
+        "Speaking"  => "bi-mic",
+        _ => "bi-check"
+    };
+
+    private double GetMinScore()
+    {
+        var scores = new[] { listeningAvg, readingAvg, writingAvg, speakingAvg }.Where(x => x > 0).ToList();
+        return scores.Any() ? scores.Min() : 0;
+    }
+
+    private static double GetBarWidth(double score) => Math.Min(Math.Max((score / 9.0) * 100, 0), 100);
+
+    // ── Trading Terminal Chart helpers (mirror of IeltsMockTestSummary) ──
+    private const double TargetBandScore = 7.0;
+    private double GetTargetDelta() => overallBand - TargetBandScore;
+    private static double GetChartY(double band) => 220 - ((Math.Clamp(band, 0, 9) / 9.0) * 180);
+    private double GetSkillAvgY(string skill) => GetChartY(skill switch
+    {
+        "Listening" => listeningAvg,
+        "Reading"   => readingAvg,
+        "Writing"   => writingAvg,
+        "Speaking"  => speakingAvg,
+        _ => 0
+    });
+    private string GetTrendPath()
+    {
+        double ly = GetSkillAvgY("Listening");
+        double ry = GetSkillAvgY("Reading");
+        double wy = GetSkillAvgY("Writing");
+        double sy = GetSkillAvgY("Speaking");
+        return $"M 120,{ly:0.0} C 210,{ly:0.0} 210,{ry:0.0} 300,{ry:0.0} C 390,{ry:0.0} 390,{wy:0.0} 480,{wy:0.0} C 570,{wy:0.0} 570,{sy:0.0} 660,{sy:0.0}";
+    }
+    private string GetAreaPath()
+    {
+        double ly = GetSkillAvgY("Listening");
+        double ry = GetSkillAvgY("Reading");
+        double wy = GetSkillAvgY("Writing");
+        double sy = GetSkillAvgY("Speaking");
+        return $"M 120,{ly:0.0} C 210,{ly:0.0} 210,{ry:0.0} 300,{ry:0.0} C 390,{ry:0.0} 390,{wy:0.0} 480,{wy:0.0} C 570,{wy:0.0} 570,{sy:0.0} 660,{sy:0.0} L 660,220 L 120,220 Z";
+    }
+
+    private static string GetCefrLevel(double band) => band switch
+    {
+        >= 8.5 => "CEFR C2 (Mastery)",
+        >= 7.0 => "CEFR C1 (Effective Operational Proficiency)",
+        >= 5.5 => "CEFR B2 (Vantage)",
+        >= 4.0 => "CEFR B1 (Threshold)",
+        > 0    => "CEFR A2 (Waystage)",
+        _      => "Chưa xếp hạng"
+    };
+
+    private static string GetBandDescription(double band) => band switch
+    {
+        >= 8.5 => "Xuất sắc! Khả năng tiếng Anh gần như hoàn toàn lưu loát và tự nhiên.",
+        >= 7.5 => "Tốt! Có khả năng sử dụng ngôn ngữ tốt, chỉ còn một vài lỗi nhỏ không đáng kể.",
+        >= 6.5 => "Khá! Nhìn chung nắm vững ngôn ngữ, phù hợp cho môi trường học thuật.",
+        >= 5.5 => "Trung bình. Có thể giao tiếp được nhưng còn mắc lỗi trong ngữ cảnh chuyên sâu.",
+        >= 4.5 => "Cần cải thiện. Tiếp tục luyện tập để tự tin hơn trong giao tiếp.",
+        > 0    => "Hãy giữ nhịp luyện tập mỗi ngày — tiến bộ sẽ đến đều đặn!",
+        _      => "Hãy hoàn thành các bài thi để nhận phân tích toàn diện."
+    };
+
+    private static string GetTimeAgo(DateTimeOffset dt)
+    {
+        var diff = DateTimeOffset.UtcNow - dt;
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} phút trước";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} giờ trước";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays} ngày trước";
+        return dt.ToLocalTime().ToString("dd/MM/yyyy");
+    }
+
+    private class ReviewTask
+    {
+        public string Priority { get; set; } = "";
+        public string PriorityLabel { get; set; } = "";
+        public string Icon { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string ActionLabel { get; set; } = "";
+        public string Route { get; set; } = "";
+    }
+
+    // RecentResultItem replaced by shared SubmissionSummaryDto model
+}

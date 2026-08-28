@@ -114,6 +114,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<TestSubmission>(entity =>
         {
             entity.Property(s => s.DetailsJson).HasColumnType("jsonb");
+            entity.Property(s => s.R2StorageKey).HasColumnName("r2_storage_key");
             entity.HasIndex(s => new { s.UserId, s.Skill });
             entity.HasIndex(s => new { s.UserId, s.SubmittedAt });
         });

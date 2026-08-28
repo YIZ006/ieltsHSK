@@ -55,6 +55,90 @@ else
         </div>
     </div>
 
+    @* ── REVIEW / RESULT TOP BANNER (HIỂN THỊ ĐÁP ÁN & KẾT QUẢ TRÊN CÙNG) ── *@
+    @if (isFinished || savedSubmission != null)
+    {
+        <div class="writing-result-top-banner">
+            <div class="result-banner-header">
+                <div class="banner-badge-box">
+                    @if (savedSubmission?.Status == "Graded" && savedSubmission?.BandScore.HasValue == true && savedSubmission.BandScore.Value > 0)
+                    {
+                        <span class="status-badge-pill">🎉 ĐÃ CÓ KẾT QUẢ CHẤM ĐIỂM</span>
+                        <span class="status-sub-note">Bài viết đã được giáo viên/admin hoàn tất chấm điểm và nhận xét chi tiết.</span>
+                    }
+                    else
+                    {
+                        <span class="status-badge-pill pending">⏳ ĐÃ NỘP BÀI — CHỜ CHẤM ĐIỂM</span>
+                        <span class="status-sub-note">Bài viết của bạn đã được ghi nhận. Admin/Giáo viên sẽ tiến hành chấm điểm 4 tiêu chí và phản hồi sớm nhất.</span>
+                    }
+                </div>
+                <div class="banner-actions">
+                    <button class="btn-banner-action review-btn" style="background:#7e22ce; color:#fff;" @onclick="NavigateToReviewDetail">
+                        <i class="bi bi-file-earmark-check-fill"></i> Xem lại bài & Bài mẫu
+                    </button>
+                    <button class="btn-banner-action summary-btn" @onclick="NavigateToSummary">
+                        <i class="bi bi-bar-chart-fill"></i> Tổng hợp kết quả (4 kỹ năng)
+                    </button>
+                    <button class="btn-banner-action retake-btn" @onclick="RetakeExam">
+                        <i class="bi bi-arrow-counterclockwise"></i> Viết lại
+                    </button>
+                    <button class="btn-banner-action exit-btn" @onclick="ExitExam">
+                        <i class="bi bi-x-lg"></i> Thoát
+                    </button>
+                </div>
+            </div>
+
+            <div class="result-banner-grid">
+                @if (savedSubmission?.Status == "Graded" && savedSubmission?.BandScore.HasValue == true && savedSubmission.BandScore.Value > 0)
+                {
+                    <div class="score-card-band">
+                        <span class="band-label">OFFICIAL BAND</span>
+                        <span class="band-number">@savedSubmission.BandScore.Value.ToString("0.0")</span>
+                        <span class="band-note">Đã được giáo viên chấm</span>
+                    </div>
+                    
+                    <div class="criteria-card-grid">
+                        @if (scoreReport?.Criteria != null && scoreReport.Criteria.Count > 0)
+                        {
+                            @foreach (var crit in scoreReport.Criteria)
+                            {
+                                <div class="crit-item">
+                                    <span class="crit-name">@crit.Name</span>
+                                    <span class="crit-score">Band @crit.Score.ToString("0.0")</span>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="crit-item"><span class="crit-name">Overall Band</span><span class="crit-score">Band @savedSubmission.BandScore.Value.ToString("0.0")</span></div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="score-card-band pending-card">
+                        <span class="band-label">TRẠNG THÁI</span>
+                        <span class="band-number pending-icon"><i class="bi bi-hourglass-split"></i></span>
+                        <span class="band-note">Đang chờ Admin chấm</span>
+                    </div>
+                    
+                    <div class="pending-info-box">
+                        <p><i class="bi bi-info-circle"></i> Kỹ năng IELTS Writing được chấm trực tiếp bởi Admin/Giáo viên theo 4 tiêu chí chuẩn Cambridge (Task Response, Coherence & Cohesion, Lexical Resource, Grammatical Range & Accuracy).</p>
+                        <p class="pending-sub">Điểm số và nhận xét chi tiết sẽ hiển thị tại đây ngay sau khi hoàn thành chấm bài.</p>
+                    </div>
+                }
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(savedSubmission?.TeacherFeedback))
+            {
+                <div class="teacher-feedback-alert">
+                    <strong><i class="bi bi-chat-left-quote-fill"></i> Nhận xét từ Giáo viên:</strong>
+                    <p>@savedSubmission.TeacherFeedback</p>
+                </div>
+            }
+        </div>
+    }
+
     @* ── TASK TABS ── *@
     <div class="writing-task-tabs">
         @for (int i = 0; i < exam.Tasks.Count; i++)
@@ -66,6 +150,17 @@ else
                 @task.TaskTitle
                 <span class="word-count-badge">@task.WordCount / @task.MinWords words</span>
             </button>
+        }
+        @if (isFinished)
+        {
+            <div class="task-tabs-right">
+                <button class="view-mode-btn @(viewSampleMode ? "" : "active")" @onclick="() => viewSampleMode = false">
+                    📝 Bài viết của bạn
+                </button>
+                <button class="view-mode-btn sample @(viewSampleMode ? "active" : "")" @onclick="() => viewSampleMode = true">
+                    📖 Đáp án mẫu Band @(activeTask.ExaminerBand?.ToString("0.0") ?? "8.0+")
+                </button>
+            </div>
         }
     </div>
 
@@ -91,56 +186,47 @@ else
         @* DIVIDER *@
         <div class="split-divider"></div>
 
-        @* RIGHT: Essay Editor *@
+        @* RIGHT: Essay Editor OR Sample Answer *@
         <div class="editor-col">
-            <textarea class="essay-textarea"
-                      placeholder="Type your essay here..."
-                      disabled="@isFinished"
-                      @bind="activeTask.Answer"
-                      @bind:event="oninput"
-                      spellcheck="false"></textarea>
-            <div class="editor-footer">
-                <span class="word-count @(activeTask.WordCount >= activeTask.MinWords ? "count-ok" : "count-low")">
-                    Words: <strong>@activeTask.WordCount</strong> / @activeTask.MinWords required
-                </span>
-                @if (activeTask.WordCount >= activeTask.MinWords)
-                {
-                    <span class="count-check">✓ Minimum reached</span>
-                }
-            </div>
-        </div>
-    </div>
-
-    @if (savedSubmission != null)
-    {
-        <section class="writing-score-panel">
-            <div>
-                <span class="score-label">Saved result</span>
-                <strong>@savedSubmission.Id</strong>
-            </div>
-            @if (scoreReport == null)
+            @if (isFinished && viewSampleMode)
             {
-                <p>Scoring your writing...</p>
+                <div class="sample-answer-panel">
+                    <div class="sample-answer-header">
+                        <span class="sample-badge">🏆 MODEL ANSWER (BAND @(activeTask.ExaminerBand?.ToString("0.0") ?? "8.5"))</span>
+                        <span class="sample-words">Words: @(activeTask.SampleAnswer != null ? System.Text.RegularExpressions.Regex.Matches(activeTask.SampleAnswer, @"\b[\w'-]+\b").Count : 0)</span>
+                    </div>
+                    <div class="sample-answer-body">
+                        @if (!string.IsNullOrEmpty(activeTask.SampleAnswer))
+                        {
+                            @((MarkupString)activeTask.SampleAnswer)
+                        }
+                        else
+                        {
+                            <p class="no-sample">Chưa có bài mẫu cho đề thi này.</p>
+                        }
+                    </div>
+                </div>
             }
             else
             {
-                <div class="score-overall">
-                    <span>Band</span>
-                    <strong>@scoreReport.Overall.ToString("F1")</strong>
-                </div>
-                <p>@scoreReport.Summary</p>
-                <div class="score-criteria">
-                    @foreach (var criterion in scoreReport.Criteria)
+                <textarea class="essay-textarea"
+                          placeholder="Type your essay here..."
+                          disabled="@isFinished"
+                          @bind="activeTask.Answer"
+                          @bind:event="oninput"
+                          spellcheck="false"></textarea>
+                <div class="editor-footer">
+                    <span class="word-count @(activeTask.WordCount >= activeTask.MinWords ? "count-ok" : "count-low")">
+                        Words: <strong>@activeTask.WordCount</strong> / @activeTask.MinWords required
+                    </span>
+                    @if (activeTask.WordCount >= activeTask.MinWords)
                     {
-                        <div>
-                            <span>@criterion.Name</span>
-                            <strong>@criterion.Score.ToString("F1")</strong>
-                        </div>
+                        <span class="count-check">✓ Minimum reached</span>
                     }
                 </div>
             }
-        </section>
-    }
+        </div>
+    </div>
 }
 
 @code {
@@ -155,6 +241,18 @@ else
     [SupplyParameterFromQuery(Name = "Session")]
     public string? TestSessionId { get; set; }
 
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "CollectionName")]
+    public string? QueryCollectionName { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "Title")]
+    public string? QueryTitle { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "MockTestId")]
+    public int? QueryMockTestId { get; set; }
+
     private WritingExamData? exam;
     private bool isLoading = true;
     private int activeTaskIndex = 0;
@@ -164,6 +262,7 @@ else
     private System.Threading.Timer? _timer;
     private IDisposable? _navigationRegistration;
     private string? _sessionKey;
+    private bool viewSampleMode = true;
     private bool isFinished;
     private bool timedOut;
     private bool isSubmitting;
@@ -207,7 +306,20 @@ else
         secondsLeft = session.SecondsRemaining;
         isFinished = session.IsCompleted || session.IsExpired;
         timedOut = session.IsTimedOut || session.IsExpired;
-        if (isFinished) return;
+        if (isFinished)
+        {
+            savedSubmission = await Submissions.GetLatestSubmissionForSkillAsync("Writing", url, TestSessionId);
+            if (savedSubmission?.Writing?.Tasks != null && exam?.Tasks != null)
+            {
+                foreach (var st in savedSubmission.Writing.Tasks)
+                {
+                    var match = exam.Tasks.FirstOrDefault(t => t.TaskNumber == st.TaskNumber);
+                    if (match != null && !string.IsNullOrWhiteSpace(st.Answer)) match.Answer = st.Answer;
+                }
+            }
+            scoreReport = savedSubmission?.Score;
+            return;
+        }
 
         _navigationRegistration = Navigation.RegisterLocationChangingHandler(ConfirmLeave);
         await ExamSession.SetUnloadWarningAsync(true);
@@ -216,7 +328,7 @@ else
 
     private void SwitchTask(int index)
     {
-        if (!isFinished) activeTaskIndex = index;
+        activeTaskIndex = index;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -226,7 +338,6 @@ else
 
     private void OnInput()
     {
-        // triggers StateHasChanged via @bind:event="oninput"
         StateHasChanged();
     }
 
@@ -236,15 +347,10 @@ else
 
         var confirmed = await JS.InvokeAsync<bool>(
             "confirm",
-            "Submit your Writing test now? Your answers will be saved and then scored.");
+            "Bạn có chắc chắn muốn nộp bài thi Writing không?");
         if (!confirmed) return;
 
         await FinishExamAsync(false);
-    }
-
-    private void LogSubmit()
-    {
-        Console.WriteLine("Nộp bài Writing.");
     }
 
     private async Task UpdateTimerAsync()
@@ -264,18 +370,48 @@ else
         await InvokeAsync(StateHasChanged);
 
         savedSubmission = BuildSubmission(timeExpired);
-        await Submissions.SaveAsync(savedSubmission);
-        savedSubmission = await Submissions.ScoreAndSaveWritingAsync(savedSubmission);
+        savedSubmission = await Submissions.SaveWritingSubmissionAsync(savedSubmission);
         scoreReport = savedSubmission.Score;
 
         isFinished = true;
         timedOut = timeExpired;
         isSubmitting = false;
+        viewSampleMode = true;
         _timer?.Dispose();
         if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
         await ExamSession.LockTestContentAsync(".writing-split");
         await ExamSession.SetUnloadWarningAsync(false);
         await InvokeAsync(StateHasChanged);
+
+        if (!timeExpired)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("alert", "🎉 Bài thi Writing đã được nộp thành công!\nKết quả chấm điểm và nhận xét chi tiết sẽ sớm được thông báo cho bạn.");
+            }
+            catch { }
+        }
+    }
+
+    private async Task RetakeExam()
+    {
+        if (!string.IsNullOrEmpty(_sessionKey))
+        {
+            await ExamSession.ClearAsync(_sessionKey);
+        }
+        if (exam?.Tasks != null)
+        {
+            foreach (var t in exam.Tasks) t.Answer = "";
+        }
+        isFinished = false;
+        timedOut = false;
+        savedSubmission = null;
+        scoreReport = null;
+        viewSampleMode = false;
+        activeTaskIndex = 0;
+        secondsLeft = (exam?.TotalMinutes ?? 60) * 60;
+        _timer = new System.Threading.Timer(_ => _ = UpdateTimerAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        StateHasChanged();
     }
 
     private IeltsSubmissionRecord BuildSubmission(bool timeExpired)
@@ -284,9 +420,12 @@ else
         return new IeltsSubmissionRecord
         {
             Skill = "writing",
-            ExamTitle = exam?.Title ?? "IELTS Writing",
+            ExamTitle = exam?.Title ?? QueryTitle ?? "IELTS Writing",
             ExamUrl = currentExamUrl,
             SessionId = TestSessionId,
+            MockTestId = QueryMockTestId,
+            CollectionName = QueryCollectionName,
+            TestTitle = QueryTitle,
             TimedOut = timeExpired,
             DurationSeconds = durationSeconds,
             Writing = new WritingSubmissionData
@@ -302,6 +441,23 @@ else
                 }).ToList() ?? new()
             }
         };
+    }
+
+    private void NavigateToReviewDetail()
+    {
+        var coll = QueryCollectionName ?? "IELTS Mock Test 2025 December";
+        var title = QueryTitle ?? exam?.Title ?? "Practise Test 1";
+        var sess = TestSessionId ?? "";
+        var extraMockId = QueryMockTestId.HasValue ? $"&MockTestId={QueryMockTestId.Value}" : "";
+        Navigation.NavigateTo($"/ielts/review?Skill=Writing&ExamUrl={Uri.EscapeDataString(currentExamUrl)}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(title)}&Session={Uri.EscapeDataString(sess)}{extraMockId}");
+    }
+
+    private void NavigateToSummary()
+    {
+        var coll = QueryCollectionName ?? "IELTS Mock Test 2025 December";
+        var title = QueryTitle ?? exam?.Title ?? "Practise Test 1";
+        var sess = TestSessionId ?? "";
+        Navigation.NavigateTo($"/ielts/mock-test/summary?CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(title)}&Session={Uri.EscapeDataString(sess)}");
     }
 
     private async ValueTask ConfirmLeave(LocationChangingContext context)
