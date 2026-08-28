@@ -7,6 +7,9 @@
 @inject IeltsService IeltsService
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 
+@inject NavigationManager Navigation
+@inject ExamSubmissionService Submissions
+
 <PageTitle>IELTS Dashboard</PageTitle>
 
 <div class="dashboard-header">
@@ -22,15 +25,18 @@
     </div>
 </div>
 
-<!-- Banner Block -->
-<div class="hero-banner">
-    <div class="banner-content">
-        <span class="banner-badge">VIỆC HÔM NAY — 20 PHÚT</span>
-        <h2>Đề của bạn đang được soạn</h2>
-        <p>Để đang được soạn — mở xem tiến độ, làm ngay khi máy soạn xong</p>
+@if (!isLoading && sections != null)
+{
+    <!-- Banner Block -->
+    <div class="hero-banner">
+        <div class="banner-content">
+            <span class="banner-badge">VIỆC HÔM NAY — 20 PHÚT</span>
+            <h2>Luyện đề Mock Test hôm nay</h2>
+            <p>Luyện tập 4 kỹ năng Listening, Reading, Writing & Speaking chuẩn Cambridge</p>
+        </div>
+        <button class="btn-banner" @onclick='() => Navigation.NavigateTo("/ielts/luyen-de")'>Bắt đầu ngay &rarr;</button>
     </div>
-    <button class="btn-banner">Bắt đầu &rarr;</button>
-</div>
+}
 
 <div class="dashboard-grid-layout">
     <!-- Goal Section -->
@@ -55,7 +61,26 @@
     <!-- Latest Result Section -->
     <section class="latest-result">
         <span class="subtitle-small">BÀI CHẤM GẦN NHẤT</span>
-        <p class="result-text">Chưa có kết quả — làm việc hôm nay để bắt đầu nhé.</p>
+        @if (latestSubmission != null)
+        {
+            <div style="margin-top: 10px;">
+                <div style="font-weight: 700; color: #1e293b; font-size: 1rem;">
+                    @GetSkillIcon(latestSubmission.Skill) @latestSubmission.ExamTitle
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px;">
+                    <span style="background: #e0f2fe; color: #0284c7; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 0.85rem;">
+                        Band @(latestSubmission.BandScore?.ToString("0.0") ?? (latestSubmission.Score?.Overall.ToString("0.0") ?? "—"))
+                    </span>
+                    <span style="font-size: 0.8rem; color: #64748b;">
+                        @latestSubmission.SubmittedAt.ToLocalTime().ToString("dd/MM HH:mm")
+                    </span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <p class="result-text">Chưa có kết quả — hãy luyện một đề hôm nay để bắt đầu nhé.</p>
+        }
     </section>
 </div>
 
@@ -135,14 +160,19 @@
     private List<LearningSectionDto>? sections;
     private string? currentLevel;
     private List<IeltsVocabularyItem> previewVocab = new();
+    private IeltsSubmissionRecord? latestSubmission;
+    private bool isLoading = true;
 
     protected override async Task OnInitializedAsync()
     {
-        sections = await IeltsService.GetSectionsAsync();
-        currentLevel = await LocalStorage.GetItemAsync<string>("ielts_level");
-
+        isLoading = true;
         try
         {
+            sections = await IeltsService.GetSectionsAsync();
+            currentLevel = await LocalStorage.GetItemAsync<string>("ielts_level");
+            var allSubmissions = await Submissions.GetAllAsync();
+            latestSubmission = allSubmissions.FirstOrDefault();
+
             var vocab = await IeltsService.GetVocabularyAsync();
             if (vocab != null && vocab.Any())
             {
@@ -150,5 +180,18 @@
             }
         }
         catch { }
+        finally
+        {
+            isLoading = false;
+        }
     }
+
+    private static string GetSkillIcon(string? skill) => skill?.ToLower() switch
+    {
+        "writing" => "✍️",
+        "speaking" => "🗣️",
+        "reading" => "📖",
+        "listening" => "🎧",
+        _ => "📝"
+    };
 }

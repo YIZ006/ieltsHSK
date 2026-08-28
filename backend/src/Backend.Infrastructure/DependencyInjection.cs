@@ -17,9 +17,11 @@ public static class DependencyInjection
                     npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5,
                         maxRetryDelay: TimeSpan.FromSeconds(10), errorCodesToAdd: null);
                 })
-                .UseSnakeCaseNamingConvention());
+                .UseSnakeCaseNamingConvention()
+                .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
         services.AddScoped<IAuthService, Backend.Infrastructure.Services.AuthService>();
         services.AddScoped<Backend.Application.Abstractions.IR2StorageService, Backend.Infrastructure.Services.R2StorageService>();
+        services.AddScoped<Backend.Application.Abstractions.IAiGradingService, Backend.Infrastructure.Services.AiGradingService>();
         services.AddScoped<Backend.Infrastructure.Services.YoutubeTranscriptService>();
         return services;
     }
@@ -30,6 +32,27 @@ public static class DependencyInjection
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         
         await dbContext.Database.MigrateAsync();
+
+        // Đảm bảo các cột mới của test_submissions luôn tồn tại trong PostgreSQL
+        try
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'test_submissions') THEN
+                        ALTER TABLE test_submissions ADD COLUMN IF NOT EXISTS student_name TEXT;
+                        ALTER TABLE test_submissions ADD COLUMN IF NOT EXISTS user_email TEXT;
+                        ALTER TABLE test_submissions ADD COLUMN IF NOT EXISTS exam_title TEXT;
+                        ALTER TABLE test_submissions ADD COLUMN IF NOT EXISTS attempt_number INTEGER NOT NULL DEFAULT 1;
+                        ALTER TABLE test_submissions ADD COLUMN IF NOT EXISTS r2_storage_key TEXT;
+                    END IF;
+                END $$;
+            ");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SeedData] Column migration note: {ex.Message}");
+        }
 
         // Seed Admin User (cuongnane)
         if (!dbContext.Users.Any(u => u.Email == "cuong20067@gmail.com"))

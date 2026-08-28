@@ -19,6 +19,7 @@ builder.Services.AddScoped(_ =>
 });
 
 builder.Services.AddBlazoredLocalStorage();
+builder.Services.AddScoped<AuthHeaderHandler>();
 builder.Services.AddScoped<ExamSessionService>();
 builder.Services.AddScoped<ExamHeaderService>();
 builder.Services.AddScoped<StreakService>();
@@ -26,7 +27,10 @@ builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<ToeicAchievementService>();
 builder.Services.AddScoped(sp =>
 {
-    var httpClient = new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) };
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
     return new ExamSubmissionService(localStorage, httpClient);
 });
@@ -102,7 +106,6 @@ builder.Services.AddScoped(sp =>
 });
 
 // HskService: tải dữ liệu HSK (gắn JWT tự động qua AuthHeaderHandler)
-builder.Services.AddScoped<AuthHeaderHandler>();
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())

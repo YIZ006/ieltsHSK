@@ -1,0 +1,719 @@
+@page "/ielts/mock-test/summary"
+@page "/ielts/luyen-de/tong-hop"
+@layout Frontend.App.Layout.IeltsLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject ExamSubmissionService SubmissionService
+@inject MockTestService MockTestService
+@inject NavigationManager Navigation
+
+<PageTitle>Tổng hợp kết quả - @(summary?.TestTitle ?? "IELTS Mock Test")</PageTitle>
+
+<div class="summary-container">
+    @if (isLoading)
+    {
+        <div class="summary-loading">
+            <div class="spinner"></div>
+            <p>Đang tổng hợp kết quả các phần thi...</p>
+        </div>
+    }
+    else if (summary == null)
+    {
+        <div class="summary-empty">
+            <div class="empty-icon">📭</div>
+            <h3>Không tìm thấy kết quả làm bài</h3>
+            <p>Bạn chưa hoàn thành bài thi nào cho đề này hoặc session đã hết hạn.</p>
+            <button class="btn-primary" @onclick="GoBackToTests">Quay về danh sách đề thi</button>
+        </div>
+    }
+    else
+    {
+        <!-- Breadcrumb & Header -->
+        <div class="summary-header">
+            <nav class="breadcrumb-nav">
+                <a href="/ielts/luyen-de">Kho đề thi</a>
+                <span>/</span>
+                <span>@summary.CollectionName</span>
+                <span>/</span>
+                <span class="active">@summary.TestTitle</span>
+            </nav>
+            
+            <div class="header-main">
+                <div>
+                    <h1>Bảng Điểm Tổng Hợp IELTS Mock Test</h1>
+                    <p class="subtitle">@summary.CollectionName — <strong>@summary.TestTitle</strong></p>
+                </div>
+                @if (summary.LastAttemptAt.HasValue)
+                {
+                    <div class="attempt-time">
+                        <i class="bi bi-clock-history"></i>
+                        Lần làm gần nhất: @summary.LastAttemptAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Overall Score Hero Banner -->
+        <div class="overall-hero-card">
+            <div class="hero-band-box">
+                <span class="hero-band-title">OVERALL BAND SCORE</span>
+                <span class="hero-band-score">@summary.OverallBandScore.ToString("0.0")</span>
+                <span class="hero-cefr-badge">@GetCefrLevel(summary.OverallBandScore)</span>
+            </div>
+
+            <div class="hero-details">
+                <h3>Đánh giá tổng quan năng lực</h3>
+                <p class="hero-desc">@GetBandDescription(summary.OverallBandScore)</p>
+                
+                <div class="progress-status-row">
+                    <div class="status-indicator">
+                        <span class="status-dot @(summary.CompletedSkillsCount == 4 ? "complete" : "in-progress")"></span>
+                        <span>Đã hoàn thành <strong>@summary.CompletedSkillsCount/4</strong> kỹ năng</span>
+                    </div>
+                    <div class="status-bar-bg">
+                        <div class="status-bar-fill" style="width: @(summary.CompletedSkillsCount * 25)%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4 Skills Breakdown Grid -->
+        <div class="skills-section-header">
+            <h2>Chi Tiết Điểm Từng Kỹ Năng</h2>
+            <p>Nhấp vào từng kỹ năng để xem lại chi tiết bài làm, đáp án chính xác và nhận xét.</p>
+        </div>
+
+        <div class="skills-grid-summary">
+            <!-- Listening Card -->
+            <div class="skill-card-summary @(summary.Listening?.IsCompleted == true ? "completed" : "pending")">
+                <div class="card-top">
+                    <div class="card-icon-title">
+                        <div class="icon-bubble listening"><i class="bi bi-headphones"></i></div>
+                        <div>
+                            <h4>Listening</h4>
+                            <span class="card-status-lbl">@(summary.Listening?.IsCompleted == true ? "Đã hoàn thành" : "Chưa làm")</span>
+                        </div>
+                    </div>
+                    <div class="card-band">
+                        <span class="band-num">@(summary.Listening?.IsCompleted == true ? summary.Listening.BandScore.ToString("0.0") : "—")</span>
+                        <span class="band-lbl">Band</span>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    @if (summary.Listening?.IsCompleted == true)
+                    {
+                        <div class="metric-row">
+                            <span><i class="bi bi-check-circle"></i> Số câu đúng:</span>
+                            <strong>@summary.Listening.CorrectCount / @(summary.Listening.TotalCount ?? 40)</strong>
+                        </div>
+                        @if (summary.Listening.DurationSeconds > 0)
+                        {
+                            <div class="metric-row">
+                                <span><i class="bi bi-stopwatch"></i> Thời gian:</span>
+                                <strong>@FormatDuration(summary.Listening.DurationSeconds)</strong>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="pending-hint">Hãy làm phần nghe để hoàn thiện Overall Band Score.</p>
+                    }
+                </div>
+
+                <div class="card-actions">
+                    @if (summary.Listening?.IsCompleted == true)
+                    {
+                        <button class="btn-review" @onclick="() => ReviewSkill(summary.Listening)">
+                            <i class="bi bi-search"></i> Xem đáp án & bài làm
+                        </button>
+                        <button class="btn-retake" @onclick="() => RetakeListening()">
+                            <i class="bi bi-arrow-counterclockwise"></i> Làm lại
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn-take" @onclick="() => RetakeListening()">
+                            <i class="bi bi-play-circle-fill"></i> Bắt đầu thi Listening
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Reading Card -->
+            <div class="skill-card-summary @(summary.Reading?.IsCompleted == true ? "completed" : "pending")">
+                <div class="card-top">
+                    <div class="card-icon-title">
+                        <div class="icon-bubble reading"><i class="bi bi-file-text"></i></div>
+                        <div>
+                            <h4>Reading</h4>
+                            <span class="card-status-lbl">@(summary.Reading?.IsCompleted == true ? "Đã hoàn thành" : "Chưa làm")</span>
+                        </div>
+                    </div>
+                    <div class="card-band">
+                        <span class="band-num">@(summary.Reading?.IsCompleted == true ? summary.Reading.BandScore.ToString("0.0") : "—")</span>
+                        <span class="band-lbl">Band</span>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    @if (summary.Reading?.IsCompleted == true)
+                    {
+                        <div class="metric-row">
+                            <span><i class="bi bi-check-circle"></i> Số câu đúng:</span>
+                            <strong>@summary.Reading.CorrectCount / @(summary.Reading.TotalCount ?? 40)</strong>
+                        </div>
+                        @if (summary.Reading.DurationSeconds > 0)
+                        {
+                            <div class="metric-row">
+                                <span><i class="bi bi-stopwatch"></i> Thời gian:</span>
+                                <strong>@FormatDuration(summary.Reading.DurationSeconds)</strong>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="pending-hint">Hãy làm phần đọc để hoàn thiện Overall Band Score.</p>
+                    }
+                </div>
+
+                <div class="card-actions">
+                    @if (summary.Reading?.IsCompleted == true)
+                    {
+                        <button class="btn-review" @onclick="() => ReviewSkill(summary.Reading)">
+                            <i class="bi bi-search"></i> Xem đáp án & bài làm
+                        </button>
+                        <button class="btn-retake" @onclick="() => RetakeReading()">
+                            <i class="bi bi-arrow-counterclockwise"></i> Làm lại
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn-take" @onclick="() => RetakeReading()">
+                            <i class="bi bi-play-circle-fill"></i> Bắt đầu thi Reading
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Writing Card -->
+            <div class="skill-card-summary @(summary.Writing?.IsCompleted == true ? "completed" : "pending")">
+                <div class="card-top">
+                    <div class="card-icon-title">
+                        <div class="icon-bubble writing"><i class="bi bi-pen"></i></div>
+                        <div>
+                            <h4>Writing</h4>
+                            <span class="card-status-lbl">
+                                @if (summary.Writing?.IsCompleted == true)
+                                {
+                                    @(summary.Writing.IsGraded ? "Đã chấm điểm" : "Chờ chấm điểm")
+                                }
+                                else
+                                {
+                                    @("Chưa làm")
+                                }
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-band">
+                        @if (summary.Writing?.IsCompleted == true && summary.Writing.IsGraded)
+                        {
+                            <span class="band-num">@summary.Writing.BandScore.ToString("0.0")</span>
+                            <span class="band-lbl">Band</span>
+                        }
+                        else if (summary.Writing?.IsCompleted == true)
+                        {
+                            <span class="band-num" style="font-size: 1.2rem; color: #d97706;"><i class="bi bi-hourglass-split"></i></span>
+                            <span class="band-lbl" style="color: #b45309;">Chờ chấm</span>
+                        }
+                        else
+                        {
+                            <span class="band-num">—</span>
+                            <span class="band-lbl">Band</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    @if (summary.Writing?.IsCompleted == true)
+                    {
+                        @if (summary.Writing.IsGraded)
+                        {
+                            <div class="criteria-list">
+                                @if (summary.Writing.ScoreReport?.Criteria != null && summary.Writing.ScoreReport.Criteria.Count > 0)
+                                {
+                                    @foreach (var c in summary.Writing.ScoreReport.Criteria)
+                                    {
+                                        <div class="crit-item">
+                                            <span class="crit-name">@c.Name:</span>
+                                            <span class="crit-score">Band @c.Score.ToString("0.0")</span>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(summary.Writing.TeacherFeedback))
+                            {
+                                <div style="margin-top: 8px; font-size: 0.82rem; color: #1e40af; background: #eff6ff; padding: 6px 10px; border-radius: 6px;">
+                                    <strong>Nhận xét:</strong> @summary.Writing.TeacherFeedback
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <p class="pending-hint" style="color: #b45309;"><i class="bi bi-hourglass-split"></i> Bài viết đã nộp thành công, đang chờ Admin/Giáo viên chấm điểm 4 tiêu chí.</p>
+                        }
+                    }
+                    else
+                    {
+                        <p class="pending-hint">Hãy làm bài viết Task 1 & Task 2 để nhận đánh giá chi tiết.</p>
+                    }
+                </div>
+
+                <div class="card-actions">
+                    @if (summary.Writing?.IsCompleted == true)
+                    {
+                        <button class="btn-review" @onclick="() => ReviewWriting()">
+                            <i class="bi bi-file-earmark-text"></i> Xem lại bài viết
+                        </button>
+                        <button class="btn-retake" @onclick="() => RetakeWriting()">
+                            <i class="bi bi-arrow-counterclockwise"></i> Viết lại
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn-take" @onclick="() => RetakeWriting()">
+                            <i class="bi bi-play-circle-fill"></i> Bắt đầu thi Writing
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Speaking Card -->
+            <div class="skill-card-summary @(summary.Speaking?.IsCompleted == true ? "completed" : "pending")">
+                <div class="card-top">
+                    <div class="card-icon-title">
+                        <div class="icon-bubble speaking"><i class="bi bi-mic"></i></div>
+                        <div>
+                            <h4>Speaking</h4>
+                            <span class="card-status-lbl">
+                                @if (summary.Speaking?.IsCompleted == true)
+                                {
+                                    @(summary.Speaking.IsGraded ? "Đã chấm điểm" : "Chờ chấm điểm")
+                                }
+                                else
+                                {
+                                    @("Chưa làm")
+                                }
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-band">
+                        @if (summary.Speaking?.IsCompleted == true && summary.Speaking.IsGraded)
+                        {
+                            <span class="band-num">@summary.Speaking.BandScore.ToString("0.0")</span>
+                            <span class="band-lbl">Band</span>
+                        }
+                        else if (summary.Speaking?.IsCompleted == true)
+                        {
+                            <span class="band-num" style="font-size: 1.2rem; color: #d97706;"><i class="bi bi-hourglass-split"></i></span>
+                            <span class="band-lbl" style="color: #b45309;">Chờ chấm</span>
+                        }
+                        else
+                        {
+                            <span class="band-num">—</span>
+                            <span class="band-lbl">Band</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    @if (summary.Speaking?.IsCompleted == true)
+                    {
+                        @if (summary.Speaking.IsGraded)
+                        {
+                            <div class="criteria-list">
+                                @if (summary.Speaking.ScoreReport?.Criteria != null && summary.Speaking.ScoreReport.Criteria.Count > 0)
+                                {
+                                    @foreach (var c in summary.Speaking.ScoreReport.Criteria)
+                                    {
+                                        <div class="crit-item">
+                                            <span class="crit-name">@c.Name:</span>
+                                            <span class="crit-score">Band @c.Score.ToString("0.0")</span>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(summary.Speaking.TeacherFeedback))
+                            {
+                                <div style="margin-top: 8px; font-size: 0.82rem; color: #1e40af; background: #eff6ff; padding: 6px 10px; border-radius: 6px;">
+                                    <strong>Nhận xét:</strong> @summary.Speaking.TeacherFeedback
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <p class="pending-hint" style="color: #b45309;"><i class="bi bi-hourglass-split"></i> Bài nói đã nộp thành công, đang chờ Admin/Giáo viên chấm điểm & nhận xét.</p>
+                        }
+                    }
+                    else
+                    {
+                        <p class="pending-hint">Hãy ghi âm trả lời các câu hỏi Part 1, 2, 3 để chấm điểm.</p>
+                    }
+                </div>
+
+                <div class="card-actions">
+                    @if (summary.Speaking?.IsCompleted == true)
+                    {
+                        <button class="btn-review" @onclick="() => ReviewSpeaking()">
+                            <i class="bi bi-soundwave"></i> Xem lại bài nói
+                        </button>
+                        <button class="btn-retake" @onclick="() => RetakeSpeaking()">
+                            <i class="bi bi-arrow-counterclockwise"></i> Thi lại
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn-take" @onclick="() => RetakeSpeaking()">
+                            <i class="bi bi-play-circle-fill"></i> Bắt đầu thi Speaking
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Stock Market / Financial Terminal Style Analytics Chart -->
+        <div class="trading-terminal-card">
+            <!-- Terminal Header -->
+            <div class="terminal-header">
+                <div class="terminal-title-group">
+                    <div class="ticker-badge">
+                        <span class="live-dot"></span>
+                        <span class="ticker-code">IELTS-INDEX : 4-SKILLS</span>
+                    </div>
+                    <span class="terminal-tag">LIVE PERFORMANCE CHART</span>
+                </div>
+
+                <div class="terminal-stats-group">
+                    <div class="stat-item">
+                        <span class="stat-lbl">CURRENT BAND</span>
+                        <span class="stat-val bullish">@summary.OverallBandScore.ToString("0.0")</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-lbl">TARGET BAND</span>
+                        <span class="stat-val neutral">@TargetBandScore.ToString("0.0")</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-lbl">VS TARGET</span>
+                        <span class="stat-badge @(GetTargetDelta() >= 0 ? "gain" : "loss")">
+                            @(GetTargetDelta() >= 0 ? $"▲ +{GetTargetDelta():0.0}" : $"▼ {GetTargetDelta():0.0}") Band
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SVG Candlestick & Glowing Curve Chart -->
+            <div class="chart-wrapper">
+                <svg class="trading-svg" viewBox="0 0 800 260" preserveAspectRatio="none">
+                    <defs>
+                        <!-- Glowing Line Gradient -->
+                        <linearGradient id="neonLineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#00f2fe" />
+                            <stop offset="35%" stop-color="#10b981" />
+                            <stop offset="70%" stop-color="#818cf8" />
+                            <stop offset="100%" stop-color="#fb923c" />
+                        </linearGradient>
+
+                        <!-- Glowing Area Fill Gradient -->
+                        <linearGradient id="areaGlowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#10b981" stop-opacity="0.45" />
+                            <stop offset="60%" stop-color="#00f2fe" stop-opacity="0.15" />
+                            <stop offset="100%" stop-color="#0f172a" stop-opacity="0.0" />
+                        </linearGradient>
+
+                        <!-- Glow Filter -->
+                        <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+
+                    <!-- Horizontal Gridlines & Price Levels -->
+                    <!-- Band 8.5 Line (Mastery Resistance) -->
+                    <line x1="50" y1="@GetChartY(8.5)" x2="750" y2="@GetChartY(8.5)" stroke="#334155" stroke-dasharray="4,4" stroke-width="1" />
+                    <text x="755" y="@(GetChartY(8.5) + 4)" fill="#64748b" font-size="10" font-family="monospace">8.5 R2</text>
+
+                    <!-- Band 7.0 Target Support -->
+                    <line x1="50" y1="@GetChartY(TargetBandScore)" x2="750" y2="@GetChartY(TargetBandScore)" stroke="#3b82f6" stroke-dasharray="6,4" stroke-width="1.5" />
+                    <text x="755" y="@(GetChartY(TargetBandScore) + 4)" fill="#60a5fa" font-size="10" font-weight="bold" font-family="monospace">7.0 TARGET</text>
+
+                    <!-- Band 5.5 Line (Baseline) -->
+                    <line x1="50" y1="@GetChartY(5.5)" x2="750" y2="@GetChartY(5.5)" stroke="#334155" stroke-dasharray="4,4" stroke-width="1" />
+                    <text x="755" y="@(GetChartY(5.5) + 4)" fill="#64748b" font-size="10" font-family="monospace">5.5 S1</text>
+
+                    <!-- Vertical Gridlines for 4 Skills -->
+                    <line x1="120" y1="20" x2="120" y2="220" stroke="#1e293b" stroke-width="1" />
+                    <line x1="300" y1="20" x2="300" y2="220" stroke="#1e293b" stroke-width="1" />
+                    <line x1="480" y1="20" x2="480" y2="220" stroke="#1e293b" stroke-width="1" />
+                    <line x1="660" y1="20" x2="660" y2="220" stroke="#1e293b" stroke-width="1" />
+
+                    <!-- Candlestick Volume Wicks -->
+                    <!-- Listening Wick -->
+                    <line x1="120" y1="@(GetSkillY("Listening") - 15)" x2="120" y2="@(GetSkillY("Listening") + 20)" stroke="#00f2fe" stroke-width="2" opacity="0.6"/>
+                    <rect x="112" y="@(GetSkillY("Listening") - 8)" width="16" height="16" rx="3" fill="#00f2fe" opacity="0.25" stroke="#00f2fe" stroke-width="1.5"/>
+
+                    <!-- Reading Wick -->
+                    <line x1="300" y1="@(GetSkillY("Reading") - 15)" x2="300" y2="@(GetSkillY("Reading") + 20)" stroke="#10b981" stroke-width="2" opacity="0.6"/>
+                    <rect x="292" y="@(GetSkillY("Reading") - 8)" width="16" height="16" rx="3" fill="#10b981" opacity="0.25" stroke="#10b981" stroke-width="1.5"/>
+
+                    <!-- Writing Wick -->
+                    <line x1="480" y1="@(GetSkillY("Writing") - 15)" x2="480" y2="@(GetSkillY("Writing") + 20)" stroke="#818cf8" stroke-width="2" opacity="0.6"/>
+                    <rect x="472" y="@(GetSkillY("Writing") - 8)" width="16" height="16" rx="3" fill="#818cf8" opacity="0.25" stroke="#818cf8" stroke-width="1.5"/>
+
+                    <!-- Speaking Wick -->
+                    <line x1="660" y1="@(GetSkillY("Speaking") - 15)" x2="660" y2="@(GetSkillY("Speaking") + 20)" stroke="#fb923c" stroke-width="2" opacity="0.6"/>
+                    <rect x="652" y="@(GetSkillY("Speaking") - 8)" width="16" height="16" rx="3" fill="#fb923c" opacity="0.25" stroke="#fb923c" stroke-width="1.5"/>
+
+                    <!-- Glowing Area Path -->
+                    <path d="@GetAreaPath()" fill="url(#areaGlowGrad)" />
+
+                    <!-- Neon Trend Curve -->
+                    <path d="@GetTrendPath()" fill="none" stroke="url(#neonLineGrad)" stroke-width="4" filter="url(#neonGlow)" stroke-linecap="round" />
+
+                    <!-- Data Nodes & Glowing Pulse Rings -->
+                    <circle cx="120" cy="@GetSkillY("Listening")" r="6" fill="#00f2fe" filter="url(#neonGlow)" />
+                    <circle cx="120" cy="@GetSkillY("Listening")" r="10" fill="none" stroke="#00f2fe" stroke-width="1.5" opacity="0.6" />
+
+                    <circle cx="300" cy="@GetSkillY("Reading")" r="6" fill="#10b981" filter="url(#neonGlow)" />
+                    <circle cx="300" cy="@GetSkillY("Reading")" r="10" fill="none" stroke="#10b981" stroke-width="1.5" opacity="0.6" />
+
+                    <circle cx="480" cy="@GetSkillY("Writing")" r="6" fill="#818cf8" filter="url(#neonGlow)" />
+                    <circle cx="480" cy="@GetSkillY("Writing")" r="10" fill="none" stroke="#818cf8" stroke-width="1.5" opacity="0.6" />
+
+                    <circle cx="660" cy="@GetSkillY("Speaking")" r="6" fill="#fb923c" filter="url(#neonGlow)" />
+                    <circle cx="660" cy="@GetSkillY("Speaking")" r="10" fill="none" stroke="#fb923c" stroke-width="1.5" opacity="0.6" />
+
+                    <!-- X-Axis Labels -->
+                    <text x="120" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">🎧 LISTENING (@((summary.Listening?.BandScore ?? 0).ToString("0.0")))</text>
+                    <text x="300" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">📖 READING (@((summary.Reading?.BandScore ?? 0).ToString("0.0")))</text>
+                    <text x="480" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">✍️ WRITING (@((summary.Writing?.BandScore ?? 0).ToString("0.0")))</text>
+                    <text x="660" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">🗣️ SPEAKING (@((summary.Speaking?.BandScore ?? 0).ToString("0.0")))</text>
+                </svg>
+            </div>
+
+            <!-- Trading Assets Breakdown -->
+            <div class="terminal-assets-grid">
+                <div class="asset-card">
+                    <div class="asset-top">
+                        <span class="asset-name">🎧 LISTENING</span>
+                        <span class="asset-signal buy">BULLISH</span>
+                    </div>
+                    <div class="asset-value">Band @(summary.Listening?.BandScore > 0 ? summary.Listening.BandScore.ToString("0.0") : "—")</div>
+                    <div class="asset-sub">Weight: 25% | Correct: @(summary.Listening?.CorrectCount ?? 0)/40</div>
+                </div>
+
+                <div class="asset-card">
+                    <div class="asset-top">
+                        <span class="asset-name">📖 READING</span>
+                        <span class="asset-signal strong-buy">STRONG BUY</span>
+                    </div>
+                    <div class="asset-value">Band @(summary.Reading?.BandScore > 0 ? summary.Reading.BandScore.ToString("0.0") : "—")</div>
+                    <div class="asset-sub">Weight: 25% | Correct: @(summary.Reading?.CorrectCount ?? 0)/40</div>
+                </div>
+
+                <div class="asset-card">
+                    <div class="asset-top">
+                        <span class="asset-name">✍️ WRITING</span>
+                        <span class="asset-signal hold">ACCUMULATE</span>
+                    </div>
+                    <div class="asset-value">Band @(summary.Writing?.BandScore > 0 ? summary.Writing.BandScore.ToString("0.0") : "—")</div>
+                    <div class="asset-sub">Weight: 25% | AI Criteria Evaluated</div>
+                </div>
+
+                <div class="asset-card">
+                    <div class="asset-top">
+                        <span class="asset-name">🗣️ SPEAKING</span>
+                        <span class="asset-signal breakout">BREAKOUT</span>
+                    </div>
+                    <div class="asset-value">Band @(summary.Speaking?.BandScore > 0 ? summary.Speaking.BandScore.ToString("0.0") : "—")</div>
+                    <div class="asset-sub">Weight: 25% | Fluency & Lexical Analysis</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Global Action Bar -->
+        <div class="summary-bottom-actions">
+            <button class="btn-bottom back" @onclick="GoBackToTests">
+                <i class="bi bi-grid-fill"></i> Quay về kho đề thi
+            </button>
+            <button class="btn-bottom retake-all" @onclick="RetakeFullExam">
+                <i class="bi bi-arrow-repeat"></i> Làm lại toàn bộ đề thi mới
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter][SupplyParameterFromQuery(Name = "CollectionName")] public string? QueryCollectionName { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "Title")] public string? QueryTitle { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "MockTestId")] public int? QueryMockTestId { get; set; }
+    [Parameter][SupplyParameterFromQuery(Name = "Session")] public string? QuerySessionId { get; set; }
+
+    private MockTestSummaryModel? summary;
+    private MockTestDto? mockTest;
+    private bool isLoading = true;
+
+    private const double TargetBandScore = 7.0;
+
+    private double GetTargetDelta() => (summary?.OverallBandScore ?? 0) - TargetBandScore;
+
+    private static double GetChartY(double band) => 220 - ((Math.Clamp(band, 0, 9) / 9.0) * 180);
+
+    private double GetSkillY(string skill)
+    {
+        double score = skill switch
+        {
+            "Listening" => summary?.Listening?.BandScore ?? 0,
+            "Reading"   => summary?.Reading?.BandScore ?? 0,
+            "Writing"   => summary?.Writing?.BandScore ?? 0,
+            "Speaking"  => summary?.Speaking?.BandScore ?? 0,
+            _ => 0
+        };
+        return GetChartY(score);
+    }
+
+    private string GetTrendPath()
+    {
+        double ly = GetSkillY("Listening");
+        double ry = GetSkillY("Reading");
+        double wy = GetSkillY("Writing");
+        double sy = GetSkillY("Speaking");
+        return $"M 120,{ly:0.0} C 210,{ly:0.0} 210,{ry:0.0} 300,{ry:0.0} C 390,{ry:0.0} 390,{wy:0.0} 480,{wy:0.0} C 570,{wy:0.0} 570,{sy:0.0} 660,{sy:0.0}";
+    }
+
+    private string GetAreaPath()
+    {
+        double ly = GetSkillY("Listening");
+        double ry = GetSkillY("Reading");
+        double wy = GetSkillY("Writing");
+        double sy = GetSkillY("Speaking");
+        return $"M 120,{ly:0.0} C 210,{ly:0.0} 210,{ry:0.0} 300,{ry:0.0} C 390,{ry:0.0} 390,{wy:0.0} 480,{wy:0.0} C 570,{wy:0.0} 570,{sy:0.0} 660,{sy:0.0} L 660,220 L 120,220 Z";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var allTests = await MockTestService.GetMockTestsAsync();
+            mockTest = allTests.FirstOrDefault(t => 
+                (QueryMockTestId.HasValue && t.Id == QueryMockTestId.Value) ||
+                (!string.IsNullOrEmpty(QueryTitle) && string.Equals(t.Title, QueryTitle, StringComparison.OrdinalIgnoreCase))
+            );
+
+            summary = await SubmissionService.GetMockTestSummaryAsync(QueryCollectionName, QueryTitle, QuerySessionId, mockTest);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading summary: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static double GetBarWidth(double score) => Math.Min(Math.Max((score / 9.0) * 100, 0), 100);
+
+    private static string GetCefrLevel(double band) => band switch
+    {
+        >= 8.5 => "CEFR C2 (Mastery)",
+        >= 7.0 => "CEFR C1 (Effective Operational Proficiency)",
+        >= 5.5 => "CEFR B2 (Vantage)",
+        >= 4.0 => "CEFR B1 (Threshold)",
+        > 0   => "CEFR A2 (Waystage)",
+        _     => "Chưa xếp hạng"
+    };
+
+    private static string GetBandDescription(double band) => band switch
+    {
+        >= 8.5 => "Khả năng sử dụng tiếng Anh hoàn toàn tự nhiên, lưu loát và chính xác trong mọi tình huống phức tạp.",
+        >= 7.5 => "Có khả năng sử dụng ngôn ngữ tốt, hiểu được các lý lẽ phức tạp, đôi khi xảy ra một vài lỗi nhỏ không đáng kể.",
+        >= 6.5 => "Nhìn chung nắm vững ngôn ngữ, có khả năng sử dụng và hiểu tốt ngữ cảnh phức tạp, thích hợp cho môi trường học thuật.",
+        >= 5.5 => "Khả năng sử dụng ngôn ngữ trung bình, nắm được ý nghĩa tổng quát, có thể mắc lỗi trong các tình huống chuyên sâu.",
+        >= 4.5 => "Khả năng hạn chế, phù hợp trong các tình huống giao tiếp quen thuộc hàng ngày.",
+        > 0   => "Cần tiếp tục trau dồi thêm các kỹ năng cơ bản để cải thiện điểm số.",
+        _     => "Hãy hoàn thành các bài thi để nhận báo cáo phân tích toàn diện."
+    };
+
+    private static string FormatDuration(int seconds)
+    {
+        int m = seconds / 60;
+        int s = seconds % 60;
+        return $"{m} phút {s} giây";
+    }
+
+    private void ReviewSkill(SkillSummaryItem? item)
+    {
+        if (item == null) return;
+        var answerExtra = string.IsNullOrWhiteSpace(item.AnswerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(item.AnswerUrl)}";
+        var mockId = mockTest != null ? $"&MockTestId={mockTest.Id}" : (QueryMockTestId.HasValue ? $"&MockTestId={QueryMockTestId.Value}" : "");
+        Navigation.NavigateTo($"/ielts/review?Skill={Uri.EscapeDataString(item.Skill)}&ExamUrl={Uri.EscapeDataString(item.ExamUrl)}{answerExtra}&CollectionName={Uri.EscapeDataString(summary?.CollectionName ?? "")}&Title={Uri.EscapeDataString(summary?.TestTitle ?? "")}&Session={Uri.EscapeDataString(summary?.SessionId ?? "")}{mockId}");
+    }
+
+    private void ReviewWriting()
+    {
+        var url = mockTest?.WritingUrl ?? "sample-data/writing-test-1.json";
+        var mockId = mockTest != null ? $"&MockTestId={mockTest.Id}" : (QueryMockTestId.HasValue ? $"&MockTestId={QueryMockTestId.Value}" : "");
+        Navigation.NavigateTo($"/ielts/review?Skill=Writing&ExamUrl={Uri.EscapeDataString(url)}&CollectionName={Uri.EscapeDataString(summary?.CollectionName ?? "")}&Title={Uri.EscapeDataString(summary?.TestTitle ?? "")}&Session={Uri.EscapeDataString(summary?.SessionId ?? "")}{mockId}");
+    }
+
+    private void ReviewSpeaking()
+    {
+        var url = mockTest?.SpeakingUrl ?? "sample-data/speaking-test-1.json";
+        var mockId = mockTest != null ? $"&MockTestId={mockTest.Id}" : (QueryMockTestId.HasValue ? $"&MockTestId={QueryMockTestId.Value}" : "");
+        Navigation.NavigateTo($"/ielts/review?Skill=Speaking&ExamUrl={Uri.EscapeDataString(url)}&CollectionName={Uri.EscapeDataString(summary?.CollectionName ?? "")}&Title={Uri.EscapeDataString(summary?.TestTitle ?? "")}&Session={Uri.EscapeDataString(summary?.SessionId ?? "")}{mockId}");
+    }
+
+    private void RetakeListening()
+    {
+        var url = mockTest?.ListeningUrl ?? "sample-data/listening-test-1.json";
+        var ans = mockTest?.ListeningAnswerUrl ?? "";
+        var newSession = Guid.NewGuid().ToString("N");
+        var ansExtra = string.IsNullOrWhiteSpace(ans) ? "" : $"&AnswerUrl={Uri.EscapeDataString(ans)}";
+        Navigation.NavigateTo($"/ielts/listening/preview?ExamUrl={Uri.EscapeDataString(url)}{ansExtra}&CollectionName={Uri.EscapeDataString(summary?.CollectionName ?? "")}&Title={Uri.EscapeDataString(summary?.TestTitle ?? "")}&Session={newSession}");
+    }
+
+    private void RetakeReading()
+    {
+        var url = mockTest?.ReadingUrl ?? "sample-data/reading-test-v2.json";
+        var ans = mockTest?.ReadingAnswerUrl ?? "";
+        var newSession = Guid.NewGuid().ToString("N");
+        var ansExtra = string.IsNullOrWhiteSpace(ans) ? "" : $"&AnswerUrl={Uri.EscapeDataString(ans)}";
+        Navigation.NavigateTo($"/ielts/reading/preview?ExamUrl={Uri.EscapeDataString(url)}{ansExtra}&CollectionName={Uri.EscapeDataString(summary?.CollectionName ?? "")}&Title={Uri.EscapeDataString(summary?.TestTitle ?? "")}&Session={newSession}");
+    }
+
+    private void RetakeWriting()
+    {
+        var url = mockTest?.WritingUrl ?? "sample-data/writing-test-1.json";
+        var newSession = Guid.NewGuid().ToString("N");
+        Navigation.NavigateTo($"/ielts/writing/preview?ExamUrl={Uri.EscapeDataString(url)}&CollectionName={Uri.EscapeDataString(summary?.CollectionName ?? "")}&Title={Uri.EscapeDataString(summary?.TestTitle ?? "")}&Session={newSession}");
+    }
+
+    private void RetakeSpeaking()
+    {
+        var url = mockTest?.SpeakingUrl ?? "sample-data/speaking-test-1.json";
+        var newSession = Guid.NewGuid().ToString("N");
+        Navigation.NavigateTo($"/ielts/speaking/preview?ExamUrl={Uri.EscapeDataString(url)}&CollectionName={Uri.EscapeDataString(summary?.CollectionName ?? "")}&Title={Uri.EscapeDataString(summary?.TestTitle ?? "")}&Session={newSession}");
+    }
+
+    private void RetakeFullExam()
+    {
+        // Start fresh with first available skill (Listening)
+        RetakeListening();
+    }
+
+    private void GoBackToTests() => Navigation.NavigateTo("/ielts/luyen-de");
+}
