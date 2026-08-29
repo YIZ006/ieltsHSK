@@ -10,6 +10,7 @@ public class IeltsVocabulary
     public string? Example { get; set; }
     public string? ExampleMeaning { get; set; }
     public string? Topic { get; set; }           // Environment, Education, Technology...
+    public string? CefrLevel { get; set; }       // A1, A2, B1, B2, C1, C2
     public int DisplayOrder { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

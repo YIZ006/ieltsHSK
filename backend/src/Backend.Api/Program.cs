@@ -188,7 +188,7 @@ app.MapGet("/api/listen-videos/{id}", async (int id, Backend.Infrastructure.Pers
 });
 
 app.MapPost("/api/listen-videos/submit",
-        [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.ListenVideoSubmitRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService ytService, CancellationToken cancellationToken) =>
+        [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.ListenVideoSubmitRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService ytService, HttpContext httpContext, CancellationToken cancellationToken) =>
 {
     // Chỉ chấp nhận đường dẫn YouTube https để tránh injection qua URL
     if (string.IsNullOrWhiteSpace(req.YoutubeUrl)
@@ -237,6 +237,19 @@ app.MapPost("/api/listen-videos/submit",
         thumbnail = string.IsNullOrEmpty(videoId) ? "" : $"https://img.youtube.com/vi/{videoId}/hqdefault.jpg";
     }
 
+    int? submitterUserId = null;
+    string submittedBy = "User";
+    if (httpContext.User.Identity?.IsAuthenticated == true)
+    {
+        var subClaim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                       ?? httpContext.User.FindFirst("sub")?.Value;
+        if (int.TryParse(subClaim, out var parsedUid)) submitterUserId = parsedUid;
+
+        var nameClaim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value
+                        ?? httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.UniqueName)?.Value;
+        if (!string.IsNullOrWhiteSpace(nameClaim)) submittedBy = nameClaim;
+    }
+
     var newVideo = new Backend.Domain.Entities.ListenVideo
     {
         YoutubeUrl = req.YoutubeUrl,
@@ -248,7 +261,8 @@ app.MapPost("/api/listen-videos/submit",
         Category = "Giao tiếp",
         IsApproved = false,
         SubmittedAt = DateTime.UtcNow,
-        SubmittedByUserId = "User"
+        SubmittedByUserId = submittedBy,
+        UserId = submitterUserId
     };
 
     dbContext.ListenVideos.Add(newVideo);
@@ -807,6 +821,84 @@ app.MapPost("/api/auth/google-login", async (GoogleLoginRequest request, IAuthSe
     }
 });
 
+app.MapGet("/api/user/me", [Microsoft.AspNetCore.Authorization.Authorize] async (System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (int.TryParse(userIdString, out int userId))
+    {
+        var dbUser = await dbContext.Users.FindAsync(new object[] { userId }, cancellationToken);
+        if (dbUser != null)
+        {
+            return Results.Ok(new
+            {
+                dbUser.Id,
+                dbUser.Username,
+                dbUser.FullName,
+                dbUser.Email,
+                dbUser.Role,
+                dbUser.Avatar,
+                dbUser.Level,
+                dbUser.Xp,
+                dbUser.Streak,
+                dbUser.LastActive,
+                dbUser.CreatedAt
+            });
+        }
+    }
+    return Results.Unauthorized();
+});
+
+app.MapPut("/api/user/profile", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.UpdateProfileRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (int.TryParse(userIdString, out int userId))
+    {
+        var dbUser = await dbContext.Users.FindAsync(new object[] { userId }, cancellationToken);
+        if (dbUser != null)
+        {
+            if (!string.IsNullOrWhiteSpace(request.FullName)) dbUser.FullName = request.FullName.Trim();
+            if (!string.IsNullOrWhiteSpace(request.Avatar)) dbUser.Avatar = request.Avatar.Trim();
+            if (!string.IsNullOrWhiteSpace(request.Level)) dbUser.Level = request.Level.Trim();
+            dbUser.UpdatedAt = DateTime.UtcNow;
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return Results.Ok(new { dbUser.Id, dbUser.FullName, dbUser.Avatar, dbUser.Level });
+        }
+    }
+    return Results.Unauthorized();
+});
+
+app.MapPost("/api/user/streak", [Microsoft.AspNetCore.Authorization.Authorize] async (System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (int.TryParse(userIdString, out int userId))
+    {
+        var dbUser = await dbContext.Users.FindAsync(new object[] { userId }, cancellationToken);
+        if (dbUser != null)
+        {
+            var today = DateTime.UtcNow.Date;
+            if (!dbUser.LastActive.HasValue || dbUser.LastActive.Value.Date != today)
+            {
+                if (dbUser.LastActive.HasValue && dbUser.LastActive.Value.Date == today.AddDays(-1))
+                {
+                    dbUser.Streak += 1;
+                }
+                else if (!dbUser.LastActive.HasValue || dbUser.LastActive.Value.Date < today.AddDays(-1))
+                {
+                    dbUser.Streak = 1;
+                }
+                dbUser.Xp += 10; // Daily check-in XP bonus
+                dbUser.LastActive = DateTime.UtcNow;
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            return Results.Ok(new { streak = dbUser.Streak, xp = dbUser.Xp, lastActive = dbUser.LastActive });
+        }
+    }
+    return Results.Unauthorized();
+});
+
 app.MapPut("/api/user/level", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.UpdateLevelRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
@@ -1072,6 +1164,45 @@ app.MapPost("/api/test-submissions", async (
     }
 
     userId ??= request.UserId;
+
+    // Kiểm tra và liên kết với User trong Database nếu có
+    if (userId.HasValue)
+    {
+        var currentUser = await dbContext.Users.FindAsync(new object[] { userId.Value }, cancellationToken);
+        if (currentUser != null)
+        {
+            if (string.IsNullOrWhiteSpace(studentName) || studentName.StartsWith("Học viên #") || studentName == "Thí sinh tự do")
+            {
+                studentName = !string.IsNullOrWhiteSpace(currentUser.FullName) ? currentUser.FullName : currentUser.Username;
+            }
+            if (string.IsNullOrWhiteSpace(userEmail))
+            {
+                userEmail = currentUser.Email;
+            }
+
+            // Tự động thưởng XP khi nộp bài và cập nhật chuỗi học Streak
+            currentUser.Xp += 50;
+            var today = DateTime.UtcNow.Date;
+            if (!currentUser.LastActive.HasValue || currentUser.LastActive.Value.Date != today)
+            {
+                if (currentUser.LastActive.HasValue && currentUser.LastActive.Value.Date == today.AddDays(-1))
+                {
+                    currentUser.Streak += 1;
+                }
+                else if (!currentUser.LastActive.HasValue || currentUser.LastActive.Value.Date < today.AddDays(-1))
+                {
+                    currentUser.Streak = 1;
+                }
+            }
+            currentUser.LastActive = DateTime.UtcNow;
+        }
+        else
+        {
+            // ID không tồn tại trong DB -> đặt null để tránh vi phạm khóa ngoại
+            userId = null;
+        }
+    }
+
     if (string.IsNullOrWhiteSpace(studentName))
     {
         studentName = userId.HasValue ? $"Học viên #{userId}" : "Thí sinh tự do";
@@ -1193,8 +1324,16 @@ app.MapGet("/api/test-submissions/sync", async (
     string? sessionId,
     int? userId,
     Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    HttpContext httpContext,
     CancellationToken cancellationToken) =>
 {
+    if (!userId.HasValue && httpContext.User.Identity?.IsAuthenticated == true)
+    {
+        var subClaim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                       ?? httpContext.User.FindFirst("sub")?.Value;
+        if (int.TryParse(subClaim, out var parsedUid)) userId = parsedUid;
+    }
+
     var query = dbContext.TestSubmissions.AsQueryable();
 
     if (userId.HasValue && userId.Value > 0)
@@ -2245,7 +2384,7 @@ app.MapGet("/api/ielts/vocab", async (string? topic, string? search, Backend.Inf
         return items.Select(v => new
         {
             v.Id, v.Word, v.Phonetic, v.PartOfSpeech, v.Meaning,
-            v.Example, v.ExampleMeaning, v.Topic, v.DisplayOrder, v.IsActive, v.CreatedAt
+            v.Example, v.ExampleMeaning, v.Topic, v.CefrLevel, v.DisplayOrder, v.IsActive, v.CreatedAt
         }).ToList();
     });
 
@@ -2273,6 +2412,7 @@ app.MapPost("/api/ielts/vocab", async (IeltsVocabularyRequest req, Backend.Infra
         Example = req.Example?.Trim(),
         ExampleMeaning = req.ExampleMeaning?.Trim(),
         Topic = req.Topic?.Trim(),
+        CefrLevel = req.CefrLevel?.Trim().ToUpperInvariant(),
         DisplayOrder = req.DisplayOrder ?? 0,
         IsActive = req.IsActive ?? true
     };
@@ -2301,6 +2441,7 @@ app.MapPut("/api/ielts/vocab/{id:int}", async (int id, IeltsVocabularyRequest re
     vocab.Example = req.Example?.Trim();
     vocab.ExampleMeaning = req.ExampleMeaning?.Trim();
     vocab.Topic = req.Topic?.Trim();
+    vocab.CefrLevel = req.CefrLevel?.Trim().ToUpperInvariant();
     if (req.DisplayOrder.HasValue) vocab.DisplayOrder = req.DisplayOrder.Value;
     if (req.IsActive.HasValue) vocab.IsActive = req.IsActive.Value;
     await dbContext.SaveChangesAsync(cancellationToken);
@@ -2329,7 +2470,7 @@ app.MapGet("/api/ielts/vocab/template-excel", () =>
 {
     using var workbook = new ClosedXML.Excel.XLWorkbook();
     var worksheet = workbook.Worksheets.Add("IELTS Vocabulary");
-    string[] headers = { "Word", "Phonetic", "PartOfSpeech", "Meaning", "Example", "ExampleMeaning", "Topic", "DisplayOrder" };
+    string[] headers = { "Word", "Phonetic", "PartOfSpeech", "Meaning", "Example", "ExampleMeaning", "Topic", "CefrLevel", "DisplayOrder" };
     for (int i = 0; i < headers.Length; i++)
         worksheet.Cell(1, i + 1).Value = headers[i];
     var headerRange = worksheet.Range(1, 1, 1, headers.Length);
@@ -2343,7 +2484,8 @@ app.MapGet("/api/ielts/vocab/template-excel", () =>
     worksheet.Cell(2, 5).Value = "She achieved her goal of becoming a doctor.";
     worksheet.Cell(2, 6).Value = "Cô ấy đã đạt được mục tiêu trở thành bác sĩ.";
     worksheet.Cell(2, 7).Value = "Education";
-    worksheet.Cell(2, 8).Value = 1;
+    worksheet.Cell(2, 8).Value = "B2";
+    worksheet.Cell(2, 9).Value = 1;
     worksheet.Cell(3, 1).Value = "sustainable";
     worksheet.Cell(3, 2).Value = "/səˈsteɪnəbl/";
     worksheet.Cell(3, 3).Value = "adjective";
@@ -2351,7 +2493,8 @@ app.MapGet("/api/ielts/vocab/template-excel", () =>
     worksheet.Cell(3, 5).Value = "We need sustainable development to protect the environment.";
     worksheet.Cell(3, 6).Value = "Chúng ta cần phát triển bền vững để bảo vệ môi trường.";
     worksheet.Cell(3, 7).Value = "Environment";
-    worksheet.Cell(3, 8).Value = 2;
+    worksheet.Cell(3, 8).Value = "C1";
+    worksheet.Cell(3, 9).Value = 2;
 
     worksheet.Column(1).Width = 16;
     worksheet.Column(2).Width = 16;
@@ -2360,7 +2503,8 @@ app.MapGet("/api/ielts/vocab/template-excel", () =>
     worksheet.Column(5).Width = 48;
     worksheet.Column(6).Width = 42;
     worksheet.Column(7).Width = 16;
-    worksheet.Column(8).Width = 13;
+    worksheet.Column(8).Width = 10;
+    worksheet.Column(9).Width = 13;
 
     using var stream = new MemoryStream();
     workbook.SaveAs(stream);
@@ -2404,7 +2548,8 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
                 r.Cell(5).GetString()?.Trim() ?? "",
                 r.Cell(6).GetString()?.Trim() ?? "",
                 r.Cell(7).GetString()?.Trim() ?? "",
-                r.Cell(8).GetString()?.Trim() ?? ""
+                r.Cell(8).GetString()?.Trim() ?? "",
+                r.Cell(9).GetString()?.Trim() ?? ""
             });
         }
     }
@@ -2420,6 +2565,7 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
     var errors = new List<string>();
     var jsonItems = new List<object>();
     var seenInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var cefrLevels = new[] { "A1", "A2", "B1", "B2", "C1", "C2" };
 
     for (int i = 0; i < rows.Count; i++)
     {
@@ -2433,6 +2579,21 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
             var key = $"{word}|{meaning}";
             if (!seenInFile.Add(key)) { duplicate++; continue; }
 
+            // Tự phát hiện format: cột 8 là CefrLevel hay DisplayOrder?
+            var col8 = HskVocabCsvParser.NullIfEmpty(cells[7]);
+            string? parsedCefr;
+            int parsedOrder;
+            if (col8 != null && cefrLevels.Contains(col8, StringComparer.OrdinalIgnoreCase))
+            {
+                parsedCefr = col8.ToUpperInvariant();
+                parsedOrder = int.TryParse(cells[8], out int o8) ? o8 : 0;
+            }
+            else
+            {
+                parsedCefr = null;
+                parsedOrder = int.TryParse(col8, out int o7) ? o7 : 0;
+            }
+
             var jsonItem = new
             {
                 word,
@@ -2442,7 +2603,8 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
                 example = HskVocabCsvParser.NullIfEmpty(cells[4]),
                 exampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]),
                 topic = HskVocabCsvParser.NullIfEmpty(cells[6]),
-                displayOrder = int.TryParse(cells[7], out int ordVal) ? ordVal : 0
+                cefrLevel = parsedCefr,
+                displayOrder = parsedOrder
             };
 
             if (existingDict.TryGetValue(key, out var existing))
@@ -2454,14 +2616,14 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
                     var newExample = HskVocabCsvParser.NullIfEmpty(cells[4]);
                     var newExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]);
                     var newTopic = HskVocabCsvParser.NullIfEmpty(cells[6]);
-                    int newOrd = int.TryParse(cells[7], out int ord) ? ord : existing.DisplayOrder;
 
                     if (existing.Phonetic == newPhonetic &&
                         existing.PartOfSpeech == newPos &&
                         existing.Example == newExample &&
                         existing.ExampleMeaning == newExampleMeaning &&
                         existing.Topic == newTopic &&
-                        existing.DisplayOrder == newOrd)
+                        existing.CefrLevel == parsedCefr &&
+                        existing.DisplayOrder == parsedOrder)
                     {
                         duplicate++;
                         continue;
@@ -2472,7 +2634,8 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
                     existing.Example = newExample;
                     existing.ExampleMeaning = newExampleMeaning;
                     existing.Topic = newTopic;
-                    existing.DisplayOrder = newOrd;
+                    existing.CefrLevel = parsedCefr;
+                    existing.DisplayOrder = parsedOrder;
                     updated++;
                     jsonItems.Add(jsonItem);
                 }
@@ -2489,7 +2652,8 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
                 Example = HskVocabCsvParser.NullIfEmpty(cells[4]),
                 ExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]),
                 Topic = HskVocabCsvParser.NullIfEmpty(cells[6]),
-                DisplayOrder = int.TryParse(cells[7], out int order) ? order : 0,
+                CefrLevel = parsedCefr,
+                DisplayOrder = parsedOrder,
                 IsActive = true
             });
             success++;
@@ -2603,7 +2767,8 @@ app.MapPost("/api/ielts/vocab/import-multiple", async (Microsoft.AspNetCore.Http
                 r.Cell(5).GetString()?.Trim() ?? "",
                 r.Cell(6).GetString()?.Trim() ?? "",
                 r.Cell(7).GetString()?.Trim() ?? "",
-                r.Cell(8).GetString()?.Trim() ?? ""
+                r.Cell(8).GetString()?.Trim() ?? "",
+                r.Cell(9).GetString()?.Trim() ?? ""
             }, file.FileName));
         }
     }
@@ -2632,6 +2797,21 @@ app.MapPost("/api/ielts/vocab/import-multiple", async (Microsoft.AspNetCore.Http
             var dedupeKey = $"{word}|{meaning}".ToLowerInvariant();
             if (!seenInFile.Add(dedupeKey)) { duplicate++; continue; }
 
+            // Tự phát hiện format: cột 8 là CefrLevel (A1..C2) hay DisplayOrder (số)?
+            var col8m = HskVocabCsvParser.NullIfEmpty(cells[7]);
+            string? parsedCefrM;
+            int parsedOrderM;
+            if (col8m != null && new[] { "A1","A2","B1","B2","C1","C2" }.Contains(col8m, StringComparer.OrdinalIgnoreCase))
+            {
+                parsedCefrM = col8m.ToUpperInvariant();
+                parsedOrderM = int.TryParse(cells[8], out int o8m) ? o8m : 0;
+            }
+            else
+            {
+                parsedCefrM = null;
+                parsedOrderM = int.TryParse(col8m, out int o7m) ? o7m : 0;
+            }
+
             var jsonItem = new
             {
                 word,
@@ -2641,7 +2821,8 @@ app.MapPost("/api/ielts/vocab/import-multiple", async (Microsoft.AspNetCore.Http
                 example = HskVocabCsvParser.NullIfEmpty(cells[4]),
                 exampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]),
                 topic = HskVocabCsvParser.NullIfEmpty(cells[6]),
-                displayOrder = int.TryParse(cells[7], out int ordVal) ? ordVal : 0
+                cefrLevel = parsedCefrM,
+                displayOrder = parsedOrderM
             };
 
             if (existingDict.TryGetValue(dedupeKey, out var existing))
@@ -2653,14 +2834,14 @@ app.MapPost("/api/ielts/vocab/import-multiple", async (Microsoft.AspNetCore.Http
                     var newExample = HskVocabCsvParser.NullIfEmpty(cells[4]);
                     var newExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]);
                     var newTopic = HskVocabCsvParser.NullIfEmpty(cells[6]);
-                    int newOrd = int.TryParse(cells[7], out int ord) ? ord : existing.DisplayOrder;
 
                     if (existing.Phonetic == newPhonetic &&
                         existing.PartOfSpeech == newPos &&
                         existing.Example == newExample &&
                         existing.ExampleMeaning == newExampleMeaning &&
                         existing.Topic == newTopic &&
-                        existing.DisplayOrder == newOrd)
+                        existing.CefrLevel == parsedCefrM &&
+                        existing.DisplayOrder == parsedOrderM)
                     {
                         duplicate++;
                         continue;
@@ -2671,7 +2852,8 @@ app.MapPost("/api/ielts/vocab/import-multiple", async (Microsoft.AspNetCore.Http
                     existing.Example = newExample;
                     existing.ExampleMeaning = newExampleMeaning;
                     existing.Topic = newTopic;
-                    existing.DisplayOrder = newOrd;
+                    existing.CefrLevel = parsedCefrM;
+                    existing.DisplayOrder = parsedOrderM;
                     updated++;
                     jsonItems.Add(jsonItem);
                 }
@@ -2688,7 +2870,8 @@ app.MapPost("/api/ielts/vocab/import-multiple", async (Microsoft.AspNetCore.Http
                 Example = HskVocabCsvParser.NullIfEmpty(cells[4]),
                 ExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[5]),
                 Topic = HskVocabCsvParser.NullIfEmpty(cells[6]),
-                DisplayOrder = int.TryParse(cells[7], out int order) ? order : 0,
+                CefrLevel = parsedCefrM,
+                DisplayOrder = parsedOrderM,
                 IsActive = true
             });
             success++;
@@ -2829,6 +3012,111 @@ app.MapDelete("/api/ielts/vocab/all", async (Backend.Infrastructure.Persistence.
         logger.LogError(ex, "Delete all vocabulary failed");
         return Results.Problem($"Xóa thất bại: {ex.Message}");
     }
+});
+
+// ─── IELTS Vocabulary Progress (lưu theo tài khoản người dùng) ───
+app.MapGet("/api/ielts/vocab/progress", [Microsoft.AspNetCore.Authorization.Authorize] async (
+        System.Security.Claims.ClaimsPrincipal user,
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var progress = await dbContext.IeltsVocabularyProgresses
+        .Where(p => p.UserId == userId)
+        .Select(p => new { p.VocabularyId, p.Status, p.LearnedAt })
+        .ToListAsync(cancellationToken);
+
+    return Results.Ok(new { 
+        vocabularyIds = progress.Select(p => p.VocabularyId).ToList(),
+        items = progress
+    });
+});
+
+app.MapPost("/api/ielts/vocab/progress/migrate", [Microsoft.AspNetCore.Authorization.Authorize] async (
+        MigrateVocabProgressRequest req,
+        System.Security.Claims.ClaimsPrincipal user,
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    if (req.VocabularyIds == null || req.VocabularyIds.Count == 0)
+        return Results.Ok(new { migrated = 0 });
+
+    var validIds = (await dbContext.IeltsVocabularies
+        .Where(v => req.VocabularyIds.Contains(v.Id))
+        .Select(v => v.Id)
+        .ToListAsync(cancellationToken)).ToHashSet();
+
+    var existingIds = (await dbContext.IeltsVocabularyProgresses
+        .Where(p => p.UserId == userId && req.VocabularyIds.Contains(p.VocabularyId))
+        .Select(p => p.VocabularyId)
+        .ToListAsync(cancellationToken)).ToHashSet();
+
+    var toAdd = validIds.Except(existingIds)
+        .Select(id => new Backend.Domain.Entities.IeltsVocabularyProgress
+        {
+            UserId = userId,
+            VocabularyId = id,
+            Status = "Learned",
+            LearnedAt = DateTime.UtcNow
+        }).ToList();
+
+    if (toAdd.Count > 0)
+    {
+        dbContext.IeltsVocabularyProgresses.AddRange(toAdd);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    return Results.Ok(new { migrated = toAdd.Count });
+});
+
+app.MapPost("/api/ielts/vocab/progress/{vocabularyId:int}", [Microsoft.AspNetCore.Authorization.Authorize] async (
+        int vocabularyId,
+        UpdateVocabProgressRequest req,
+        System.Security.Claims.ClaimsPrincipal user,
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    bool vocabExists = await dbContext.IeltsVocabularies.AnyAsync(v => v.Id == vocabularyId, cancellationToken);
+    if (!vocabExists) return Results.NotFound("Không tìm thấy từ vựng.");
+
+    if (req.Learned)
+    {
+        bool exists = await dbContext.IeltsVocabularyProgresses.AnyAsync(
+            p => p.UserId == userId && p.VocabularyId == vocabularyId, cancellationToken);
+        if (!exists)
+        {
+            dbContext.IeltsVocabularyProgresses.Add(new Backend.Domain.Entities.IeltsVocabularyProgress
+            {
+                UserId = userId,
+                VocabularyId = vocabularyId,
+                Status = "Learned",
+                LearnedAt = DateTime.UtcNow
+            });
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        return Results.Ok(new { vocabularyId, learned = true });
+    }
+
+    var rows = await dbContext.IeltsVocabularyProgresses
+        .Where(p => p.UserId == userId && p.VocabularyId == vocabularyId)
+        .ToListAsync(cancellationToken);
+    if (rows.Count > 0)
+    {
+        dbContext.IeltsVocabularyProgresses.RemoveRange(rows);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+    return Results.Ok(new { vocabularyId, learned = false });
 });
 
 // ─── HSK: Vocabulary CRUD ───
@@ -3390,7 +3678,7 @@ public record HskSaveExamRequest(string CollectionName, string Title, int? MockT
 public record HskVocabularyRequest(string HskLevel, string Hanzi, string Pinyin, string Meaning, string? WordType, string? ExampleSentence, string? ExamplePinyin, string? ExampleMeaning, string? AudioUrl, int? DisplayOrder, bool? IsActive);
 public record UpdateVocabProgressRequest(bool Learned);
 public record MigrateVocabProgressRequest(List<int> VocabularyIds);
-public record IeltsVocabularyRequest(string Word, string? Phonetic, string? PartOfSpeech, string Meaning, string? Example, string? ExampleMeaning, string? Topic, int? DisplayOrder, bool? IsActive);
+public record IeltsVocabularyRequest(string Word, string? Phonetic, string? PartOfSpeech, string Meaning, string? Example, string? ExampleMeaning, string? Topic, string? CefrLevel, int? DisplayOrder, bool? IsActive);
 
 /// <summary>
 /// Parser CSV hỗ trợ dấu ngoặc kép, dấu phẩy/chấm phẩy/tab trong ô và tự dò delimiter.

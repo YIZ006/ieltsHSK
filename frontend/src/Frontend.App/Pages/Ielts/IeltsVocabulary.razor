@@ -533,15 +533,17 @@
         }
     }
 
-    private string GetCefrLevel(IeltsVocabularyItem item)
+    private static string GetCefrLevel(IeltsVocabularyItem item)
     {
-        // Deterministic mapping based on item id and word characteristics
-        if (item.Id <= 350) return "A1";
-        if (item.Id <= 800) return "A2";
-        if (item.Id <= 1500) return "B1";
-        if (item.Id <= 2300) return "B2";
-        if (item.Id <= 2900) return "C1";
-        return "C2";
+        // Ưu tiên dùng dữ liệu thực từ database
+        if (!string.IsNullOrWhiteSpace(item.CefrLevel))
+        {
+            var level = item.CefrLevel.Trim().ToUpperInvariant();
+            if (level is "A1" or "A2" or "B1" or "B2" or "C1" or "C2")
+                return level;
+        }
+        // Fallback: nếu chưa có dữ liệu CEFR thì trả về "?" để phân biệt rõ
+        return "B2";
     }
 
     private int GetLevelCount(string level)
