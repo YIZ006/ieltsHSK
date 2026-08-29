@@ -38,6 +38,10 @@
                 <i class="bi bi-file-earmark-arrow-down text-primary"></i>
                 <span>Tải Mẫu Excel</span>
             </a>
+            <button class="btn-secondary-action" @onclick="AutoClassifyCefr" disabled="@(isAutoClassifying || isImporting)" title="Tự động phân loại mức CEFR cho tất cả từ chưa có nhãn">
+                <i class="bi bi-magic"></i>
+                <span>@(isAutoClassifying ? "Đang phân loại..." : "Auto CEFR")</span>
+            </button>
         </div>
     </div>
 
@@ -373,6 +377,7 @@
     private IeltsVocabularyItem form = new();
 
     private bool isImporting = false;
+    private bool isAutoClassifying = false;
     private string? importMessage;
     private bool importSuccess;
     private string importMode = "upsert";
@@ -559,6 +564,29 @@
     private async Task SpeakEnglish(string text)
     {
         await JS.InvokeVoidAsync("eval", $"if ('speechSynthesis' in window) {{ const u = new SpeechSynthesisUtterance('{text}'); u.lang = 'en-US'; window.speechSynthesis.speak(u); }}");
+    }
+
+    private async Task AutoClassifyCefr()
+    {
+        var confirm = await JS.InvokeAsync<bool>("confirm",
+            "Tự động phân loại CEFR cho tất cả từ chưa có nhãn dựa trên chủ đề và độ phức tạp từ?\n" +
+            "Những từ đã có CefrLevel sẽ không bị thay đổi.");
+        if (!confirm) return;
+
+        isAutoClassifying = true;
+        importMessage = null;
+        StateHasChanged();
+
+        var (success, updated, message) = await IeltsService.AutoClassifyCefrAsync();
+
+        isAutoClassifying = false;
+        importMessage = message;
+        importSuccess = success;
+
+        if (success && updated > 0)
+            await LoadData();
+        else
+            StateHasChanged();
     }
 
     private async Task DeleteAll()
