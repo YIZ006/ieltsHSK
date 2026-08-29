@@ -61,6 +61,23 @@ public class IeltsService
         catch { return false; }
     }
 
+    public async Task<(bool Success, int Updated, string Message)> AutoClassifyCefrAsync()
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync("api/admin/ielts/vocab/auto-classify-cefr", null);
+            if (response.IsSuccessStatusCode)
+            {
+                var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var result = await response.Content.ReadFromJsonAsync<AutoClassifyResult>(options);
+                return (true, result?.Updated ?? 0, result?.Message ?? "Phân loại thành công.");
+            }
+            var err = await response.Content.ReadAsStringAsync();
+            return (false, 0, $"Lỗi: {err}");
+        }
+        catch (Exception ex) { return (false, 0, $"Lỗi kết nối: {ex.Message}"); }
+    }
+
     public async Task<(bool Success, int Deleted)> DeleteAllVocabularyAsync()
     {
         try
@@ -412,3 +429,4 @@ public class IeltsVocabularyItem
 }
 
 public record IeltsImportExcelResponse(int Success, int Fail, int Duplicate, int Updated, string? JsonUrl, List<string>? Errors);
+public record AutoClassifyResult(int Updated, string Message);

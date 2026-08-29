@@ -3670,6 +3670,95 @@ app.MapPost("/api/hsk/vocab/import-excel",
     return Results.Ok(new { Success = success, Fail = fail, Duplicate = duplicate, Updated = updated, Errors = errors, JsonUrl = jsonUrl });
 }).DisableAntiforgery();
 
+// ─── IELTS: Auto-phân loại CEFR cho từ vựng chưa có CefrLevel ───
+app.MapPost("/api/admin/ielts/vocab/auto-classify-cefr",
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    HttpContext httpContext,
+    CancellationToken cancellationToken) =>
+{
+    // Bảng mapping Topic → CEFR range (min, max) dựa trên chuẩn IELTS Academic
+    static string ClassifyByCefrLogic(string? topic, string word)
+    {
+        var w = word.ToLowerInvariant().Trim();
+        int len = w.Length;
+
+        // Topic-based CEFR mapping
+        var topicCefr = (topic?.ToLowerInvariant() ?? "") switch
+        {
+            var t when t.Contains("daily life") || t.Contains("daily communication") ||
+                       t.Contains("family") || t.Contains("greetings") ||
+                       t.Contains("numbers") || t.Contains("colors") => len <= 5 ? "A1" : "A2",
+
+            var t when t.Contains("travel") || t.Contains("food") ||
+                       t.Contains("shopping") || t.Contains("health") ||
+                       t.Contains("sport") || t.Contains("hobby") ||
+                       t.Contains("weather") || t.Contains("transport") => len <= 6 ? "A2" : "B1",
+
+            var t when t.Contains("education") || t.Contains("work") ||
+                       t.Contains("career") || t.Contains("society") ||
+                       t.Contains("culture") || t.Contains("media") ||
+                       t.Contains("communication") => len <= 8 ? "B1" : "B2",
+
+            var t when t.Contains("environment") || t.Contains("technology") ||
+                       t.Contains("business") || t.Contains("economy") ||
+                       t.Contains("urban") || t.Contains("global") ||
+                       t.Contains("science") => len <= 8 ? "B2" : "C1",
+
+            var t when t.Contains("academic") || t.Contains("research") ||
+                       t.Contains("law") || t.Contains("politic") ||
+                       t.Contains("philosophy") || t.Contains("psychology") ||
+                       t.Contains("sociology") || t.Contains("linguistics") => len <= 9 ? "C1" : "C2",
+
+            var t when t.Contains("data") || t.Contains("programming") ||
+                       t.Contains("artificial") || t.Contains("quantum") ||
+                       t.Contains("biochemistry") || t.Contains("nuclear") => "C2",
+
+            _ => null // Không xác định được từ topic → dùng word complexity
+        };
+
+        if (topicCefr != null) return topicCefr;
+
+        // Fallback: phân loại theo độ phức tạp từ
+        if (len <= 4) return "A1";
+        if (len <= 6) return "A2";
+        if (len <= 8) return "B1";
+        if (len <= 10) return "B2";
+        if (len <= 13) return "C1";
+        return "C2";
+    }
+
+    // Chỉ cập nhật những từ chưa có CefrLevel
+    var toUpdate = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+        .ToListAsync(dbContext.IeltsVocabularies.Where(v => v.CefrLevel == null || v.CefrLevel == ""), cancellationToken);
+
+    int updated = 0;
+    foreach (var v in toUpdate)
+    {
+        v.CefrLevel = ClassifyByCefrLogic(v.Topic, v.Word);
+        updated++;
+    }
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    // Xóa cache để GET vocab trả về dữ liệu mới
+    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
+    cache.Remove("IeltsVocabularyList");
+
+    // Thống kê kết quả
+    var stats = toUpdate.GroupBy(v => v.CefrLevel)
+        .Select(g => new { Level = g.Key, Count = g.Count() })
+        .OrderBy(x => x.Level)
+        .ToList();
+
+    return Results.Ok(new
+    {
+        Updated = updated,
+        Message = $"Đã tự động phân loại CEFR cho {updated} từ vựng.",
+        Distribution = stats
+    });
+});
+
 app.Run();
 
 public record CreateExamRequest(string Title, string DataUrl, string Category = "IELTS");
