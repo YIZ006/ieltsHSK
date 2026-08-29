@@ -18,4 +18,6 @@ public class ListenVideo
     
     public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
     public string SubmittedByUserId { get; set; } = string.Empty;
+    public int? UserId { get; set; }
+    public User? User { get; set; }
 }

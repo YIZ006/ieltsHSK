@@ -4,9 +4,9 @@ namespace Frontend.App.Services;
 
 /// <summary>
 /// Tính chuỗi ngày học tập: một ngày được tính "active" khi người dùng
-/// đăng nhập/truy cập web trong ngày đó. Dữ liệu lưu localStorage theo máy.
+/// đăng nhập/truy cập web trong ngày đó. Dữ liệu lưu localStorage và đồng bộ PostgreSQL khi có auth.
 /// </summary>
-public class StreakService(ILocalStorageService localStorage)
+public class StreakService(ILocalStorageService localStorage, HttpClient? httpClient = null)
 {
     private const string StorageKey = "streak_active_days";
     private const int MaxTrackedDays = 400;
@@ -16,16 +16,28 @@ public class StreakService(ILocalStorageService localStorage)
     {
         var days = await LoadAsync();
         var today = DateTime.Today;
-        if (days.Contains(today)) return;
-
-        days.Add(today);
-        days.Sort();
-        if (days.Count > MaxTrackedDays)
+        if (!days.Contains(today))
         {
-            days = days.Skip(days.Count - MaxTrackedDays).ToList();
+            days.Add(today);
+            days.Sort();
+            if (days.Count > MaxTrackedDays)
+            {
+                days = days.Skip(days.Count - MaxTrackedDays).ToList();
+            }
+            await SaveAsync(days);
         }
 
-        await SaveAsync(days);
+        if (httpClient != null)
+        {
+            try
+            {
+                await httpClient.PostAsync("api/user/streak", null);
+            }
+            catch
+            {
+                // Non-fatal if offline
+            }
+        }
     }
 
     public async Task<HashSet<DateTime>> GetActiveDaysAsync()

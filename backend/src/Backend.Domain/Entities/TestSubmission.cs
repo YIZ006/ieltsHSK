@@ -4,6 +4,7 @@ public class TestSubmission
 {
     public int Id { get; set; }
     public int? UserId { get; set; }
+    public User? User { get; set; }
     public string? StudentName { get; set; }
     public string? UserEmail { get; set; }
     public string? SessionId { get; set; }

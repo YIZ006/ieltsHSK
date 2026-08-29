@@ -33,25 +33,65 @@ public static class DependencyInjection
         
         await dbContext.Database.MigrateAsync();
 
-        // Đảm bảo các cột mới của test_submissions luôn tồn tại trong PostgreSQL
+        // Đảm bảo các bảng và ràng buộc khóa ngoại (Foreign Keys) luôn tồn tại trong PostgreSQL
         try
         {
             await dbContext.Database.ExecuteSqlRawAsync(@"
                 DO $$
                 BEGIN
+                    -- 1. Bảng test_submissions: các cột và khóa ngoại tới users
                     IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'test_submissions') THEN
                         ALTER TABLE test_submissions ADD COLUMN IF NOT EXISTS student_name TEXT;
                         ALTER TABLE test_submissions ADD COLUMN IF NOT EXISTS user_email TEXT;
                         ALTER TABLE test_submissions ADD COLUMN IF NOT EXISTS exam_title TEXT;
                         ALTER TABLE test_submissions ADD COLUMN IF NOT EXISTS attempt_number INTEGER NOT NULL DEFAULT 1;
                         ALTER TABLE test_submissions ADD COLUMN IF NOT EXISTS r2_storage_key TEXT;
+                        
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.table_constraints 
+                            WHERE constraint_name = 'fk_test_submissions_users_user_id'
+                        ) THEN
+                            BEGIN
+                                ALTER TABLE test_submissions 
+                                ADD CONSTRAINT fk_test_submissions_users_user_id 
+                                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
+                            EXCEPTION WHEN OTHERS THEN NULL;
+                            END;
+                        END IF;
                     END IF;
+
+                    -- 2. Bảng listen_videos: cột user_id và khóa ngoại tới users
+                    IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'listen_videos') THEN
+                        ALTER TABLE listen_videos ADD COLUMN IF NOT EXISTS user_id INTEGER;
+                        
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.table_constraints 
+                            WHERE constraint_name = 'fk_listen_videos_users_user_id'
+                        ) THEN
+                            BEGIN
+                                ALTER TABLE listen_videos 
+                                ADD CONSTRAINT fk_listen_videos_users_user_id 
+                                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
+                            EXCEPTION WHEN OTHERS THEN NULL;
+                            END;
+                        END IF;
+                    END IF;
+
+                    -- 3. Bảng ielts_vocabulary_progresses
+                    CREATE TABLE IF NOT EXISTS ielts_vocabulary_progresses (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        vocabulary_id INTEGER NOT NULL REFERENCES ielts_vocabularies(id) ON DELETE CASCADE,
+                        status TEXT NOT NULL DEFAULT 'Learned',
+                        learned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        CONSTRAINT uq_ielts_vocab_progress_user_vocab UNIQUE (user_id, vocabulary_id)
+                    );
                 END $$;
             ");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[SeedData] Column migration note: {ex.Message}");
+            Console.WriteLine($"[SeedData] Column/FK migration note: {ex.Message}");
         }
 
         // Seed Admin User (cuongnane)
