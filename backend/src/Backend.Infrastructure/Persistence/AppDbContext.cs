@@ -29,6 +29,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<HskVocabularyProgress> HskVocabularyProgresses { get; set; }
     public DbSet<IeltsVocabulary> IeltsVocabularies { get; set; }
     public DbSet<IeltsVocabularyImport> IeltsVocabularyImports { get; set; }
+    public DbSet<IeltsVocabularyProgress> IeltsVocabularyProgresses { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -102,11 +103,34 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        // ListenVideo
+        modelBuilder.Entity<ListenVideo>(entity =>
+        {
+            entity.HasOne(v => v.User)
+                .WithMany(u => u.ListenVideos)
+                .HasForeignKey(v => v.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
         // IeltsVocabulary: không cho trùng (từ + nghĩa) để tránh import lặp
         modelBuilder.Entity<IeltsVocabulary>(entity =>
         {
             entity.HasIndex(v => new { v.Word, v.Meaning }).IsUnique();
             entity.HasIndex(v => v.Topic);
+        });
+
+        // IeltsVocabularyProgress: mỗi user chỉ có 1 dòng tiến độ cho 1 từ IELTS
+        modelBuilder.Entity<IeltsVocabularyProgress>(entity =>
+        {
+            entity.HasIndex(p => new { p.UserId, p.VocabularyId }).IsUnique();
+            entity.HasOne(p => p.User)
+                .WithMany(u => u.IeltsVocabularyProgresses)
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(p => p.Vocabulary)
+                .WithMany()
+                .HasForeignKey(p => p.VocabularyId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // JSONB: tiến trình học tập có cấu trúc động (bài nghe lưu đáp án,
@@ -117,6 +141,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(s => s.R2StorageKey).HasColumnName("r2_storage_key");
             entity.HasIndex(s => new { s.UserId, s.Skill });
             entity.HasIndex(s => new { s.UserId, s.SubmittedAt });
+            entity.HasOne(s => s.User)
+                .WithMany(u => u.TestSubmissions)
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // JSONB cho nội dung truyện (paragraphs / vocabulary / questions)

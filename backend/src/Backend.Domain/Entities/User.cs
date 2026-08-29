@@ -24,4 +24,8 @@ public class User
     
     // Navigation Properties
     public ICollection<Course> CreatedCourses { get; set; } = new List<Course>();
+    public ICollection<TestSubmission> TestSubmissions { get; set; } = new List<TestSubmission>();
+    public ICollection<HskVocabularyProgress> HskVocabularyProgresses { get; set; } = new List<HskVocabularyProgress>();
+    public ICollection<IeltsVocabularyProgress> IeltsVocabularyProgresses { get; set; } = new List<IeltsVocabularyProgress>();
+    public ICollection<ListenVideo> ListenVideos { get; set; } = new List<ListenVideo>();
 }

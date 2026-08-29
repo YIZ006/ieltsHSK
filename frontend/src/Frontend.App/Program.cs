@@ -22,8 +22,24 @@ builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<AuthHeaderHandler>();
 builder.Services.AddScoped<ExamSessionService>();
 builder.Services.AddScoped<ExamHeaderService>();
-builder.Services.AddScoped<StreakService>();
-builder.Services.AddScoped<ProfileService>();
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    return new StreakService(localStorage, httpClient);
+});
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    return new ProfileService(localStorage, httpClient);
+});
 builder.Services.AddScoped<ToeicAchievementService>();
 builder.Services.AddScoped(sp =>
 {
