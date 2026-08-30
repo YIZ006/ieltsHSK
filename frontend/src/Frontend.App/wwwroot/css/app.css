@@ -105,10 +105,7 @@ a:hover {
 
 /* ===== Màn hình tải lúc khởi động: chibi chạy trên thanh tiến độ =====
    --blazor-load-percentage / --blazor-load-percentage-text do blazor.webassembly.js
-   tự cập nhật theo % tài nguyên (.wasm/.dll) đã tải về, nên không cần JS riêng.
-   Thanh chia 4 chặng màu đúng các mốc 25/50/75/100%: .chibi-track chứa sẵn
-   4 dải màu, .chibi-mask là tấm nền kem trượt theo tiến độ che phần CHƯA
-   tải — chỗ được lộ ra chính là màu của chặng đang chạy tới. */
+   tự cập nhật theo % tài nguyên (.wasm/.dll) đã tải về, nên không cần JS riêng. */
 .chibi-loader {
     position: fixed;
     inset: 0;
@@ -117,31 +114,36 @@ a:hover {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    background: #fff8f0;
+    gap: 12px;
+    background: #ffffff;
     font-family: "Be Vietnam Pro", system-ui, sans-serif;
 }
 
     .chibi-loader::before {
-        content: "Đang tải…";
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: #8a6d5c;
-        margin-bottom: 72px; /* chừa chỗ cho chibi cao 68px chạy qua không đè chữ */
+        content: "Đang tải hệ thống…";
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 74px; /* chừa chỗ cho chibi cao 68px chạy qua không đè chữ */
+        letter-spacing: -0.01em;
     }
 
 .chibi-track {
     position: relative; /* không overflow:hidden để chibi đứng trên thanh không bị cắt */
-    width: min(420px, 80vw);
-    height: 16px;
+    width: min(440px, 85vw);
+    height: 18px;
     border-radius: 999px;
     background: linear-gradient(90deg,
-        #ff6b6b 0 25%,   /* mốc 1: đỏ san hô */
-        #ffa94d 25% 50%, /* mốc 2: cam */
-        #51cf66 50% 75%, /* mốc 3: xanh lá */
-        #4dabf7 75% 100% /* mốc 4: xanh dương */
+        #0284c7 0%,   /* Xanh dương neon */
+        #38bdf8 25%,  /* Xanh cyan sáng */
+        #8b5cf6 55%,  /* Tím hoàng gia phát sáng */
+        #ec4899 80%,  /* Hồng neon */
+        #ef4444 100%  /* Đỏ tươi rực rỡ */
     );
-    box-shadow: inset 0 1px 3px rgb(0 0 0 / 15%);
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.55), 
+                0 0 35px rgba(2, 132, 199, 0.45), 
+                0 0 10px rgba(239, 68, 68, 0.35),
+                inset 0 1px 2px rgba(255, 255, 255, 0.4);
 }
 
 .chibi-mask {
@@ -151,7 +153,9 @@ a:hover {
     left: var(--blazor-load-percentage, 0%);
     right: 0;
     border-radius: 999px;
-    background: #ffe3c2; /* trùng màu nền kem ban đầu của thanh */
+    background: #0f172a; /* Nền tối vừa tương phản vừa tạo hiệu ứng lộ dải màu neon phát sáng */
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
     transition: left .25s ease-out;
 }
 
@@ -159,18 +163,19 @@ a:hover {
     position: absolute;
     bottom: calc(100% - 4px); /* chân chibi chồng nhẹ lên mặt thanh */
     left: var(--blazor-load-percentage, 0%);
-    height: 68px;
+    height: 70px;
     width: auto;
     transform: translateX(-50%); /* giữa người chibi bám đúng mút thanh */
-    filter: drop-shadow(0 3px 4px rgb(0 0 0 / 18%));
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
     animation: chibi-bob .3s ease-in-out infinite alternate;
 }
 
 .chibi-percent::after {
     content: var(--blazor-load-percentage-text, "0%");
-    font-weight: 700;
-    font-size: 1rem;
-    color: #c2502c;
+    font-weight: 800;
+    font-size: 1.05rem;
+    color: #8b5cf6;
+    text-shadow: 0 0 8px rgba(139, 92, 246, 0.25);
 }
 
 @keyframes chibi-bob {
