@@ -5,116 +5,247 @@
 @inject NavigationService NavService
 @inject NavigationManager NavManager
 
-<PageTitle>Quản lý Sidebar - Admin</PageTitle>
+<PageTitle>Quản lý Sidebar - Admin Hub</PageTitle>
 
-<div class="admin-container">
-    <div class="admin-header">
-        <div>
-            <h1>Quản lý Sidebar điều hướng</h1>
-            <p class="admin-subtitle">Các mục hiển thị trong Left Sidebar — thay đổi có hiệu lực ngay lập tức.</p>
+<div class="admin-nav-page">
+    <!-- Header Section -->
+    <div class="page-header">
+        <div class="header-left">
+            <div class="header-icon-badge">
+                <i class="bi bi-layout-sidebar-inset-reverse"></i>
+            </div>
+            <div>
+                <h1 class="page-title">Quản lý Sidebar điều hướng</h1>
+                <p class="page-subtitle">Cấu hình các mục hiển thị trong Left Sidebar học tập — Thay đổi có hiệu lực tức thì.</p>
+            </div>
         </div>
-        <button class="btn-create" @onclick="() => OpenForm(null)">+ Thêm mục</button>
+        <button class="btn-create-nav" @onclick="() => OpenForm(null)">
+            <i class="bi bi-plus-lg"></i>
+            <span>Thêm mục mới</span>
+        </button>
     </div>
 
+    <!-- Edit/Create Drawer or Card -->
     @if (isFormOpen)
     {
-        <div class="admin-card create-form">
-            <h2>@(editId.HasValue ? "Cập nhật mục" : "Thêm mục mới")</h2>
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger" style="color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;padding:10px;border-radius:8px;margin-bottom:12px;">@errorMessage</div>
-            }
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>Tên hiển thị *</label>
-                    <input @bind="form.Name" class="form-control" placeholder="VD: Luyện đề, Dashboard..." />
+        <div class="nav-form-overlay" @onclick="() => isFormOpen = false">
+            <div class="nav-form-card" @onclick:stopPropagation="true">
+                <div class="form-card-header">
+                    <div class="form-header-title">
+                        <i class="bi @(editId.HasValue ? "bi-pencil-square" : "bi-plus-circle-fill")"></i>
+                        <h3>@(editId.HasValue ? "Cập nhật mục Sidebar" : "Thêm mục Sidebar mới")</h3>
+                    </div>
+                    <button class="btn-close-form" @onclick="() => isFormOpen = false">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                 </div>
-                <div class="form-group">
-                    <label>Route * (vd: /toeic/test)</label>
-                    <input @bind="form.Route" class="form-control" placeholder="/toeic/test" />
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="form-alert-error">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <span>@errorMessage</span>
+                    </div>
+                }
+
+                <div class="form-fields-grid">
+                    <div class="form-group-item">
+                        <label class="form-label-custom">Tên hiển thị <span class="required">*</span></label>
+                        <input @bind="form.Name" class="form-input-custom" placeholder="VD: Luyện đề, Luyện nghe..." />
+                    </div>
+
+                    <div class="form-group-item">
+                        <label class="form-label-custom">Đường dẫn Route <span class="required">*</span></label>
+                        <input @bind="form.Route" class="form-input-custom font-mono" placeholder="VD: /hsk/luyen-de, /ielts/reading..." />
+                    </div>
+
+                    <div class="form-group-item">
+                        <label class="form-label-custom">Chương trình <span class="required">*</span></label>
+                        <select @bind="form.Language" class="form-input-custom form-select-custom">
+                            <option value="HSK">🇨🇳 HSK (Tiếng Trung)</option>
+                            <option value="IELTS">🇬🇧 IELTS (Tiếng Anh)</option>
+                            <option value="TOEIC">🏆 TOEIC (Tiếng Anh)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group-item">
+                        <label class="form-label-custom">Thứ tự hiển thị (Order)</label>
+                        <input type="number" @bind="form.OrderIndex" class="form-input-custom" min="1" max="99" />
+                    </div>
+
+                    <div class="form-group-item full-span">
+                        <label class="form-label-custom">Mã Icon (Bootstrap Icons)</label>
+                        <div class="icon-input-wrapper">
+                            <input @bind="form.Icon" class="form-input-custom font-mono" placeholder="VD: bi-journal-text, bi-headphones..." />
+                            <div class="icon-live-preview">
+                                @if (!string.IsNullOrWhiteSpace(form.Icon))
+                                {
+                                    <i class="bi @form.Icon"></i>
+                                    <span>Preview</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-circle"></i>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group-item full-span">
+                        <label class="form-label-custom">Mô tả ngắn (Hiển thị mờ bên dưới tiêu đề)</label>
+                        <input @bind="form.Description" class="form-input-custom" placeholder="VD: Luyện đề thi các cấp, Kho 15.000 từ..." />
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Chương trình *</label>
-                    <select @bind="form.Language" class="form-control">
-                        <option value="TOEIC">TOEIC</option>
-                        <option value="IELTS">IELTS</option>
-                        <option value="HSK">HSK</option>
-                    </select>
+
+                <div class="form-footer-actions">
+                    <button class="btn-modal-cancel" @onclick="() => isFormOpen = false">Hủy bỏ</button>
+                    <button class="btn-modal-save" @onclick="Save" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="btn-spinner"></span>
+                            <span>Đang lưu...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check2-circle"></i>
+                            <span>@(editId.HasValue ? "Lưu cập nhật" : "Tạo mục mới")</span>
+                        }
+                    </button>
                 </div>
-                <div class="form-group">
-                    <label>Icon (Bootstrap Icons, vd: bi-journal-text)</label>
-                    <input @bind="form.Icon" class="form-control" placeholder="bi-journal-text" />
-                    <div class="icon-preview">@if (!string.IsNullOrWhiteSpace(form.Icon)) { <i class="bi @form.Icon"></i> <span>@form.Icon</span> }</div>
-                </div>
-                <div class="form-group">
-                    <label>Thứ tự</label>
-                    <input type="number" @bind="form.OrderIndex" class="form-control" />
-                </div>
-                <div class="form-group" style="grid-column:1/-1">
-                    <label>Mô tả ngắn</label>
-                    <input @bind="form.Description" class="form-control" placeholder="Gợi ý hiển thị dưới tên..." />
-                </div>
-            </div>
-            <div class="form-actions" style="margin-top:14px">
-                <button class="btn-secondary" @onclick="() => isFormOpen = false">Hủy</button>
-                <button class="btn-primary" @onclick="Save" disabled="@isSaving">@(isSaving ? "Đang lưu..." : "Lưu")</button>
             </div>
         </div>
     }
 
-    <div class="admin-card list-container">
-        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
-            <span style="font-weight:700;color:#0f172a">Lọc:</span>
-            @foreach (var lang in new[] { "ALL", "TOEIC", "IELTS", "HSK" })
-            {
-                <button class="btn-sm @(filterLang==lang ? "btn-primary":"btn-secondary")" @onclick="() => filterLang = lang">@lang</button>
-            }
-            <span style="margin-left:auto;color:#94a3b8;font-size:0.85rem">@Filtered.Count mục</span>
+    <!-- Toolbar Filters -->
+    <div class="nav-toolbar-card">
+        <div class="filter-pills-row">
+            <button class="filter-pill @(filterLang == "ALL" ? "active" : "")" @onclick='() => filterLang = "ALL"'>
+                <span class="pill-dot"></span>
+                <span>Tất cả</span>
+                <span class="pill-count">@items.Count</span>
+            </button>
+            <button class="filter-pill pill-hsk @(filterLang == "HSK" ? "active" : "")" @onclick='() => filterLang = "HSK"'>
+                <span class="pill-icon">🇨🇳</span>
+                <span>HSK</span>
+                <span class="pill-count">@items.Count(x => x.Language == "HSK")</span>
+            </button>
+            <button class="filter-pill pill-ielts @(filterLang == "IELTS" ? "active" : "")" @onclick='() => filterLang = "IELTS"'>
+                <span class="pill-icon">🇬🇧</span>
+                <span>IELTS</span>
+                <span class="pill-count">@items.Count(x => x.Language == "IELTS")</span>
+            </button>
+            <button class="filter-pill pill-toeic @(filterLang == "TOEIC" ? "active" : "")" @onclick='() => filterLang = "TOEIC"'>
+                <span class="pill-icon">🏆</span>
+                <span>TOEIC</span>
+                <span class="pill-count">@items.Count(x => x.Language == "TOEIC")</span>
+            </button>
         </div>
 
+        <div class="search-box-wrapper">
+            <i class="bi bi-search search-icon"></i>
+            <input type="text" @bind="searchQuery" @bind:event="oninput" class="search-input" placeholder="Tìm theo tên mục hoặc route..." />
+            @if (!string.IsNullOrWhiteSpace(searchQuery))
+            {
+                <button class="btn-clear-search" @onclick='() => searchQuery = ""'>
+                    <i class="bi bi-x-circle-fill"></i>
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Data Table Card -->
+    <div class="nav-table-card">
         @if (isLoading)
         {
-            <p>Đang tải...</p>
+            <div class="table-loading-state">
+                <div class="loading-spinner"></div>
+                <span>Đang tải danh sách Sidebar...</span>
+            </div>
         }
         else if (Filtered.Count == 0)
         {
-            <p>Chưa có mục nào.</p>
+            <div class="table-empty-state">
+                <div class="empty-icon-wrap">
+                    <i class="bi bi-inbox-fill"></i>
+                </div>
+                <h3>Không tìm thấy mục điều hướng nào</h3>
+                <p>Thử thay đổi bộ lọc hoặc bấm nút "Thêm mục mới" để tạo danh mục đầu tiên.</p>
+                <button class="btn-create-nav-sm" @onclick="() => OpenForm(null)">
+                    <i class="bi bi-plus-lg"></i> Thêm mục ngay
+                </button>
+            </div>
         }
         else
         {
-            <table class="admin-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Icon</th>
-                        <th>Tên</th>
-                        <th>Route</th>
-                        <th>Chương trình</th>
-                        <th>Thứ tự</th>
-                        <th>Hành động</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var item in Filtered)
-                    {
+            <div class="table-responsive-wrapper">
+                <table class="modern-nav-table">
+                    <thead>
                         <tr>
-                            <td>@item.Id</td>
-                            <td><i class="bi @item.Icon" style="font-size:1.1rem;color:#6c63ff"></i></td>
-                            <td>
-                                <div style="font-weight:600">@item.Name</div>
-                                <div style="font-size:0.78rem;color:#94a3b8">@item.Description</div>
-                            </td>
-                            <td><code style="background:#f5f3ff;padding:2px 6px;border-radius:6px">@item.Route</code></td>
-                            <td><span class="badge-lang lang-@item.Language.ToLower()">@item.Language</span></td>
-                            <td>@item.OrderIndex</td>
-                            <td>
-                                <button class="btn-sm btn-edit" @onclick="() => OpenForm(item)">Sửa</button>
-                                <button class="btn-sm" style="background:#fee2e2;color:#b91c1c;border:none;padding:6px 10px;border-radius:8px;margin-left:6px;cursor:pointer" @onclick="() => Delete(item.Id)">Xóa</button>
-                            </td>
+                            <th style="width: 70px;">#ID</th>
+                            <th style="width: 75px; text-align: center;">Icon</th>
+                            <th>Tên danh mục & Mô tả</th>
+                            <th>Đường dẫn (Route)</th>
+                            <th style="width: 140px;">Chương trình</th>
+                            <th style="width: 90px; text-align: center;">Thứ tự</th>
+                            <th style="width: 160px; text-align: right;">Thao tác</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Filtered)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="id-badge">#@item.Id</span>
+                                </td>
+                                <td style="text-align: center;">
+                                    <div class="icon-avatar-badge icon-lang-@item.Language.ToLower()">
+                                        <i class="bi @item.Icon"></i>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="nav-item-name">@item.Name</div>
+                                    @if (!string.IsNullOrWhiteSpace(item.Description))
+                                    {
+                                        <div class="nav-item-desc">@item.Description</div>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="route-code-pill" title="@item.Route">
+                                        <i class="bi bi-link-45deg"></i>
+                                        <code>@item.Route</code>
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="program-badge prog-@item.Language.ToLower()">
+                                        @if (item.Language == "HSK") { <span>🇨🇳 HSK</span> }
+                                        else if (item.Language == "IELTS") { <span>🇬🇧 IELTS</span> }
+                                        else { <span>🏆 TOEIC</span> }
+                                    </span>
+                                </td>
+                                <td style="text-align: center;">
+                                    <span class="order-pill">@item.OrderIndex</span>
+                                </td>
+                                <td>
+                                    <div class="actions-group">
+                                        <button class="btn-action-edit" @onclick="() => OpenForm(item)" title="Chỉnh sửa mục">
+                                            <i class="bi bi-pencil-fill"></i>
+                                            <span>Sửa</span>
+                                        </button>
+                                        <button class="btn-action-delete" @onclick="() => Delete(item.Id)" title="Xóa mục khỏi sidebar">
+                                            <i class="bi bi-trash3-fill"></i>
+                                            <span>Xóa</span>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-footer-summary">
+                <span>Hiển thị <b>@Filtered.Count</b> / <b>@items.Count</b> mục điều hướng</span>
+            </div>
         }
     </div>
 </div>
@@ -126,10 +257,19 @@
     private bool isSaving;
     private string errorMessage = "";
     private string filterLang = "ALL";
+    private string searchQuery = "";
     private int? editId;
     private LearningSectionDto form = new();
 
-    private List<LearningSectionDto> Filtered => filterLang == "ALL" ? items : items.Where(x => x.Language == filterLang).ToList();
+    private List<LearningSectionDto> Filtered => items
+        .Where(x => filterLang == "ALL" || x.Language.Equals(filterLang, StringComparison.OrdinalIgnoreCase))
+        .Where(x => string.IsNullOrWhiteSpace(searchQuery) ||
+                    x.Name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                    x.Route.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                    (x.Description != null && x.Description.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)))
+        .OrderBy(x => x.Language)
+        .ThenBy(x => x.OrderIndex)
+        .ToList();
 
     protected override async Task OnInitializedAsync() => await Load();
 
