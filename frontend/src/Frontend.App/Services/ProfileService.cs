@@ -22,9 +22,17 @@ public sealed class UserProfile
 public sealed class ProfileService(ILocalStorageService localStorage, HttpClient? httpClient = null)
 {
     private const string StorageKey = "user_profile";
+    private static UserProfile? _inMemoryProfile;
 
-    public async Task<UserProfile> GetAsync()
+    public static UserProfile? CachedProfile => _inMemoryProfile;
+
+    public async Task<UserProfile> GetAsync(bool forceRefresh = false)
     {
+        if (!forceRefresh && _inMemoryProfile != null)
+        {
+            return _inMemoryProfile;
+        }
+
         UserProfile local;
         try
         {
@@ -34,6 +42,7 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
         {
             local = new UserProfile();
         }
+        _inMemoryProfile = local;
 
         if (httpClient != null)
         {
@@ -56,6 +65,7 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
                     if (!string.IsNullOrWhiteSpace(srvUser.Level)) local.StudyLevel = srvUser.Level;
                     local.Xp = srvUser.Xp;
                     local.Streak = srvUser.Streak;
+                    _inMemoryProfile = local;
                     await localStorage.SetItemAsync(StorageKey, local);
                 }
             }
@@ -69,6 +79,7 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
 
     public async Task SaveAsync(UserProfile profile)
     {
+        _inMemoryProfile = profile;
         await localStorage.SetItemAsync(StorageKey, profile);
         if (httpClient != null)
         {
@@ -86,6 +97,11 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
                 // Non-fatal if offline
             }
         }
+    }
+
+    public static void InvalidateCache()
+    {
+        _inMemoryProfile = null;
     }
 
     private sealed record BackendUserDto(
