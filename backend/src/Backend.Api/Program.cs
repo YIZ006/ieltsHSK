@@ -916,12 +916,30 @@ app.MapPut("/api/user/profile", [Microsoft.AspNetCore.Authorization.Authorize] a
         var dbUser = await dbContext.Users.FindAsync(new object[] { userId }, cancellationToken);
         if (dbUser != null)
         {
+            if (!string.IsNullOrWhiteSpace(request.Username))
+            {
+                var newUsername = request.Username.Trim();
+                if (!string.Equals(dbUser.Username, newUsername, StringComparison.OrdinalIgnoreCase))
+                {
+                    var isTaken = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
+                        dbContext.Users,
+                        u => u.Id != userId && u.Username.ToLower() == newUsername.ToLower(),
+                        cancellationToken);
+
+                    if (isTaken)
+                    {
+                        return Results.BadRequest(new { message = "Tên hiển thị (username) này đã có người sử dụng. Vui lòng chọn tên khác." });
+                    }
+                    dbUser.Username = newUsername;
+                }
+            }
+
             if (!string.IsNullOrWhiteSpace(request.FullName)) dbUser.FullName = request.FullName.Trim();
             if (!string.IsNullOrWhiteSpace(request.Avatar)) dbUser.Avatar = request.Avatar.Trim();
             if (!string.IsNullOrWhiteSpace(request.Level)) dbUser.Level = request.Level.Trim();
             dbUser.UpdatedAt = DateTime.UtcNow;
             await dbContext.SaveChangesAsync(cancellationToken);
-            return Results.Ok(new { dbUser.Id, dbUser.FullName, dbUser.Avatar, dbUser.Level });
+            return Results.Ok(new { dbUser.Id, dbUser.Username, dbUser.FullName, dbUser.Avatar, dbUser.Level });
         }
     }
     return Results.Unauthorized();
