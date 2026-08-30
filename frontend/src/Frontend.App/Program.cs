@@ -37,6 +37,14 @@ builder.Services.AddScoped(sp =>
     {
         BaseAddress = new Uri(backendApiBaseUrl)
     };
+    return new NavigationService(httpClient);
+});
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
     return new StreakService(localStorage, httpClient);
 });

@@ -23,19 +23,37 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             throw new Exception("Email này đã được sử dụng. Vui lòng dùng email khác hoặc đăng nhập.");
         }
 
-        // Auto-generate a unique username from email (internal, not shown to user)
-        var baseUsername = normalizedEmail.Split('@')[0];
-        var username = baseUsername;
-        var suffix = 1;
-        while (await dbContext.Users.AnyAsync(u => u.Username == username, cancellationToken))
+        string finalUsername;
+        if (!string.IsNullOrWhiteSpace(request.Username))
         {
-            username = $"{baseUsername}{suffix++}";
+            var cleanUsername = request.Username.Trim();
+            if (!System.Text.RegularExpressions.Regex.IsMatch(cleanUsername, @"^[a-zA-Z0-9]+$"))
+            {
+                throw new Exception("Tên đăng nhập chỉ được bao gồm chữ cái và chữ số (không chứa ký tự đặc biệt hay khoảng trắng).");
+            }
+            if (await dbContext.Users.AnyAsync(u => u.Username.ToLower() == cleanUsername.ToLower(), cancellationToken))
+            {
+                throw new Exception("Tên đăng nhập này đã tồn tại. Vui lòng chọn tên đăng nhập khác.");
+            }
+            finalUsername = cleanUsername;
+        }
+        else
+        {
+            // Auto-generate a unique username from email
+            var baseUsername = normalizedEmail.Split('@')[0];
+            var username = baseUsername;
+            var suffix = 1;
+            while (await dbContext.Users.AnyAsync(u => u.Username == username, cancellationToken))
+            {
+                username = $"{baseUsername}{suffix++}";
+            }
+            finalUsername = username;
         }
 
         var user = new User
         {
-            Username = username,
-            FullName = string.IsNullOrWhiteSpace(request.FullName) ? username : request.FullName.Trim(),
+            Username = finalUsername,
+            FullName = string.IsNullOrWhiteSpace(request.FullName) ? finalUsername : request.FullName.Trim(),
             Email = normalizedEmail,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password)
         };
@@ -47,13 +65,23 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
         return new AuthResponse(token, user.FullName, user.Email);
     }
 
+    public async Task<bool> IsUsernameTakenAsync(string username, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(username)) return false;
+        var clean = username.Trim().ToLowerInvariant();
+        return await dbContext.Users.AnyAsync(u => u.Username.ToLower() == clean, cancellationToken);
+    }
+
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
-        var user = await dbContext.Users.SingleOrDefaultAsync(u => u.Email == request.Email, cancellationToken);
+        var input = request.ResolvedUsernameOrEmail.Trim().ToLowerInvariant();
+        var user = await dbContext.Users.SingleOrDefaultAsync(
+            u => u.Email.ToLower() == input || u.Username.ToLower() == input, 
+            cancellationToken);
         
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
-            throw new Exception("Email hoặc mật khẩu không đúng.");
+            throw new Exception("Tên đăng nhập / Email hoặc mật khẩu không đúng.");
         }
 
         if (!user.IsActive)

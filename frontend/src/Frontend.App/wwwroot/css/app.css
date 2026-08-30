@@ -146,3 +146,569 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* ─── UNIFIED LEFT SIDEBAR STYLING (PREMIUM IMMERSIVE THEMES) ─── */
+.left-sidebar {
+    position: fixed;
+    left: 0; 
+    top: 0; 
+    bottom: 0;
+    width: 260px;
+    background: #0f172a;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    z-index: 600;
+    transition: width 0.28s cubic-bezier(0.32, 0.72, 0, 1), transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    color: #ffffff;
+}
+
+.left-sidebar.collapsed {
+    width: 74px !important;
+}
+
+/* ── Header ── */
+.left-sidebar .sb-header {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px 0 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+    gap: 8px;
+    background: transparent !important;
+}
+
+.left-sidebar .sb-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none !important;
+    min-width: 0;
+}
+
+.left-sidebar .sb-brand-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+}
+
+.left-sidebar .sb-brand-text {
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: #ffffff !important;
+    letter-spacing: -0.3px;
+}
+
+.left-sidebar .sb-brand-badge {
+    font-size: 0.62rem;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 6px;
+    text-transform: uppercase;
+}
+
+.left-sidebar .sb-collapse-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+}
+
+.left-sidebar .sb-collapse-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+    transform: scale(1.05);
+}
+
+/* ── Section labels ── */
+.left-sidebar .sb-section-label {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 6px 14px 2px 14px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+}
+
+/* ── CLEAN NAV ITEM CARDS ── */
+.left-sidebar .sb-nav .sb-item,
+.left-sidebar .sb-nav a.sb-item {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 10px 12px !important;
+    border-radius: 12px !important;
+    text-decoration: none !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    box-shadow: none !important;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    position: relative !important;
+    margin-bottom: 4px !important;
+}
+
+.left-sidebar .sb-nav .sb-item-icon {
+    width: 34px !important; 
+    height: 34px !important;
+    border-radius: 9px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 1.05rem !important;
+    flex-shrink: 0 !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    transition: all 0.2s ease !important;
+}
+
+.left-sidebar .sb-item-name {
+    font-weight: 600 !important;
+    color: #ffffff !important;
+}
+
+.left-sidebar .sb-item-desc {
+    font-size: 0.72rem !important;
+    color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.left-sidebar .sb-bottom {
+    flex-shrink: 0;
+    padding: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: transparent !important;
+    position: sticky;
+    bottom: 0;
+}
+
+.left-sidebar .sb-switcher-card {
+    background: rgba(0, 0, 0, 0.25) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 12px !important;
+    padding: 10px !important;
+    box-shadow: none !important;
+}
+
+.left-sidebar .sb-switcher-label {
+    font-size: 0.65rem !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.8px !important;
+    text-transform: uppercase !important;
+    margin-bottom: 6px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+/* ========================================================================= */
+/* 1. HSK THEME (CHINESE IMPERIAL RED & ROYAL GOLD ACCENTS)                  */
+/* ========================================================================= */
+.left-sidebar.theme-hsk {
+    background: linear-gradient(180deg, #991b1b 0%, #7f1d1d 45%, #450a0a 100%) !important;
+    border-right: 1px solid rgba(254, 202, 202, 0.15) !important;
+    box-shadow: 4px 0 25px rgba(153, 27, 27, 0.25) !important;
+}
+
+.left-sidebar.theme-hsk .sb-brand-icon {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+    color: #451a03 !important;
+    box-shadow: 0 3px 10px rgba(245, 158, 11, 0.4) !important;
+}
+
+.left-sidebar.theme-hsk .sb-brand-badge {
+    background: #facc15 !important;
+    color: #451a03 !important;
+    font-weight: 800 !important;
+}
+
+.left-sidebar.theme-hsk .sb-section-label,
+.left-sidebar.theme-hsk .sb-switcher-label {
+    color: #facc15 !important;
+}
+
+.left-sidebar.theme-hsk .sb-nav .sb-item:hover,
+.left-sidebar.theme-hsk .sb-nav a.sb-item:hover {
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.05) 100%) !important;
+    border-color: rgba(250, 204, 21, 0.35) !important;
+    color: #ffffff !important;
+    transform: translateX(4px) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
+}
+
+.left-sidebar.theme-hsk .sb-nav .sb-item:hover .sb-item-icon {
+    background: rgba(250, 204, 21, 0.25) !important;
+    color: #facc15 !important;
+    border-color: #facc15 !important;
+    transform: scale(1.1) !important;
+}
+
+.left-sidebar.theme-hsk .sb-nav .sb-item:hover .sb-item-desc {
+    color: #fde047 !important;
+}
+
+.left-sidebar.theme-hsk .sb-nav .sb-item.active,
+.left-sidebar.theme-hsk .sb-nav a.sb-item.active {
+    background: linear-gradient(90deg, rgba(250, 204, 21, 0.28) 0%, rgba(255, 255, 255, 0.08) 100%) !important;
+    border: 1px solid rgba(250, 204, 21, 0.6) !important;
+    color: #ffffff !important;
+    font-weight: 800 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
+}
+
+.left-sidebar.theme-hsk .sb-nav .sb-item.active .sb-item-icon {
+    background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+    color: #451a03 !important;
+    border-color: #fde68a !important;
+    box-shadow: 0 0 12px rgba(250, 204, 21, 0.5) !important;
+}
+
+.left-sidebar.theme-hsk .sb-nav .sb-item.active .sb-item-desc {
+    color: #fde047 !important;
+}
+
+/* HSK Level Selector Box */
+.left-sidebar .sb-hsk-level-box {
+    margin: 8px 10px 4px !important;
+    padding: 10px !important;
+    background: rgba(0, 0, 0, 0.22) !important;
+    border: 1px solid rgba(250, 204, 21, 0.25) !important;
+    border-radius: 12px !important;
+    backdrop-filter: blur(8px);
+}
+
+.left-sidebar .sb-hsk-level-header {
+    font-size: 0.72rem !important;
+    font-weight: 800 !important;
+    color: #facc15 !important;
+    margin-bottom: 6px !important;
+}
+
+.left-sidebar .sb-hsk-dot {
+    background: #facc15 !important;
+    box-shadow: 0 0 6px #facc15 !important;
+}
+
+.left-sidebar .sb-hsk-pill {
+    padding: 5px !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    background: rgba(0, 0, 0, 0.28) !important;
+    color: #ffffff !important;
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    transition: all 0.2s ease !important;
+}
+
+.left-sidebar .sb-hsk-pill:hover {
+    background: #dc2626 !important;
+    border-color: #facc15 !important;
+    color: #ffffff !important;
+    transform: translateY(-1px) !important;
+}
+
+.left-sidebar .sb-hsk-pill.active {
+    background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+    color: #451a03 !important;
+    border-color: #fde68a !important;
+    font-weight: 800 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* ========================================================================= */
+/* 2. IELTS THEME (DEEP OCEAN NAVY BLUE & BRIGHT SKY/CYAN ACCENTS)           */
+/* ========================================================================= */
+.left-sidebar.theme-ielts {
+    background: linear-gradient(180deg, #0c2340 0%, #081a30 50%, #040e1a 100%) !important;
+    border-right: 1px solid rgba(56, 189, 248, 0.15) !important;
+    box-shadow: 4px 0 25px rgba(8, 26, 48, 0.3) !important;
+}
+
+.left-sidebar.theme-ielts .sb-brand-icon {
+    background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%) !important;
+    color: #ffffff !important;
+    box-shadow: 0 3px 10px rgba(14, 165, 233, 0.4) !important;
+}
+
+.left-sidebar.theme-ielts .sb-brand-badge {
+    background: #0ea5e9 !important;
+    color: #ffffff !important;
+    font-weight: 800 !important;
+}
+
+.left-sidebar.theme-ielts .sb-section-label,
+.left-sidebar.theme-ielts .sb-switcher-label {
+    color: #38bdf8 !important;
+}
+
+.left-sidebar.theme-ielts .sb-nav .sb-item:hover,
+.left-sidebar.theme-ielts .sb-nav a.sb-item:hover {
+    background: linear-gradient(90deg, rgba(56, 189, 248, 0.18) 0%, rgba(255, 255, 255, 0.04) 100%) !important;
+    border-color: rgba(56, 189, 248, 0.35) !important;
+    color: #ffffff !important;
+    transform: translateX(4px) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+}
+
+.left-sidebar.theme-ielts .sb-nav .sb-item:hover .sb-item-icon {
+    background: rgba(56, 189, 248, 0.25) !important;
+    color: #38bdf8 !important;
+    border-color: #38bdf8 !important;
+    transform: scale(1.1) !important;
+}
+
+.left-sidebar.theme-ielts .sb-nav .sb-item:hover .sb-item-desc {
+    color: #7dd3fc !important;
+}
+
+.left-sidebar.theme-ielts .sb-nav .sb-item.active,
+.left-sidebar.theme-ielts .sb-nav a.sb-item.active {
+    background: linear-gradient(90deg, rgba(14, 165, 233, 0.28) 0%, rgba(255, 255, 255, 0.08) 100%) !important;
+    border: 1px solid rgba(56, 189, 248, 0.6) !important;
+    color: #ffffff !important;
+    font-weight: 800 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+.left-sidebar.theme-ielts .sb-nav .sb-item.active .sb-item-icon {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7) !important;
+    color: #ffffff !important;
+    border-color: #38bdf8 !important;
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.5) !important;
+}
+
+.left-sidebar.theme-ielts .sb-nav .sb-item.active .sb-item-desc {
+    color: #7dd3fc !important;
+}
+
+/* ========================================================================= */
+/* 3. TOEIC THEME (DEEP ROYAL INDIGO & VIOLET ACCENTS)                       */
+/* ========================================================================= */
+.left-sidebar.theme-toeic {
+    background: linear-gradient(180deg, #1e1b4b 0%, #171236 50%, #0c0a1f 100%) !important;
+    border-right: 1px solid rgba(167, 139, 250, 0.15) !important;
+    box-shadow: 4px 0 25px rgba(30, 27, 75, 0.3) !important;
+}
+
+.left-sidebar.theme-toeic .sb-brand-icon {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+    color: #ffffff !important;
+    box-shadow: 0 3px 10px rgba(99, 102, 241, 0.4) !important;
+}
+
+.left-sidebar.theme-toeic .sb-brand-badge {
+    background: #6366f1 !important;
+    color: #ffffff !important;
+    font-weight: 800 !important;
+}
+
+.left-sidebar.theme-toeic .sb-section-label,
+.left-sidebar.theme-toeic .sb-switcher-label {
+    color: #a78bfa !important;
+}
+
+.left-sidebar.theme-toeic .sb-nav .sb-item:hover,
+.left-sidebar.theme-toeic .sb-nav a.sb-item:hover {
+    background: linear-gradient(90deg, rgba(167, 139, 250, 0.18) 0%, rgba(255, 255, 255, 0.04) 100%) !important;
+    border-color: rgba(167, 139, 250, 0.35) !important;
+    color: #ffffff !important;
+    transform: translateX(4px) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2) !important;
+}
+
+.left-sidebar.theme-toeic .sb-nav .sb-item:hover .sb-item-icon {
+    background: rgba(167, 139, 250, 0.25) !important;
+    color: #a78bfa !important;
+    border-color: #a78bfa !important;
+    transform: scale(1.1) !important;
+}
+
+.left-sidebar.theme-toeic .sb-nav .sb-item:hover .sb-item-desc {
+    color: #c4b5fd !important;
+}
+
+.left-sidebar.theme-toeic .sb-nav .sb-item.active,
+.left-sidebar.theme-toeic .sb-nav a.sb-item.active {
+    background: linear-gradient(90deg, rgba(99, 102, 241, 0.28) 0%, rgba(255, 255, 255, 0.08) 100%) !important;
+    border: 1px solid rgba(167, 139, 250, 0.6) !important;
+    color: #ffffff !important;
+    font-weight: 800 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+.left-sidebar.theme-toeic .sb-nav .sb-item.active .sb-item-icon {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+    color: #ffffff !important;
+    border-color: #a78bfa !important;
+    box-shadow: 0 0 12px rgba(167, 139, 250, 0.5) !important;
+}
+
+.left-sidebar.theme-toeic .sb-nav .sb-item.active .sb-item-desc {
+    color: #c4b5fd !important;
+}
+
+/* ─── COLLAPSED SIDEBAR OPTIMIZATIONS ─── */
+.left-sidebar.collapsed {
+    width: 72px !important;
+}
+
+.left-sidebar.collapsed .sb-header {
+    justify-content: center !important;
+    padding: 0 8px !important;
+}
+
+.left-sidebar.collapsed .sb-collapse-btn-standalone {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 10px !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #ffffff !important;
+    font-size: 1.15rem !important;
+    box-shadow: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.left-sidebar.collapsed .sb-collapse-btn-standalone:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
+    color: #ffffff !important;
+}
+
+.left-sidebar.collapsed .sb-nav {
+    padding: 12px 6px !important;
+    align-items: center !important;
+}
+
+.left-sidebar.collapsed .sb-nav .sb-item,
+.left-sidebar.collapsed .sb-nav a.sb-item {
+    width: 42px !important;
+    height: 42px !important;
+    min-width: 42px !important;
+    padding: 0 !important;
+    margin: 0 auto 6px auto !important;
+    justify-content: center !important;
+    align-items: center !important;
+    border-radius: 10px !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    box-shadow: none !important;
+}
+
+.left-sidebar.collapsed .sb-nav .sb-item-icon {
+    width: 38px !important;
+    height: 38px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 10px !important;
+    font-size: 1.1rem !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.left-sidebar.collapsed .sb-nav .sb-item:hover .sb-item-icon {
+    background: rgba(255, 255, 255, 0.2) !important;
+    color: #ffffff !important;
+}
+
+.left-sidebar.collapsed.theme-toeic .sb-nav .sb-item.active .sb-item-icon {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+    color: #ffffff !important;
+    border-color: #a78bfa !important;
+}
+
+.left-sidebar.collapsed.theme-ielts .sb-nav .sb-item.active .sb-item-icon {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7) !important;
+    color: #ffffff !important;
+    border-color: #38bdf8 !important;
+}
+
+.left-sidebar.collapsed.theme-hsk .sb-nav .sb-item.active .sb-item-icon {
+    background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+    color: #451a03 !important;
+    border-color: #fde68a !important;
+}
+
+/* ─── SIDEBAR RIGHT-TO-LEFT FLYING ANIMATION ─── */
+.left-sidebar .sb-nav-anim-wrapper {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    animation: sbFlyRightToLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+.left-sidebar .sb-anim-fly-in {
+    animation: sbFlyRightToLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+.left-sidebar .sb-nav-anim-wrapper .sb-section-label {
+    animation: sbFlyRightToLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+    animation-delay: 0.01s !important;
+}
+
+.left-sidebar .sb-nav-anim-wrapper .sb-item,
+.left-sidebar .sb-nav-anim-wrapper a.sb-item {
+    animation: sbItemFlyRightToLeft 0.38s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+}
+
+.left-sidebar .sb-nav-anim-wrapper .sb-item:nth-child(1),
+.left-sidebar .sb-nav-anim-wrapper a.sb-item:nth-child(1) { animation-delay: 0.03s !important; }
+
+.left-sidebar .sb-nav-anim-wrapper .sb-item:nth-child(2),
+.left-sidebar .sb-nav-anim-wrapper a.sb-item:nth-child(2) { animation-delay: 0.07s !important; }
+
+.left-sidebar .sb-nav-anim-wrapper .sb-item:nth-child(3),
+.left-sidebar .sb-nav-anim-wrapper a.sb-item:nth-child(3) { animation-delay: 0.11s !important; }
+
+.left-sidebar .sb-nav-anim-wrapper .sb-item:nth-child(4),
+.left-sidebar .sb-nav-anim-wrapper a.sb-item:nth-child(4) { animation-delay: 0.15s !important; }
+
+.left-sidebar .sb-nav-anim-wrapper .sb-item:nth-child(5),
+.left-sidebar .sb-nav-anim-wrapper a.sb-item:nth-child(5) { animation-delay: 0.19s !important; }
+
+.left-sidebar .sb-nav-anim-wrapper .sb-item:nth-child(6),
+.left-sidebar .sb-nav-anim-wrapper a.sb-item:nth-child(6) { animation-delay: 0.23s !important; }
+
+@keyframes sbFlyRightToLeft {
+    0% {
+        opacity: 0;
+        transform: translateX(35px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes sbItemFlyRightToLeft {
+    0% {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+

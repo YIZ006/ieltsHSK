@@ -241,5 +241,19 @@ public static class DependencyInjection
             );
             await dbContext.SaveChangesAsync();
         }
+
+        // Seed TOEIC LearningSections
+        if (!dbContext.LearningSections.Any(s => s.Language == "TOEIC"))
+        {
+            dbContext.LearningSections.AddRange(
+                new LearningSection { Name = "Dashboard", Description = "Tổng quan TOEIC", Icon = "bi-speedometer2", Route = "/toeic", Language = "TOEIC", OrderIndex = 1 },
+                new LearningSection { Name = "Luyện đề", Description = "Đề thi chuẩn ETS", Icon = "bi-journal-text", Route = "/toeic/test", Language = "TOEIC", OrderIndex = 2 },
+                new LearningSection { Name = "Từ vựng", Description = "Flashcard 70 từ", Icon = "bi-layers", Route = "/toeic/flashcards", Language = "TOEIC", OrderIndex = 3 },
+                new LearningSection { Name = "Nghe Part 1-4", Description = "Luyện Listening", Icon = "bi-headphones", Route = "/toeic/listening", Language = "TOEIC", OrderIndex = 4 },
+                new LearningSection { Name = "Đọc Part 5-7", Description = "Luyện Reading", Icon = "bi-book", Route = "/toeic/reading", Language = "TOEIC", OrderIndex = 5 }
+            );
+            await dbContext.SaveChangesAsync();
+        }
     }
 }
+

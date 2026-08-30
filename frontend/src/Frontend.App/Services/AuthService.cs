@@ -11,21 +11,34 @@ public class RegisterRequest
     [StringLength(50, MinimumLength = 2, ErrorMessage = "Họ và tên phải từ 2 đến 50 ký tự.")]
     public string FullName { get; set; } = string.Empty;
 
+    [Required(ErrorMessage = "Vui lòng nhập tên đăng nhập.")]
+    [StringLength(30, MinimumLength = 3, ErrorMessage = "Tên đăng nhập từ 3 đến 30 ký tự.")]
+    [RegularExpression(@"^[a-zA-Z0-9]+$", ErrorMessage = "Tên đăng nhập chỉ được bao gồm chữ cái và chữ số (không chứa ký tự đặc biệt hay khoảng trắng).")]
+    public string Username { get; set; } = string.Empty;
+
     [Required(ErrorMessage = "Vui lòng nhập email.")]
     [EmailAddress(ErrorMessage = "Email không đúng định dạng.")]
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập mật khẩu.")]
-    [RegularExpression(@"^(?=.*[A-Za-z])(?=.*\d)[^%&*$#@^]{8,15}$", 
-        ErrorMessage = "Mật khẩu từ 8-15 ký tự, gồm cả chữ và số, không chứa %^&*$#@.")]
+    [MinLength(6, ErrorMessage = "Mật khẩu phải từ 6 ký tự trở lên.")]
     public string Password { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng xác nhận mật khẩu.")]
+    [Compare(nameof(Password), ErrorMessage = "Mật khẩu xác nhận không khớp.")]
+    public string ConfirmPassword { get; set; } = string.Empty;
 }
 
 public class LoginRequest
 {
-    [Required(ErrorMessage = "Vui lòng nhập email.")]
-    [EmailAddress(ErrorMessage = "Email không đúng định dạng.")]
-    public string Email { get; set; } = string.Empty;
+    [Required(ErrorMessage = "Vui lòng nhập Tên đăng nhập hoặc Email.")]
+    public string UsernameOrEmail { get; set; } = string.Empty;
+
+    public string Email
+    {
+        get => UsernameOrEmail;
+        set => UsernameOrEmail = value;
+    }
 
     [Required(ErrorMessage = "Vui lòng nhập mật khẩu.")]
     public string Password { get; set; } = string.Empty;
@@ -36,6 +49,11 @@ public class AuthResponse
     public string Token { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+}
+
+public class CheckUsernameResult
+{
+    public bool IsTaken { get; set; }
 }
 
 public class AuthService(HttpClient httpClient, ILocalStorageService localStorage, AuthenticationStateProvider authStateProvider)
@@ -73,10 +91,34 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
             await localStorage.RemoveItemAsync(key);
     }
 
-    public async Task<bool> RegisterAsync(RegisterRequest request)
+    public async Task<(bool Success, string ErrorMessage)> RegisterAsync(RegisterRequest request)
     {
         var response = await httpClient.PostAsJsonAsync("api/auth/register", request);
-        return response.IsSuccessStatusCode;
+        if (response.IsSuccessStatusCode)
+        {
+            return (true, string.Empty);
+        }
+
+        var error = await response.Content.ReadAsStringAsync();
+        if (string.IsNullOrWhiteSpace(error))
+        {
+            error = "Đăng ký thất bại. Vui lòng kiểm tra lại thông tin.";
+        }
+        return (false, error.Trim('"'));
+    }
+
+    public async Task<bool> CheckUsernameExistsAsync(string username)
+    {
+        if (string.IsNullOrWhiteSpace(username)) return false;
+        try
+        {
+            var res = await httpClient.GetFromJsonAsync<CheckUsernameResult>($"api/auth/check-username?username={Uri.EscapeDataString(username)}");
+            return res?.IsTaken ?? false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public async Task<bool> LoginAsync(LoginRequest request)

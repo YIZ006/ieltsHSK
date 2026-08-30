@@ -3,26 +3,52 @@
 @using Frontend.App.Services
 @inject AuthenticationStateProvider AuthStateProvider
 @inject StreakService Streak
+@inject NavigationManager NavManager
+@implements IDisposable
 
-<div class="page">
-    <header class="top-navbar">
-        <NavMenu OnShowLogin="() => authModal?.Show(true)" OnShowRegister="() => authModal?.Show(false)" />
-    </header>
+<div class="app-shell @(isHomePage ? "no-sidebar" : (sidebarCollapsed ? "sidebar-collapsed" : ""))">
+    @if (!isHomePage)
+    {
+        <LeftSidebar @ref="leftSidebar" CollapseChanged="OnSidebarCollapseChanged" />
+    }
 
-    <main>
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
+    <div class="app-main">
+        <header class="top-navbar">
+            <div class="top-navbar-inner">
+                @if (!isHomePage)
+                {
+                    <button class="sb-mobile-toggle" @onclick="ToggleMobileSidebar" title="Menu">
+                        <i class="bi bi-list"></i>
+                    </button>
+                }
+                <NavMenu OnShowLogin="() => authModal?.Show(true)" OnShowRegister="() => authModal?.Show(false)" />
+            </div>
+        </header>
+
+        <main>
+            <article class="content px-4">
+                @Body
+            </article>
+        </main>
+    </div>
 </div>
 
 <AuthModal @ref="authModal" />
 
 @code {
     private AuthModal? authModal;
+    private LeftSidebar? leftSidebar;
+    private bool sidebarCollapsed;
+    private bool isHomePage;
+
+    private void OnSidebarCollapseChanged(bool collapsed) => sidebarCollapsed = collapsed;
+    private void ToggleMobileSidebar() => leftSidebar?.OpenMobile();
 
     protected override async Task OnInitializedAsync()
     {
+        CheckHomePage();
+        NavManager.LocationChanged += OnLocationChanged;
+
         try
         {
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
@@ -35,5 +61,23 @@
         {
             // Không chặn render nếu ghi chuỗi thất bại
         }
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        CheckHomePage();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void CheckHomePage()
+    {
+        var relativePath = NavManager.ToBaseRelativePath(NavManager.Uri);
+        var path = relativePath.Split('?', '#')[0].Trim('/');
+        isHomePage = string.IsNullOrEmpty(path);
+    }
+
+    public void Dispose()
+    {
+        NavManager.LocationChanged -= OnLocationChanged;
     }
 }

@@ -1,152 +1,57 @@
 @inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.Authorization
-@using Frontend.App.Models
 @using Frontend.App.Services
-@inject NavigationManager NavigationManager
-@inject AuthService AuthService
-@inject IeltsService IeltsService
-@inject ProfileService ProfileSvc
+@inject AuthenticationStateProvider AuthStateProvider
+@inject StreakService Streak
+@inject NavigationManager NavManager
+@implements IDisposable
 
-<div class="dashboard-wrapper">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-        <div class="sidebar-header">
-            <BrandLogo />
-        </div>
-        <nav class="sidebar-nav">
-            <NavLink class="nav-item" href="/ielts/dashboard" Match="NavLinkMatch.All">
-                <i class="bi bi-house-door"></i> Hôm nay
-            </NavLink>
-            
-            @if (sections == null)
-            {
-                <div style="padding: 15px; color: #888;">Loading...</div>
-            }
-            else
-            {
-                @foreach (var section in sections)
-                {
-                    <NavLink class="nav-item" href="@section.Route">
-                        <i class="bi @section.Icon"></i> @section.Name
-                    </NavLink>
-                }
-            }
-        </nav>
-        
-        <div class="sidebar-footer">
-            <div class="user-info">
-                <AuthorizeView>
-                    <Authorized>
-                        @{
-                            var userName = GetDisplayName(context.User);
-                            var avatarChar = GetAvatarChar(userName);
-                        }
-                        <div class="user-avatar">@avatarChar</div>
-                        <div class="user-details">
-                            <span class="user-email" title="@userName">@userName</span>
-                            <span class="user-role">Học viên</span>
-                        </div>
-                    </Authorized>
-                    <NotAuthorized>
-                        <div class="user-avatar guest"><i class="bi bi-person"></i></div>
-                        <div class="user-details">
-                            <span class="user-email">Khách</span>
-                            <span class="user-role">Chưa đăng nhập</span>
-                        </div>
-                    </NotAuthorized>
-                </AuthorizeView>
-            </div>
-            <button class="btn-logout" @onclick="Logout" title="Đăng xuất">
-                <i class="bi bi-box-arrow-right"></i>
-            </button>
-        </div>
-    </aside>
+<div class="app-shell @(sidebarCollapsed ? "sidebar-collapsed" : "")">
+    <LeftSidebar @ref="leftSidebar" CollapseChanged="OnSidebarCollapseChanged" />
 
-    <!-- Main Section -->
-    <div class="main-wrapper">
-        <!-- Topbar -->
-        <header class="topbar">
-            <div class="search-bar">
-                <i class="bi bi-search"></i>
-                <input type="text" placeholder="Tìm kiếm..." />
-            </div>
-            <div class="topbar-actions">
-                <AuthorizeView>
-                    <Authorized>
-                        @{
-                            var topUserName = GetDisplayName(context.User);
-                            var topAvatarChar = GetAvatarChar(topUserName);
-                        }
-                        <span class="topbar-username">@topUserName</span>
-                        <div class="topbar-avatar" title="@topUserName">
-                            @topAvatarChar
-                        </div>
-                    </Authorized>
-                    <NotAuthorized>
-                        <a href="/" class="btn-login-link" style="color: #4f46e5; font-weight: 600; font-size: 0.9rem; text-decoration: none;">
-                            Đăng nhập
-                        </a>
-                    </NotAuthorized>
-                </AuthorizeView>
+    <div class="app-main">
+        <header class="top-navbar">
+            <div class="top-navbar-inner">
+                <button class="sb-mobile-toggle" @onclick="ToggleMobileSidebar" title="Menu">
+                    <i class="bi bi-list"></i>
+                </button>
+                <NavMenu OnShowLogin="() => authModal?.Show(true)" OnShowRegister="() => authModal?.Show(false)" />
             </div>
         </header>
 
-        <!-- Content -->
-        <main class="content-area">
-            @Body
+        <main>
+            <article class="content px-4">
+                @Body
+            </article>
         </main>
     </div>
 </div>
 
+<AuthModal @ref="authModal" />
+
 @code {
-    private List<LearningSectionDto>? sections;
-    private UserProfile? userProfile;
+    private AuthModal? authModal;
+    private LeftSidebar? leftSidebar;
+    private bool sidebarCollapsed;
+
+    private void OnSidebarCollapseChanged(bool collapsed) => sidebarCollapsed = collapsed;
+    private void ToggleMobileSidebar() => leftSidebar?.OpenMobile();
 
     protected override async Task OnInitializedAsync()
     {
-        sections = await IeltsService.GetSectionsAsync();
         try
         {
-            userProfile = await ProfileSvc.GetAsync();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated == true)
+            {
+                await Streak.MarkTodayAsync();
+            }
         }
-        catch { }
-    }
-
-    private string GetDisplayName(System.Security.Claims.ClaimsPrincipal user)
-    {
-        string? result = null;
-
-        if (!string.IsNullOrWhiteSpace(userProfile?.FullName)) result = userProfile.FullName;
-        else if (!string.IsNullOrWhiteSpace(userProfile?.DisplayName)) result = userProfile.DisplayName;
-        else
+        catch
         {
-            var name = user.FindFirst(c => c.Type == "unique_name")?.Value;
-            if (string.IsNullOrWhiteSpace(name)) name = user.Identity?.Name;
-            if (string.IsNullOrWhiteSpace(name)) name = user.FindFirst(c => c.Type == "email" || c.Type == System.Security.Claims.ClaimTypes.Email)?.Value;
-            if (string.IsNullOrWhiteSpace(name)) name = userProfile?.Email;
-            result = name;
+            // Không chặn render nếu ghi chuỗi thất bại
         }
-
-        if (string.IsNullOrWhiteSpace(result)) return "Học viên";
-
-        // Nếu chuỗi là email (vd: cuongnane@gmail.com), trích xuất phần tên tài khoản trước '@'
-        if (result.Contains('@'))
-        {
-            result = result.Split('@')[0];
-        }
-
-        return result.Trim();
     }
 
-    private static string GetAvatarChar(string displayName)
-    {
-        if (string.IsNullOrWhiteSpace(displayName)) return "U";
-        return displayName.Trim().Substring(0, 1).ToUpper();
-    }
-
-    private async Task Logout()
-    {
-        await AuthService.LogoutAsync();
-        NavigationManager.NavigateTo("/", forceLoad: true);
-    }
+    public void Dispose() { }
 }
