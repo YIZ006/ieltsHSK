@@ -116,7 +116,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var s in FilteredStories)
+                        @foreach (var s in PagedStories)
                         {
                             <tr>
                                 <td>
@@ -193,6 +193,47 @@
                         }
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="pagination-footer">
+                <div class="pagination-info">
+                    Hiển thị <b>@((currentPage - 1) * pageSize + 1)</b> - <b>@Math.Min(currentPage * pageSize, FilteredStories.Count)</b> trong tổng số <b>@FilteredStories.Count</b> truyện đọc
+                </div>
+
+                <div class="pagination-controls">
+                    <div class="page-size-selector">
+                        <span>Mỗi trang:</span>
+                        <select @bind="pageSize" @bind:after="() => currentPage = 1" class="page-size-select">
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+
+                    <div class="page-nav-buttons">
+                        <button class="btn-page-nav" disabled="@(currentPage <= 1)" @onclick="() => currentPage = 1" title="Trang đầu">
+                            <i class="bi bi-chevron-double-left"></i>
+                        </button>
+                        <button class="btn-page-nav" disabled="@(currentPage <= 1)" @onclick="() => currentPage--" title="Trang trước">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+
+                        @foreach (var p in GetVisiblePageNumbers())
+                        {
+                            <button class="btn-page-num @(currentPage == p ? "active" : "")" @onclick="() => currentPage = p">
+                                @p
+                            </button>
+                        }
+
+                        <button class="btn-page-nav" disabled="@(currentPage >= totalPages)" @onclick="() => currentPage++" title="Trang sau">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                        <button class="btn-page-nav" disabled="@(currentPage >= totalPages)" @onclick="() => currentPage = totalPages" title="Trang cuối">
+                            <i class="bi bi-chevron-double-right"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
         }
     </div>
@@ -622,11 +663,29 @@
 }
 
 @code {
+    private static List<StoryModel>? _cachedStories;
+
     private List<StoryModel> stories = new();
     private bool isLoading = true;
 
     private string filterSearch = "";
     private string filterLevel = "All";
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages => Math.Max(1, (int)Math.Ceiling((double)FilteredStories.Count / pageSize));
+    private List<StoryModel> PagedStories => FilteredStories.Skip((currentPage - 1) * pageSize).Take(pageSize).ToList();
+
+    private List<int> GetVisiblePageNumbers()
+    {
+        var list = new List<int>();
+        int start = Math.Max(1, currentPage - 2);
+        int end = Math.Min(totalPages, start + 4);
+        if (end - start < 4) start = Math.Max(1, end - 4);
+        for (int i = start; i <= end; i++) list.Add(i);
+        return list;
+    }
 
     private string? alertMessage;
     private bool alertSuccess = true;
@@ -669,13 +728,20 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadStories();
+        if (_cachedStories != null && _cachedStories.Count > 0)
+        {
+            stories = _cachedStories;
+            isLoading = false;
+        }
+
+        await LoadStories(silent: _cachedStories != null && _cachedStories.Count > 0);
     }
 
-    private async Task LoadStories()
+    private async Task LoadStories(bool silent = false)
     {
-        isLoading = true;
+        if (!silent) isLoading = true;
         stories = await StoryService.AdminGetAllStoriesAsync();
+        _cachedStories = stories;
         isLoading = false;
     }
 

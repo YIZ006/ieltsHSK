@@ -53,7 +53,7 @@
             </div>
         </div>
 
-        <button class="btn-refresh" @onclick="LoadSubmissionsAsync">
+        <button class="btn-refresh" @onclick="() => LoadSubmissionsAsync(false)">
             <i class="bi bi-arrow-clockwise"></i> Làm mới
         </button>
     </div>
@@ -93,7 +93,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var sub in filteredSubmissions)
+                    @foreach (var sub in pagedSubmissions)
                     {
                         <tr>
                             <td class="id-cell">#@sub.Id</td>
@@ -151,6 +151,47 @@
                     }
                 </tbody>
             </table>
+
+            <!-- Pagination Bar -->
+            <div class="pagination-footer">
+                <div class="pagination-info">
+                    Hiển thị <b>@((currentPage - 1) * pageSize + 1)</b> - <b>@Math.Min(currentPage * pageSize, filteredSubmissions.Count)</b> trong tổng số <b>@filteredSubmissions.Count</b> bài nộp
+                </div>
+
+                <div class="pagination-controls">
+                    <div class="page-size-selector">
+                        <span>Mỗi trang:</span>
+                        <select @bind="pageSize" @bind:after="() => currentPage = 1" class="page-size-select">
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+
+                    <div class="page-nav-buttons">
+                        <button class="btn-page-nav" disabled="@(currentPage <= 1)" @onclick="() => currentPage = 1" title="Trang đầu">
+                            <i class="bi bi-chevron-double-left"></i>
+                        </button>
+                        <button class="btn-page-nav" disabled="@(currentPage <= 1)" @onclick="() => currentPage--" title="Trang trước">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+
+                        @foreach (var p in GetVisiblePageNumbers())
+                        {
+                            <button class="btn-page-num @(currentPage == p ? "active" : "")" @onclick="() => currentPage = p">
+                                @p
+                            </button>
+                        }
+
+                        <button class="btn-page-nav" disabled="@(currentPage >= totalPages)" @onclick="() => currentPage++" title="Trang sau">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                        <button class="btn-page-nav" disabled="@(currentPage >= totalPages)" @onclick="() => currentPage = totalPages" title="Trang cuối">
+                            <i class="bi bi-chevron-double-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     }
 </div>
@@ -345,6 +386,8 @@
 }
 
 @code {
+    private static List<SubmissionRecordDto>? _cachedSubmissions;
+
     private List<SubmissionRecordDto> submissions = new();
     private List<SubmissionRecordDto> filteredSubmissions = new();
     private SubmissionRecordDto? activeSubmission;
@@ -356,6 +399,22 @@
     private bool isLoading = true;
     private bool isSaving = false;
     private bool isAiScoring = false;
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages => Math.Max(1, (int)Math.Ceiling((double)filteredSubmissions.Count / pageSize));
+    private List<SubmissionRecordDto> pagedSubmissions => filteredSubmissions.Skip((currentPage - 1) * pageSize).Take(pageSize).ToList();
+
+    private List<int> GetVisiblePageNumbers()
+    {
+        var list = new List<int>();
+        int start = Math.Max(1, currentPage - 2);
+        int end = Math.Min(totalPages, start + 4);
+        if (end - start < 4) start = Math.Max(1, end - 4);
+        for (int i = start; i <= end; i++) list.Add(i);
+        return list;
+    }
 
     private double crit1Score = 6.0;
     private double crit2Score = 6.0;
@@ -373,16 +432,24 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadSubmissionsAsync();
+        if (_cachedSubmissions != null && _cachedSubmissions.Count > 0)
+        {
+            submissions = _cachedSubmissions;
+            ApplyFilters();
+            isLoading = false;
+        }
+
+        await LoadSubmissionsAsync(silent: _cachedSubmissions != null && _cachedSubmissions.Count > 0);
     }
 
-    private async Task LoadSubmissionsAsync()
+    private async Task LoadSubmissionsAsync(bool silent = false)
     {
-        isLoading = true;
+        if (!silent) isLoading = true;
         try
         {
             var res = await Http.GetFromJsonAsync<List<SubmissionRecordDto>>(GetApiUrl("api/admin/test-submissions"));
             submissions = res ?? new();
+            _cachedSubmissions = submissions;
             ApplyFilters();
         }
         catch (Exception ex)
@@ -397,6 +464,7 @@
 
     private void ApplyFilters()
     {
+        currentPage = 1;
         filteredSubmissions = submissions.Where(s =>
             (selectedSkillFilter == "all" || s.Skill.Equals(selectedSkillFilter, StringComparison.OrdinalIgnoreCase)) &&
             (selectedStatusFilter == "all" || 
