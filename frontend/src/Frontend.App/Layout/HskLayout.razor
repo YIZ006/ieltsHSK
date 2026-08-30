@@ -7,6 +7,7 @@
 @inject AuthService AuthService
 @inject HskService HskService
 @inject ILocalStorageService LocalStorage
+@inject ProfileService ProfileSvc
 
 <div class="dashboard-wrapper hsk-theme">
     <!-- Sidebar Thanh Dọc Màu Chủ Đạo Đỏ Á Đông -->
@@ -80,8 +81,8 @@
                 <AuthorizeView>
                     <Authorized>
                         @{
-                            var userName = context.User.FindFirst(c => c.Type == "unique_name")?.Value ?? context.User.Identity?.Name ?? "User";
-                            var avatarChar = string.IsNullOrEmpty(userName) ? "U" : userName.Substring(0, 1).ToUpper();
+                            var userName = GetDisplayName(context.User);
+                            var avatarChar = GetAvatarChar(userName);
                         }
                         <div class="user-avatar">@avatarChar</div>
                         <div class="user-details">
@@ -120,11 +121,11 @@
                 <AuthorizeView>
                     <Authorized>
                         @{
-                            var topUserName = context.User.FindFirst(c => c.Type == "unique_name")?.Value ?? context.User.Identity?.Name ?? "User";
-                            var topAvatarChar = string.IsNullOrEmpty(topUserName) ? "U" : topUserName.Substring(0, 1).ToUpper();
+                            var topUserName = GetDisplayName(context.User);
+                            var topAvatarChar = GetAvatarChar(topUserName);
                         }
                         <span class="topbar-username">@topUserName</span>
-                        <div class="topbar-avatar">
+                        <div class="topbar-avatar" title="@topUserName">
                             @topAvatarChar
                         </div>
                     </Authorized>
@@ -141,10 +142,47 @@
 
 @code {
     private string currentLevel = "HSK1";
+    private UserProfile? userProfile;
 
     protected override async Task OnInitializedAsync()
     {
         currentLevel = await LocalStorage.GetItemAsync<string>("hsk_level") ?? "HSK1";
+        try
+        {
+            userProfile = await ProfileSvc.GetAsync();
+        }
+        catch { }
+    }
+
+    private string GetDisplayName(System.Security.Claims.ClaimsPrincipal user)
+    {
+        string? result = null;
+
+        if (!string.IsNullOrWhiteSpace(userProfile?.FullName)) result = userProfile.FullName;
+        else if (!string.IsNullOrWhiteSpace(userProfile?.DisplayName)) result = userProfile.DisplayName;
+        else
+        {
+            var name = user.FindFirst(c => c.Type == "unique_name")?.Value;
+            if (string.IsNullOrWhiteSpace(name)) name = user.Identity?.Name;
+            if (string.IsNullOrWhiteSpace(name)) name = user.FindFirst(c => c.Type == "email" || c.Type == System.Security.Claims.ClaimTypes.Email)?.Value;
+            if (string.IsNullOrWhiteSpace(name)) name = userProfile?.Email;
+            result = name;
+        }
+
+        if (string.IsNullOrWhiteSpace(result)) return "Học viên";
+
+        if (result.Contains('@'))
+        {
+            result = result.Split('@')[0];
+        }
+
+        return result.Trim();
+    }
+
+    private static string GetAvatarChar(string displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName)) return "U";
+        return displayName.Trim().Substring(0, 1).ToUpper();
     }
 
     private async Task ChangeHskLevel(string level)

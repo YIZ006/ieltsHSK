@@ -84,8 +84,12 @@ app.UseCors(frontendCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/api/ielts/courses", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapGet("/api/ielts/courses", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
+    const string cacheKey = "ielts:courses";
+    var cached = await cacheService.GetAsync<List<Backend.Application.DTOs.CourseDto>>(cacheKey, cancellationToken);
+    if (cached != null) return Results.Ok(cached);
+
     var courses = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
         dbContext.Courses
             .Where(c => c.Status == "published")
@@ -100,11 +104,17 @@ app.MapGet("/api/ielts/courses", async (Backend.Infrastructure.Persistence.AppDb
                 Category = c.Category,
                 DurationMinutes = c.DurationMinutes
             }), cancellationToken);
+
+    await cacheService.SetAsync(cacheKey, courses, TimeSpan.FromHours(2), cancellationToken);
     return Results.Ok(courses);
 });
 
-app.MapGet("/api/ielts/websites", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapGet("/api/ielts/websites", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
+    const string cacheKey = "ielts:websites";
+    var cached = await cacheService.GetAsync<List<Backend.Application.DTOs.WebsiteDto>>(cacheKey, cancellationToken);
+    if (cached != null) return Results.Ok(cached);
+
     var websites = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
         dbContext.Websites
             .Where(w => w.IsActive && w.Language.Code == "EN")
@@ -118,11 +128,17 @@ app.MapGet("/api/ielts/websites", async (Backend.Infrastructure.Persistence.AppD
                 RecommendedLevel = w.RecommendedLevel,
                 ThumbnailUrl = w.ThumbnailUrl
             }), cancellationToken);
+
+    await cacheService.SetAsync(cacheKey, websites, TimeSpan.FromHours(2), cancellationToken);
     return Results.Ok(websites);
 });
 
-app.MapGet("/api/ielts/sections", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapGet("/api/ielts/sections", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
+    const string cacheKey = "ielts:sections";
+    var cached = await cacheService.GetAsync<List<Backend.Application.DTOs.LearningSectionDto>>(cacheKey, cancellationToken);
+    if (cached != null) return Results.Ok(cached);
+
     var sections = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
         dbContext.LearningSections
             .Where(s => s.Language == "IELTS")
@@ -137,12 +153,18 @@ app.MapGet("/api/ielts/sections", async (Backend.Infrastructure.Persistence.AppD
                 Language = s.Language,
                 OrderIndex = s.OrderIndex
             }), cancellationToken);
+
+    await cacheService.SetAsync(cacheKey, sections, TimeSpan.FromHours(2), cancellationToken);
     return Results.Ok(sections);
 });
 
 // LISTEN VIDEOS API
-app.MapGet("/api/listen-videos", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapGet("/api/listen-videos", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
+    const string cacheKey = "listen-videos:approved";
+    var cached = await cacheService.GetAsync<List<Backend.Application.DTOs.ListenVideoDto>>(cacheKey, cancellationToken);
+    if (cached != null) return Results.Ok(cached);
+
     var videos = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
         dbContext.ListenVideos
             .Where(v => v.IsApproved)
@@ -162,6 +184,8 @@ app.MapGet("/api/listen-videos", async (Backend.Infrastructure.Persistence.AppDb
                 WordCount = v.WordCount,
                 SubmittedAt = v.SubmittedAt
             }), cancellationToken);
+
+    await cacheService.SetAsync(cacheKey, videos, TimeSpan.FromMinutes(30), cancellationToken);
     return Results.Ok(videos);
 });
 
@@ -296,18 +320,19 @@ app.MapGet("/api/admin/listen-videos",
 });
 
 app.MapPut("/api/admin/listen-videos/{id}/approve",
-        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
     var video = await dbContext.ListenVideos.FindAsync(new object[] { id }, cancellationToken);
     if (video == null) return Results.NotFound();
 
     video.IsApproved = true;
     await dbContext.SaveChangesAsync(cancellationToken);
+    await cacheService.RemoveAsync("listen-videos:approved", cancellationToken);
     return Results.Ok(new { Message = "Đã duyệt video thành công" });
 });
 
 app.MapPut("/api/admin/listen-videos/{id}/transcript",
-        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Application.DTOs.ManualTranscriptRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService transcriptService, Backend.Application.Abstractions.IR2StorageService r2Storage, CancellationToken cancellationToken) =>
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Application.DTOs.ManualTranscriptRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService transcriptService, Backend.Application.Abstractions.IR2StorageService r2Storage, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
     var video = await dbContext.ListenVideos.FindAsync(new object[] { id }, cancellationToken);
     if (video == null) return Results.NotFound();
@@ -340,6 +365,7 @@ app.MapPut("/api/admin/listen-videos/{id}/transcript",
         video.IsApproved = true;
         
         await dbContext.SaveChangesAsync(cancellationToken);
+        await cacheService.RemoveAsync("listen-videos:approved", cancellationToken);
         return Results.Ok(new { Message = "Cập nhật phụ đề thành công", TranscriptUrl = r2Url, WordCount = wordCount });
     }
     catch (Exception ex)
@@ -349,7 +375,7 @@ app.MapPut("/api/admin/listen-videos/{id}/transcript",
 });
 
 app.MapDelete("/api/admin/listen-videos/{id}",
-        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Application.Abstractions.IR2StorageService r2Storage, CancellationToken cancellationToken) =>
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Application.Abstractions.IR2StorageService r2Storage, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
     var video = await dbContext.ListenVideos.FindAsync(new object[] { id }, cancellationToken);
     if (video == null) return Results.NotFound();
@@ -365,11 +391,12 @@ app.MapDelete("/api/admin/listen-videos/{id}",
 
     dbContext.ListenVideos.Remove(video);
     await dbContext.SaveChangesAsync(cancellationToken);
+    await cacheService.RemoveAsync("listen-videos:approved", cancellationToken);
 
     return Results.Ok(new { Message = "Video removed successfully" });
 });
 
-app.MapPut("/api/admin/listen-videos/{id}", async (int id, Backend.Application.DTOs.UpdateListenVideoRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapPut("/api/admin/listen-videos/{id}", async (int id, Backend.Application.DTOs.UpdateListenVideoRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
     var video = await dbContext.ListenVideos.FindAsync(new object[] { id }, cancellationToken);
     if (video == null) return Results.NotFound();
@@ -379,6 +406,7 @@ app.MapPut("/api/admin/listen-videos/{id}", async (int id, Backend.Application.D
     if (!string.IsNullOrWhiteSpace(req.Category)) video.Category = req.Category.Trim();
 
     await dbContext.SaveChangesAsync(cancellationToken);
+    await cacheService.RemoveAsync("listen-videos:approved", cancellationToken);
     return Results.Ok(new { Message = "Cập nhật thông tin video thành công", Video = video });
 });
 
@@ -418,7 +446,7 @@ app.MapGet("/api/admin/listen-videos/template-excel",
 });
 
 app.MapPost("/api/admin/listen-videos/import-excel",
-        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService transcriptService, Backend.Application.Abstractions.IR2StorageService r2Storage, CancellationToken cancellationToken) =>
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Microsoft.AspNetCore.Http.IFormFile file, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Infrastructure.Services.YoutubeTranscriptService transcriptService, Backend.Application.Abstractions.IR2StorageService r2Storage, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
     if (file == null || file.Length == 0)
         return Results.BadRequest(new { Message = "File không hợp lệ hoặc trống." });
@@ -523,6 +551,10 @@ app.MapPost("/api/admin/listen-videos/import-excel",
     }
     
     await dbContext.SaveChangesAsync(cancellationToken);
+    if (successCount > 0)
+    {
+        await cacheService.RemoveAsync("listen-videos:approved", cancellationToken);
+    }
     
     var finalMessage = $"Import thành công {successCount}, thất bại {failCount}, bỏ qua {duplicateCount} bị trùng.";
     if (errorDetails.Any()) {
@@ -542,7 +574,7 @@ app.MapPost("/api/admin/listen-videos/import-excel",
 
 
 app.MapPost("/api/ielts/exams",
-        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (CreateExamRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (CreateExamRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
     var exam = new Backend.Domain.Entities.Exam
     {
@@ -553,25 +585,31 @@ app.MapPost("/api/ielts/exams",
 
     dbContext.Exams.Add(exam);
     await dbContext.SaveChangesAsync(cancellationToken);
+    await cacheService.RemoveAsync("ielts:exams:all", cancellationToken);
 
     return Results.Ok(new { exam.Id, exam.Title, exam.DataUrl });
 });
 
-app.MapGet("/api/ielts/exams", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapGet("/api/ielts/exams", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
+    const string cacheKey = "ielts:exams:all";
+    var cached = await cacheService.GetAsync<List<Backend.Application.DTOs.ExamDto>>(cacheKey, cancellationToken);
+    if (cached != null) return Results.Ok(cached);
+
     var exams = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
         dbContext.Exams
             .Where(e => e.IsActive)
             .OrderByDescending(e => e.CreatedAt)
-            .Select(e => new
+            .Select(e => new Backend.Application.DTOs.ExamDto
             {
-                e.Id,
-                e.Title,
-                e.DataUrl,
-                e.Category,
-                e.CreatedAt
+                Id = e.Id,
+                Title = e.Title,
+                DataUrl = e.DataUrl,
+                Category = e.Category,
+                CreatedAt = e.CreatedAt
             }), cancellationToken);
-    
+
+    await cacheService.SetAsync(cacheKey, exams, TimeSpan.FromHours(1), cancellationToken);
     return Results.Ok(exams);
 });
 
@@ -813,6 +851,19 @@ app.MapPost("/api/auth/google-login", async (GoogleLoginRequest request, IAuthSe
     try
     {
         var result = await authService.LoginWithGoogleAsync(request, cancellationToken);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
+app.MapPost("/api/auth/google-register", async (GoogleLoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await authService.RegisterWithGoogleAsync(request, cancellationToken);
         return Results.Ok(result);
     }
     catch (Exception ex)
@@ -1332,6 +1383,13 @@ app.MapGet("/api/test-submissions/sync", async (
         var subClaim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                        ?? httpContext.User.FindFirst("sub")?.Value;
         if (int.TryParse(subClaim, out var parsedUid)) userId = parsedUid;
+    }
+
+    // Bảo mật: bắt buộc phải có userId hoặc sessionId để filter
+    // Không cho phép trả về dữ liệu của tất cả user khi không có điều kiện
+    if (!userId.HasValue && string.IsNullOrEmpty(sessionId))
+    {
+        return Results.Ok(new List<object>());
     }
 
     var query = dbContext.TestSubmissions.AsQueryable();
@@ -2367,28 +2425,36 @@ app.MapPost("/api/hsk/save-exam",
 });
 
 // ─── IELTS: Vocabulary CRUD ───
-app.MapGet("/api/ielts/vocab", async (string? topic, string? search, Backend.Infrastructure.Persistence.AppDbContext dbContext, HttpContext httpContext, CancellationToken cancellationToken) =>
+app.MapGet("/api/ielts/vocab", async (string? topic, string? search, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
-    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
-    const string cacheKey = "IeltsVocabularyList";
-    var cacheOptions = new MemoryCacheEntryOptions()
-        .SetSlidingExpiration(TimeSpan.FromMinutes(5))
-        .SetAbsoluteExpiration(TimeSpan.FromMinutes(30));
+    const string cacheKey = "ielts:vocab:all";
+    var allItems = await cacheService.GetAsync<List<IeltsVocabularyDto>>(cacheKey, cancellationToken);
 
-    var allItems = await cache.GetOrCreateAsync(cacheKey, async entry =>
+    if (allItems == null)
     {
-        entry.SetOptions(cacheOptions);
         var items = await dbContext.IeltsVocabularies
             .OrderBy(v => v.DisplayOrder).ThenBy(v => v.Id)
             .ToListAsync(cancellationToken);
-        return items.Select(v => new
+        allItems = items.Select(v => new IeltsVocabularyDto
         {
-            v.Id, v.Word, v.Phonetic, v.PartOfSpeech, v.Meaning,
-            v.Example, v.ExampleMeaning, v.Topic, v.CefrLevel, v.DisplayOrder, v.IsActive, v.CreatedAt
+            Id = v.Id,
+            Word = v.Word,
+            Phonetic = v.Phonetic,
+            PartOfSpeech = v.PartOfSpeech,
+            Meaning = v.Meaning,
+            Example = v.Example,
+            ExampleMeaning = v.ExampleMeaning,
+            Topic = v.Topic,
+            CefrLevel = v.CefrLevel,
+            DisplayOrder = v.DisplayOrder,
+            IsActive = v.IsActive,
+            CreatedAt = v.CreatedAt
         }).ToList();
-    });
 
-    var query = allItems!.AsEnumerable();
+        await cacheService.SetAsync(cacheKey, allItems, TimeSpan.FromHours(2), cancellationToken);
+    }
+
+    var query = allItems.AsEnumerable();
     if (!string.IsNullOrEmpty(topic))
         query = query.Where(v => v.Topic == topic);
     if (!string.IsNullOrEmpty(search))
@@ -2397,7 +2463,7 @@ app.MapGet("/api/ielts/vocab", async (string? topic, string? search, Backend.Inf
     return Results.Ok(query);
 });
 
-app.MapPost("/api/ielts/vocab", async (IeltsVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, HttpContext httpContext, CancellationToken cancellationToken) =>
+app.MapPost("/api/ielts/vocab", async (IeltsVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
     bool exists = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
         dbContext.IeltsVocabularies, v => v.Word == req.Word && v.Meaning == req.Meaning, cancellationToken);
@@ -2419,13 +2485,12 @@ app.MapPost("/api/ielts/vocab", async (IeltsVocabularyRequest req, Backend.Infra
     dbContext.IeltsVocabularies.Add(vocab);
     await dbContext.SaveChangesAsync(cancellationToken);
 
-    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
-    cache.Remove("IeltsVocabularyList");
+    await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
     return Results.Ok(new { Id = vocab.Id });
 });
 
-app.MapPut("/api/ielts/vocab/{id:int}", async (int id, IeltsVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, HttpContext httpContext, CancellationToken cancellationToken) =>
+app.MapPut("/api/ielts/vocab/{id:int}", async (int id, IeltsVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
     var vocab = await dbContext.IeltsVocabularies.FindAsync(new object[] { id }, cancellationToken);
     if (vocab == null) return Results.NotFound();
@@ -2446,21 +2511,19 @@ app.MapPut("/api/ielts/vocab/{id:int}", async (int id, IeltsVocabularyRequest re
     if (req.IsActive.HasValue) vocab.IsActive = req.IsActive.Value;
     await dbContext.SaveChangesAsync(cancellationToken);
 
-    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
-    cache.Remove("IeltsVocabularyList");
+    await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
     return Results.Ok();
 });
 
-app.MapDelete("/api/ielts/vocab/{id:int}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, HttpContext httpContext, CancellationToken cancellationToken) =>
+app.MapDelete("/api/ielts/vocab/{id:int}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
     var vocab = await dbContext.IeltsVocabularies.FindAsync(new object[] { id }, cancellationToken);
     if (vocab == null) return Results.NotFound();
     dbContext.IeltsVocabularies.Remove(vocab);
     await dbContext.SaveChangesAsync(cancellationToken);
 
-    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
-    cache.Remove("IeltsVocabularyList");
+    await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
     return Results.Ok();
 });
@@ -2724,8 +2787,8 @@ app.MapPost("/api/ielts/vocab/import-excel", async (Microsoft.AspNetCore.Http.IF
     dbContext.IeltsVocabularyImports.Add(batch);
     await dbContext.SaveChangesAsync(cancellationToken);
 
-    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
-    cache.Remove("IeltsVocabularyList");
+    var cacheService = httpContext.RequestServices.GetRequiredService<ICacheService>();
+    await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
     return Results.Ok(new { Success = success, Fail = fail, Duplicate = duplicate, Updated = updated, Errors = errors, JsonUrl = jsonUrl });
 }).DisableAntiforgery();
@@ -2947,8 +3010,8 @@ app.MapPost("/api/ielts/vocab/import-multiple", async (Microsoft.AspNetCore.Http
     dbContext.IeltsVocabularyImports.Add(batch);
     await dbContext.SaveChangesAsync(cancellationToken);
 
-    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
-    cache.Remove("IeltsVocabularyList");
+    var cacheService = httpContext.RequestServices.GetRequiredService<ICacheService>();
+    await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
     var msg = $"Thêm mới {success}, cập nhật {updated}, thất bại {fail}, bỏ qua {duplicate} trùng.";
     if (errors.Any()) msg += " Chi tiết: " + string.Join(" | ", errors.Take(3));
@@ -2959,7 +3022,7 @@ app.MapPost("/api/ielts/vocab/import-multiple", async (Microsoft.AspNetCore.Http
 app.MapDelete("/api/ielts/vocab/all", async (Backend.Infrastructure.Persistence.AppDbContext dbContext,
         ILogger<Program> logger,
         Backend.Application.Abstractions.IR2StorageService r2Storage,
-        HttpContext httpContext,
+        ICacheService cacheService,
         CancellationToken cancellationToken) =>
 {
     logger.LogInformation("Delete all vocabulary called");
@@ -3002,8 +3065,7 @@ app.MapDelete("/api/ielts/vocab/all", async (Backend.Infrastructure.Persistence.
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // Invalidate cache
-        var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
-        cache.Remove("IeltsVocabularyList");
+        await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
         return Results.Ok(new { Deleted = count, R2FilesDeleted = imports.Count });
     }
@@ -3120,33 +3182,41 @@ app.MapPost("/api/ielts/vocab/progress/{vocabularyId:int}", [Microsoft.AspNetCor
 });
 
 // ─── HSK: Vocabulary CRUD ───
-app.MapGet("/api/hsk/vocab", async (string? level, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+app.MapGet("/api/hsk/vocab", async (string? level, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
+    var cacheKey = string.IsNullOrEmpty(level) ? "hsk:vocab:all" : $"hsk:vocab:{level.ToLowerInvariant().Trim()}";
+    var cached = await cacheService.GetAsync<List<HskVocabularyDto>>(cacheKey, cancellationToken);
+    if (cached != null) return Results.Ok(cached);
+
     var query = dbContext.HskVocabularies.AsQueryable();
     if (!string.IsNullOrEmpty(level))
         query = query.Where(v => v.HskLevel == level);
     var items = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
         query.OrderBy(v => v.HskLevel).ThenBy(v => v.DisplayOrder), cancellationToken);
-    return Results.Ok(items.Select(v => new
+
+    var dtoList = items.Select(v => new HskVocabularyDto
     {
-        v.Id,
-        v.HskLevel,
-        v.Hanzi,
-        v.Pinyin,
-        v.Meaning,
-        v.WordType,
-        v.ExampleSentence,
-        v.ExamplePinyin,
-        v.ExampleMeaning,
-        v.AudioUrl,
-        v.DisplayOrder,
-        v.IsActive,
-        v.CreatedAt
-    }));
+        Id = v.Id,
+        HskLevel = v.HskLevel,
+        Hanzi = v.Hanzi,
+        Pinyin = v.Pinyin,
+        Meaning = v.Meaning,
+        WordType = v.WordType,
+        ExampleSentence = v.ExampleSentence,
+        ExamplePinyin = v.ExamplePinyin,
+        ExampleMeaning = v.ExampleMeaning,
+        AudioUrl = v.AudioUrl,
+        DisplayOrder = v.DisplayOrder,
+        IsActive = v.IsActive,
+        CreatedAt = v.CreatedAt
+    }).ToList();
+
+    await cacheService.SetAsync(cacheKey, dtoList, TimeSpan.FromHours(2), cancellationToken);
+    return Results.Ok(dtoList);
 });
 
 app.MapPost("/api/hsk/vocab",
-        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (HskVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (HskVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
     var existing = await dbContext.HskVocabularies
         .FirstOrDefaultAsync(v => v.HskLevel == req.HskLevel && v.Hanzi == req.Hanzi, cancellationToken);
@@ -3169,11 +3239,13 @@ app.MapPost("/api/hsk/vocab",
     };
     dbContext.HskVocabularies.Add(vocab);
     await dbContext.SaveChangesAsync(cancellationToken);
+    await cacheService.RemoveByPrefixAsync("hsk:vocab:", cancellationToken);
+
     return Results.Ok(new { Id = vocab.Id });
 });
 
 app.MapPut("/api/hsk/vocab/{id}",
-        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, HskVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, HskVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
     var vocab = await dbContext.HskVocabularies.FindAsync(new object[] { id }, cancellationToken);
     if (vocab == null) return Results.NotFound();
@@ -3199,6 +3271,8 @@ app.MapPut("/api/hsk/vocab/{id}",
     vocab.DisplayOrder = req.DisplayOrder ?? 0;
     vocab.IsActive = req.IsActive ?? true;
     await dbContext.SaveChangesAsync(cancellationToken);
+    await cacheService.RemoveByPrefixAsync("hsk:vocab:", cancellationToken);
+
     return Results.Ok();
 });
 
@@ -3237,12 +3311,14 @@ app.MapGet("/api/admin/users/{id}/logs",
 });
 
 app.MapDelete("/api/hsk/vocab/{id}",
-        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
     var vocab = await dbContext.HskVocabularies.FindAsync(new object[] { id }, cancellationToken);
     if (vocab == null) return Results.NotFound();
     dbContext.HskVocabularies.Remove(vocab);
     await dbContext.SaveChangesAsync(cancellationToken);
+    await cacheService.RemoveByPrefixAsync("hsk:vocab:", cancellationToken);
+
     return Results.Ok();
 });
 
@@ -3250,6 +3326,7 @@ app.MapDelete("/api/hsk/vocab/{id}",
 app.MapDelete("/api/hsk/vocab/all", async (Backend.Infrastructure.Persistence.AppDbContext dbContext,
         ILogger<Program> logger,
         Backend.Application.Abstractions.IR2StorageService r2Storage,
+        ICacheService cacheService,
         CancellationToken cancellationToken) =>
 {
     logger.LogInformation("Delete all HSK vocabulary called");
@@ -3277,6 +3354,8 @@ app.MapDelete("/api/hsk/vocab/all", async (Backend.Infrastructure.Persistence.Ap
         logger.LogInformation("Deleting {Count} HSK vocabulary items", count);
         dbContext.HskVocabularies.RemoveRange(all);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        await cacheService.RemoveByPrefixAsync("hsk:vocab:", cancellationToken);
 
         return Results.Ok(new { Deleted = count, R2FilesDeleted = imports.Count });
     }
@@ -3432,6 +3511,7 @@ app.MapPost("/api/hsk/vocab/import-excel",
         [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Microsoft.AspNetCore.Http.IFormFile file,
         Backend.Infrastructure.Persistence.AppDbContext dbContext,
         Backend.Application.Abstractions.IR2StorageService r2Storage,
+        ICacheService cacheService,
         HttpContext httpContext,
         CancellationToken cancellationToken) =>
 {
@@ -3665,6 +3745,8 @@ app.MapPost("/api/hsk/vocab/import-excel",
     dbContext.HskVocabularyImports.Add(batch);
     await dbContext.SaveChangesAsync(cancellationToken);
 
+    await cacheService.RemoveByPrefixAsync("hsk:vocab:", cancellationToken);
+
     var msg = $"Thêm mới {success}, cập nhật {updated}, thất bại {fail}, bỏ qua {duplicate} trùng.";
     if (errors.Any()) msg += " Chi tiết: " + string.Join(" | ", errors.Take(3));
     return Results.Ok(new { Success = success, Fail = fail, Duplicate = duplicate, Updated = updated, Errors = errors, JsonUrl = jsonUrl });
@@ -3742,8 +3824,8 @@ app.MapPost("/api/admin/ielts/vocab/auto-classify-cefr",
     await dbContext.SaveChangesAsync(cancellationToken);
 
     // Xóa cache để GET vocab trả về dữ liệu mới
-    var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
-    cache.Remove("IeltsVocabularyList");
+    var cacheService = httpContext.RequestServices.GetRequiredService<ICacheService>();
+    await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
     // Thống kê kết quả
     var stats = toUpdate.GroupBy(v => v.CefrLevel)

@@ -14,4 +14,13 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="9.0.0" />
   </ItemGroup>
 
+  <Target Name="ApplyContentHashCacheBusting" AfterTargets="Publish">
+    <PropertyGroup>
+      <_PublishWwwRoot Condition="Exists('$(PublishDir)wwwroot')">$(PublishDir)wwwroot</_PublishWwwRoot>
+      <_PublishWwwRoot Condition="'$(_PublishWwwRoot)' == '' and Exists('$(PublishDir)index.html')">$(PublishDir)</_PublishWwwRoot>
+    </PropertyGroup>
+    <Exec Condition="'$(_PublishWwwRoot)' != ''"
+          Command="dotnet run --project &quot;$(MSBuildThisFileDirectory)../../tools/CacheBuster/CacheBuster.csproj&quot; -c Release -- &quot;$(_PublishWwwRoot)&quot;" />
+  </Target>
+
 </Project>

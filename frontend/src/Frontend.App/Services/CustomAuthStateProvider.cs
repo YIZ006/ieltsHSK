@@ -59,7 +59,7 @@ public class CustomAuthStateProvider(ILocalStorageService localStorage) : Authen
         NotifyAuthenticationStateChanged(authState);
     }
 
-    private static IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
+    public static IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
     {
         var claims = new List<Claim>();
         if (string.IsNullOrWhiteSpace(jwt)) return claims;
@@ -75,7 +75,27 @@ public class CustomAuthStateProvider(ILocalStorageService localStorage) : Authen
 
             if (keyValuePairs != null)
             {
-                claims.AddRange(keyValuePairs.Select(kvp => new Claim(kvp.Key, kvp.Value?.ToString() ?? string.Empty)));
+                foreach (var kvp in keyValuePairs)
+                {
+                    var val = kvp.Value?.ToString() ?? string.Empty;
+                    claims.Add(new Claim(kvp.Key, val));
+
+                    if (kvp.Key == "role" || kvp.Key == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
+                    {
+                        if (kvp.Key != ClaimTypes.Role)
+                        {
+                            claims.Add(new Claim(ClaimTypes.Role, val));
+                        }
+                    }
+
+                    if (kvp.Key == "unique_name" || kvp.Key == "name" || kvp.Key == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")
+                    {
+                        if (kvp.Key != ClaimTypes.Name)
+                        {
+                            claims.Add(new Claim(ClaimTypes.Name, val));
+                        }
+                    }
+                }
             }
         }
         catch (Exception ex)

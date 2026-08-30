@@ -99,7 +99,7 @@
     else
     {
         <div class="vocab-grid">
-            @foreach (var item in FilteredItems)
+            @foreach (var item in PagedItems)
             {
                 var isLearned = IsLearned(item.Id);
                 <div class="vocab-card @(isLearned ? "is-learned" : "")">
@@ -154,6 +154,46 @@
                 </div>
             }
         </div>
+
+        @* Pagination Controls *@
+        @if (TotalPages > 1)
+        {
+            <div class="pagination-container">
+                <div class="pagination-summary">
+                    Hiển thị <strong>@((currentPage - 1) * pageSize + 1)</strong> - <strong>@(Math.Min(currentPage * pageSize, FilteredItems.Count))</strong> trong tổng <strong>@FilteredItems.Count.ToString("N0")</strong> từ @selectedLevel
+                </div>
+
+                <div class="pagination-buttons">
+                    <button class="btn-page" @onclick="() => GoToPage(1)" disabled="@(currentPage == 1)" title="Trang đầu">
+                        <i class="bi bi-chevron-double-left"></i>
+                    </button>
+                    <button class="btn-page" @onclick="() => GoToPage(currentPage - 1)" disabled="@(currentPage == 1)" title="Trang trước">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+
+                    @foreach (var p in VisiblePageNumbers)
+                    {
+                        @if (p == -1)
+                        {
+                            <span class="page-ellipsis">...</span>
+                        }
+                        else
+                        {
+                            <button class="btn-page @(p == currentPage ? "active" : "")" @onclick="() => GoToPage(p)">
+                                @p
+                            </button>
+                        }
+                    }
+
+                    <button class="btn-page" @onclick="() => GoToPage(currentPage + 1)" disabled="@(currentPage >= TotalPages)" title="Trang sau">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <button class="btn-page" @onclick="() => GoToPage(TotalPages)" disabled="@(currentPage >= TotalPages)" title="Trang cuối">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </button>
+                </div>
+            </div>
+        }
     }
 </div>
 
@@ -321,6 +361,54 @@
     private int FlashcardProgressPercent =>
         sessionQueue.Count == 0 ? 0 : (int)((double)sessionIndex / sessionQueue.Count * 100);
 
+    // Pagination
+    private int pageSize = 48;
+    private int currentPage = 1;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)FilteredItems.Count / pageSize));
+
+    private List<HskVocabularyItem> PagedItems
+    {
+        get
+        {
+            var filtered = FilteredItems;
+            if (currentPage > TotalPages) currentPage = 1;
+            return filtered.Skip((currentPage - 1) * pageSize).Take(pageSize).ToList();
+        }
+    }
+
+    private List<int> VisiblePageNumbers
+    {
+        get
+        {
+            var pages = new List<int>();
+            int total = TotalPages;
+            if (total <= 7)
+            {
+                for (int i = 1; i <= total; i++) pages.Add(i);
+            }
+            else
+            {
+                pages.Add(1);
+                if (currentPage > 3) pages.Add(-1);
+                int start = Math.Max(2, currentPage - 1);
+                int end = Math.Min(total - 1, currentPage + 1);
+                for (int i = start; i <= end; i++) pages.Add(i);
+                if (currentPage < total - 2) pages.Add(-1);
+                pages.Add(total);
+            }
+            return pages;
+        }
+    }
+
+    private void GoToPage(int page)
+    {
+        if (page < 1) page = 1;
+        if (page > TotalPages) page = TotalPages;
+        currentPage = page;
+        StateHasChanged();
+    }
+
     private List<HskVocabularyItem> BaseItems =>
         isShuffled ? (shuffledItems ?? vocabItems) : vocabItems;
 
@@ -346,15 +434,21 @@
 
     private async Task SelectLevel(string level)
     {
+        if (selectedLevel == level && vocabItems.Count > 0) return;
         selectedLevel = level;
+        currentPage = 1;
         await LocalStorage.SetItemAsync("hsk_level", level);
         await LoadVocabulary();
     }
 
     private async Task LoadVocabulary()
     {
-        isLoading = true;
-        StateHasChanged();
+        var hasCache = HskService.HasVocabInCache(selectedLevel);
+        if (!hasCache)
+        {
+            isLoading = true;
+            StateHasChanged();
+        }
 
         try
         {

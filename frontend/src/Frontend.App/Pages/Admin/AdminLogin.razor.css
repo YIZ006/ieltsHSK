@@ -1,0 +1,292 @@
+.admin-login-wrapper {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at top right, #0f172a 0%, #020617 100%);
+    padding: 24px;
+    font-family: 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #e2e8f0;
+    position: relative;
+    overflow: hidden;
+}
+
+.admin-login-wrapper::before {
+    content: "";
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(2, 132, 199, 0.15) 0%, rgba(2, 132, 199, 0) 70%);
+    top: -150px;
+    right: -150px;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.admin-login-card {
+    width: 100%;
+    max-width: 480px;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    padding: 40px 36px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(2, 132, 199, 0.2);
+    position: relative;
+    z-index: 1;
+}
+
+.card-header-brand {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.brand-shield-badge {
+    width: 68px;
+    height: 68px;
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    color: #ffffff;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2rem;
+    margin-bottom: 16px;
+    box-shadow: 0 10px 25px -5px rgba(2, 132, 199, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.brand-title {
+    font-size: 2rem;
+    font-weight: 800;
+    margin: 0 0 6px 0;
+    color: #ffffff;
+    letter-spacing: -0.03em;
+}
+
+.brand-subtitle {
+    margin: 0;
+    font-size: 0.92rem;
+    color: #94a3b8;
+}
+
+/* Alert Box */
+.login-alert-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 24px;
+    color: #fca5a5;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.alert-icon {
+    font-size: 1.2rem;
+    color: #ef4444;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+}
+
+.animate-shake {
+    animation: shake 0.4s ease-in-out;
+}
+
+/* Form Styles */
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.form-group-modern {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.form-label i {
+    color: #38bdf8;
+}
+
+.input-with-icon {
+    position: relative;
+}
+
+.form-control-modern {
+    width: 100%;
+    padding: 13px 16px;
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    color: #ffffff;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.form-control-modern:focus {
+    border-color: #38bdf8;
+    background: rgba(30, 41, 59, 0.95);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+}
+
+.form-control-modern::placeholder {
+    color: #64748b;
+}
+
+.password-wrapper {
+    display: flex;
+    align-items: center;
+}
+
+.btn-toggle-eye {
+    position: absolute;
+    right: 12px;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+}
+
+.btn-toggle-eye:hover {
+    color: #e2e8f0;
+}
+
+.validation-msg {
+    color: #f87171;
+    font-size: 0.8rem;
+    margin-top: 2px;
+}
+
+/* Submit Button */
+.btn-admin-submit {
+    margin-top: 8px;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+}
+
+.btn-admin-submit:hover:not(:disabled) {
+    background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(2, 132, 199, 0.45);
+}
+
+.btn-admin-submit:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.btn-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Quick Accounts Section */
+.quick-accounts-section {
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.quick-title {
+    display: block;
+    font-size: 0.82rem;
+    color: #94a3b8;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.quick-title i {
+    color: #facc15;
+}
+
+.account-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.chip-btn {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: #bae6fd;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.chip-btn:hover {
+    background: rgba(2, 132, 199, 0.25);
+    border-color: #38bdf8;
+    color: #ffffff;
+}
+
+/* Footer Links */
+.card-footer-links {
+    text-align: center;
+    margin-top: 24px;
+}
+
+.back-home-link {
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 0.88rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.2s;
+}
+
+.back-home-link:hover {
+    color: #38bdf8;
+}

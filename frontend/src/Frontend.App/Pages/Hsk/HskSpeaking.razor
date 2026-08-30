@@ -268,6 +268,13 @@
                                     <button class="sp-btn-secondary sp-btn-sm" @onclick="ReplayVideo">🔄 Repeat Question (@replaysLeft left)</button>
                                 }
                             </div>
+                            @if (replaysLeft > 0)
+                            {
+                                <div class="sp-repeat-note">
+                                    <i class="bi bi-exclamation-triangle-fill"></i>
+                                    <span><strong>Chú ý:</strong> Bấm <em>Repeat Question</em> sẽ phát lại video và <strong>làm mới (ghi âm lại từ đầu)</strong> toàn bộ câu trả lời của câu này.</span>
+                                </div>
+                            }
                         </div>
                     }
 
@@ -766,6 +773,15 @@
     private async Task ReplayVideo()
     {
         if (replaysLeft <= 0) return;
+
+        if (recordingSecondsElapsed > 2 || !string.IsNullOrWhiteSpace(liveTranscript))
+        {
+            var confirm = await JS.InvokeAsync<bool>(
+                "confirm",
+                "⚠️ Chú ý: Phát lại câu hỏi sẽ làm mới (xóa và ghi âm lại từ đầu) toàn bộ câu trả lời bạn vừa nói cho câu này.\n\nBạn có chắc chắn muốn nghe lại và trả lời lại không?");
+            if (!confirm) return;
+        }
+
         replaysLeft--;
         _timer?.Dispose();
         try { _ = JS.InvokeVoidAsync("SpeakingInterop.stopRecording"); } catch { }

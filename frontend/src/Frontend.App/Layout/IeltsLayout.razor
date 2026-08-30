@@ -5,6 +5,7 @@
 @inject NavigationManager NavigationManager
 @inject AuthService AuthService
 @inject IeltsService IeltsService
+@inject ProfileService ProfileSvc
 
 <div class="dashboard-wrapper">
     <!-- Sidebar -->
@@ -37,15 +38,22 @@
                 <AuthorizeView>
                     <Authorized>
                         @{
-                            var userName = context.User.FindFirst(c => c.Type == "unique_name")?.Value ?? context.User.Identity?.Name ?? "User";
-                            var avatarChar = string.IsNullOrEmpty(userName) ? "U" : userName.Substring(0, 1).ToUpper();
+                            var userName = GetDisplayName(context.User);
+                            var avatarChar = GetAvatarChar(userName);
                         }
                         <div class="user-avatar">@avatarChar</div>
                         <div class="user-details">
-                            <span class="user-email">@userName</span>
+                            <span class="user-email" title="@userName">@userName</span>
                             <span class="user-role">Học viên</span>
                         </div>
                     </Authorized>
+                    <NotAuthorized>
+                        <div class="user-avatar guest"><i class="bi bi-person"></i></div>
+                        <div class="user-details">
+                            <span class="user-email">Khách</span>
+                            <span class="user-role">Chưa đăng nhập</span>
+                        </div>
+                    </NotAuthorized>
                 </AuthorizeView>
             </div>
             <button class="btn-logout" @onclick="Logout" title="Đăng xuất">
@@ -66,14 +74,19 @@
                 <AuthorizeView>
                     <Authorized>
                         @{
-                            var topUserName = context.User.FindFirst(c => c.Type == "unique_name")?.Value ?? context.User.Identity?.Name ?? "User";
-                            var topAvatarChar = string.IsNullOrEmpty(topUserName) ? "U" : topUserName.Substring(0, 1).ToUpper();
+                            var topUserName = GetDisplayName(context.User);
+                            var topAvatarChar = GetAvatarChar(topUserName);
                         }
                         <span class="topbar-username">@topUserName</span>
-                        <div class="topbar-avatar">
+                        <div class="topbar-avatar" title="@topUserName">
                             @topAvatarChar
                         </div>
                     </Authorized>
+                    <NotAuthorized>
+                        <a href="/" class="btn-login-link" style="color: #4f46e5; font-weight: 600; font-size: 0.9rem; text-decoration: none;">
+                            Đăng nhập
+                        </a>
+                    </NotAuthorized>
                 </AuthorizeView>
             </div>
         </header>
@@ -87,10 +100,48 @@
 
 @code {
     private List<LearningSectionDto>? sections;
+    private UserProfile? userProfile;
 
     protected override async Task OnInitializedAsync()
     {
         sections = await IeltsService.GetSectionsAsync();
+        try
+        {
+            userProfile = await ProfileSvc.GetAsync();
+        }
+        catch { }
+    }
+
+    private string GetDisplayName(System.Security.Claims.ClaimsPrincipal user)
+    {
+        string? result = null;
+
+        if (!string.IsNullOrWhiteSpace(userProfile?.FullName)) result = userProfile.FullName;
+        else if (!string.IsNullOrWhiteSpace(userProfile?.DisplayName)) result = userProfile.DisplayName;
+        else
+        {
+            var name = user.FindFirst(c => c.Type == "unique_name")?.Value;
+            if (string.IsNullOrWhiteSpace(name)) name = user.Identity?.Name;
+            if (string.IsNullOrWhiteSpace(name)) name = user.FindFirst(c => c.Type == "email" || c.Type == System.Security.Claims.ClaimTypes.Email)?.Value;
+            if (string.IsNullOrWhiteSpace(name)) name = userProfile?.Email;
+            result = name;
+        }
+
+        if (string.IsNullOrWhiteSpace(result)) return "Học viên";
+
+        // Nếu chuỗi là email (vd: cuongnane@gmail.com), trích xuất phần tên tài khoản trước '@'
+        if (result.Contains('@'))
+        {
+            result = result.Split('@')[0];
+        }
+
+        return result.Trim();
+    }
+
+    private static string GetAvatarChar(string displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName)) return "U";
+        return displayName.Trim().Substring(0, 1).ToUpper();
     }
 
     private async Task Logout()

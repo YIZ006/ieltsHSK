@@ -9,13 +9,27 @@ public class StoryService
     private readonly HttpClient _httpClient;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
+    private List<StoryListItemModel>? _storiesCache;
+    private readonly Dictionary<string, StoryModel> _storyDetailCache = new();
+
     public StoryService(HttpClient httpClient)
     {
         _httpClient = httpClient;
     }
 
-    public async Task<List<StoryListItemModel>> GetStoriesAsync(string? level = null, string? category = null, string? search = null)
+    public void InvalidateStoriesCache()
     {
+        _storiesCache = null;
+        _storyDetailCache.Clear();
+    }
+
+    public async Task<List<StoryListItemModel>> GetStoriesAsync(string? level = null, string? category = null, string? search = null, bool forceRefresh = false)
+    {
+        if (!forceRefresh && string.IsNullOrEmpty(level) && string.IsNullOrEmpty(category) && string.IsNullOrEmpty(search) && _storiesCache != null)
+        {
+            return _storiesCache;
+        }
+
         try
         {
             var query = new List<string>();
@@ -25,30 +39,44 @@ public class StoryService
 
             var url = "api/stories" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
             var response = await _httpClient.GetFromJsonAsync<List<StoryListItemModel>>(url);
+            if (string.IsNullOrEmpty(level) && string.IsNullOrEmpty(category) && string.IsNullOrEmpty(search) && response != null)
+            {
+                _storiesCache = response;
+            }
             return response ?? new List<StoryListItemModel>();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading stories: {ex.Message}");
-            return new List<StoryListItemModel>();
+            return _storiesCache ?? new List<StoryListItemModel>();
         }
     }
 
-    public async Task<StoryModel?> GetStoryAsync(string idOrSlug)
+    public async Task<StoryModel?> GetStoryAsync(string idOrSlug, bool forceRefresh = false)
     {
+        if (!forceRefresh && _storyDetailCache.TryGetValue(idOrSlug, out var cachedStory))
+        {
+            return cachedStory;
+        }
+
         try
         {
             var story = await _httpClient.GetFromJsonAsync<StoryModel>($"api/stories/{idOrSlug}", JsonOptions);
             if (story != null)
             {
                 ParseStoryJson(story);
+                _storyDetailCache[idOrSlug] = story;
+                if (!string.IsNullOrEmpty(story.Slug) && story.Slug != idOrSlug)
+                {
+                    _storyDetailCache[story.Slug] = story;
+                }
             }
             return story;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading story {idOrSlug}: {ex.Message}");
-            return null;
+            return _storyDetailCache.TryGetValue(idOrSlug, out var fallback) ? fallback : null;
         }
     }
 
@@ -146,6 +174,7 @@ public class StoryService
             var response = await _httpClient.PostAsJsonAsync("api/admin/stories", req);
             if (response.IsSuccessStatusCode)
             {
+                InvalidateStoriesCache();
                 return (true, "Tạo truyện thành công!");
             }
             var error = await response.Content.ReadAsStringAsync();
@@ -183,6 +212,7 @@ public class StoryService
             var response = await _httpClient.PutAsJsonAsync($"api/admin/stories/{id}", req);
             if (response.IsSuccessStatusCode)
             {
+                InvalidateStoriesCache();
                 return (true, "Cập nhật truyện thành công!");
             }
             var error = await response.Content.ReadAsStringAsync();
@@ -199,7 +229,12 @@ public class StoryService
         try
         {
             var response = await _httpClient.DeleteAsync($"api/admin/stories/{id}");
-            return response.IsSuccessStatusCode;
+            if (response.IsSuccessStatusCode)
+            {
+                InvalidateStoriesCache();
+                return true;
+            }
+            return false;
         }
         catch (Exception ex)
         {
@@ -216,6 +251,7 @@ public class StoryService
             var response = await _httpClient.PostAsJsonAsync("api/admin/stories/import-json", req);
             if (response.IsSuccessStatusCode)
             {
+                InvalidateStoriesCache();
                 return (true, "Import truyện từ JSON thành công!");
             }
             var err = await response.Content.ReadAsStringAsync();
@@ -234,6 +270,7 @@ public class StoryService
             var response = await _httpClient.PostAsync("api/admin/stories/sync-to-r2", null);
             if (response.IsSuccessStatusCode)
             {
+                InvalidateStoriesCache();
                 var result = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>(JsonOptions);
                 var msg = result?.GetValueOrDefault("message")?.ToString() ?? result?.GetValueOrDefault("Message")?.ToString() ?? "Đồng bộ R2 thành công!";
                 return (true, msg);

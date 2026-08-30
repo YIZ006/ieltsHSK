@@ -9,6 +9,8 @@
 
 @inject NavigationManager Navigation
 @inject ExamSubmissionService Submissions
+@inject ProfileService ProfileSvc
+@inject IJSRuntime JS
 
 <PageTitle>IELTS Dashboard</PageTitle>
 
@@ -48,13 +50,13 @@
         <div class="goal-form">
             <div class="form-group">
                 <label>Đích hướng tới</label>
-                <input type="text" placeholder="vd: IELTS 6.5 / Thi vào 10 / Giao tiếp" class="form-input" />
+                <input type="text" placeholder="vd: IELTS 6.5 / Thi vào 10 / Giao tiếp" class="form-input" @bind="targetGoal" />
             </div>
             <div class="form-group">
                 <label>Hạn</label>
-                <input type="date" class="form-input" />
+                <input type="date" class="form-input" @bind="targetDeadline" />
             </div>
-            <button class="btn-primary">Đặt mục tiêu</button>
+            <button class="btn-primary" @onclick="SaveGoalAsync">Đặt mục tiêu</button>
         </div>
     </section>
 
@@ -65,12 +67,39 @@
         {
             <div style="margin-top: 10px;">
                 <div style="font-weight: 700; color: #1e293b; font-size: 1rem;">
-                    @GetSkillIcon(latestSubmission.Skill) @latestSubmission.ExamTitle
+                    @GetSkillIcon(latestSubmission.Skill) @(string.IsNullOrWhiteSpace(latestSubmission.ExamTitle) ? (latestSubmission.Skill + " Test") : latestSubmission.ExamTitle)
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px;">
-                    <span style="background: #e0f2fe; color: #0284c7; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 0.85rem;">
-                        Band @(latestSubmission.BandScore?.ToString("0.0") ?? (latestSubmission.Score?.Overall.ToString("0.0") ?? "—"))
-                    </span>
+                    @if (latestSubmission.Status == "Graded" && latestSubmission.BandScore.HasValue && latestSubmission.BandScore.Value > 0)
+                    {
+                        <span style="background: #e0f2fe; color: #0284c7; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 0.85rem;">
+                            Band @latestSubmission.BandScore.Value.ToString("0.0")
+                        </span>
+                    }
+                    else if (latestSubmission.Score?.Overall > 0)
+                    {
+                        <span style="background: #e0f2fe; color: #0284c7; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 0.85rem;">
+                            Band @latestSubmission.Score.Overall.ToString("0.0")
+                        </span>
+                    }
+                    else if (latestSubmission.Status == "Pending")
+                    {
+                        <span style="background: #fef3c7; color: #b45309; padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 0.82rem;">
+                            ⏳ Đang chấm
+                        </span>
+                    }
+                    else if (latestSubmission.BandScore.HasValue && latestSubmission.BandScore.Value > 0)
+                    {
+                        <span style="background: #e0f2fe; color: #0284c7; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 0.85rem;">
+                            Band @latestSubmission.BandScore.Value.ToString("0.0")
+                        </span>
+                    }
+                    else
+                    {
+                        <span style="background: #e0f2fe; color: #0284c7; padding: 2px 8px; border-radius: 6px; font-weight: 800; font-size: 0.85rem;">
+                            Đã hoàn thành
+                        </span>
+                    }
                     <span style="font-size: 0.8rem; color: #64748b;">
                         @latestSubmission.SubmittedAt.ToLocalTime().ToString("dd/MM HH:mm")
                     </span>
@@ -159,6 +188,9 @@
 @code {
     private List<LearningSectionDto>? sections;
     private string? currentLevel;
+    private string targetGoal = "";
+    private DateTime? targetDeadline;
+    private UserProfile? userProfile;
     private List<IeltsVocabularyItem> previewVocab = new();
     private IeltsSubmissionRecord? latestSubmission;
     private bool isLoading = true;
@@ -169,7 +201,37 @@
         try
         {
             sections = await IeltsService.GetSectionsAsync();
-            currentLevel = await LocalStorage.GetItemAsync<string>("ielts_level");
+            
+            try
+            {
+                userProfile = await ProfileSvc.GetAsync();
+                if (!string.IsNullOrWhiteSpace(userProfile?.StudyLevel))
+                {
+                    currentLevel = userProfile.StudyLevel;
+                }
+                if (!string.IsNullOrWhiteSpace(userProfile?.TargetScore))
+                {
+                    targetGoal = userProfile.TargetScore;
+                }
+            }
+            catch { }
+
+            if (string.IsNullOrWhiteSpace(currentLevel))
+            {
+                currentLevel = await LocalStorage.GetItemAsync<string>("ielts_level") ?? "A1";
+            }
+
+            if (string.IsNullOrWhiteSpace(targetGoal))
+            {
+                targetGoal = await LocalStorage.GetItemAsync<string>("ielts_goal_target") ?? "";
+            }
+
+            var savedDateStr = await LocalStorage.GetItemAsync<string>("ielts_goal_deadline");
+            if (!string.IsNullOrWhiteSpace(savedDateStr) && DateTime.TryParse(savedDateStr, out var parsedDate))
+            {
+                targetDeadline = parsedDate;
+            }
+
             var allSubmissions = await Submissions.GetAllAsync();
             latestSubmission = allSubmissions.FirstOrDefault();
 
@@ -184,6 +246,25 @@
         {
             isLoading = false;
         }
+    }
+
+    private async Task SaveGoalAsync()
+    {
+        try
+        {
+            if (userProfile != null)
+            {
+                userProfile.TargetScore = targetGoal;
+                await ProfileSvc.SaveAsync(userProfile);
+            }
+            await LocalStorage.SetItemAsync("ielts_goal_target", targetGoal);
+            if (targetDeadline.HasValue)
+            {
+                await LocalStorage.SetItemAsync("ielts_goal_deadline", targetDeadline.Value.ToString("yyyy-MM-dd"));
+            }
+            await JS.InvokeVoidAsync("alert", "🎯 Đã lưu mục tiêu lộ trình học tập thành công!");
+        }
+        catch { }
     }
 
     private static string GetSkillIcon(string? skill) => skill?.ToLower() switch

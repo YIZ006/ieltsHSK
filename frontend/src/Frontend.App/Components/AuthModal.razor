@@ -173,31 +173,52 @@
         ErrorMessage = string.Empty;
         StateHasChanged();
 
-        var (success, error) = await AuthService.LoginWithGoogleAsync(idToken);
-        if (success)
+        if (IsLogin)
         {
-            Close();
-            NavigationManager.NavigateTo("/ielts", forceLoad: false);
-        }
-        else
-        {
-            if (error.Contains("UserNotRegistered|"))
+            // ─── Chế độ ĐĂNG NHẬP: chỉ tìm tài khoản đã có ───
+            var (success, error) = await AuthService.LoginWithGoogleAsync(idToken);
+            if (success)
             {
-                var emailParts = error.Split("UserNotRegistered|");
-                if (emailParts.Length > 1) 
-                {
-                    var email = emailParts[1].Trim('"', '\r', '\n');
-                    SwitchMode(false); // Switch to register mode
-                    registerModel.Email = email;
-                    ErrorMessage = "Tài khoản chưa được đăng ký. Vui lòng tạo tài khoản mới.";
-                }
+                Close();
+                NavigationManager.NavigateTo("/ielts", forceLoad: false);
             }
             else
             {
-                ErrorMessage = "Đăng nhập Google thất bại: " + error;
+                if (error.Contains("UserNotRegistered|"))
+                {
+                    // Gợi ý user chuyển sang tab đăng ký
+                    ErrorMessage = "Tài khoản Google này chưa được đăng ký. Hãy chuyển sang tab Đăng ký để tạo tài khoản mới.";
+                }
+                else
+                {
+                    ErrorMessage = "Đăng nhập Google thất bại: " + error;
+                }
             }
         }
-        
+        else
+        {
+            // ─── Chế độ ĐĂNG KÝ: tạo tài khoản mới từ Google ───
+            var (success, error) = await AuthService.RegisterWithGoogleAsync(idToken);
+            if (success)
+            {
+                Close();
+                NavigationManager.NavigateTo("/ielts", forceLoad: false);
+            }
+            else
+            {
+                if (error.Contains("EmailAlreadyExists|"))
+                {
+                    // Email đã tồn tại → gợi ý đăng nhập
+                    SwitchMode(true);
+                    ErrorMessage = "Email Google này đã có tài khoản. Vui lòng đăng nhập thay vì đăng ký.";
+                }
+                else
+                {
+                    ErrorMessage = "Đăng ký Google thất bại: " + error;
+                }
+            }
+        }
+
         IsLoading = false;
         StateHasChanged();
     }

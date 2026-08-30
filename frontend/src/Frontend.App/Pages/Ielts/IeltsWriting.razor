@@ -8,6 +8,7 @@
 @inject IJSRuntime JS
 @inject ExamSessionService ExamSession
 @inject ExamSubmissionService Submissions
+@inject ExamCheckpointService CheckpointService
 @inject NavigationManager Navigation
 @implements IDisposable
 
@@ -64,12 +65,12 @@ else
                     @if (savedSubmission?.Status == "Graded" && savedSubmission?.BandScore.HasValue == true && savedSubmission.BandScore.Value > 0)
                     {
                         <span class="status-badge-pill">🎉 ĐÃ CÓ KẾT QUẢ CHẤM ĐIỂM</span>
-                        <span class="status-sub-note">Bài viết đã được giáo viên/admin hoàn tất chấm điểm và nhận xét chi tiết.</span>
+                        <span class="status-sub-note">Bài viết đã được giáo viên có trình độ chuyên môn hoàn tất chấm điểm và nhận xét chi tiết.</span>
                     }
                     else
                     {
                         <span class="status-badge-pill pending">⏳ ĐÃ NỘP BÀI — CHỜ CHẤM ĐIỂM</span>
-                        <span class="status-sub-note">Bài viết của bạn đã được ghi nhận. Admin/Giáo viên sẽ tiến hành chấm điểm 4 tiêu chí và phản hồi sớm nhất.</span>
+                        <span class="status-sub-note">Bài viết của bạn đã được ghi nhận. Giáo viên có trình độ chuyên môn sẽ tiến hành chấm điểm 4 tiêu chí và phản hồi sớm nhất.</span>
                     }
                 </div>
                 <div class="banner-actions">
@@ -119,11 +120,11 @@ else
                     <div class="score-card-band pending-card">
                         <span class="band-label">TRẠNG THÁI</span>
                         <span class="band-number pending-icon"><i class="bi bi-hourglass-split"></i></span>
-                        <span class="band-note">Đang chờ Admin chấm</span>
+                        <span class="band-note">Đang chờ Giáo viên chấm</span>
                     </div>
                     
                     <div class="pending-info-box">
-                        <p><i class="bi bi-info-circle"></i> Kỹ năng IELTS Writing được chấm trực tiếp bởi Admin/Giáo viên theo 4 tiêu chí chuẩn Cambridge (Task Response, Coherence & Cohesion, Lexical Resource, Grammatical Range & Accuracy).</p>
+                        <p><i class="bi bi-info-circle"></i> Kỹ năng IELTS Writing được chấm trực tiếp bởi Giáo viên có trình độ chuyên môn theo 4 tiêu chí chuẩn Cambridge (Task Response, Coherence & Cohesion, Lexical Resource, Grammatical Range & Accuracy).</p>
                         <p class="pending-sub">Điểm số và nhận xét chi tiết sẽ hiển thị tại đây ngay sau khi hoàn thành chấm bài.</p>
                     </div>
                 }
@@ -136,6 +137,28 @@ else
                     <p>@savedSubmission.TeacherFeedback</p>
                 </div>
             }
+        </div>
+    }
+
+    @* ── CHECKPOINT RESTORE BANNER ── *@
+    @if (!isFinished && pendingCheckpoint != null)
+    {
+        <div class="checkpoint-banner">
+            <div class="cb-left">
+                <i class="bi bi-clock-history cb-icon"></i>
+                <div class="cb-info">
+                    <strong>Phát hiện bài làm dở:</strong> Lưu lúc @pendingCheckpoint.LastSavedAt.ToLocalTime().ToString("HH:mm dd/MM/yyyy")
+                    (Còn @(pendingCheckpoint.SecondsRemaining / 60) phút @(pendingCheckpoint.SecondsRemaining % 60) giây · Đã viết @pendingCheckpoint.WritingTasks.Values.Count(w => !string.IsNullOrWhiteSpace(w)) Task)
+                </div>
+            </div>
+            <div class="cb-actions">
+                <button class="btn-cb-restore" @onclick="RestoreCheckpoint">
+                    <i class="bi bi-arrow-repeat"></i> Khôi phục bài viết dở
+                </button>
+                <button class="btn-cb-discard" @onclick="DiscardCheckpoint">
+                    <i class="bi bi-trash3"></i> Viết bài mới
+                </button>
+            </div>
         </div>
     }
 
@@ -269,6 +292,8 @@ else
     private string currentExamUrl = DefaultExamUrl;
     private IeltsSubmissionRecord? savedSubmission;
     private IeltsScoreReport? scoreReport;
+    private ExamCheckpointDto? pendingCheckpoint;
+    private int _autoSaveCounter = 0;
 
     private const string DefaultExamUrl = "sample-data/writing-test-1.json";
 
@@ -321,9 +346,80 @@ else
             return;
         }
 
+        // Kiểm tra bài viết dở của tài khoản hiện tại
+        var cp = await CheckpointService.GetCheckpointAsync("Writing", url, QueryMockTestId);
+        if (cp != null && cp.WritingTasks.Count > 0 && cp.WritingTasks.Values.Any(w => !string.IsNullOrWhiteSpace(w)))
+        {
+            pendingCheckpoint = cp;
+        }
+
         _navigationRegistration = Navigation.RegisterLocationChangingHandler(ConfirmLeave);
         await ExamSession.SetUnloadWarningAsync(true);
         _timer = new System.Threading.Timer(_ => _ = UpdateTimerAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void RestoreCheckpoint()
+    {
+        if (pendingCheckpoint == null || exam == null) return;
+
+        foreach (var task in exam.Tasks)
+        {
+            if (pendingCheckpoint.WritingTasks.TryGetValue(task.TaskNumber, out var ans))
+            {
+                task.Answer = ans;
+            }
+        }
+
+        if (pendingCheckpoint.SecondsRemaining > 0)
+        {
+            secondsLeft = pendingCheckpoint.SecondsRemaining;
+        }
+
+        if (pendingCheckpoint.ActivePartIndex >= 0 && pendingCheckpoint.ActivePartIndex < exam.Tasks.Count)
+        {
+            activeTaskIndex = pendingCheckpoint.ActivePartIndex;
+        }
+
+        pendingCheckpoint = null;
+        StateHasChanged();
+    }
+
+    private async Task DiscardCheckpoint()
+    {
+        if (pendingCheckpoint != null)
+        {
+            await CheckpointService.ClearCheckpointAsync("Writing", currentExamUrl, QueryMockTestId);
+            pendingCheckpoint = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AutoSaveCheckpointAsync()
+    {
+        if (isFinished || exam == null || string.IsNullOrEmpty(currentExamUrl)) return;
+
+        var cp = new ExamCheckpointDto
+        {
+            Skill = "Writing",
+            ExamUrl = currentExamUrl,
+            MockTestId = QueryMockTestId,
+            CollectionName = QueryCollectionName,
+            TestTitle = QueryTitle ?? exam.Title,
+            SessionId = TestSessionId,
+            SecondsRemaining = secondsLeft,
+            TotalDurationSeconds = (exam.TotalMinutes > 0 ? exam.TotalMinutes : 60) * 60,
+            ActivePartIndex = activeTaskIndex
+        };
+
+        foreach (var task in exam.Tasks)
+        {
+            if (!string.IsNullOrWhiteSpace(task.Answer))
+            {
+                cp.WritingTasks[task.TaskNumber] = task.Answer;
+            }
+        }
+
+        await CheckpointService.SaveCheckpointAsync(cp);
     }
 
     private void SwitchTask(int index)
@@ -338,6 +434,7 @@ else
 
     private void OnInput()
     {
+        _ = AutoSaveCheckpointAsync();
         StateHasChanged();
     }
 
@@ -359,6 +456,13 @@ else
         var session = await ExamSession.GetAsync(_sessionKey);
         if (session == null) return;
         secondsLeft = session.SecondsRemaining;
+
+        _autoSaveCounter++;
+        if (_autoSaveCounter % 5 == 0)
+        {
+            _ = AutoSaveCheckpointAsync();
+        }
+
         if (session.IsExpired) await InvokeAsync(() => FinishExamAsync(true));
         else await InvokeAsync(StateHasChanged);
     }
@@ -368,6 +472,8 @@ else
         if (isFinished || isSubmitting) return;
         isSubmitting = true;
         await InvokeAsync(StateHasChanged);
+
+        await CheckpointService.ClearCheckpointAsync("Writing", currentExamUrl, QueryMockTestId);
 
         savedSubmission = BuildSubmission(timeExpired);
         savedSubmission = await Submissions.SaveWritingSubmissionAsync(savedSubmission);
