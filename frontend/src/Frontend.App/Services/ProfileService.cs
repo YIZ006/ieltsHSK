@@ -54,11 +54,6 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
                     if (!string.IsNullOrWhiteSpace(srvUser.FullName))
                     {
                         local.FullName = srvUser.FullName;
-                        local.DisplayName = srvUser.FullName;
-                    }
-                    else if (!string.IsNullOrWhiteSpace(srvUser.Username))
-                    {
-                        local.DisplayName = srvUser.Username;
                     }
                     if (!string.IsNullOrWhiteSpace(srvUser.Email)) local.Email = srvUser.Email;
                     if (!string.IsNullOrWhiteSpace(srvUser.Avatar)) local.AvatarEmoji = srvUser.Avatar;
