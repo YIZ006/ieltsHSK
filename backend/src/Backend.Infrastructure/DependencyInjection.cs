@@ -56,7 +56,82 @@ public static class DependencyInjection
         using var scope = serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         
-        await dbContext.Database.MigrateAsync();
+        // 1. Đồng bộ __EFMigrationsHistory với các bảng/cột đã tồn tại trong PostgreSQL
+        try
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                DO $$
+                BEGIN
+                    -- Tạo bảng __EFMigrationsHistory nếu chưa tồn tại
+                    CREATE TABLE IF NOT EXISTS ""__EFMigrationsHistory"" (
+                        migration_id character varying(150) NOT NULL,
+                        product_version character varying(32) NOT NULL,
+                        CONSTRAINT pk___ef_migrations_history PRIMARY KEY (migration_id)
+                    );
+
+                    -- 1. InitialPostgreSQL & InitialCreate_PostgreSQL
+                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'categories') THEN
+                        INSERT INTO ""__EFMigrationsHistory"" (migration_id, product_version)
+                        VALUES ('20260826062942_InitialPostgreSQL', '9.0.4')
+                        ON CONFLICT (migration_id) DO NOTHING;
+
+                        INSERT INTO ""__EFMigrationsHistory"" (migration_id, product_version)
+                        VALUES ('20260826102953_InitialCreate_PostgreSQL', '9.0.4')
+                        ON CONFLICT (migration_id) DO NOTHING;
+                    END IF;
+
+                    -- 2. AddFullNameToUser
+                    IF EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'full_name') THEN
+                        INSERT INTO ""__EFMigrationsHistory"" (migration_id, product_version)
+                        VALUES ('20260826164733_AddFullNameToUser', '9.0.4')
+                        ON CONFLICT (migration_id) DO NOTHING;
+                    END IF;
+
+                    -- 3. AddHskMockTestEntity
+                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'hsk_mock_tests') THEN
+                        INSERT INTO ""__EFMigrationsHistory"" (migration_id, product_version)
+                        VALUES ('20260827111448_AddHskMockTestEntity', '9.0.4')
+                        ON CONFLICT (migration_id) DO NOTHING;
+                    END IF;
+
+                    -- 4. AddIeltsVocabularyImport
+                    IF EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'test_submissions' AND column_name = 'audio_key') THEN
+                        INSERT INTO ""__EFMigrationsHistory"" (migration_id, product_version)
+                        VALUES ('20260828100248_AddIeltsVocabularyImport', '9.0.4')
+                        ON CONFLICT (migration_id) DO NOTHING;
+                    END IF;
+
+                    -- 5. AddSubmissionDetailsAndR2Key
+                    IF EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'test_submissions' AND column_name = 'r2_storage_key') THEN
+                        INSERT INTO ""__EFMigrationsHistory"" (migration_id, product_version)
+                        VALUES ('20260828111500_AddSubmissionDetailsAndR2Key', '9.0.4')
+                        ON CONFLICT (migration_id) DO NOTHING;
+                    END IF;
+
+                    -- 6. AddCefrLevelToVocabulary
+                    IF EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'ielts_vocabularies' AND column_name = 'cefr_level') 
+                       AND EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'ielts_vocabulary_progresses') THEN
+                        INSERT INTO ""__EFMigrationsHistory"" (migration_id, product_version)
+                        VALUES ('20260829160132_AddCefrLevelToVocabulary', '9.0.4')
+                        ON CONFLICT (migration_id) DO NOTHING;
+                    END IF;
+                END $$;
+            ");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SeedData] Pre-migration history sync note: {ex.Message}");
+        }
+
+        // 2. Chạy MigrateAsync
+        try
+        {
+            await dbContext.Database.MigrateAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SeedData] MigrateAsync note: {ex.Message}");
+        }
 
         // Đảm bảo các bảng và ràng buộc khóa ngoại (Foreign Keys) luôn tồn tại trong PostgreSQL
         try
@@ -103,14 +178,16 @@ public static class DependencyInjection
                     END IF;
 
                     -- 3. Bảng ielts_vocabulary_progresses
-                    CREATE TABLE IF NOT EXISTS ielts_vocabulary_progresses (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                        vocabulary_id INTEGER NOT NULL REFERENCES ielts_vocabularies(id) ON DELETE CASCADE,
-                        status TEXT NOT NULL DEFAULT 'Learned',
-                        learned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                        CONSTRAINT uq_ielts_vocab_progress_user_vocab UNIQUE (user_id, vocabulary_id)
-                    );
+                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'ielts_vocabularies') THEN
+                        CREATE TABLE IF NOT EXISTS ielts_vocabulary_progresses (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            vocabulary_id INTEGER NOT NULL REFERENCES ielts_vocabularies(id) ON DELETE CASCADE,
+                            status TEXT NOT NULL DEFAULT 'Learned',
+                            learned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                            CONSTRAINT uq_ielts_vocab_progress_user_vocab UNIQUE (user_id, vocabulary_id)
+                        );
+                    END IF;
                 END $$;
             ");
         }

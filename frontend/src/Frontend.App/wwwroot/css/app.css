@@ -16,6 +16,7 @@ html, body {
     --ig-primary-hover: #1877f2;
     --ig-card-bg: #ffffff;
     --ig-danger: #ed4956;
+    --toeic-color: #8b5cf6;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -28,6 +29,7 @@ html, body {
         --ig-primary-hover: #1877f2;
         --ig-card-bg: #000000;
         --ig-danger: #ed4956;
+        --toeic-color: #8b5cf6;
     }
 }
 
@@ -101,38 +103,85 @@ a:hover {
         content: "An error has occurred."
     }
 
-.loading-progress {
-    position: relative;
-    display: block;
-    width: 8rem;
-    height: 8rem;
-    margin: 20vh auto 1rem auto;
+/* ===== Màn hình tải lúc khởi động: chibi chạy trên thanh tiến độ =====
+   --blazor-load-percentage / --blazor-load-percentage-text do blazor.webassembly.js
+   tự cập nhật theo % tài nguyên (.wasm/.dll) đã tải về, nên không cần JS riêng.
+   Thanh chia 4 chặng màu đúng các mốc 25/50/75/100%: .chibi-track chứa sẵn
+   4 dải màu, .chibi-mask là tấm nền kem trượt theo tiến độ che phần CHƯA
+   tải — chỗ được lộ ra chính là màu của chặng đang chạy tới. */
+.chibi-loader {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: #fff8f0;
+    font-family: "Be Vietnam Pro", system-ui, sans-serif;
 }
 
-    .loading-progress circle {
-        fill: none;
-        stroke: #e0e0e0;
-        stroke-width: 0.6rem;
-        transform-origin: 50% 50%;
-        transform: rotate(-90deg);
+    .chibi-loader::before {
+        content: "Đang tải…";
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #8a6d5c;
+        margin-bottom: 72px; /* chừa chỗ cho chibi cao 68px chạy qua không đè chữ */
     }
 
-        .loading-progress circle:last-child {
-            stroke: #1b6ec2;
-            stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
-            transition: stroke-dasharray 0.05s ease-in-out;
-        }
+.chibi-track {
+    position: relative; /* không overflow:hidden để chibi đứng trên thanh không bị cắt */
+    width: min(420px, 80vw);
+    height: 16px;
+    border-radius: 999px;
+    background: linear-gradient(90deg,
+        #ff6b6b 0 25%,   /* mốc 1: đỏ san hô */
+        #ffa94d 25% 50%, /* mốc 2: cam */
+        #51cf66 50% 75%, /* mốc 3: xanh lá */
+        #4dabf7 75% 100% /* mốc 4: xanh dương */
+    );
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / 15%);
+}
 
-.loading-progress-text {
+.chibi-mask {
     position: absolute;
-    text-align: center;
-    font-weight: bold;
-    inset: calc(20vh + 3.25rem) 0 auto 0.2rem;
+    top: 0;
+    bottom: 0;
+    left: var(--blazor-load-percentage, 0%);
+    right: 0;
+    border-radius: 999px;
+    background: #ffe3c2; /* trùng màu nền kem ban đầu của thanh */
+    transition: left .25s ease-out;
 }
 
-    .loading-progress-text:after {
-        content: var(--blazor-load-percentage-text, "Loading");
+.chibi-runner {
+    position: absolute;
+    bottom: calc(100% - 4px); /* chân chibi chồng nhẹ lên mặt thanh */
+    left: var(--blazor-load-percentage, 0%);
+    height: 68px;
+    width: auto;
+    transform: translateX(-50%); /* giữa người chibi bám đúng mút thanh */
+    filter: drop-shadow(0 3px 4px rgb(0 0 0 / 18%));
+    animation: chibi-bob .3s ease-in-out infinite alternate;
+}
+
+.chibi-percent::after {
+    content: var(--blazor-load-percentage-text, "0%");
+    font-weight: 700;
+    font-size: 1rem;
+    color: #c2502c;
+}
+
+@keyframes chibi-bob {
+    from {
+        transform: translateX(-50%) translateY(0) rotate(-4deg);
     }
+
+    to {
+        transform: translateX(-50%) translateY(-4px) rotate(4deg);
+    }
+}
 
 code {
     color: #c02d76;

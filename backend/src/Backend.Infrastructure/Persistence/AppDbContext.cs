@@ -98,7 +98,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.HasIndex(p => new { p.UserId, p.VocabularyId }).IsUnique();
             entity.HasOne(p => p.User)
-                .WithMany()
+                .WithMany(u => u.HskVocabularyProgresses)
                 .HasForeignKey(p => p.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
