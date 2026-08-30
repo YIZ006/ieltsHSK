@@ -2,7 +2,6 @@
 @inject NavigationManager NavigationManager
 @inject Frontend.App.Services.AuthService AuthService
 @inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
-@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
 <div class="admin-layout theme-@activeDomain.ToLower()">
     <!-- Top Horizontal Navbar -->
@@ -30,7 +29,7 @@
             <button class="nav-tab tab-users @(activeDomain == "USERS" ? "active" : "")" @onclick='() => SwitchDomain("USERS")'>
                 <span class="tab-icon">👥</span> Học viên & Users
             </button>
-            <a href="@((Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101/").TrimEnd('/') + "/swagger")" target="_blank" class="nav-tab tab-swagger" style="text-decoration: none;">
+            <a href="http://localhost:5101/swagger" target="_blank" class="nav-tab tab-swagger" style="text-decoration: none;">
                 <span class="tab-icon">⚙️</span> Swagger API
             </a>
         </nav>
