@@ -114,36 +114,42 @@ a:hover {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 14px;
     background: #ffffff;
-    font-family: "Be Vietnam Pro", system-ui, sans-serif;
+    font-family: "Plus Jakarta Sans", "Be Vietnam Pro", system-ui, sans-serif;
 }
 
     .chibi-loader::before {
-        content: "Đang tải hệ thống…";
-        font-size: 1.15rem;
-        font-weight: 700;
+        content: "Master Your Languages";
+        font-size: 1.25rem;
+        font-weight: 800;
         color: #0f172a;
-        margin-bottom: 74px; /* chừa chỗ cho chibi cao 68px chạy qua không đè chữ */
-        letter-spacing: -0.01em;
+        margin-bottom: 70px; /* chừa chỗ cho chibi cao 68px chạy qua không đè chữ */
+        letter-spacing: -0.02em;
     }
 
 .chibi-track {
     position: relative; /* không overflow:hidden để chibi đứng trên thanh không bị cắt */
-    width: min(440px, 85vw);
-    height: 18px;
+    width: min(400px, 85vw);
+    height: 12px;
     border-radius: 999px;
     background: linear-gradient(90deg,
-        #0284c7 0%,   /* Xanh dương neon */
-        #38bdf8 25%,  /* Xanh cyan sáng */
-        #8b5cf6 55%,  /* Tím hoàng gia phát sáng */
-        #ec4899 80%,  /* Hồng neon */
-        #ef4444 100%  /* Đỏ tươi rực rỡ */
+        #2563eb 0%,    /* Royal Blue */
+        #6366f1 25%,   /* Indigo */
+        #8b5cf6 50%,   /* Electric Violet */
+        #d946ef 75%,   /* Neon Fuchsia */
+        #f43f5e 100%   /* Sunset Rose */
     );
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.55), 
-                0 0 35px rgba(2, 132, 199, 0.45), 
-                0 0 10px rgba(239, 68, 68, 0.35),
-                inset 0 1px 2px rgba(255, 255, 255, 0.4);
+    background-size: 200% 100%;
+    animation: futuristic-flow 3s ease-in-out infinite alternate;
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.4), 
+                0 0 35px rgba(37, 99, 235, 0.25),
+                0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+@keyframes futuristic-flow {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
 }
 
 .chibi-mask {
@@ -153,29 +159,38 @@ a:hover {
     left: var(--blazor-load-percentage, 0%);
     right: 0;
     border-radius: 999px;
-    background: #0f172a; /* Nền tối vừa tương phản vừa tạo hiệu ứng lộ dải màu neon phát sáng */
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.06);
     transition: left .25s ease-out;
 }
 
 .chibi-runner {
     position: absolute;
-    bottom: calc(100% - 4px); /* chân chibi chồng nhẹ lên mặt thanh */
+    bottom: calc(100% - 2px); /* chân chibi chồng nhẹ lên mặt thanh */
     left: var(--blazor-load-percentage, 0%);
-    height: 70px;
+    height: 68px;
     width: auto;
     transform: translateX(-50%); /* giữa người chibi bám đúng mút thanh */
-    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
+    filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.14));
     animation: chibi-bob .3s ease-in-out infinite alternate;
+}
+
+.chibi-percent {
+    margin-top: 4px;
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    padding: 3px 14px;
+    border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
 }
 
 .chibi-percent::after {
     content: var(--blazor-load-percentage-text, "0%");
     font-weight: 800;
-    font-size: 1.05rem;
-    color: #8b5cf6;
-    text-shadow: 0 0 8px rgba(139, 92, 246, 0.25);
+    font-size: 0.88rem;
+    color: #0f172a;
+    letter-spacing: 0.02em;
 }
 
 @keyframes chibi-bob {
