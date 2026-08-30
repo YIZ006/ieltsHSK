@@ -32,22 +32,20 @@ public static class DependencyInjection
         
         await dbContext.Database.MigrateAsync();
 
-        // Seed Admin User (cuongnane)
-        if (!dbContext.Users.Any(u => u.Email == "cuong20067@gmail.com"))
-        {
-            var adminUser = new User
-            {
-                Username = "cuongnane",
-                Email = "cuong20067@gmail.com",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Aa@cuongnane"),
-                Role = "admin",
-                Level = "C2",
-                IsActive = true,
-                LastLoginAt = DateTime.UtcNow
-            };
-            dbContext.Users.Add(adminUser);
-            await dbContext.SaveChangesAsync();
-        }
+        // Clear existing user activity logs and all user data as requested
+        var existingLogs = await dbContext.UserActivityLogs.ToListAsync();
+        if (existingLogs.Count > 0) dbContext.UserActivityLogs.RemoveRange(existingLogs);
+
+        var existingProgress = await dbContext.HskVocabularyProgresses.ToListAsync();
+        if (existingProgress.Count > 0) dbContext.HskVocabularyProgresses.RemoveRange(existingProgress);
+
+        var existingSubmissions = await dbContext.TestSubmissions.Where(s => s.UserId.HasValue).ToListAsync();
+        foreach (var sub in existingSubmissions) sub.UserId = null;
+
+        var existingUsers = await dbContext.Users.ToListAsync();
+        if (existingUsers.Count > 0) dbContext.Users.RemoveRange(existingUsers);
+
+        await dbContext.SaveChangesAsync();
 
         // Seed Languages
         if (!dbContext.Languages.Any(l => l.Code == "EN"))
@@ -100,19 +98,22 @@ public static class DependencyInjection
         // Seed Course
         if (!dbContext.Courses.Any(c => c.Slug == "ielts-listening-master"))
         {
-            var admin = dbContext.Users.First(u => u.Email == "cuong20067@gmail.com");
-            dbContext.Courses.Add(new Course
+            var admin = dbContext.Users.FirstOrDefault();
+            if (admin != null)
             {
-                Title = "IELTS Listening Masterclass",
-                Slug = "ielts-listening-master",
-                Description = "Khóa học luyện nghe IELTS chuyên sâu từ con số 0.",
-                Level = "B2",
-                Category = "listening",
-                Status = "published",
-                DurationMinutes = 1200,
-                CreatedById = admin.Id
-            });
-            await dbContext.SaveChangesAsync();
+                dbContext.Courses.Add(new Course
+                {
+                    Title = "IELTS Listening Masterclass",
+                    Slug = "ielts-listening-master",
+                    Description = "Khóa học luyện nghe IELTS chuyên sâu từ con số 0.",
+                    Level = "B2",
+                    Category = "listening",
+                    Status = "published",
+                    DurationMinutes = 1200,
+                    CreatedById = admin.Id
+                });
+                await dbContext.SaveChangesAsync();
+            }
         }
 
         // Seed LearningSections
@@ -139,6 +140,19 @@ public static class DependencyInjection
                 new LearningSection { Name = "Viết HSK", Description = "Luyện viết HSK", Icon = "bi-pencil", Route = "/hsk/writing", Language = "HSK", OrderIndex = 4 },
                 new LearningSection { Name = "Nói HSK", Description = "Luyện nói HSK", Icon = "bi-mic", Route = "/hsk/speaking", Language = "HSK", OrderIndex = 5 },
                 new LearningSection { Name = "Từ vựng HSK", Description = "Từ vựng HSK 1-9", Icon = "bi-spellcheck", Route = "/hsk/tu-vung", Language = "HSK", OrderIndex = 6 }
+            );
+            await dbContext.SaveChangesAsync();
+        }
+
+        // Seed TOEIC LearningSections
+        if (!dbContext.LearningSections.Any(s => s.Language == "TOEIC"))
+        {
+            dbContext.LearningSections.AddRange(
+                new LearningSection { Name = "Dashboard", Description = "Tổng quan TOEIC", Icon = "bi-speedometer2", Route = "/toeic", Language = "TOEIC", OrderIndex = 1 },
+                new LearningSection { Name = "Luyện đề", Description = "Đề thi chuẩn ETS", Icon = "bi-journal-text", Route = "/toeic/test", Language = "TOEIC", OrderIndex = 2 },
+                new LearningSection { Name = "Từ vựng", Description = "Flashcard 70 từ", Icon = "bi-layers", Route = "/toeic/flashcards", Language = "TOEIC", OrderIndex = 3 },
+                new LearningSection { Name = "Nghe Part 1-4", Description = "Luyện Listening", Icon = "bi-headphones", Route = "/toeic/listening", Language = "TOEIC", OrderIndex = 4 },
+                new LearningSection { Name = "Đọc Part 5-7", Description = "Luyện Reading", Icon = "bi-book", Route = "/toeic/reading", Language = "TOEIC", OrderIndex = 5 }
             );
             await dbContext.SaveChangesAsync();
         }
