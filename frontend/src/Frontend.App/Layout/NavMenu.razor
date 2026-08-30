@@ -1,27 +1,16 @@
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @inject AuthService AuthService
 @inject NavigationManager NavigationManager
 @inject ExamHeaderService ExamHeader
 @inject ProfileService ProfileSvc
 @inject StreakService StreakSvc
+@inject AuthenticationStateProvider AuthStateProvider
 @implements IDisposable
 
 <nav class="navbar">
-    <div class="navbar-brand">
-        <BrandLogo />
-    </div>
-
-    <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-        <i class="bi bi-list"></i>
-    </button>
-
-    <div class="@NavMenuCssClass navbar-collapse" @onclick="ToggleNavMenu">
-        <ul class="navbar-nav me-auto">
-            <li class="nav-item">
-                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                    Home
-                </NavLink>
-            </li>
-        </ul>
+    <div class="navbar-collapse">
+        <div class="navbar-spacer"></div>
 
         <div class="exam-toolbar exam-toolbar-desktop">
             @if (ExamHeader.Visible)
@@ -35,7 +24,7 @@
             }
         </div>
 
-        <ul class="navbar-nav auth-nav">
+        <ul class="navbar-nav auth-nav ms-auto">
             <AuthorizeView>
                 <Authorized>
                     <li class="nav-item streak-menu">
@@ -81,21 +70,121 @@
                             </div>
                         }
                     </li>
+
                     <li class="nav-item user-menu">
-                        <button class="nav-link welcome-toggle" @onclick="ToggleUserMenu" @onclick:stopPropagation>
-                            Xin chào, @welcomeName!
-                            <i class="bi bi-chevron-down"></i>
+                        <button class="nav-profile-pill @(showUserMenu ? "active" : "")" @onclick="ToggleUserMenu" @onclick:stopPropagation title="Mở thẻ hồ sơ cá nhân">
+                            <span class="profile-avatar-mini">
+                                @if (!string.IsNullOrWhiteSpace(avatarEmoji) && avatarEmoji.Length <= 2)
+                                {
+                                    <span>@avatarEmoji</span>
+                                }
+                                else
+                                {
+                                    <span>@GetInitial(welcomeName)</span>
+                                }
+                            </span>
+                            <span class="profile-pill-name">@welcomeName</span>
+                            <i class="bi bi-chevron-down profile-pill-arrow @(showUserMenu ? "rotate" : "")"></i>
                         </button>
+
                         @if (showUserMenu)
                         {
                             <div class="user-backdrop" @onclick="() => showUserMenu = false" @onclick:stopPropagation></div>
-                            <div class="user-dropdown">
-                                <a class="dropdown-item" href="/profile" @onclick="() => showUserMenu = false" @onclick:stopPropagation>
-                                    <i class="bi bi-person-circle"></i> Hồ sơ cá nhân
-                                </a>
-                                <button class="dropdown-item btn-logout" @onclick="Logout" @onclick:stopPropagation>
-                                    <i class="bi bi-box-arrow-right"></i> Logout
-                                </button>
+                            <div class="profile-popover-card" @onclick:stopPropagation>
+                                @* ── Popover Header Cover ── *@
+                                <div class="popover-cover">
+                                    <button class="popover-close-btn" @onclick="() => showUserMenu = false" title="Đóng">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+
+                                @* ── Avatar with online badge ── *@
+                                <div class="popover-avatar-container">
+                                    <div class="popover-avatar">
+                                        @if (!string.IsNullOrWhiteSpace(avatarEmoji) && avatarEmoji.Length <= 2)
+                                        {
+                                            <span>@avatarEmoji</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@GetInitial(welcomeName)</span>
+                                        }
+                                    </div>
+                                    <span class="online-indicator" title="Đang online"></span>
+                                </div>
+
+                                @* ── User Basic Info ── *@
+                                <div class="popover-user-info">
+                                    <h4 class="popover-fullname">@welcomeName</h4>
+                                    @if (!string.IsNullOrWhiteSpace(userEmail))
+                                    {
+                                        <div class="popover-email">@userEmail</div>
+                                    }
+                                    <div class="popover-badges">
+                                        @if (isAdmin)
+                                        {
+                                            <span class="badge-role badge-admin"><i class="bi bi-shield-check"></i> Quản trị viên</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge-role badge-member"><i class="bi bi-person-check"></i> Học viên</span>
+                                        }
+                                        @if (currentStreak > 0)
+                                        {
+                                            <span class="badge-streak">🔥 @currentStreak ngày</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                @* ── Quick Stats Row ── *@
+                                <div class="popover-stats-row">
+                                    <div class="popover-stat-item">
+                                        <span class="stat-label">Cấp độ</span>
+                                        <span class="stat-val">@(string.IsNullOrWhiteSpace(studyLevel) ? "HSK/IELTS" : studyLevel)</span>
+                                    </div>
+                                    <div class="popover-stat-divider"></div>
+                                    <div class="popover-stat-item">
+                                        <span class="stat-label">Mục tiêu</span>
+                                        <span class="stat-val">@(string.IsNullOrWhiteSpace(targetExam) ? "TOEIC" : targetExam)</span>
+                                    </div>
+                                    <div class="popover-stat-divider"></div>
+                                    <div class="popover-stat-item">
+                                        <span class="stat-label">Điểm XP</span>
+                                        <span class="stat-val">@userXp</span>
+                                    </div>
+                                </div>
+
+                                @* ── Action Navigation List ── *@
+                                <div class="popover-nav-list">
+                                    <a href="/profile" class="popover-nav-item" @onclick="() => showUserMenu = false">
+                                        <div class="nav-item-icon bg-blue"><i class="bi bi-person-gear"></i></div>
+                                        <div class="nav-item-content">
+                                            <span class="nav-item-title">Hồ sơ cá nhân</span>
+                                            <span class="nav-item-subtitle">Cài đặt tài khoản & mục tiêu</span>
+                                        </div>
+                                        <i class="bi bi-chevron-right nav-item-arrow"></i>
+                                    </a>
+
+                                    @if (isAdmin)
+                                    {
+                                        <a href="/admin/users" class="popover-nav-item" @onclick="() => showUserMenu = false">
+                                            <div class="nav-item-icon bg-purple"><i class="bi bi-shield-lock"></i></div>
+                                            <div class="nav-item-content">
+                                                <span class="nav-item-title">Trang Quản Trị</span>
+                                                <span class="nav-item-subtitle">Quản lý người dùng & dữ liệu</span>
+                                            </div>
+                                            <i class="bi bi-chevron-right nav-item-arrow"></i>
+                                        </a>
+                                    }
+                                </div>
+
+                                @* ── Popover Footer ── *@
+                                <div class="popover-footer">
+                                    <button class="btn-popover-logout" @onclick="Logout">
+                                        <i class="bi bi-box-arrow-right"></i>
+                                        <span>Đăng xuất tài khoản</span>
+                                    </button>
+                                </div>
                             </div>
                         }
                     </li>
@@ -136,36 +225,55 @@
     [Parameter]
     public EventCallback OnShowRegister { get; set; }
 
-    private bool collapseNavMenu = true;
     private bool showUserMenu = false;
     private bool showStreakMenu = false;
     private string welcomeName = "User";
+    private string userEmail = "";
+    private string avatarEmoji = "🎓";
+    private string studyLevel = "HSK3";
+    private string targetExam = "HSK";
+    private int userXp = 0;
+    private bool isAdmin = false;
     private int currentStreak;
     private int bestStreak;
 
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
-
     protected override async Task OnInitializedAsync()
     {
-        var profile = await ProfileSvc.GetAsync();
-        if (!string.IsNullOrWhiteSpace(profile.FullName))
+        try
         {
-            welcomeName = profile.FullName;
-        }
-        else if (!string.IsNullOrWhiteSpace(profile.DisplayName))
-        {
-            welcomeName = profile.DisplayName;
-        }
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            isAdmin = user.IsInRole("Admin") || user.HasClaim(c => c.Type == ClaimTypes.Role && c.Value == "Admin");
+            userEmail = user.FindFirst(ClaimTypes.Email)?.Value ?? "";
 
-        currentStreak = await StreakSvc.GetCurrentStreakAsync();
-        bestStreak = await StreakSvc.GetBestStreakAsync();
+            var profile = await ProfileSvc.GetAsync();
+            if (!string.IsNullOrWhiteSpace(profile.FullName))
+            {
+                welcomeName = profile.FullName;
+            }
+            else if (!string.IsNullOrWhiteSpace(profile.DisplayName))
+            {
+                welcomeName = profile.DisplayName;
+            }
+            if (!string.IsNullOrWhiteSpace(profile.Email)) userEmail = profile.Email;
+            if (!string.IsNullOrWhiteSpace(profile.AvatarEmoji)) avatarEmoji = profile.AvatarEmoji;
+            if (!string.IsNullOrWhiteSpace(profile.StudyLevel)) studyLevel = profile.StudyLevel;
+            if (!string.IsNullOrWhiteSpace(profile.TargetExam)) targetExam = profile.TargetExam;
+            userXp = profile.Xp;
+
+            currentStreak = await StreakSvc.GetCurrentStreakAsync();
+            bestStreak = await StreakSvc.GetBestStreakAsync();
+        }
+        catch { }
 
         ExamHeader.OnChange += OnExamHeaderChanged;
     }
 
-    private void ToggleNavMenu()
+    private string GetInitial(string name)
     {
-        collapseNavMenu = !collapseNavMenu;
+        if (string.IsNullOrWhiteSpace(name)) return "U";
+        var trimmed = name.Trim();
+        return trimmed.Substring(0, 1).ToUpperInvariant();
     }
 
     private void ToggleUserMenu()

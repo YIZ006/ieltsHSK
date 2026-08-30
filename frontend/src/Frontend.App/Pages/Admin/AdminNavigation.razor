@@ -1,0 +1,202 @@
+@page "/admin/navigation"
+@layout AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject NavigationService NavService
+@inject NavigationManager NavManager
+
+<PageTitle>Quản lý Sidebar - Admin</PageTitle>
+
+<div class="admin-container">
+    <div class="admin-header">
+        <div>
+            <h1>Quản lý Sidebar điều hướng</h1>
+            <p class="admin-subtitle">Các mục hiển thị trong Left Sidebar — thay đổi có hiệu lực ngay lập tức.</p>
+        </div>
+        <button class="btn-create" @onclick="() => OpenForm(null)">+ Thêm mục</button>
+    </div>
+
+    @if (isFormOpen)
+    {
+        <div class="admin-card create-form">
+            <h2>@(editId.HasValue ? "Cập nhật mục" : "Thêm mục mới")</h2>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger" style="color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;padding:10px;border-radius:8px;margin-bottom:12px;">@errorMessage</div>
+            }
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Tên hiển thị *</label>
+                    <input @bind="form.Name" class="form-control" placeholder="VD: Luyện đề, Dashboard..." />
+                </div>
+                <div class="form-group">
+                    <label>Route * (vd: /toeic/test)</label>
+                    <input @bind="form.Route" class="form-control" placeholder="/toeic/test" />
+                </div>
+                <div class="form-group">
+                    <label>Chương trình *</label>
+                    <select @bind="form.Language" class="form-control">
+                        <option value="TOEIC">TOEIC</option>
+                        <option value="IELTS">IELTS</option>
+                        <option value="HSK">HSK</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Icon (Bootstrap Icons, vd: bi-journal-text)</label>
+                    <input @bind="form.Icon" class="form-control" placeholder="bi-journal-text" />
+                    <div class="icon-preview">@if (!string.IsNullOrWhiteSpace(form.Icon)) { <i class="bi @form.Icon"></i> <span>@form.Icon</span> }</div>
+                </div>
+                <div class="form-group">
+                    <label>Thứ tự</label>
+                    <input type="number" @bind="form.OrderIndex" class="form-control" />
+                </div>
+                <div class="form-group" style="grid-column:1/-1">
+                    <label>Mô tả ngắn</label>
+                    <input @bind="form.Description" class="form-control" placeholder="Gợi ý hiển thị dưới tên..." />
+                </div>
+            </div>
+            <div class="form-actions" style="margin-top:14px">
+                <button class="btn-secondary" @onclick="() => isFormOpen = false">Hủy</button>
+                <button class="btn-primary" @onclick="Save" disabled="@isSaving">@(isSaving ? "Đang lưu..." : "Lưu")</button>
+            </div>
+        </div>
+    }
+
+    <div class="admin-card list-container">
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+            <span style="font-weight:700;color:#0f172a">Lọc:</span>
+            @foreach (var lang in new[] { "ALL", "TOEIC", "IELTS", "HSK" })
+            {
+                <button class="btn-sm @(filterLang==lang ? "btn-primary":"btn-secondary")" @onclick="() => filterLang = lang">@lang</button>
+            }
+            <span style="margin-left:auto;color:#94a3b8;font-size:0.85rem">@Filtered.Count mục</span>
+        </div>
+
+        @if (isLoading)
+        {
+            <p>Đang tải...</p>
+        }
+        else if (Filtered.Count == 0)
+        {
+            <p>Chưa có mục nào.</p>
+        }
+        else
+        {
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Icon</th>
+                        <th>Tên</th>
+                        <th>Route</th>
+                        <th>Chương trình</th>
+                        <th>Thứ tự</th>
+                        <th>Hành động</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Filtered)
+                    {
+                        <tr>
+                            <td>@item.Id</td>
+                            <td><i class="bi @item.Icon" style="font-size:1.1rem;color:#6c63ff"></i></td>
+                            <td>
+                                <div style="font-weight:600">@item.Name</div>
+                                <div style="font-size:0.78rem;color:#94a3b8">@item.Description</div>
+                            </td>
+                            <td><code style="background:#f5f3ff;padding:2px 6px;border-radius:6px">@item.Route</code></td>
+                            <td><span class="badge-lang lang-@item.Language.ToLower()">@item.Language</span></td>
+                            <td>@item.OrderIndex</td>
+                            <td>
+                                <button class="btn-sm btn-edit" @onclick="() => OpenForm(item)">Sửa</button>
+                                <button class="btn-sm" style="background:#fee2e2;color:#b91c1c;border:none;padding:6px 10px;border-radius:8px;margin-left:6px;cursor:pointer" @onclick="() => Delete(item.Id)">Xóa</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@code {
+    private List<LearningSectionDto> items = new();
+    private bool isLoading = true;
+    private bool isFormOpen;
+    private bool isSaving;
+    private string errorMessage = "";
+    private string filterLang = "ALL";
+    private int? editId;
+    private LearningSectionDto form = new();
+
+    private List<LearningSectionDto> Filtered => filterLang == "ALL" ? items : items.Where(x => x.Language == filterLang).ToList();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        isLoading = true;
+        items = await NavService.GetAllForAdminAsync();
+        isLoading = false;
+    }
+
+    private void OpenForm(LearningSectionDto? item)
+    {
+        errorMessage = "";
+        if (item == null)
+        {
+            editId = null;
+            form = new LearningSectionDto { Language = "TOEIC", Icon = "bi-circle", OrderIndex = items.Count + 1 };
+        }
+        else
+        {
+            editId = item.Id;
+            form = new LearningSectionDto
+            {
+                Id = item.Id,
+                Name = item.Name,
+                Description = item.Description,
+                Icon = item.Icon,
+                Route = item.Route,
+                Language = item.Language,
+                OrderIndex = item.OrderIndex
+            };
+        }
+        isFormOpen = true;
+    }
+
+    private async Task Save()
+    {
+        errorMessage = "";
+        if (string.IsNullOrWhiteSpace(form.Name) || string.IsNullOrWhiteSpace(form.Route) || string.IsNullOrWhiteSpace(form.Language))
+        {
+            errorMessage = "Vui lòng nhập Tên, Route và Chương trình.";
+            return;
+        }
+        isSaving = true;
+        bool ok;
+        if (editId.HasValue)
+        {
+            form.Id = editId.Value;
+            ok = await NavService.UpdateAsync(form);
+        }
+        else
+        {
+            var created = await NavService.CreateAsync(form);
+            ok = created != null;
+        }
+        if (ok)
+        {
+            isFormOpen = false;
+            await Load();
+        }
+        else errorMessage = "Lưu thất bại. Kiểm tra quyền admin hoặc dữ liệu.";
+        isSaving = false;
+    }
+
+    private async Task Delete(int id)
+    {
+        if (!await NavService.DeleteAsync(id)) return;
+        await Load();
+    }
+}

@@ -1,0 +1,356 @@
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject NavigationService NavService
+@inject NavigationManager NavManager
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@implements IDisposable
+
+<aside class="left-sidebar theme-@selectedProgram.ToLowerInvariant() @(isCollapsed ? "collapsed" : "") @(isMobileOpen ? "mobile-open" : "")">
+    @* ── Header ── *@
+    <div class="sb-header">
+        @if (!isCollapsed)
+        {
+            <a href="/" class="sb-brand" title="Trang chủ ieltsHSK">
+                <span class="sb-brand-icon">
+                    <i class="bi bi-box-fill"></i>
+                </span>
+                <div class="sb-brand-text-wrapper">
+                    <span class="sb-brand-text">ieltsHSK</span>
+                    <span class="sb-brand-badge sb-brand-badge-@selectedProgram.ToLowerInvariant()" @key="selectedProgram">@(selectedProgram == "HSK" ? "HSK 3.0" : selectedProgram)</span>
+                </div>
+            </a>
+            <button class="sb-collapse-btn" @onclick="ToggleCollapse" title="Thu gọn thanh bên">
+                <i class="bi bi-layout-sidebar-inset"></i>
+            </button>
+        }
+        else
+        {
+            <button class="sb-collapse-btn sb-collapse-btn-standalone" @onclick="ToggleCollapse" title="Mở rộng thanh bên">
+                <i class="bi bi-layout-sidebar"></i>
+            </button>
+        }
+    </div>
+
+    @* ── HSK Level Selector (dành cho khóa HSK) ── *@
+    @if (selectedProgram == "HSK" && !isCollapsed)
+    {
+        <div class="sb-hsk-level-box sb-anim-fly-in" @key="@($"hsk-box-{hskLevel}")">
+            <div class="sb-hsk-level-header">
+                <span class="sb-hsk-dot"></span>
+                <span>Mục tiêu HSK: <b>@hskLevel</b></span>
+            </div>
+            <div class="sb-hsk-pills">
+                @for (int i = 1; i <= 6; i++)
+                {
+                    var lvl = $"HSK{i}";
+                    <button class="sb-hsk-pill @(hskLevel == lvl ? "active" : "")"
+                            @onclick="() => ChangeHskLevel(lvl)">
+                        HSK @i
+                    </button>
+                }
+            </div>
+        </div>
+    }
+
+    @* ── Navigation ── *@
+    <nav class="sb-nav" aria-label="Main navigation">
+        <div class="sb-nav-anim-wrapper" @key="@($"{selectedProgram}_{hskLevel}")">
+            @* ── Dynamic menu items ── *@
+            @if (!isCollapsed)
+            {
+                <div class="sb-section-label">
+                    <span>HỌC TẬP (@selectedProgram)</span>
+                </div>
+            }
+
+            @if (menuItems.Count == 0)
+            {
+                <div class="sb-empty">
+                    <i class="bi bi-inbox"></i>
+                    <span>Chưa có mục nào</span>
+                </div>
+            }
+            else
+            {
+                @foreach (var item in menuItems)
+                {
+                    var isRootDashboard = item.Route == "/toeic" || item.Route == "/ielts" || item.Route == "/hsk" || item.Route == "/ielts/dashboard";
+                    var matchMode = isRootDashboard ? NavLinkMatch.All : NavLinkMatch.Prefix;
+
+                    <NavLink href="@item.Route" class="sb-item" Match="@matchMode" data-tooltip="@item.Name" title="@(isCollapsed ? item.Name : "")">
+                        <span class="sb-item-icon">
+                            <i class="bi @item.Icon"></i>
+                        </span>
+                        @if (!isCollapsed)
+                        {
+                            <span class="sb-item-body">
+                                <span class="sb-item-name">@item.Name</span>
+                                @if (!string.IsNullOrWhiteSpace(item.Description))
+                                {
+                                    <span class="sb-item-desc">@item.Description</span>
+                                }
+                            </span>
+                        }
+                    </NavLink>
+                }
+            }
+        </div>
+    </nav>
+
+    @* ── Bottom sticky : Program Switcher ── *@
+    <div class="sb-bottom">
+        @if (!isCollapsed)
+        {
+            <div class="sb-switcher-card">
+                <div class="sb-switcher-label">
+                    <i class="bi bi-mortarboard-fill"></i>
+                    <span>CHƯƠNG TRÌNH HỌC</span>
+                </div>
+                <div class="sb-switcher" role="tablist">
+                    @foreach (var prog in Programs)
+                    {
+                        var isActive = selectedProgram == prog.Key;
+                        <button class="sb-switch-btn @(isActive ? "active" : "")"
+                                role="tab"
+                                aria-selected="@isActive.ToString().ToLower()"
+                                @onclick="() => SelectProgram(prog.Key)">
+                            <span class="sb-switch-dot" style="background:@prog.Color"></span>
+                            <span>@prog.Label</span>
+                        </button>
+                    }
+                </div>
+                <div class="sb-switcher-hint">
+                    Đang học: <span class="sb-program-tag" style="color:@CurrentProgramColor">@selectedProgram</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="sb-switcher-collapsed">
+                <button class="sb-switch-collapsed-btn" @onclick="OnCollapsedSwitcherClick" title="Mở rộng để đổi chương trình (@selectedProgram)">
+                    <span class="sb-switch-dot" style="background:@CurrentProgramColor"></span>
+                    <span class="sb-switch-collapsed-text">@selectedProgram.Substring(0,1)</span>
+                </button>
+                @if (showProgramDropdown)
+                {
+                    <div class="sb-program-dropdown">
+                        <div class="sb-dropdown-title">Chương trình học</div>
+                        @foreach (var prog in Programs)
+                        {
+                            <button class="sb-program-option @(selectedProgram == prog.Key ? "active" : "")"
+                                    @onclick="() => SelectProgram(prog.Key)">
+                                <span class="sb-switch-dot" style="background:@prog.Color"></span>
+                                <span>@prog.Label</span>
+                                @if (selectedProgram == prog.Key)
+                                {
+                                    <i class="bi bi-check2 ms-auto"></i>
+                                }
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</aside>
+
+@if (isMobileOpen)
+{
+    <div class="sb-backdrop" @onclick="CloseMobile"></div>
+}
+
+@code {
+    private static readonly Dictionary<string, List<LearningSectionDto>> PredefinedMenus = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["TOEIC"] = new()
+        {
+            new LearningSectionDto{ Name="Dashboard", Route="/toeic", Icon="bi-speedometer2", Language="TOEIC", OrderIndex=1, Description="Tổng quan TOEIC" },
+            new LearningSectionDto{ Name="Luyện đề", Route="/toeic/test", Icon="bi-journal-text", Language="TOEIC", OrderIndex=2, Description="Đề thi chuẩn ETS" },
+            new LearningSectionDto{ Name="Từ vựng", Route="/toeic/flashcards", Icon="bi-layers", Language="TOEIC", OrderIndex=3, Description="Flashcard 70 từ" },
+        },
+        ["IELTS"] = new()
+        {
+            new LearningSectionDto{ Name="Hôm nay", Route="/ielts/dashboard", Icon="bi-house-door-fill", Language="IELTS", OrderIndex=1, Description="Tổng quan IELTS" },
+            new LearningSectionDto{ Name="Truyện đệm", Route="/ielts/stories", Icon="bi-book", Language="IELTS", OrderIndex=2, Description="Luyện đọc qua truyện" },
+            new LearningSectionDto{ Name="Nghe điền từ", Route="/ielts/listen-fill", Icon="bi-headphones", Language="IELTS", OrderIndex=3, Description="Luyện nghe gõ từ" },
+            new LearningSectionDto{ Name="Phòng thi thử", Route="/ielts/mock-tests", Icon="bi-journal-check", Language="IELTS", OrderIndex=4, Description="Phòng thi thử" },
+        },
+        ["HSK"] = new()
+        {
+            new LearningSectionDto{ Name="Hôm nay", Route="/hsk", Icon="bi-house-door-fill", Language="HSK", OrderIndex=1, Description="Tổng quan HSK" },
+            new LearningSectionDto{ Name="Từ vựng HSK", Route="/hsk/tu-vung", Icon="bi-book-half", Language="HSK", OrderIndex=2, Description="Từ vựng HSK 1-6" },
+            new LearningSectionDto{ Name="Phòng thi thử", Route="/hsk/mock-tests", Icon="bi-journal-check", Language="HSK", OrderIndex=3, Description="Đề thi HSK" },
+            new LearningSectionDto{ Name="Tổng quan HSK 1–6", Route="/hsk/overview", Icon="bi-grid-fill", Language="HSK", OrderIndex=4, Description="Tổng hợp cấp độ" },
+        }
+    };
+
+    private bool isCollapsed;
+    private bool isMobileOpen;
+    private bool showProgramDropdown;
+    private string selectedProgram = "HSK";
+    private string hskLevel = "HSK1";
+    private List<LearningSectionDto> menuItems = new();
+
+    private static readonly (string Key, string Label, string Color, string Route)[] Programs =
+    {
+        ("TOEIC", "TOEIC", "#6c63ff", "/toeic"),
+        ("IELTS", "IELTS", "#0ea5e9", "/ielts"),
+        ("HSK",   "HSK",   "#ef4444", "/hsk"),
+    };
+
+    private string CurrentProgramColor => Programs.FirstOrDefault(p => p.Key == selectedProgram).Color ?? "#6c63ff";
+
+    protected override async Task OnInitializedAsync()
+    {
+        DetectProgramFromUrl(NavManager.Uri);
+        
+        // Immediate instant synchronous population (0ms delay, zero white boxes)
+        SetInstantMenu(selectedProgram);
+
+        try
+        {
+            var collapsed = await LocalStorage.GetItemAsync<bool?>("sidebar_collapsed");
+            if (collapsed.HasValue) isCollapsed = collapsed.Value;
+
+            var lvl = await LocalStorage.GetItemAsync<string>("hsk_level");
+            if (!string.IsNullOrWhiteSpace(lvl)) hskLevel = lvl;
+
+            var prog = await LocalStorage.GetItemAsync<string>("sidebar_program");
+            if (!string.IsNullOrWhiteSpace(prog) && Programs.Any(p => p.Key == prog))
+            {
+                if (DetectProgramFromUrl(NavManager.Uri))
+                {
+                    SetInstantMenu(selectedProgram);
+                }
+            }
+        }
+        catch { }
+
+        await LoadMenuAsync();
+
+        // Pre-warm background cache for all programs
+        _ = Task.WhenAll(
+            NavService.GetAsync("IELTS"),
+            NavService.GetAsync("HSK"),
+            NavService.GetAsync("TOEIC")
+        );
+
+        NavManager.LocationChanged += OnLocationChanged;
+    }
+
+    private void SetInstantMenu(string prog)
+    {
+        if (PredefinedMenus.TryGetValue(prog, out var defaults))
+        {
+            menuItems = [.. defaults];
+        }
+    }
+
+    private bool DetectProgramFromUrl(string url)
+    {
+        var relative = NavManager.ToBaseRelativePath(url).ToLowerInvariant();
+        string targetProg = selectedProgram;
+        if (relative.StartsWith("hsk"))
+        {
+            targetProg = "HSK";
+        }
+        else if (relative.StartsWith("ielts"))
+        {
+            targetProg = "IELTS";
+        }
+        else if (relative.StartsWith("toeic"))
+        {
+            targetProg = "TOEIC";
+        }
+
+        if (targetProg != selectedProgram)
+        {
+            selectedProgram = targetProg;
+            SetInstantMenu(selectedProgram);
+            return true;
+        }
+        return false;
+    }
+
+    private async Task LoadMenuAsync()
+    {
+        var data = await NavService.GetAsync(selectedProgram);
+        if (data.Count > 0)
+        {
+            menuItems = data.OrderBy(m => m.OrderIndex).ToList();
+            StateHasChanged();
+        }
+    }
+
+    private async Task ChangeHskLevel(string level)
+    {
+        hskLevel = level;
+        try { await LocalStorage.SetItemAsync("hsk_level", level); } catch { }
+        StateHasChanged();
+    }
+
+    private async Task ToggleCollapse()
+    {
+        isCollapsed = !isCollapsed;
+        try { await LocalStorage.SetItemAsync("sidebar_collapsed", isCollapsed); } catch { }
+        await CollapseChanged.InvokeAsync(isCollapsed);
+    }
+
+    private async Task OnCollapsedSwitcherClick()
+    {
+        if (isCollapsed)
+        {
+            isCollapsed = false;
+            try { await LocalStorage.SetItemAsync("sidebar_collapsed", false); } catch { }
+            await CollapseChanged.InvokeAsync(false);
+        }
+        else
+        {
+            showProgramDropdown = !showProgramDropdown;
+        }
+    }
+
+    private async Task SelectProgram(string prog)
+    {
+        if (selectedProgram == prog) { showProgramDropdown = false; return; }
+        showProgramDropdown = false;
+        try { await LocalStorage.SetItemAsync("sidebar_program", prog); } catch { }
+
+        var target = Programs.FirstOrDefault(p => p.Key == prog);
+        if (!string.IsNullOrEmpty(target.Route))
+        {
+            NavManager.NavigateTo(target.Route);
+        }
+    }
+
+    private void ToggleProgramDropdown() => showProgramDropdown = !showProgramDropdown;
+
+    public void OpenMobile() => isMobileOpen = true;
+    public void CloseMobile() => isMobileOpen = false;
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        bool changed = DetectProgramFromUrl(e.Location);
+        if (changed || menuItems.Count == 0)
+        {
+            _ = LoadMenuAsync();
+        }
+        else
+        {
+            InvokeAsync(StateHasChanged);
+        }
+
+        if (isMobileOpen)
+        {
+            isMobileOpen = false;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    [Parameter] public EventCallback<bool> CollapseChanged { get; set; }
+
+    public void Dispose()
+    {
+        NavManager.LocationChanged -= OnLocationChanged;
+    }
+}

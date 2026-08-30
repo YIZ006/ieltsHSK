@@ -29,13 +29,19 @@
                 <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
                     <DataAnnotationsValidator />
                     <div class="form-group">
-                        <label>Email</label>
-                        <InputText type="email" class="form-control" @bind-Value="loginModel.Email" placeholder="Nhập email của bạn" />
-                        <ValidationMessage For="@(() => loginModel.Email)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                        <label>Tên đăng nhập hoặc Email</label>
+                        <InputText class="form-control" @bind-Value="loginModel.UsernameOrEmail" placeholder="Nhập tên đăng nhập hoặc email của bạn" />
+                        <ValidationMessage For="@(() => loginModel.UsernameOrEmail)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
                     </div>
                     <div class="form-group">
                         <label>Password</label>
-                        <InputText type="password" class="form-control" @bind-Value="loginModel.Password" placeholder="Nhập mật khẩu" />
+                        <div style="position: relative;">
+                            <InputText type="@(showLoginPassword ? "text" : "password")" class="form-control" style="padding-right: 42px;" @bind-Value="loginModel.Password" placeholder="Nhập mật khẩu" />
+                            <button type="button" @onclick="() => showLoginPassword = !showLoginPassword" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; color: #64748b; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; padding: 4px; z-index: 5;" title="@(showLoginPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu")">
+                                <i class="bi @(showLoginPassword ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                            </button>
+                        </div>
+                        <ValidationMessage For="@(() => loginModel.Password)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
                     </div>
                     <button type="submit" class="btn-primary" disabled="@IsLoading">
                         @(IsLoading ? "Processing..." : "Login")
@@ -55,14 +61,53 @@
                         <ValidationMessage For="@(() => registerModel.FullName)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
                     </div>
                     <div class="form-group">
+                        <label>Tên đăng nhập (Username)</label>
+                        <InputText class="form-control" @bind-Value="registerModel.Username" placeholder="Nhập tên đăng nhập" @onblur="OnUsernameBlur" />
+                        <ValidationMessage For="@(() => registerModel.Username)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                        @if (!string.IsNullOrEmpty(usernameStatusMessage))
+                        {
+                            <div style="font-size: 0.8rem; margin-top: 5px; font-weight: 600; color: @(isUsernameTaken ? "var(--ig-danger)" : "#16a34a");">
+                                @usernameStatusMessage
+                            </div>
+                        }
+                    </div>
+                    <div class="form-group">
                         <label>Email</label>
                         <InputText type="email" class="form-control" @bind-Value="registerModel.Email" placeholder="Enter your email" />
                         <ValidationMessage For="@(() => registerModel.Email)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
                     </div>
                     <div class="form-group">
-                        <label>Password</label>
-                        <InputText type="password" class="form-control" @bind-Value="registerModel.Password" placeholder="Create a password" />
+                        <label>Mật khẩu (Password)</label>
+                        <div style="position: relative;">
+                            <InputText type="@(showPassword ? "text" : "password")" class="form-control" style="padding-right: 42px;" @bind-Value="registerModel.Password" @oninput="OnPasswordInput" placeholder="Nhập mật khẩu" />
+                            <button type="button" @onclick="() => showPassword = !showPassword" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; color: #64748b; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; padding: 4px; z-index: 5;" title="@(showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu")">
+                                <i class="bi @(showPassword ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                            </button>
+                        </div>
                         <ValidationMessage For="@(() => registerModel.Password)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                        
+                        @if (!string.IsNullOrEmpty(registerModel.Password))
+                        {
+                            <div class="pw-strength-container" style="margin-top: 8px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 0.78rem; font-weight: 600;">
+                                    <span style="color: #64748b;">Độ mạnh mật khẩu:</span>
+                                    <span style="color: @GetPasswordStrengthColor(); font-weight: 700;">@GetPasswordStrengthLabel()</span>
+                                </div>
+                                <div style="height: 6px; background: #e2e8f0; border-radius: 10px; overflow: hidden; display: flex;">
+                                    <div style="width: @(GetPasswordStrengthPercent())%; background: @GetPasswordStrengthColor(); transition: all 0.3s ease; height: 100%; border-radius: 10px;"></div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div class="form-group">
+                        <label>Xác nhận mật khẩu (Confirm Password)</label>
+                        <div style="position: relative;">
+                            <InputText type="@(showConfirmPassword ? "text" : "password")" class="form-control" style="padding-right: 42px;" @bind-Value="registerModel.ConfirmPassword" placeholder="Nhập lại mật khẩu để xác nhận" />
+                            <button type="button" @onclick="() => showConfirmPassword = !showConfirmPassword" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; color: #64748b; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; padding: 4px; z-index: 5;" title="@(showConfirmPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu")">
+                                <i class="bi @(showConfirmPassword ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                            </button>
+                        </div>
+                        <ValidationMessage For="@(() => registerModel.ConfirmPassword)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
                     </div>
                     <button type="submit" class="btn-primary" disabled="@IsLoading">
                         @(IsLoading ? "Processing..." : "Register")
@@ -89,6 +134,12 @@
     private bool IsLogin = true;
     private bool IsLoading = false;
     private string ErrorMessage = string.Empty;
+    private string usernameStatusMessage = string.Empty;
+    private bool isUsernameTaken = false;
+
+    private bool showLoginPassword = false;
+    private bool showPassword = false;
+    private bool showConfirmPassword = false;
 
     private LoginRequest loginModel = new();
     private RegisterRequest registerModel = new();
@@ -112,6 +163,11 @@
     {
         IsLogin = isLogin;
         ErrorMessage = string.Empty;
+        usernameStatusMessage = string.Empty;
+        isUsernameTaken = false;
+        showLoginPassword = false;
+        showPassword = false;
+        showConfirmPassword = false;
         IsVisible = true;
         StateHasChanged();
     }
@@ -126,6 +182,101 @@
     {
         IsLogin = isLogin;
         ErrorMessage = string.Empty;
+        usernameStatusMessage = string.Empty;
+        isUsernameTaken = false;
+        showLoginPassword = false;
+        showPassword = false;
+        showConfirmPassword = false;
+    }
+
+    private void OnPasswordInput(ChangeEventArgs e)
+    {
+        registerModel.Password = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private int GetPasswordStrengthScore()
+    {
+        var pwd = registerModel.Password;
+        if (string.IsNullOrEmpty(pwd)) return 0;
+
+        int score = 0;
+        if (pwd.Length >= 6) score++;
+        if (pwd.Length >= 10) score++;
+        if (System.Text.RegularExpressions.Regex.IsMatch(pwd, @"[a-z]") && System.Text.RegularExpressions.Regex.IsMatch(pwd, @"[A-Z]")) score++;
+        if (System.Text.RegularExpressions.Regex.IsMatch(pwd, @"[0-9]")) score++;
+        if (System.Text.RegularExpressions.Regex.IsMatch(pwd, @"[^a-zA-Z0-9]")) score++;
+
+        return score;
+    }
+
+    private string GetPasswordStrengthLabel()
+    {
+        var score = GetPasswordStrengthScore();
+        return score switch
+        {
+            1 or 2 => "Yếu",
+            3 => "Trung bình",
+            4 => "Mạnh",
+            5 => "Rất mạnh",
+            _ => ""
+        };
+    }
+
+    private string GetPasswordStrengthColor()
+    {
+        var score = GetPasswordStrengthScore();
+        return score switch
+        {
+            1 or 2 => "#ef4444",
+            3 => "#f59e0b",
+            4 => "#10b981",
+            5 => "#059669",
+            _ => "#e2e8f0"
+        };
+    }
+
+    private int GetPasswordStrengthPercent()
+    {
+        var score = GetPasswordStrengthScore();
+        return score switch
+        {
+            1 => 20,
+            2 => 40,
+            3 => 65,
+            4 => 85,
+            5 => 100,
+            _ => 0
+        };
+    }
+
+    private async Task OnUsernameBlur()
+    {
+        if (string.IsNullOrWhiteSpace(registerModel.Username) || registerModel.Username.Trim().Length < 3)
+        {
+            usernameStatusMessage = string.Empty;
+            isUsernameTaken = false;
+            return;
+        }
+
+        var username = registerModel.Username.Trim();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(username, @"^[a-zA-Z0-9]+$"))
+        {
+            usernameStatusMessage = string.Empty;
+            isUsernameTaken = false;
+            StateHasChanged();
+            return;
+        }
+
+        isUsernameTaken = await AuthService.CheckUsernameExistsAsync(username);
+        if (isUsernameTaken)
+        {
+            usernameStatusMessage = "Tên đăng nhập này đã tồn tại. Vui lòng chọn tên khác.";
+        }
+        else
+        {
+            usernameStatusMessage = "Tên đăng nhập khả dụng!";
+        }
+        StateHasChanged();
     }
 
     private async Task HandleLogin()
@@ -141,7 +292,7 @@
         }
         else
         {
-            ErrorMessage = "Email hoặc mật khẩu không chính xác.";
+            ErrorMessage = "Tên đăng nhập / Email hoặc mật khẩu không chính xác.";
         }
         
         IsLoading = false;
@@ -151,18 +302,30 @@
     {
         IsLoading = true;
         ErrorMessage = string.Empty;
-        
-        var success = await AuthService.RegisterAsync(registerModel);
+        usernameStatusMessage = string.Empty;
+
+        // Check username existence before submitting
+        isUsernameTaken = await AuthService.CheckUsernameExistsAsync(registerModel.Username.Trim());
+        if (isUsernameTaken)
+        {
+            ErrorMessage = "Tên đăng nhập này đã tồn tại. Vui lòng chọn tên đăng nhập khác.";
+            usernameStatusMessage = "Tên đăng nhập này đã tồn tại.";
+            IsLoading = false;
+            return;
+        }
+
+        var (success, error) = await AuthService.RegisterAsync(registerModel);
         if (success)
         {
             IsLogin = true; // Switch to login after successful registration
             ErrorMessage = "Đăng ký thành công! Vui lòng đăng nhập.";
+            registerModel = new();
         }
         else
         {
-            ErrorMessage = "Đăng ký thất bại. Email có thể đã được sử dụng.";
+            ErrorMessage = !string.IsNullOrEmpty(error) ? error : "Đăng ký thất bại. Email hoặc Tên đăng nhập có thể đã được sử dụng.";
         }
-        
+
         IsLoading = false;
     }
 
@@ -173,52 +336,31 @@
         ErrorMessage = string.Empty;
         StateHasChanged();
 
-        if (IsLogin)
+        var (success, error) = await AuthService.LoginWithGoogleAsync(idToken);
+        if (success)
         {
-            // ─── Chế độ ĐĂNG NHẬP: chỉ tìm tài khoản đã có ───
-            var (success, error) = await AuthService.LoginWithGoogleAsync(idToken);
-            if (success)
-            {
-                Close();
-                NavigationManager.NavigateTo("/ielts", forceLoad: false);
-            }
-            else
-            {
-                if (error.Contains("UserNotRegistered|"))
-                {
-                    // Gợi ý user chuyển sang tab đăng ký
-                    ErrorMessage = "Tài khoản Google này chưa được đăng ký. Hãy chuyển sang tab Đăng ký để tạo tài khoản mới.";
-                }
-                else
-                {
-                    ErrorMessage = "Đăng nhập Google thất bại: " + error;
-                }
-            }
+            Close();
+            NavigationManager.NavigateTo("/ielts", forceLoad: false);
         }
         else
         {
-            // ─── Chế độ ĐĂNG KÝ: tạo tài khoản mới từ Google ───
-            var (success, error) = await AuthService.RegisterWithGoogleAsync(idToken);
-            if (success)
+            if (error.Contains("UserNotRegistered|"))
             {
-                Close();
-                NavigationManager.NavigateTo("/ielts", forceLoad: false);
+                var emailParts = error.Split("UserNotRegistered|");
+                if (emailParts.Length > 1) 
+                {
+                    var email = emailParts[1].Trim('"', '\r', '\n');
+                    SwitchMode(false); // Switch to register mode
+                    registerModel.Email = email;
+                    ErrorMessage = "Tài khoản chưa được đăng ký. Vui lòng tạo tài khoản mới.";
+                }
             }
             else
             {
-                if (error.Contains("EmailAlreadyExists|"))
-                {
-                    // Email đã tồn tại → gợi ý đăng nhập
-                    SwitchMode(true);
-                    ErrorMessage = "Email Google này đã có tài khoản. Vui lòng đăng nhập thay vì đăng ký.";
-                }
-                else
-                {
-                    ErrorMessage = "Đăng ký Google thất bại: " + error;
-                }
+                ErrorMessage = "Đăng nhập Google thất bại: " + error;
             }
         }
-
+        
         IsLoading = false;
         StateHasChanged();
     }
