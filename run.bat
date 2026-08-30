@@ -1,3 +1,3 @@
 @echo off
-echo [ieltsHSK] Starting Frontend (connected to Cloud Backend: https://ieltshsk-1.onrender.com)...
+start cmd /k "cd backend\src\Backend.Api && dotnet watch run"
 start cmd /k "cd frontend\src\Frontend.App && dotnet watch run"
