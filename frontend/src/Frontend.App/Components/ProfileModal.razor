@@ -58,16 +58,25 @@
 
                 <div class="header-name-box">
                     <div class="name-row">
-                        <h3 class="user-fullname">@(string.IsNullOrWhiteSpace(profile.FullName) ? (string.IsNullOrWhiteSpace(profile.DisplayName) ? username : profile.DisplayName) : profile.FullName)</h3>
+                        <h3 class="user-fullname">@ResolvedTitleName</h3>
                         @if (isAdmin)
                         {
                             <span class="role-badge badge-admin"><i class="bi bi-shield-check"></i> Admin</span>
                         }
                     </div>
                     <div class="user-meta-row">
-                        <span class="user-tag">@@@username</span>
-                        <span class="meta-dot">•</span>
-                        <span class="user-email-text">@userEmail</span>
+                        @if (!string.IsNullOrWhiteSpace(ResolvedHandleTag))
+                        {
+                            <span class="user-tag">@@@ResolvedHandleTag</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(userEmail))
+                        {
+                            @if (!string.IsNullOrWhiteSpace(ResolvedHandleTag))
+                            {
+                                <span class="meta-dot">•</span>
+                            }
+                            <span class="user-email-text">@userEmail</span>
+                        }
                         @if (currentStreak > 0)
                         {
                             <span class="meta-dot">•</span>
@@ -109,12 +118,12 @@
                         <div class="form-grid">
                             <div class="form-field">
                                 <label class="field-label">Họ và tên</label>
-                                <input class="form-control-custom" @bind="profile.FullName" placeholder="Nhập họ và tên..." maxlength="80" />
+                                <input class="form-control-custom" @bind="profile.FullName" @bind:event="oninput" placeholder="Nhập họ và tên..." maxlength="80" />
                             </div>
 
                             <div class="form-field">
-                                <label class="field-label">Tên hiển thị</label>
-                                <input class="form-control-custom" @bind="profile.DisplayName" placeholder="Tên thường gọi..." maxlength="50" />
+                                <label class="field-label">Tên hiển thị (@@)</label>
+                                <input class="form-control-custom" @bind="profile.DisplayName" @bind:event="oninput" placeholder="Ví dụ: cuongnane..." maxlength="50" />
                             </div>
 
                             <div class="form-field full-width">
@@ -307,6 +316,27 @@
 
     private static readonly string[] AvailableEmojis = ["🎓", "🦁", "🚀", "🐼", "🔥", "💎", "⭐", "🐉", "🦊", "🎯", "👑", "🦄"];
     private static readonly string[] AvailableColors = ["#6366f1", "#0ea5e9", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6"];
+
+    private string ResolvedTitleName
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(profile.FullName)) return profile.FullName;
+            if (!string.IsNullOrWhiteSpace(profile.DisplayName)) return profile.DisplayName;
+            if (!string.IsNullOrWhiteSpace(username)) return username;
+            return "Học viên";
+        }
+    }
+
+    private string ResolvedHandleTag
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(profile.DisplayName)) return profile.DisplayName.Trim();
+            if (!string.IsNullOrWhiteSpace(username)) return username.Trim();
+            return "";
+        }
+    }
 
     public async Task OpenAsync(string tab = "info")
     {
