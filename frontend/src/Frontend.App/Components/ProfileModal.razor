@@ -117,8 +117,11 @@
                     <div class="tab-pane">
                         <div class="form-grid">
                             <div class="form-field">
-                                <label class="field-label">Họ và tên</label>
-                                <input class="form-control-custom" @bind="profile.FullName" @bind:event="oninput" placeholder="Nhập họ và tên..." maxlength="80" />
+                                <label class="field-label">
+                                    Họ và tên
+                                    <span class="field-badge-readonly"><i class="bi bi-lock-fill"></i> Cố định từ tài khoản</span>
+                                </label>
+                                <input class="form-control-custom readonly-field" value="@ResolvedFullName" readonly title="Họ và tên tự động từ hồ sơ, không thể thay đổi" />
                             </div>
 
                             <div class="form-field">
@@ -317,13 +320,25 @@
     private static readonly string[] AvailableEmojis = ["🎓", "🦁", "🚀", "🐼", "🔥", "💎", "⭐", "🐉", "🦊", "🎯", "👑", "🦄"];
     private static readonly string[] AvailableColors = ["#6366f1", "#0ea5e9", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6"];
 
+    private string userFullNameClaim = "";
+
+    private string ResolvedFullName
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(profile.FullName)) return profile.FullName;
+            if (!string.IsNullOrWhiteSpace(userFullNameClaim)) return userFullNameClaim;
+            return "Học viên";
+        }
+    }
+
     private string ResolvedTitleName
     {
         get
         {
             if (!string.IsNullOrWhiteSpace(profile.FullName)) return profile.FullName;
+            if (!string.IsNullOrWhiteSpace(userFullNameClaim)) return userFullNameClaim;
             if (!string.IsNullOrWhiteSpace(profile.DisplayName)) return profile.DisplayName;
-            if (!string.IsNullOrWhiteSpace(username)) return username;
             return "Học viên";
         }
     }
@@ -332,8 +347,10 @@
     {
         get
         {
-            if (!string.IsNullOrWhiteSpace(profile.DisplayName)) return profile.DisplayName.Trim();
-            if (!string.IsNullOrWhiteSpace(username)) return username.Trim();
+            if (!string.IsNullOrWhiteSpace(profile.DisplayName)) 
+                return profile.DisplayName.Trim().Replace(" ", "");
+            if (!string.IsNullOrWhiteSpace(username) && !username.Contains(' ') && username != userFullNameClaim && username != profile.FullName) 
+                return username.Trim();
             return "";
         }
     }
@@ -361,10 +378,26 @@
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
             var user = authState.User;
             isAdmin = user.IsInRole("Admin") || user.HasClaim(c => c.Type == ClaimTypes.Role && c.Value == "Admin");
-            username = user.Identity?.Name ?? "user";
+            username = user.Identity?.Name ?? "";
             userEmail = user.FindFirst(ClaimTypes.Email)?.Value ?? "";
 
+            userFullNameClaim = user.FindFirst("name")?.Value 
+                             ?? user.FindFirst(ClaimTypes.Name)?.Value 
+                             ?? user.FindFirst(ClaimTypes.GivenName)?.Value 
+                             ?? "";
+
             profile = await ProfileSvc.GetAsync();
+            if (string.IsNullOrWhiteSpace(profile.FullName) && !string.IsNullOrWhiteSpace(userFullNameClaim))
+            {
+                profile.FullName = userFullNameClaim;
+            }
+
+            // If DisplayName was accidentally equal to FullName from past bug, clean it up so it is empty
+            if (!string.IsNullOrWhiteSpace(profile.DisplayName) && (profile.DisplayName == profile.FullName || profile.DisplayName == userFullNameClaim))
+            {
+                profile.DisplayName = "";
+            }
+
             if (string.IsNullOrWhiteSpace(profile.AvatarEmoji)) profile.AvatarEmoji = "🎓";
             if (string.IsNullOrWhiteSpace(profile.AvatarColor)) profile.AvatarColor = "#6366f1";
             if (string.IsNullOrWhiteSpace(profile.TargetExam)) profile.TargetExam = "HSK";
