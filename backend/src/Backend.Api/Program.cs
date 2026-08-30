@@ -918,12 +918,17 @@ app.MapPut("/api/user/profile", [Microsoft.AspNetCore.Authorization.Authorize] a
         {
             if (!string.IsNullOrWhiteSpace(request.Username))
             {
-                var newUsername = request.Username.Trim();
+                var newUsername = request.Username.Trim().ToLowerInvariant();
+                if (!System.Text.RegularExpressions.Regex.IsMatch(newUsername, @"^[a-z0-9._-]{3,30}$"))
+                {
+                    return Results.BadRequest(new { message = "Tên hiển thị (username) chỉ được gồm chữ cái không dấu (a-z), số (0-9), dấu '.', '_', '-' và từ 3 đến 30 ký tự, không dùng tiếng Việt có dấu." });
+                }
+
                 if (!string.Equals(dbUser.Username, newUsername, StringComparison.OrdinalIgnoreCase))
                 {
                     var isTaken = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
                         dbContext.Users,
-                        u => u.Id != userId && u.Username.ToLower() == newUsername.ToLower(),
+                        u => u.Id != userId && u.Username.ToLower() == newUsername,
                         cancellationToken);
 
                     if (isTaken)
