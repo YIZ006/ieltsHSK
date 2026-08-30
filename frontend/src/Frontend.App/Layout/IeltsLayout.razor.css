@@ -1,220 +1,82 @@
-.dashboard-wrapper {
+.app-shell {
     display: flex;
-    height: 100vh;
-    width: 100vw;
+    min-height: 100vh;
     background-color: var(--ig-bg);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color: var(--ig-text);
-    overflow: hidden;
 }
 
-/* Sidebar */
-.sidebar {
-    width: 250px;
-    background-color: var(--ig-bg);
-    border-right: 1px solid var(--ig-border);
+.app-main {
+    flex: 1;
+    min-width: 0;
+    margin-left: 260px;
     display: flex;
     flex-direction: column;
-    padding: 20px 10px;
-    z-index: 10;
+    min-height: 100vh;
+    transition: margin-left 0.28s cubic-bezier(0.32,0.72,0,1);
 }
 
-.sidebar-header {
-    padding: 10px 15px;
-    margin-bottom: 20px;
+.sidebar-collapsed .app-main {
+    margin-left: 72px;
 }
 
-.brand-logo {
-    font-size: 1.8rem;
-    font-weight: 800;
-    font-style: italic;
-    color: var(--ig-text);
+.no-sidebar .app-main {
+    margin-left: 0 !important;
+}
+
+.top-navbar {
+    position: sticky;
+    top: 0;
+    z-index: 500;
+    background-color: var(--ig-bg);
+    border-bottom: 1px solid var(--ig-border);
+    backdrop-filter: blur(8px);
+}
+
+.top-navbar-inner {
     display: flex;
     align-items: center;
-    gap: 10px;
-    text-decoration: none !important;
+    gap: 8px;
+    width: 100%;
 }
 
-.brand-logo i {
-    color: var(--ig-text);
+.sb-mobile-toggle {
+    display: none;
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    border: 1px solid #ede9fe;
+    background: #f5f3ff;
+    color: #6c63ff;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    cursor: pointer;
+    margin-left: 8px;
+    transition: background 0.2s, transform 0.2s;
 }
 
-.sidebar-nav {
-    flex-grow: 1;
+.sb-mobile-toggle:hover {
+    background: #ede9fe;
+    transform: scale(1.05);
+}
+
+main {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 5px;
 }
 
-.nav-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 15px;
-    border-radius: 8px;
-    color: var(--ig-text);
-    text-decoration: none !important;
-    font-weight: 400;
-    transition: all 0.2s ease;
+article.content {
+    flex: 1;
+    padding: 2rem 1.5rem !important;
 }
 
-.nav-item:hover {
-    background-color: rgba(0,0,0,0.05);
-    color: var(--ig-text);
-}
-
-@media (prefers-color-scheme: dark) {
-    .nav-item:hover {
-        background-color: rgba(255,255,255,0.1);
+@media (min-width: 641px) {
+    article.content {
+        padding: 3rem 2rem !important;
     }
 }
 
-.nav-item.active {
-    background-color: transparent;
-    color: var(--ig-text);
-    font-weight: 700;
-}
-
-.nav-item i {
-    font-size: 1.2rem;
-}
-
-.sidebar-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 15px;
-    border-top: 1px solid var(--ig-border);
-    margin-top: auto;
-}
-
-.user-info {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    overflow: hidden;
-}
-
-.user-avatar {
-    width: 36px;
-    height: 36px;
-    background-color: rgba(0, 149, 246, 0.1);
-    color: var(--ig-primary);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    flex-shrink: 0;
-}
-
-.user-details {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-.user-email {
-    font-size: 0.85rem;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 120px;
-}
-
-.user-role {
-    font-size: 0.75rem;
-    color: var(--ig-text-secondary);
-}
-
-.btn-logout {
-    background: none;
-    border: none;
-    color: var(--ig-text-secondary);
-    cursor: pointer;
-    font-size: 1.2rem;
-    padding: 5px;
-    border-radius: 4px;
-    transition: color 0.2s;
-}
-
-.btn-logout:hover {
-    color: var(--ig-danger);
-    background-color: rgba(237, 73, 86, 0.1);
-}
-
-/* Main Section */
-.main-wrapper {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-/* Topbar */
-.topbar {
-    height: 70px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 30px;
-    background-color: transparent;
-}
-
-.search-bar {
-    display: flex;
-    align-items: center;
-    background-color: var(--ig-bg);
-    border: 1px solid var(--ig-border);
-    padding: 8px 15px;
-    border-radius: 8px;
-    width: 300px;
-    gap: 10px;
-}
-
-.search-bar i {
-    color: var(--ig-text-secondary);
-}
-
-.search-bar input {
-    border: none;
-    background: transparent;
-    outline: none;
-    width: 100%;
-    color: var(--ig-text);
-    font-size: 0.95rem;
-}
-
-.topbar-actions {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.topbar-username {
-    font-weight: 600;
-    font-size: 0.95rem;
-    color: var(--ig-text);
-}
-
-.topbar-avatar {
-    width: 32px;
-    height: 32px;
-    background-color: var(--ig-bg);
-    border: 1px solid var(--ig-border);
-    color: var(--ig-text);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-}
-
-/* Content Area */
-.content-area {
-    flex-grow: 1;
-    padding: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
+@media (max-width: 900px) {
+    .app-main { margin-left: 0 !important; }
+    .sb-mobile-toggle { display: inline-flex; }
 }

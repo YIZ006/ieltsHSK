@@ -546,6 +546,13 @@ app.MapPost("/api/auth/register", async (RegisterRequest request, IAuthService a
     }
 });
 
+app.MapGet("/api/auth/check-username", async (string? username, IAuthService authService, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(username)) return Results.Ok(new { isTaken = false });
+    var isTaken = await authService.IsUsernameTakenAsync(username, cancellationToken);
+    return Results.Ok(new { isTaken });
+});
+
 app.MapPost("/api/auth/login", async (LoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
 {
     try
@@ -1510,6 +1517,83 @@ app.MapGet("/api/hsk/sections", async (Backend.Infrastructure.Persistence.AppDbC
                 OrderIndex = s.OrderIndex
             }), cancellationToken);
     return Results.Ok(sections);
+});
+
+// ─── Navigation (dynamic sidebar) ───
+app.MapGet("/api/navigation", async (string? language, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var query = dbContext.LearningSections.AsQueryable();
+    if (!string.IsNullOrWhiteSpace(language))
+        query = query.Where(s => s.Language == language);
+    var sections = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        query.OrderBy(s => s.Language).ThenBy(s => s.OrderIndex)
+            .Select(s => new Backend.Application.DTOs.LearningSectionDto
+            {
+                Id = s.Id,
+                Name = s.Name,
+                Description = s.Description,
+                Icon = s.Icon,
+                Route = s.Route,
+                Language = s.Language,
+                OrderIndex = s.OrderIndex
+            }), cancellationToken);
+    return Results.Ok(sections);
+});
+
+// Admin: CRUD navigation
+app.MapGet("/api/admin/navigation", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var all = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.LearningSections.OrderBy(s => s.Language).ThenBy(s => s.OrderIndex)
+            .Select(s => new Backend.Application.DTOs.LearningSectionDto
+            {
+                Id = s.Id, Name = s.Name, Description = s.Description, Icon = s.Icon, Route = s.Route, Language = s.Language, OrderIndex = s.OrderIndex
+            }), cancellationToken);
+    return Results.Ok(all);
+});
+
+app.MapPost("/api/admin/navigation", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Backend.Application.DTOs.LearningSectionDto dto, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Route) || string.IsNullOrWhiteSpace(dto.Language))
+        return Results.BadRequest("Name, Route and Language are required.");
+    var entity = new Backend.Domain.Entities.LearningSection
+    {
+        Name = dto.Name.Trim(),
+        Description = dto.Description ?? "",
+        Icon = string.IsNullOrWhiteSpace(dto.Icon) ? "bi-circle" : dto.Icon.Trim(),
+        Route = dto.Route.Trim(),
+        Language = dto.Language.Trim().ToUpperInvariant(),
+        OrderIndex = dto.OrderIndex <= 0 ? 99 : dto.OrderIndex
+    };
+    dbContext.LearningSections.Add(entity);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    dto.Id = entity.Id;
+    return Results.Created($"/api/admin/navigation/{entity.Id}", dto);
+});
+
+app.MapPut("/api/admin/navigation/{id:int}", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Application.DTOs.LearningSectionDto dto, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var entity = await dbContext.LearningSections.FindAsync(new object[] { id }, cancellationToken);
+    if (entity == null) return Results.NotFound();
+    if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Route) || string.IsNullOrWhiteSpace(dto.Language))
+        return Results.BadRequest("Name, Route and Language are required.");
+    entity.Name = dto.Name.Trim();
+    entity.Description = dto.Description ?? "";
+    entity.Icon = string.IsNullOrWhiteSpace(dto.Icon) ? "bi-circle" : dto.Icon.Trim();
+    entity.Route = dto.Route.Trim();
+    entity.Language = dto.Language.Trim().ToUpperInvariant();
+    entity.OrderIndex = dto.OrderIndex;
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(dto);
+});
+
+app.MapDelete("/api/admin/navigation/{id:int}", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var entity = await dbContext.LearningSections.FindAsync(new object[] { id }, cancellationToken);
+    if (entity == null) return Results.NotFound();
+    dbContext.LearningSections.Remove(entity);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.NoContent();
 });
 
 // ─── HSK: Upload media (image/audio) ───

@@ -100,6 +100,16 @@ builder.Services.AddScoped(sp =>
     return new StoryService(httpClient);
 });
 
+// NavigationService: sidebar động theo chương trình TOEIC/IELTS/HSK
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    return new NavigationService(httpClient);
+});
+
 // HskService: tải dữ liệu HSK (gắn JWT tự động qua AuthHeaderHandler)
 builder.Services.AddScoped<AuthHeaderHandler>();
 builder.Services.AddScoped(sp =>

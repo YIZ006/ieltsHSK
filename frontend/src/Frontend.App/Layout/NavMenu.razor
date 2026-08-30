@@ -6,25 +6,8 @@
 @implements IDisposable
 
 <nav class="navbar">
-    <div class="navbar-brand">
-        <a class="brand-logo" href="/" style="text-decoration: none; color: inherit;">
-            <i class="bi bi-box-fill"></i>
-            <span class="brand-text">ieltsHSK</span>
-        </a>
-    </div>
-
-    <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-        <i class="bi bi-list"></i>
-    </button>
-
-    <div class="@NavMenuCssClass navbar-collapse" @onclick="ToggleNavMenu">
-        <ul class="navbar-nav me-auto">
-            <li class="nav-item">
-                <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                    Home
-                </NavLink>
-            </li>
-        </ul>
+    <div class="navbar-collapse">
+        <div class="navbar-spacer"></div>
 
         <div class="exam-toolbar exam-toolbar-desktop">
             @if (ExamHeader.Visible)
@@ -38,7 +21,7 @@
             }
         </div>
 
-        <ul class="navbar-nav auth-nav">
+        <ul class="navbar-nav auth-nav ms-auto">
             <AuthorizeView>
                 <Authorized>
                     <li class="nav-item streak-menu">
@@ -139,14 +122,11 @@
     [Parameter]
     public EventCallback OnShowRegister { get; set; }
 
-    private bool collapseNavMenu = true;
     private bool showUserMenu = false;
     private bool showStreakMenu = false;
     private string welcomeName = "User";
     private int currentStreak;
     private int bestStreak;
-
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -164,11 +144,6 @@
         bestStreak = await StreakSvc.GetBestStreakAsync();
 
         ExamHeader.OnChange += OnExamHeaderChanged;
-    }
-
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
     }
 
     private void ToggleUserMenu()
