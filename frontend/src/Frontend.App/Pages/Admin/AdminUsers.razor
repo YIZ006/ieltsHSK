@@ -20,7 +20,7 @@
             </div>
         </div>
         <div class="header-right">
-            <button class="btn-refresh" @onclick="LoadUsers" disabled="@isLoading" title="Tải lại danh sách">
+            <button class="btn-refresh" @onclick="() => LoadUsers(false)" disabled="@isLoading" title="Tải lại danh sách">
                 <i class="bi bi-arrow-clockwise @(isLoading ? "spin-icon" : "")"></i>
                 <span>Làm mới</span>
             </button>
@@ -154,7 +154,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var user in filteredUsers)
+                        @foreach (var user in pagedUsers)
                         {
                             <tr class="@(user.IsActive ? "" : "row-disabled")">
                                 <td>
@@ -223,8 +223,45 @@
                 </table>
             </div>
             
-            <div class="table-footer">
-                <span>Hiển thị <b>@filteredUsers.Count()</b> / @(users?.Count ?? 0) tài khoản</span>
+            <!-- Pagination Bar -->
+            <div class="pagination-footer">
+                <div class="pagination-info">
+                    Hiển thị <b>@((currentPage - 1) * pageSize + 1)</b> - <b>@Math.Min(currentPage * pageSize, filteredUsers.Count())</b> trong tổng số <b>@filteredUsers.Count()</b> tài khoản
+                </div>
+
+                <div class="pagination-controls">
+                    <div class="page-size-selector">
+                        <span>Mỗi trang:</span>
+                        <select @bind="pageSize" @bind:after="() => currentPage = 1" class="page-size-select">
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+
+                    <div class="page-nav-buttons">
+                        <button class="btn-page-nav" disabled="@(currentPage <= 1)" @onclick="() => currentPage = 1" title="Trang đầu">
+                            <i class="bi bi-chevron-double-left"></i>
+                        </button>
+                        <button class="btn-page-nav" disabled="@(currentPage <= 1)" @onclick="() => currentPage--" title="Trang trước">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+
+                        @foreach (var p in GetVisiblePageNumbers())
+                        {
+                            <button class="btn-page-num @(currentPage == p ? "active" : "")" @onclick="() => currentPage = p">
+                                @p
+                            </button>
+                        }
+
+                        <button class="btn-page-nav" disabled="@(currentPage >= totalPages)" @onclick="() => currentPage++" title="Trang sau">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                        <button class="btn-page-nav" disabled="@(currentPage >= totalPages)" @onclick="() => currentPage = totalPages" title="Trang cuối">
+                            <i class="bi bi-chevron-double-right"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
         }
     </div>
@@ -362,6 +399,8 @@
 <Frontend.App.Components.AuthModal IsVisible="@isAuthModalOpen" IsVisibleChanged="HandleAuthModalChanged" />
 
 @code {
+    private static List<UserDto>? _cachedUsers;
+
     [SupplyParameterFromQuery(Name = "domain")]
     public string? DomainParam { get; set; }
 
@@ -372,6 +411,22 @@
     private bool isLoading = true;
     private bool isSaving = false;
     private string? errorMessage = null;
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages => Math.Max(1, (int)Math.Ceiling((double)(filteredUsers?.Count() ?? 0) / pageSize));
+    private IEnumerable<UserDto> pagedUsers => filteredUsers?.Skip((currentPage - 1) * pageSize).Take(pageSize) ?? Enumerable.Empty<UserDto>();
+
+    private List<int> GetVisiblePageNumbers()
+    {
+        var list = new List<int>();
+        int start = Math.Max(1, currentPage - 2);
+        int end = Math.Min(totalPages, start + 4);
+        if (end - start < 4) start = Math.Max(1, end - 4);
+        for (int i = start; i <= end; i++) list.Add(i);
+        return list;
+    }
 
     // Auth Modal
     private bool isAuthModalOpen = false;
@@ -388,7 +443,13 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadUsers();
+        if (_cachedUsers != null && _cachedUsers.Count > 0)
+        {
+            users = _cachedUsers;
+            isLoading = false;
+        }
+
+        await LoadUsers(silent: _cachedUsers != null && _cachedUsers.Count > 0);
     }
 
     protected override void OnParametersSet()
@@ -399,9 +460,9 @@
         }
     }
 
-    private async Task LoadUsers()
+    private async Task LoadUsers(bool silent = false)
     {
-        isLoading = true;
+        if (!silent) isLoading = true;
         errorMessage = null;
         try
         {
@@ -419,6 +480,7 @@
             else
             {
                 users = result.Users;
+                _cachedUsers = users;
             }
         }
         catch (Exception ex)
