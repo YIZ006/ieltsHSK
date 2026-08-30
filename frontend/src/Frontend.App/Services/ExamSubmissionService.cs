@@ -97,6 +97,24 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
                             hasChanges = true;
                         }
                     }
+                    else
+                    {
+                        local.Add(new IeltsSubmissionRecord
+                        {
+                            Id = srv.Id.ToString(),
+                            Skill = srv.Skill,
+                            ExamUrl = srv.ExamUrl,
+                            ExamTitle = !string.IsNullOrWhiteSpace(srv.ExamUrl) ? Path.GetFileNameWithoutExtension(srv.ExamUrl) : srv.Skill,
+                            SessionId = srv.SessionId,
+                            BandScore = srv.BandScore,
+                            CorrectCount = srv.CorrectCount,
+                            TotalQuestions = srv.TotalCount,
+                            Status = srv.Status,
+                            TeacherFeedback = srv.TeacherFeedback,
+                            SubmittedAt = srv.SubmittedAt
+                        });
+                        hasChanges = true;
+                    }
                 }
 
                 if (hasChanges)

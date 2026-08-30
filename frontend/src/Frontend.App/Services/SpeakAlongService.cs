@@ -11,6 +11,8 @@ public class SpeakAlongService
     private readonly HttpClient _http;
     private readonly IJSRuntime _js;
     private readonly string _backendApiBaseUrl;
+    private readonly Dictionary<string, SpeakAlongExamData> _examMemoryCache = new();
+    private List<AudioLessonDto>? _audioLessonsMemoryCache;
 
     public SpeakAlongService(HttpClient http, IJSRuntime js, string? backendApiBaseUrl = null)
     {
@@ -27,9 +29,14 @@ public class SpeakAlongService
         return $"custom_speak_along_{clean}";
     }
 
-    public async Task<SpeakAlongExamData?> LoadExamAsync(string part)
+    public async Task<SpeakAlongExamData?> LoadExamAsync(string part, bool forceRefresh = false)
     {
         var cleanPart = part.ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+
+        if (!forceRefresh && _examMemoryCache.TryGetValue(cleanPart, out var memCached))
+        {
+            return memCached;
+        }
 
         // 1. Try to fetch from Backend & Cloudflare R2
         try
@@ -49,7 +56,8 @@ public class SpeakAlongService
                         var r2Data = await backendClient.GetFromJsonAsync<SpeakAlongExamData>(r2Url);
                         if (r2Data != null && r2Data.Items != null && r2Data.Items.Count > 0)
                         {
-                            // Cache to localStorage for offline
+                            // Cache to memory & localStorage for offline
+                            _examMemoryCache[cleanPart] = r2Data;
                             var key = GetStorageKey(part);
                             var json = JsonSerializer.Serialize(r2Data);
                             await _js.InvokeVoidAsync("localStorage.setItem", key, json);
@@ -74,6 +82,7 @@ public class SpeakAlongService
                 var localData = JsonSerializer.Deserialize<SpeakAlongExamData>(localJson);
                 if (localData != null && localData.Items != null && localData.Items.Count > 0)
                 {
+                    _examMemoryCache[cleanPart] = localData;
                     return localData;
                 }
             }
@@ -100,18 +109,26 @@ public class SpeakAlongService
             var data = await _http.GetFromJsonAsync<SpeakAlongExamData>(url);
             if (data != null && data.Items != null && data.Items.Count > 0)
             {
+                _examMemoryCache[cleanPart] = data;
                 return data;
             }
-            return GetSampleData(part);
+            var sample = GetSampleData(part);
+            _examMemoryCache[cleanPart] = sample;
+            return sample;
         }
         catch
         {
-            return GetSampleData(part);
+            var sample = GetSampleData(part);
+            _examMemoryCache[cleanPart] = sample;
+            return sample;
         }
     }
 
     public async Task<string?> SaveExamDataAsync(string part, SpeakAlongExamData data)
     {
+        var cleanPart = part.ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+        _examMemoryCache[cleanPart] = data;
+
         string? r2Url = null;
 
         // 1. Upload & Save to Cloudflare R2 via Backend API
@@ -174,7 +191,7 @@ public class SpeakAlongService
             if (response.IsSuccessStatusCode)
             {
                 // Reload exam into local state
-                await LoadExamAsync(part);
+                await LoadExamAsync(part, forceRefresh: true);
                 return true;
             }
             return false;
@@ -242,6 +259,8 @@ public class SpeakAlongService
     {
         try
         {
+            var cleanPart = part.ToLowerInvariant().Replace(" ", "").Replace("-", "").Replace("_", "");
+            _examMemoryCache.Remove(cleanPart);
             var key = GetStorageKey(part);
             await _js.InvokeVoidAsync("localStorage.removeItem", key);
         }
@@ -257,8 +276,13 @@ public class SpeakAlongService
 
     private const string AudioLessonsStorageKey = "ielts_audio_shadowing_lessons_catalog";
 
-    public async Task<List<AudioLessonDto>> LoadAudioLessonsAsync()
+    public async Task<List<AudioLessonDto>> LoadAudioLessonsAsync(bool forceRefresh = false)
     {
+        if (!forceRefresh && _audioLessonsMemoryCache != null && _audioLessonsMemoryCache.Count > 0)
+        {
+            return _audioLessonsMemoryCache;
+        }
+
         // 1. Try to fetch master catalog from Backend & Cloudflare R2
         try
         {
@@ -277,7 +301,8 @@ public class SpeakAlongService
                         var r2Lessons = await backendClient.GetFromJsonAsync<List<AudioLessonDto>>(r2Url);
                         if (r2Lessons != null && r2Lessons.Count > 0)
                         {
-                            // Cache to localStorage
+                            // Cache to memory & localStorage
+                            _audioLessonsMemoryCache = r2Lessons;
                             var json = JsonSerializer.Serialize(r2Lessons);
                             await _js.InvokeVoidAsync("localStorage.setItem", AudioLessonsStorageKey, json);
                             return r2Lessons;
@@ -300,6 +325,7 @@ public class SpeakAlongService
                 var cached = JsonSerializer.Deserialize<List<AudioLessonDto>>(localJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (cached != null && cached.Count > 0)
                 {
+                    _audioLessonsMemoryCache = cached;
                     return cached;
                 }
             }
@@ -315,6 +341,7 @@ public class SpeakAlongService
             var masterCatalog = await _http.GetFromJsonAsync<List<AudioLessonDto>>("sample-data/ielts_audio_shadowing_master_catalog.json");
             if (masterCatalog != null && masterCatalog.Count > 0)
             {
+                _audioLessonsMemoryCache = masterCatalog;
                 var json = JsonSerializer.Serialize(masterCatalog);
                 await _js.InvokeVoidAsync("localStorage.setItem", AudioLessonsStorageKey, json);
                 return masterCatalog;
@@ -330,6 +357,8 @@ public class SpeakAlongService
 
     public async Task SaveAudioLessonsAsync(List<AudioLessonDto> lessons)
     {
+        _audioLessonsMemoryCache = lessons;
+
         // 1. Sync to Cloudflare R2 via Backend API
         try
         {

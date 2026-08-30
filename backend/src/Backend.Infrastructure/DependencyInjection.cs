@@ -19,6 +19,31 @@ public static class DependencyInjection
                 })
                 .UseSnakeCaseNamingConvention()
                 .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
+
+        // Redis Distributed Cache & In-Memory Fallback
+        var redisConn = configuration["Redis:ConnectionString"] ?? "localhost:6379";
+        var redisEnabled = configuration.GetValue<bool?>("Redis:Enabled") ?? true;
+
+        if (redisEnabled && !string.IsNullOrWhiteSpace(redisConn))
+        {
+            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(sp =>
+            {
+                var options = StackExchange.Redis.ConfigurationOptions.Parse(redisConn);
+                options.AbortOnConnectFail = false; // Resilience: Do not crash if Redis is unavailable on startup
+                options.ConnectTimeout = 3000;
+                options.SyncTimeout = 3000;
+                options.AsyncTimeout = 3000;
+                return StackExchange.Redis.ConnectionMultiplexer.Connect(options);
+            });
+        }
+        else
+        {
+            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(_ => null!);
+        }
+
+        services.AddMemoryCache();
+        services.AddSingleton<ICacheService, Backend.Infrastructure.Services.RedisCacheService>();
+
         services.AddScoped<IAuthService, Backend.Infrastructure.Services.AuthService>();
         services.AddScoped<Backend.Application.Abstractions.IR2StorageService, Backend.Infrastructure.Services.R2StorageService>();
         services.AddScoped<Backend.Application.Abstractions.IAiGradingService, Backend.Infrastructure.Services.AiGradingService>();
@@ -109,6 +134,18 @@ public static class DependencyInjection
             };
             dbContext.Users.Add(adminUser);
             await dbContext.SaveChangesAsync();
+        }
+
+        // Ensure Admin role for admins
+        try
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                UPDATE users SET role = 'admin' WHERE email IN ('cuong20067@gmail.com', 'phamc13579@gmail.com');
+            ");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SeedData] Admin role update note: {ex.Message}");
         }
 
         // Seed Languages

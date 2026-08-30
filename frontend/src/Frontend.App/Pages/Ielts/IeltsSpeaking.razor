@@ -9,6 +9,7 @@
 @inject IJSRuntime JS
 @inject ExamSessionService ExamSession
 @inject ExamSubmissionService Submissions
+@inject ExamCheckpointService CheckpointService
 @inject NavigationManager Navigation
 @implements IDisposable
 
@@ -262,6 +263,13 @@
                                     <button class="sp-btn-secondary sp-btn-sm" @onclick="ReplayVideo">🔄 Repeat Question (@replaysLeft left)</button>
                                 }
                             </div>
+                            @if (replaysLeft > 0)
+                            {
+                                <div class="sp-repeat-note">
+                                    <i class="bi bi-exclamation-triangle-fill"></i>
+                                    <span><strong>Chú ý:</strong> Bấm <em>Repeat Question</em> sẽ phát lại video và <strong>làm mới (ghi âm lại từ đầu)</strong> toàn bộ câu trả lời của câu này.</span>
+                                </div>
+                            }
                         </div>
                     }
 
@@ -379,7 +387,7 @@
             <div style="margin-bottom: 12px;">
                 <span class="sp-score-label">Trạng thái bài thi: </span>
                 <strong style="color: @(savedSubmission.Status == "Graded" ? "#16a34a" : "#d97706");">
-                    @(savedSubmission.Status == "Graded" ? "🎉 Đã có kết quả chấm điểm" : "⏳ Đang chờ Admin/Giáo viên chấm điểm")
+                    @(savedSubmission.Status == "Graded" ? "🎉 Đã có kết quả chấm điểm" : "⏳ Đang chờ Giáo viên có trình độ chuyên môn chấm điểm")
                 </strong>
             </div>
             @if (savedSubmission.Status == "Graded" && savedSubmission.BandScore.HasValue && savedSubmission.BandScore.Value > 0)
@@ -412,7 +420,7 @@
             {
                 <div class="sp-pending-box" style="margin: 16px 0; padding: 16px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; color: #78350f; text-align: left;">
                     <p style="margin: 0; font-weight: 700; font-size: 0.95rem;"><i class="bi bi-hourglass-split"></i> Bài thi Speaking đã được ghi nhận thành công.</p>
-                    <p style="margin: 6px 0 0; font-size: 0.88rem; color: #92400e; line-height: 1.5;">Kỹ năng Speaking sẽ được Admin/Giáo viên trực tiếp nghe lại file ghi âm và đánh giá 4 tiêu chí chuẩn Cambridge IELTS (Fluency & Coherence, Lexical Resource, Grammatical Range & Accuracy, Pronunciation). Điểm số chính thức sẽ được cập nhật sau khi hoàn thành chấm bài.</p>
+                    <p style="margin: 6px 0 0; font-size: 0.88rem; color: #92400e; line-height: 1.5;">Kỹ năng Speaking sẽ được Giáo viên có trình độ chuyên môn trực tiếp nghe lại file ghi âm và đánh giá 4 tiêu chí chuẩn Cambridge IELTS (Fluency & Coherence, Lexical Resource, Grammatical Range & Accuracy, Pronunciation). Điểm số chính thức sẽ được cập nhật sau khi hoàn thành chấm bài.</p>
                 </div>
             }
             <div class="result-actions" style="display:flex; gap:12px; margin-top:24px; justify-content:center; flex-wrap:wrap;">
@@ -798,6 +806,15 @@
     private async Task ReplayVideo()
     {
         if (replaysLeft <= 0) return;
+
+        if (recordingSecondsElapsed > 2 || !string.IsNullOrWhiteSpace(liveTranscript))
+        {
+            var confirm = await JS.InvokeAsync<bool>(
+                "confirm",
+                "⚠️ Chú ý: Phát lại câu hỏi sẽ làm mới (xóa và ghi âm lại từ đầu) toàn bộ câu trả lời bạn vừa nói cho câu này.\n\nBạn có chắc chắn muốn nghe lại và trả lời lại không?");
+            if (!confirm) return;
+        }
+
         replaysLeft--;
         _timer?.Dispose(); // Stops recording timer
         try { _ = JS.InvokeVoidAsync("SpeakingInterop.stopRecording"); } catch { }
@@ -854,6 +871,7 @@
         savedSubmission = BuildSubmission(timeExpired);
         savedSubmission = await Submissions.SaveSpeakingSubmissionAsync(savedSubmission);
         scoreReport = savedSubmission.Score;
+        await CheckpointService.ClearCheckpointAsync("Speaking", currentExamUrl, QueryMockTestId);
 
         isFinished = true;
         sessionSecondsLeft = 0;

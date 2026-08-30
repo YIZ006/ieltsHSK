@@ -19,9 +19,18 @@ builder.Services.AddScoped(_ =>
 });
 
 builder.Services.AddBlazoredLocalStorage();
-builder.Services.AddScoped<AuthHeaderHandler>();
+builder.Services.AddTransient<AuthHeaderHandler>();
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    return new AdminUserService(httpClient);
+});
 builder.Services.AddScoped<ExamSessionService>();
 builder.Services.AddScoped<ExamHeaderService>();
+builder.Services.AddScoped<ExamCheckpointService>();
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())

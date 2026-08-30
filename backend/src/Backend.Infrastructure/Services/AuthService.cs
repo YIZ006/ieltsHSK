@@ -129,6 +129,66 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
         return new AuthResponse(token, user.FullName, user.Email);
     }
 
+    public async Task<AuthResponse> RegisterWithGoogleAsync(GoogleLoginRequest request, CancellationToken cancellationToken = default)
+    {
+        var settings = new GoogleJsonWebSignature.ValidationSettings
+        {
+            Audience = new[] { configuration["Google:ClientId"] }
+        };
+
+        GoogleJsonWebSignature.Payload payload;
+        try
+        {
+            payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings);
+        }
+        catch (InvalidJwtException)
+        {
+            throw new Exception("Invalid Google token.");
+        }
+
+        var normalizedEmail = payload.Email.Trim().ToLowerInvariant();
+
+        // Nếu email đã tồn tại → không cho đăng ký thêm
+        if (await dbContext.Users.AnyAsync(u => u.Email == normalizedEmail, cancellationToken))
+        {
+            throw new Exception("EmailAlreadyExists|" + normalizedEmail);
+        }
+
+        // Tạo username duy nhất từ email
+        var baseUsername = normalizedEmail.Split('@')[0];
+        var username = baseUsername;
+        var suffix = 1;
+        while (await dbContext.Users.AnyAsync(u => u.Username == username, cancellationToken))
+        {
+            username = $"{baseUsername}{suffix++}";
+        }
+
+        // Tạo tài khoản mới từ thông tin Google (không có password thực, user sẽ dùng Google để đăng nhập)
+        var user = new User
+        {
+            Username = username,
+            FullName = !string.IsNullOrWhiteSpace(payload.Name) ? payload.Name.Trim() : username,
+            Email = normalizedEmail,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()) // random, không dùng
+        };
+
+        dbContext.Users.Add(user);
+        // Lưu user trước để có user.Id thực từ DB
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        dbContext.UserActivityLogs.Add(new UserActivityLog
+        {
+            UserId = user.Id,
+            Action = "register_google",
+            Detail = "Registered via Google OAuth"
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var token = GenerateJwtToken(user, 1.0 / 24.0); // 1 hour cho Google session
+        return new AuthResponse(token, user.FullName, user.Email);
+    }
+
     private string GenerateJwtToken(User user, double expireDays = 30)
     {
         var jwtSettings = configuration.GetSection("Jwt");

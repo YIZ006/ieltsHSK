@@ -1,5 +1,7 @@
 @inherits LayoutComponentBase
 @inject NavigationManager NavigationManager
+@inject Frontend.App.Services.AuthService AuthService
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
 
 <div class="admin-layout theme-@activeDomain.ToLower()">
     <!-- Top Horizontal Navbar -->
@@ -33,11 +35,23 @@
         </nav>
 
         <div class="topbar-user">
-            <span class="user-avatar">A</span>
-            <div class="user-info-text">
-                <span class="user-name">Quản trị viên</span>
-                <span class="domain-tag domain-tag-@activeDomain.ToLower()">@activeDomain</span>
-            </div>
+            @if (isAdminAuthenticated)
+            {
+                <span class="user-avatar">@(string.IsNullOrWhiteSpace(adminName) ? "A" : adminName.Substring(0, 1).ToUpper())</span>
+                <div class="user-info-text">
+                    <span class="user-name" title="@adminEmail">@(string.IsNullOrWhiteSpace(adminName) ? "Quản trị viên" : adminName)</span>
+                    <span class="domain-tag domain-tag-@activeDomain.ToLower()">@activeDomain</span>
+                </div>
+                <button type="button" class="btn-admin-logout" @onclick="HandleLogout" title="Đăng xuất khỏi Admin Hub">
+                    <i class="bi bi-box-arrow-right"></i>
+                </button>
+            }
+            else
+            {
+                <button type="button" class="btn-topbar-login" @onclick="NavigateToLogin">
+                    <i class="bi bi-shield-lock-fill"></i> Đăng nhập
+                </button>
+            }
         </div>
     </header>
 
@@ -173,19 +187,46 @@
 @code {
     private string activeDomain = "IELTS";
     private string currentUrl = "";
+    private bool isAdminAuthenticated = false;
+    private string? adminName;
+    private string? adminEmail;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
         
         UpdateActiveDomain(currentUrl);
+        await CheckAdminAuthState();
     }
 
-    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    private async Task CheckAdminAuthState()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        isAdminAuthenticated = user.Identity?.IsAuthenticated == true && user.IsInRole("admin");
+        
+        if (isAdminAuthenticated)
+        {
+            adminName = user.Identity?.Name 
+                ?? user.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value 
+                ?? user.FindFirst("name")?.Value 
+                ?? user.FindFirst("unique_name")?.Value;
+            adminEmail = user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value 
+                ?? user.FindFirst("email")?.Value;
+        }
+        else
+        {
+            adminName = null;
+            adminEmail = null;
+        }
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
         UpdateActiveDomain(currentUrl);
+        await CheckAdminAuthState();
         StateHasChanged();
     }
 
@@ -228,6 +269,21 @@
             NavigationManager.NavigateTo("/admin/hsk-mock-tests");
         else
             NavigationManager.NavigateTo("/admin/users");
+    }
+
+    private void NavigateToLogin()
+    {
+        var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
+        NavigationManager.NavigateTo($"/admin/login?returnUrl={returnUrl}");
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthService.LogoutAsync();
+        isAdminAuthenticated = false;
+        adminName = null;
+        adminEmail = null;
+        NavigationManager.NavigateTo("/admin/login", forceLoad: true);
     }
 
     private bool IsActive(string path)

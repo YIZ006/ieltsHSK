@@ -10,6 +10,7 @@
 @inject IJSRuntime JS
 @inject ExamSessionService ExamSession
 @inject ExamSubmissionService SubmissionService
+@inject ExamCheckpointService CheckpointService
 @inject NavigationManager Navigation
 @implements IDisposable
 
@@ -99,6 +100,28 @@ else
                 <button class="btn-exit-exam" @onclick="ExitExam">Exit test</button>
                 <button class="btn-submit-exam" disabled="@isSubmitting" @onclick="SubmitExam">
                     @(isSubmitting ? "Đang chấm..." : "Nộp bài ➤")
+                </button>
+            </div>
+        </div>
+    }
+
+    @* ── CHECKPOINT RESTORE BANNER ── *@
+    @if (!isFinished && pendingCheckpoint != null)
+    {
+        <div class="checkpoint-banner">
+            <div class="cb-left">
+                <i class="bi bi-clock-history cb-icon"></i>
+                <div class="cb-info">
+                    <strong>Phát hiện bài làm dở:</strong> Lưu lúc @pendingCheckpoint.LastSavedAt.ToLocalTime().ToString("HH:mm dd/MM/yyyy")
+                    (Còn @(pendingCheckpoint.SecondsRemaining / 60) phút @(pendingCheckpoint.SecondsRemaining % 60) giây · Đã điền @pendingCheckpoint.AnsweredCount câu)
+                </div>
+            </div>
+            <div class="cb-actions">
+                <button class="btn-cb-restore" @onclick="RestoreCheckpoint">
+                    <i class="bi bi-arrow-repeat"></i> Khôi phục bài làm dở
+                </button>
+                <button class="btn-cb-discard" @onclick="DiscardCheckpoint">
+                    <i class="bi bi-trash3"></i> Làm bài mới
                 </button>
             </div>
         </div>
@@ -362,6 +385,8 @@ else
     private string? _answerUrlLoaded;
     private string? _statusMessage;
     private bool timedOut;
+    private ExamCheckpointDto? pendingCheckpoint;
+    private int _autoSaveCounter = 0;
 
     private const string DefaultExamUrl = "sample-data/reading-test-v2.json";
     private string TimerDisplay
@@ -398,9 +423,95 @@ else
             return;
         }
 
+        // Kiểm tra bài làm dở của tài khoản hiện tại
+        var cp = await CheckpointService.GetCheckpointAsync("Reading", url, QueryMockTestId);
+        if (cp != null && cp.AnsweredCount > 0)
+        {
+            pendingCheckpoint = cp;
+        }
+
         _navigationRegistration = Navigation.RegisterLocationChangingHandler(ConfirmLeave);
         await ExamSession.SetUnloadWarningAsync(true);
         _timer = new System.Threading.Timer(_ => _ = UpdateTimerAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void RestoreCheckpoint()
+    {
+        if (pendingCheckpoint == null || exam == null) return;
+        
+        foreach (var part in exam.Parts)
+        {
+            foreach (var group in GetQuestionGroups(part))
+            {
+                foreach (var q in group.Questions)
+                {
+                    if (pendingCheckpoint.SelectedOptions.TryGetValue(q.Id, out var optId))
+                    {
+                        q.SelectedOptionId = optId;
+                    }
+                    if (pendingCheckpoint.FillAnswers.TryGetValue(q.Id, out var fill))
+                    {
+                        q.FillAnswer = fill;
+                    }
+                }
+            }
+        }
+
+        if (pendingCheckpoint.SecondsRemaining > 0)
+        {
+            secondsLeft = pendingCheckpoint.SecondsRemaining;
+        }
+
+        if (pendingCheckpoint.ActivePartIndex >= 0 && pendingCheckpoint.ActivePartIndex < exam.Parts.Count)
+        {
+            activePartIndex = pendingCheckpoint.ActivePartIndex;
+            activeQuestionId = FirstQuestionId(exam.Parts[activePartIndex]);
+        }
+
+        pendingCheckpoint = null;
+        StateHasChanged();
+    }
+
+    private async Task DiscardCheckpoint()
+    {
+        if (pendingCheckpoint != null)
+        {
+            await CheckpointService.ClearCheckpointAsync("Reading", _examUrlLoaded ?? "", QueryMockTestId);
+            pendingCheckpoint = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task AutoSaveCheckpointAsync()
+    {
+        if (isFinished || exam == null || string.IsNullOrEmpty(_examUrlLoaded)) return;
+
+        var cp = new ExamCheckpointDto
+        {
+            Skill = "Reading",
+            ExamUrl = _examUrlLoaded,
+            MockTestId = QueryMockTestId,
+            CollectionName = QueryCollectionName,
+            TestTitle = QueryTitle ?? exam.Title,
+            SessionId = TestSessionId,
+            SecondsRemaining = secondsLeft,
+            TotalDurationSeconds = 60 * 60,
+            ActivePartIndex = activePartIndex
+        };
+
+        foreach (var part in exam.Parts)
+        {
+            foreach (var group in GetQuestionGroups(part))
+            {
+                foreach (var q in group.Questions)
+                {
+                    if (q.SelectedOptionId.HasValue) cp.SelectedOptions[q.Id] = q.SelectedOptionId.Value;
+                    if (!string.IsNullOrWhiteSpace(q.FillAnswer)) cp.FillAnswers[q.Id] = q.FillAnswer;
+                }
+            }
+        }
+
+        await CheckpointService.SaveCheckpointAsync(cp);
     }
 
     private async Task LoadGradingResultOnRestoreAsync()
@@ -425,7 +536,11 @@ else
 
     private void SelectOption(QuestionData q, int optionId)
     {
-        if (!isFinished) q.SelectedOptionId = q.SelectedOptionId == optionId ? null : optionId;
+        if (!isFinished)
+        {
+            q.SelectedOptionId = q.SelectedOptionId == optionId ? null : optionId;
+            _ = AutoSaveCheckpointAsync();
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -440,11 +555,16 @@ else
             q.SelectedOptionId = id;
         else
             q.SelectedOptionId = null;
+        _ = AutoSaveCheckpointAsync();
     }
 
     private void SetFillAnswer(QuestionData q, ChangeEventArgs e)
     {
-        if (!isFinished) q.FillAnswer = e.Value?.ToString() ?? string.Empty;
+        if (!isFinished)
+        {
+            q.FillAnswer = e.Value?.ToString() ?? string.Empty;
+            _ = AutoSaveCheckpointAsync();
+        }
     }
 
     private bool IsAnswered(QuestionData q)
@@ -457,13 +577,13 @@ else
     { 
         await Task.Delay(50);
         try 
-        {
+        { 
             await JS.InvokeVoidAsync("scrollToElementId", $"q-{qId}"); 
         } 
         catch (Exception ex) 
-        {
-            Console.WriteLine($"Lỗi JS Interop: {ex.Message}");
-        }
+        { 
+            Console.WriteLine($"Lỗi JS Interop: {ex.Message}"); 
+        } 
     }
 
     private Task SubmitExam() => FinishExamAsync(false);
@@ -474,6 +594,13 @@ else
         var session = await ExamSession.GetAsync(_sessionKey);
         if (session == null) return;
         secondsLeft = session.SecondsRemaining;
+        
+        _autoSaveCounter++;
+        if (_autoSaveCounter % 5 == 0)
+        {
+            _ = AutoSaveCheckpointAsync();
+        }
+
         if (session.IsExpired) await InvokeAsync(() => FinishExamAsync(true));
         else await InvokeAsync(StateHasChanged);
     }
@@ -515,6 +642,7 @@ else
             if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
             await ExamSession.LockTestContentAsync(".reading-split");
             await ExamSession.SetUnloadWarningAsync(false);
+            await CheckpointService.ClearCheckpointAsync("Reading", _examUrlLoaded, QueryMockTestId);
 
             try
             {

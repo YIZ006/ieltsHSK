@@ -7,14 +7,38 @@ public class IeltsService
 {
     private readonly HttpClient _httpClient;
 
+    // Client-side in-memory caches
+    private List<IeltsVocabularyItem>? _vocabCache;
+    private List<CourseDto>? _coursesCache;
+    private List<WebsiteDto>? _websitesCache;
+    private List<LearningSectionDto>? _sectionsCache;
+    private List<ListenVideoDto>? _videosCache;
+
     public IeltsService(HttpClient httpClient)
     {
         _httpClient = httpClient;
     }
 
-    // === Vocabulary (IELTS) ===
-    public async Task<List<IeltsVocabularyItem>?> GetVocabularyAsync(string? topic = null, string? search = null)
+    public void InvalidateVocabCache() => _vocabCache = null;
+    public void InvalidateVideosCache() => _videosCache = null;
+    public void InvalidateAllCache()
     {
+        _vocabCache = null;
+        _coursesCache = null;
+        _websitesCache = null;
+        _sectionsCache = null;
+        _videosCache = null;
+    }
+
+    // === Vocabulary (IELTS) ===
+    public async Task<List<IeltsVocabularyItem>?> GetVocabularyAsync(string? topic = null, string? search = null, bool forceRefresh = false)
+    {
+        // Phục vụ tức thì 0ms từ RAM nếu đang lấy toàn bộ danh sách
+        if (!forceRefresh && string.IsNullOrEmpty(topic) && string.IsNullOrEmpty(search) && _vocabCache != null)
+        {
+            return _vocabCache;
+        }
+
         try
         {
             var url = "api/ielts/vocab";
@@ -23,11 +47,17 @@ public class IeltsService
             if (!string.IsNullOrEmpty(search)) qs.Add($"search={Uri.EscapeDataString(search)}");
             if (qs.Count > 0) url += "?" + string.Join("&", qs);
             var items = await _httpClient.GetFromJsonAsync<List<IeltsVocabularyItem>>(url);
+
+            if (string.IsNullOrEmpty(topic) && string.IsNullOrEmpty(search) && items != null)
+            {
+                _vocabCache = items;
+            }
+
             return items ?? new List<IeltsVocabularyItem>();
         }
         catch
         {
-            return null;
+            return _vocabCache ?? null;
         }
     }
 
@@ -36,7 +66,12 @@ public class IeltsService
         try
         {
             var response = await _httpClient.PostAsJsonAsync("api/ielts/vocab", item);
-            return response.IsSuccessStatusCode;
+            if (response.IsSuccessStatusCode)
+            {
+                InvalidateVocabCache();
+                return true;
+            }
+            return false;
         }
         catch { return false; }
     }
@@ -46,7 +81,12 @@ public class IeltsService
         try
         {
             var response = await _httpClient.PutAsJsonAsync($"api/ielts/vocab/{id}", item);
-            return response.IsSuccessStatusCode;
+            if (response.IsSuccessStatusCode)
+            {
+                InvalidateVocabCache();
+                return true;
+            }
+            return false;
         }
         catch { return false; }
     }
@@ -56,7 +96,12 @@ public class IeltsService
         try
         {
             var response = await _httpClient.DeleteAsync($"api/ielts/vocab/{id}");
-            return response.IsSuccessStatusCode;
+            if (response.IsSuccessStatusCode)
+            {
+                InvalidateVocabCache();
+                return true;
+            }
+            return false;
         }
         catch { return false; }
     }
@@ -68,6 +113,7 @@ public class IeltsService
             var response = await _httpClient.PostAsync("api/admin/ielts/vocab/auto-classify-cefr", null);
             if (response.IsSuccessStatusCode)
             {
+                InvalidateVocabCache();
                 var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var result = await response.Content.ReadFromJsonAsync<AutoClassifyResult>(options);
                 return (true, result?.Updated ?? 0, result?.Message ?? "Phân loại thành công.");
@@ -85,6 +131,7 @@ public class IeltsService
             var response = await _httpClient.DeleteAsync("api/ielts/vocab/all");
             if (response.IsSuccessStatusCode)
             {
+                InvalidateVocabCache();
                 var result = await response.Content.ReadFromJsonAsync<Dictionary<string, int>>();
                 return (true, result?.GetValueOrDefault("Deleted") ?? 0);
             }
@@ -105,6 +152,7 @@ public class IeltsService
 
             var response = await _httpClient.PostAsync("api/ielts/vocab/import-excel", content);
             if (!response.IsSuccessStatusCode) return null;
+            InvalidateVocabCache();
             return await response.Content.ReadFromJsonAsync<IeltsImportExcelResponse>();
         }
         catch
@@ -128,6 +176,7 @@ public class IeltsService
 
             var response = await _httpClient.PostAsync("api/ielts/vocab/import-multiple", content);
             if (!response.IsSuccessStatusCode) return null;
+            InvalidateVocabCache();
             return await response.Content.ReadFromJsonAsync<IeltsImportExcelResponse>();
         }
         catch
@@ -136,41 +185,49 @@ public class IeltsService
         }
     }
 
-    public async Task<List<CourseDto>> GetCoursesAsync()
+    public async Task<List<CourseDto>> GetCoursesAsync(bool forceRefresh = false)
     {
+        if (!forceRefresh && _coursesCache != null) return _coursesCache;
         try
         {
             var response = await _httpClient.GetFromJsonAsync<List<CourseDto>>("api/ielts/courses");
-            return response ?? new List<CourseDto>();
+            _coursesCache = response ?? new List<CourseDto>();
+            return _coursesCache;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error fetching courses: {ex.Message}");
-            return new List<CourseDto>();
+            return _coursesCache ?? new List<CourseDto>();
         }
     }
 
-    public async Task<List<WebsiteDto>> GetWebsitesAsync()
+    public async Task<List<WebsiteDto>> GetWebsitesAsync(bool forceRefresh = false)
     {
+        if (!forceRefresh && _websitesCache != null) return _websitesCache;
         try
         {
             var response = await _httpClient.GetFromJsonAsync<List<WebsiteDto>>("api/ielts/websites");
-            return response ?? new List<WebsiteDto>();
+            _websitesCache = response ?? new List<WebsiteDto>();
+            return _websitesCache;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error fetching websites: {ex.Message}");
-            return new List<WebsiteDto>();
+            return _websitesCache ?? new List<WebsiteDto>();
         }
     }
 
-    public async Task<List<LearningSectionDto>> GetSectionsAsync()
+    public async Task<List<LearningSectionDto>> GetSectionsAsync(bool forceRefresh = false)
     {
+        if (!forceRefresh && _sectionsCache != null) return _sectionsCache;
         try
         {
             var response = await _httpClient.GetFromJsonAsync<List<LearningSectionDto>>("api/ielts/sections");
             if (response != null && response.Count > 0)
-                return response;
+            {
+                _sectionsCache = response;
+                return _sectionsCache;
+            }
         }
         catch (Exception ex)
         {
@@ -204,17 +261,19 @@ public class IeltsService
         }
     }
 
-    public async Task<List<ListenVideoDto>> GetListenFillVideosAsync()
+    public async Task<List<ListenVideoDto>> GetListenFillVideosAsync(bool forceRefresh = false)
     {
+        if (!forceRefresh && _videosCache != null) return _videosCache;
         try
         {
             var response = await _httpClient.GetFromJsonAsync<List<ListenVideoDto>>("api/listen-videos");
-            return response ?? new List<ListenVideoDto>();
+            _videosCache = response ?? new List<ListenVideoDto>();
+            return _videosCache;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error fetching listen videos: {ex.Message}");
-            return new List<ListenVideoDto>();
+            return _videosCache ?? new List<ListenVideoDto>();
         }
     }
 
@@ -237,7 +296,12 @@ public class IeltsService
         {
             var request = new ListenVideoSubmitRequest { YoutubeUrl = youtubeUrl };
             var response = await _httpClient.PostAsJsonAsync("api/listen-videos/submit", request);
-            return response.IsSuccessStatusCode;
+            if (response.IsSuccessStatusCode)
+            {
+                InvalidateVideosCache();
+                return true;
+            }
+            return false;
         }
         catch (Exception ex)
         {
@@ -267,6 +331,7 @@ public class IeltsService
             var response = await _httpClient.PutAsync($"api/admin/listen-videos/{id}/approve", null);
             if (response.IsSuccessStatusCode)
             {
+                InvalidateVideosCache();
                 return (true, "Phê duyệt thành công.");
             }
             else
@@ -298,6 +363,7 @@ public class IeltsService
             var response = await _httpClient.PutAsJsonAsync($"api/admin/listen-videos/{id}/transcript", new { TranscriptText = transcriptText });
             if (response.IsSuccessStatusCode)
             {
+                InvalidateVideosCache();
                 return (true, "Cập nhật phụ đề thủ công thành công.");
             }
             else
@@ -335,12 +401,13 @@ public class IeltsService
             var response = await _httpClient.PutAsJsonAsync($"api/admin/listen-videos/{id}", req);
             if (response.IsSuccessStatusCode)
             {
+                InvalidateVideosCache();
                 return (true, "Cập nhật thông tin video thành công.");
             }
             else
             {
                 var errorText = await response.Content.ReadAsStringAsync();
-                try
+                try 
                 {
                     var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                     var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(errorText, options);
@@ -364,7 +431,12 @@ public class IeltsService
         try
         {
             var response = await _httpClient.DeleteAsync($"api/admin/listen-videos/{id}");
-            return response.IsSuccessStatusCode;
+            if (response.IsSuccessStatusCode)
+            {
+                InvalidateVideosCache();
+                return true;
+            }
+            return false;
         }
         catch (Exception ex)
         {
@@ -386,6 +458,7 @@ public class IeltsService
             
             if (response.IsSuccessStatusCode)
             {
+                InvalidateVideosCache();
                 var result = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
                 return (true, result?.GetValueOrDefault("message")?.ToString() ?? "Import thành công");
             }

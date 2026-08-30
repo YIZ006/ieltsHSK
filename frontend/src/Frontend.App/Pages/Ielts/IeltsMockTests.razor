@@ -49,10 +49,10 @@
             <div class="tests-grid">
                 @foreach (var test in mockTests)
                 {
-                    var lSub = GetLatestSub("Listening", test.ListeningUrl, test.Id);
-                    var rSub = GetLatestSub("Reading", test.ReadingUrl, test.Id);
-                    var wSub = GetLatestSub("Writing", test.WritingUrl, test.Id);
-                    var sSub = GetLatestSub("Speaking", test.SpeakingUrl, test.Id);
+                    var lSub = GetLatestSub("Listening", test.ListeningUrl, test);
+                    var rSub = GetLatestSub("Reading", test.ReadingUrl, test);
+                    var wSub = GetLatestSub("Writing", test.WritingUrl, test);
+                    var sSub = GetLatestSub("Speaking", test.SpeakingUrl, test);
                     bool hasAnyAttempt = lSub != null || rSub != null || wSub != null || sSub != null;
 
                     <div class="test-block">
@@ -236,13 +236,20 @@
         }
     }
 
-    private IeltsSubmissionRecord? GetLatestSub(string skill, string? examUrl, int? mockTestId = null)
+    private IeltsSubmissionRecord? GetLatestSub(string skill, string? examUrl, MockTestDto test)
     {
-        if (string.IsNullOrEmpty(examUrl) && !mockTestId.HasValue) return null;
         var normExam = ExamSubmissionService.NormalizeUrl(examUrl);
         return submissions
             .Where(s => string.Equals(s.Skill, skill, StringComparison.OrdinalIgnoreCase))
-            .Where(s => (mockTestId.HasValue && s.MockTestId == mockTestId) || (!string.IsNullOrEmpty(normExam) && ExamSubmissionService.NormalizeUrl(s.ExamUrl) == normExam))
+            .Where(s => 
+                (s.MockTestId.HasValue && s.MockTestId == test.Id) ||
+                (!string.IsNullOrEmpty(normExam) && ExamSubmissionService.NormalizeUrl(s.ExamUrl) == normExam) ||
+                (!string.IsNullOrWhiteSpace(s.TestTitle) && string.Equals(s.TestTitle, test.Title, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(s.ExamTitle) && (
+                    string.Equals(s.ExamTitle, test.Title, StringComparison.OrdinalIgnoreCase) ||
+                    s.ExamTitle.Contains(test.Title, StringComparison.OrdinalIgnoreCase)
+                ))
+            )
             .OrderByDescending(s => s.SubmittedAt)
             .FirstOrDefault();
     }

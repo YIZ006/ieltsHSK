@@ -9,6 +9,8 @@ public class HskService
     private readonly HttpClient _http;
     private readonly ILocalStorageService _localStorage;
     private readonly Dictionary<string, HskExamData> _examCache = new();
+    private readonly Dictionary<string, List<HskVocabularyItem>> _vocabCache = new();
+    private List<HskLearningSection>? _sectionsCache;
 
     public HttpClient Client => _http;
 
@@ -17,6 +19,9 @@ public class HskService
         _http = http;
         _localStorage = localStorage;
     }
+
+    public void InvalidateVocabCache() => _vocabCache.Clear();
+    public bool HasVocabInCache(string? level = null) => _vocabCache.ContainsKey(string.IsNullOrEmpty(level) ? "all" : level);
 
     // === Exam loading ===
     public async Task<HskExamData?> LoadExamAsync(string dataUrl)
@@ -38,12 +43,18 @@ public class HskService
     }
 
     // === Sections ===
-    public async Task<List<HskLearningSection>> GetSectionsAsync()
+    public async Task<List<HskLearningSection>> GetSectionsAsync(bool forceRefresh = false)
     {
+        if (!forceRefresh && _sectionsCache != null) return _sectionsCache;
+
         try
         {
             var sections = await _http.GetFromJsonAsync<List<HskLearningSection>>("/api/hsk/sections");
-            if (sections != null && sections.Any()) return sections;
+            if (sections != null && sections.Any())
+            {
+                _sectionsCache = sections;
+                return _sectionsCache;
+            }
         }
         catch
         {
@@ -61,19 +72,28 @@ public class HskService
     }
 
     // === Vocabulary ===
-    // Trả về null khi lỗi kết nối API; trả về list (có thể rỗng) khi gọi thành công.
-    public async Task<List<HskVocabularyItem>?> GetVocabularyAsync(string? level = null)
+    public async Task<List<HskVocabularyItem>?> GetVocabularyAsync(string? level = null, bool forceRefresh = false)
     {
+        var cacheKey = string.IsNullOrEmpty(level) ? "all" : level;
+        if (!forceRefresh && _vocabCache.TryGetValue(cacheKey, out var cachedVocab))
+        {
+            return cachedVocab;
+        }
+
         try
         {
             var url = "/api/hsk/vocab";
             if (!string.IsNullOrEmpty(level)) url += $"?level={Uri.EscapeDataString(level)}";
             var items = await _http.GetFromJsonAsync<List<HskVocabularyItem>>(url);
+            if (items != null)
+            {
+                _vocabCache[cacheKey] = items;
+            }
             return items ?? new List<HskVocabularyItem>();
         }
         catch
         {
-            return null;
+            return _vocabCache.TryGetValue(cacheKey, out var fallback) ? fallback : null;
         }
     }
 

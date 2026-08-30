@@ -1,0 +1,151 @@
+@page "/admin/login"
+@using Frontend.App.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Đăng nhập Quản trị viên - Admin Hub</PageTitle>
+
+<div class="admin-login-wrapper">
+    <div class="admin-login-card">
+        <!-- Brand Header -->
+        <div class="card-header-brand">
+            <div class="brand-shield-badge">
+                <i class="bi bi-shield-lock-fill"></i>
+            </div>
+            <h1 class="brand-title">Admin Hub</h1>
+            <p class="brand-subtitle">Cổng đăng nhập hệ thống Quản trị & Điều hành</p>
+        </div>
+
+        <!-- Error Message Alert -->
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="login-alert-box animate-shake">
+                <i class="bi bi-exclamation-triangle-fill alert-icon"></i>
+                <div class="alert-text">@errorMessage</div>
+            </div>
+        }
+
+        <!-- Login Form -->
+        <EditForm Model="loginModel" OnValidSubmit="HandleAdminLogin" class="login-form">
+            <DataAnnotationsValidator />
+
+            <div class="form-group-modern">
+                <label class="form-label">
+                    <i class="bi bi-envelope-fill"></i> Email Quản trị viên
+                </label>
+                <div class="input-with-icon">
+                    <InputText @bind-Value="loginModel.Email" 
+                               type="email" 
+                               class="form-control-modern" 
+                               placeholder="admin@example.com" 
+                               autocomplete="username" />
+                </div>
+                <ValidationMessage For="@(() => loginModel.Email)" class="validation-msg" />
+            </div>
+
+            <div class="form-group-modern">
+                <label class="form-label">
+                    <i class="bi bi-key-fill"></i> Mật khẩu bảo mật
+                </label>
+                <div class="input-with-icon password-wrapper">
+                    <InputText @bind-Value="loginModel.Password" 
+                               type="@(showPassword ? "text" : "password")" 
+                               class="form-control-modern" 
+                               placeholder="••••••••" 
+                               autocomplete="current-password" />
+                    <button type="button" class="btn-toggle-eye" @onclick="() => showPassword = !showPassword" tabindex="-1">
+                        <i class="bi @(showPassword ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                    </button>
+                </div>
+                <ValidationMessage For="@(() => loginModel.Password)" class="validation-msg" />
+            </div>
+
+            <button type="submit" class="btn-admin-submit" disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span class="btn-spinner"></span>
+                    <span>Đang xác thực bảo mật...</span>
+                }
+                else
+                {
+                    <i class="bi bi-box-arrow-in-right"></i>
+                    <span>Đăng nhập Quản trị</span>
+                }
+            </button>
+        </EditForm>
+
+        <!-- Quick Test Account Helper -->
+        <div class="quick-accounts-section">
+            <span class="quick-title"><i class="bi bi-lightning-charge-fill"></i> Tài khoản Admin có sẵn:</span>
+            <div class="account-chips">
+                <button type="button" class="chip-btn" @onclick='() => FillCredentials("cuong20067@gmail.com", "Aa@cuongnane")'>
+                    <b>cuongnane</b> (cuong20067@gmail.com)
+                </button>
+            </div>
+        </div>
+
+        <!-- Back to Student Portal Link -->
+        <div class="card-footer-links">
+            <a href="/" class="back-home-link">
+                <i class="bi bi-arrow-left"></i> Quay lại Cổng học tập học viên
+            </a>
+        </div>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private LoginRequest loginModel = new();
+    private bool isLoading = false;
+    private bool showPassword = false;
+    private string? errorMessage = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Nếu đã đăng nhập với role admin sẵn thì redirect ngay vào Admin Hub
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true && authState.User.IsInRole("admin"))
+        {
+            var target = string.IsNullOrWhiteSpace(ReturnUrl) ? "/admin" : ReturnUrl;
+            NavigationManager.NavigateTo(target);
+        }
+    }
+
+    private void FillCredentials(string email, string password)
+    {
+        loginModel.Email = email;
+        loginModel.Password = password;
+        errorMessage = null;
+    }
+
+    private async Task HandleAdminLogin()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var (success, isAdmin, errMsg) = await AuthService.AdminLoginAsync(loginModel);
+
+            if (!success)
+            {
+                errorMessage = errMsg;
+                isLoading = false;
+                return;
+            }
+
+            // Chuyển hướng tới ReturnUrl hoặc trang Admin Hub
+            var target = string.IsNullOrWhiteSpace(ReturnUrl) ? "/admin" : ReturnUrl;
+            NavigationManager.NavigateTo(target, forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Đã xảy ra lỗi kết nối: " + ex.Message;
+            isLoading = false;
+        }
+    }
+}

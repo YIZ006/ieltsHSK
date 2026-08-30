@@ -1,7 +1,7 @@
 @page "/admin/users"
 @page "/admin/ielts-users"
 @layout Frontend.App.Layout.AdminLayout
-@inject HttpClient Http
+@inject Frontend.App.Services.AdminUserService AdminUserService
 @inject IJSRuntime JS
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
@@ -26,6 +26,22 @@
             </button>
         </div>
     </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert-banner-box">
+            <div class="alert-banner-left">
+                <i class="bi bi-shield-lock-fill alert-banner-icon"></i>
+                <div>
+                    <strong>Cần quyền Quản trị viên:</strong> @errorMessage
+                    <div class="alert-subtext">Vui lòng đăng nhập tài khoản có quyền <b>Admin</b> (Ví dụ: <code>cuong20067@gmail.com</code> / Mật khẩu: <code>Aa@cuongnane</code>).</div>
+                </div>
+            </div>
+            <button class="btn-login-admin" @onclick="() => isAuthModalOpen = true">
+                <i class="bi bi-box-arrow-in-right"></i> Đăng nhập Admin
+            </button>
+        </div>
+    }
 
     <!-- Domain Category Pills -->
     <div class="domain-tabs-row">
@@ -343,6 +359,8 @@
     </div>
 }
 
+<Frontend.App.Components.AuthModal IsVisible="@isAuthModalOpen" IsVisibleChanged="HandleAuthModalChanged" />
+
 @code {
     [SupplyParameterFromQuery(Name = "domain")]
     public string? DomainParam { get; set; }
@@ -353,6 +371,10 @@
     private string currentDomainFilter = "all";
     private bool isLoading = true;
     private bool isSaving = false;
+    private string? errorMessage = null;
+
+    // Auth Modal
+    private bool isAuthModalOpen = false;
 
     // Edit Modal
     private bool isEditModalOpen = false;
@@ -363,12 +385,6 @@
     private bool isLoadingLogs = false;
     private List<UserLogDto>? userLogs;
     private string currentLogUsername = "";
-
-    private string GetApiUrl(string path)
-    {
-        var baseUrl = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101/";
-        return $"{baseUrl.TrimEnd('/')}/{path.TrimStart('/')}";
-    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -386,31 +402,44 @@
     private async Task LoadUsers()
     {
         isLoading = true;
+        errorMessage = null;
         try
         {
-            var apiUrl = GetApiUrl("api/admin/users");
-            users = await Http.GetFromJsonAsync<List<UserDto>>(apiUrl);
+            var result = await AdminUserService.GetUsersAsync();
+            if (result.IsUnauthorized)
+            {
+                errorMessage = "Tài khoản hiện tại chưa có quyền Quản trị viên (Admin) hoặc chưa đăng nhập.";
+                users = new List<UserDto>();
+            }
+            else if (!result.IsSuccess)
+            {
+                errorMessage = result.ErrorMessage;
+                users = new List<UserDto>();
+            }
+            else
+            {
+                users = result.Users;
+            }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading users from API: {ex.Message}");
+            errorMessage = "Lỗi kết nối: " + ex.Message;
+            users = new List<UserDto>();
         }
         finally
         {
-            // Fallback sample users if DB has no extra users yet
-            if (users == null || users.Count == 0)
-            {
-                users = new List<UserDto>
-                {
-                    new() { Id = 1, Username = "Admin System", Email = "admin@ielts.hsk", Role = "admin", Level = "C2", IsActive = true, LastLoginAt = DateTime.UtcNow },
-                    new() { Id = 2, Username = "chienpham", Email = "chienpham@example.com", Role = "user", Level = "B2", IsActive = true, LastLoginAt = DateTime.UtcNow.AddHours(-1) },
-                    new() { Id = 3, Username = "nguyenvanan", Email = "nguyenvanan@gmail.com", Role = "user", Level = "A2", IsActive = true, LastLoginAt = DateTime.UtcNow.AddDays(-1) },
-                    new() { Id = 4, Username = "tranthibich", Email = "tranthibich@gmail.com", Role = "user", Level = "C1", IsActive = true, LastLoginAt = DateTime.UtcNow.AddHours(-4) },
-                    new() { Id = 5, Username = "lequocviet", Email = "lequocviet@gmail.com", Role = "user", Level = "B1", IsActive = false, LastLoginAt = DateTime.UtcNow.AddDays(-10) },
-                    new() { Id = 6, Username = "hoangthimai", Email = "hoangthimai@gmail.com", Role = "user", Level = "A1", IsActive = true, LastLoginAt = DateTime.UtcNow.AddMinutes(-20) }
-                };
-            }
+            users ??= new List<UserDto>();
             isLoading = false;
+        }
+    }
+
+    private async Task HandleAuthModalChanged(bool isVisible)
+    {
+        isAuthModalOpen = isVisible;
+        if (!isVisible)
+        {
+            await LoadUsers();
         }
     }
 
@@ -438,7 +467,7 @@
         get
         {
             if (users == null) return null;
-            var list = users.AsEnumerable();
+            var list = FilteredDomainUsers ?? users.AsEnumerable();
 
             // Filter by role/state tab
             list = currentFilter switch
@@ -497,9 +526,8 @@
                 Level = editingUser.Level
             };
 
-            var apiUrl = GetApiUrl($"api/admin/users/{editingUser.Id}");
-            var response = await Http.PutAsJsonAsync(apiUrl, updateReq);
-            if (response.IsSuccessStatusCode)
+            var success = await AdminUserService.UpdateUserAsync(editingUser.Id, updateReq);
+            if (success)
             {
                 await LoadUsers();
                 CloseEditModal();
@@ -524,9 +552,8 @@
     {
         try
         {
-            var apiUrl = GetApiUrl($"api/admin/users/{userId}/toggle-active");
-            var response = await Http.PutAsync(apiUrl, null);
-            if (response.IsSuccessStatusCode)
+            var success = await AdminUserService.ToggleUserStatusAsync(userId);
+            if (success)
             {
                 var target = users?.FirstOrDefault(u => u.Id == userId);
                 if (target != null)
@@ -548,12 +575,14 @@
 
         try
         {
-            var apiUrl = GetApiUrl($"api/admin/users/{userId}/reset-password");
-            var response = await Http.PostAsync(apiUrl, null);
-            if (response.IsSuccessStatusCode)
+            var result = await AdminUserService.ResetPasswordAsync(userId);
+            if (result != null)
             {
-                var result = await response.Content.ReadFromJsonAsync<ResetPasswordResult>();
-                await JS.InvokeVoidAsync("alert", $"Đặt lại mật khẩu thành công!\n\nMật khẩu tạm thời mới là:\n{result?.TempPassword}\n\nHãy gửi mật khẩu này cho học viên.");
+                await JS.InvokeVoidAsync("alert", $"Đặt lại mật khẩu thành công!\n\nMật khẩu tạm thời mới là:\n{result.TempPassword}\n\nHãy gửi mật khẩu này cho học viên.");
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Có lỗi khi đặt lại mật khẩu.");
             }
         }
         catch (Exception ex)
@@ -570,8 +599,7 @@
 
         try
         {
-            var apiUrl = GetApiUrl($"api/admin/users/{userId}/logs");
-            userLogs = await Http.GetFromJsonAsync<List<UserLogDto>>(apiUrl);
+            userLogs = await AdminUserService.GetUserLogsAsync(userId);
         }
         catch (Exception ex)
         {
@@ -588,30 +616,5 @@
     {
         isLogModalOpen = false;
         userLogs = null;
-    }
-
-    public class UserDto
-    {
-        public int Id { get; set; }
-        public string Username { get; set; } = "";
-        public string Email { get; set; } = "";
-        public string Role { get; set; } = "user";
-        public string Level { get; set; } = "A1";
-        public bool IsActive { get; set; } = true;
-        public DateTime? LastLoginAt { get; set; }
-        public DateTime CreatedAt { get; set; }
-    }
-
-    public class UserLogDto
-    {
-        public int Id { get; set; }
-        public string Action { get; set; } = "";
-        public string Detail { get; set; } = "";
-        public DateTime CreatedAt { get; set; }
-    }
-
-    public class ResetPasswordResult
-    {
-        public string TempPassword { get; set; } = "";
     }
 }
