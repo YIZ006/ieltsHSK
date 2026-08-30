@@ -22,9 +22,17 @@ public sealed class UserProfile
 public sealed class ProfileService(ILocalStorageService localStorage, HttpClient? httpClient = null)
 {
     private const string StorageKey = "user_profile";
+    private static UserProfile? _inMemoryProfile;
 
-    public async Task<UserProfile> GetAsync()
+    public static UserProfile? CachedProfile => _inMemoryProfile;
+
+    public async Task<UserProfile> GetAsync(bool forceRefresh = false)
     {
+        if (!forceRefresh && _inMemoryProfile != null)
+        {
+            return _inMemoryProfile;
+        }
+
         UserProfile local;
         try
         {
@@ -34,6 +42,7 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
         {
             local = new UserProfile();
         }
+        _inMemoryProfile = local;
 
         if (httpClient != null)
         {
@@ -45,17 +54,13 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
                     if (!string.IsNullOrWhiteSpace(srvUser.FullName))
                     {
                         local.FullName = srvUser.FullName;
-                        local.DisplayName = srvUser.FullName;
-                    }
-                    else if (!string.IsNullOrWhiteSpace(srvUser.Username))
-                    {
-                        local.DisplayName = srvUser.Username;
                     }
                     if (!string.IsNullOrWhiteSpace(srvUser.Email)) local.Email = srvUser.Email;
                     if (!string.IsNullOrWhiteSpace(srvUser.Avatar)) local.AvatarEmoji = srvUser.Avatar;
                     if (!string.IsNullOrWhiteSpace(srvUser.Level)) local.StudyLevel = srvUser.Level;
                     local.Xp = srvUser.Xp;
                     local.Streak = srvUser.Streak;
+                    _inMemoryProfile = local;
                     await localStorage.SetItemAsync(StorageKey, local);
                 }
             }
@@ -67,26 +72,43 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
         return local;
     }
 
-    public async Task SaveAsync(UserProfile profile)
+    public async Task<(bool Success, string? ErrorMessage)> SaveAsync(UserProfile profile)
     {
-        await localStorage.SetItemAsync(StorageKey, profile);
         if (httpClient != null)
         {
             try
             {
-                await httpClient.PutAsJsonAsync("api/user/profile", new
+                var response = await httpClient.PutAsJsonAsync("api/user/profile", new
                 {
                     FullName = profile.FullName,
+                    Username = string.IsNullOrWhiteSpace(profile.DisplayName) ? null : profile.DisplayName.Trim(),
                     Avatar = profile.AvatarEmoji,
                     Level = profile.StudyLevel
                 });
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorObj = await response.Content.ReadFromJsonAsync<BackendErrorDto>();
+                    return (false, errorObj?.Message ?? "Không thể lưu thông tin vào máy chủ.");
+                }
             }
             catch
             {
                 // Non-fatal if offline
             }
         }
+
+        _inMemoryProfile = profile;
+        await localStorage.SetItemAsync(StorageKey, profile);
+        return (true, null);
     }
+
+    public static void InvalidateCache()
+    {
+        _inMemoryProfile = null;
+    }
+
+    private sealed record BackendErrorDto(string? Message);
 
     private sealed record BackendUserDto(
         int Id,

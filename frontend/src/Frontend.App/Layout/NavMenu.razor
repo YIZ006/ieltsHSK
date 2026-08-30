@@ -237,17 +237,27 @@
     [Parameter]
     public EventCallback<string> OnOpenProfile { get; set; }
 
+    private static string _cachedWelcomeName = "";
+    private static string _cachedAvatarEmoji = "🎓";
+    private static string _cachedUserEmail = "";
+    private static string _cachedStudyLevel = "HSK3";
+    private static string _cachedTargetExam = "HSK";
+    private static int _cachedUserXp = 0;
+    private static bool _cachedIsAdmin = false;
+    private static int _cachedCurrentStreak = 0;
+    private static int _cachedBestStreak = 0;
+
     private bool showUserMenu = false;
     private bool showStreakMenu = false;
-    private string welcomeName = "User";
-    private string userEmail = "";
-    private string avatarEmoji = "🎓";
-    private string studyLevel = "HSK3";
-    private string targetExam = "HSK";
-    private int userXp = 0;
-    private bool isAdmin = false;
-    private int currentStreak;
-    private int bestStreak;
+    private string welcomeName = !string.IsNullOrEmpty(_cachedWelcomeName) ? _cachedWelcomeName : "Học viên";
+    private string userEmail = _cachedUserEmail;
+    private string avatarEmoji = !string.IsNullOrEmpty(_cachedAvatarEmoji) ? _cachedAvatarEmoji : "🎓";
+    private string studyLevel = _cachedStudyLevel;
+    private string targetExam = _cachedTargetExam;
+    private int userXp = _cachedUserXp;
+    private bool isAdmin = _cachedIsAdmin;
+    private int currentStreak = _cachedCurrentStreak;
+    private int bestStreak = _cachedBestStreak;
 
     private async Task HandleOpenProfile(string tab)
     {
@@ -264,39 +274,85 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Check if we have synchronous in-memory profile available
+        var cached = ProfileService.CachedProfile;
+        if (cached != null)
+        {
+            ApplyProfile(cached);
+        }
+
         try
         {
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
             var user = authState.User;
             isAdmin = user.IsInRole("Admin") || user.HasClaim(c => c.Type == ClaimTypes.Role && c.Value == "Admin");
+            _cachedIsAdmin = isAdmin;
+
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                var userNameClaim = user.FindFirst(ClaimTypes.Name)?.Value ?? user.Identity.Name;
+                if (!string.IsNullOrWhiteSpace(userNameClaim) && welcomeName == "Học viên")
+                {
+                    welcomeName = userNameClaim;
+                    _cachedWelcomeName = userNameClaim;
+                }
+            }
+
             userEmail = user.FindFirst(ClaimTypes.Email)?.Value ?? "";
+            _cachedUserEmail = userEmail;
 
             var profile = await ProfileSvc.GetAsync();
-            if (!string.IsNullOrWhiteSpace(profile.FullName))
-            {
-                welcomeName = profile.FullName;
-            }
-            else if (!string.IsNullOrWhiteSpace(profile.DisplayName))
-            {
-                welcomeName = profile.DisplayName;
-            }
-            if (!string.IsNullOrWhiteSpace(profile.Email)) userEmail = profile.Email;
-            if (!string.IsNullOrWhiteSpace(profile.AvatarEmoji)) avatarEmoji = profile.AvatarEmoji;
-            if (!string.IsNullOrWhiteSpace(profile.StudyLevel)) studyLevel = profile.StudyLevel;
-            if (!string.IsNullOrWhiteSpace(profile.TargetExam)) targetExam = profile.TargetExam;
-            userXp = profile.Xp;
+            ApplyProfile(profile);
 
             currentStreak = await StreakSvc.GetCurrentStreakAsync();
             bestStreak = await StreakSvc.GetBestStreakAsync();
+            _cachedCurrentStreak = currentStreak;
+            _cachedBestStreak = bestStreak;
         }
         catch { }
 
         ExamHeader.OnChange += OnExamHeaderChanged;
     }
 
+    private void ApplyProfile(UserProfile profile)
+    {
+        if (!string.IsNullOrWhiteSpace(profile.FullName))
+        {
+            welcomeName = profile.FullName;
+        }
+        else if (!string.IsNullOrWhiteSpace(profile.DisplayName))
+        {
+            welcomeName = profile.DisplayName;
+        }
+        _cachedWelcomeName = welcomeName;
+
+        if (!string.IsNullOrWhiteSpace(profile.Email))
+        {
+            userEmail = profile.Email;
+            _cachedUserEmail = userEmail;
+        }
+        if (!string.IsNullOrWhiteSpace(profile.AvatarEmoji))
+        {
+            avatarEmoji = profile.AvatarEmoji;
+            _cachedAvatarEmoji = avatarEmoji;
+        }
+        if (!string.IsNullOrWhiteSpace(profile.StudyLevel))
+        {
+            studyLevel = profile.StudyLevel;
+            _cachedStudyLevel = studyLevel;
+        }
+        if (!string.IsNullOrWhiteSpace(profile.TargetExam))
+        {
+            targetExam = profile.TargetExam;
+            _cachedTargetExam = targetExam;
+        }
+        userXp = profile.Xp;
+        _cachedUserXp = userXp;
+    }
+
     private string GetInitial(string name)
     {
-        if (string.IsNullOrWhiteSpace(name)) return "U";
+        if (string.IsNullOrWhiteSpace(name) || name == "Học viên") return "🎓";
         var trimmed = name.Trim();
         return trimmed.Substring(0, 1).ToUpperInvariant();
     }
@@ -323,6 +379,11 @@
     private async Task Logout()
     {
         showUserMenu = false;
+        _cachedWelcomeName = "";
+        _cachedUserEmail = "";
+        _cachedAvatarEmoji = "🎓";
+        _cachedIsAdmin = false;
+        ProfileService.InvalidateCache();
         await AuthService.LogoutAsync();
         NavigationManager.NavigateTo("/", true);
     }

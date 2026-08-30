@@ -58,16 +58,25 @@
 
                 <div class="header-name-box">
                     <div class="name-row">
-                        <h3 class="user-fullname">@(string.IsNullOrWhiteSpace(profile.FullName) ? (string.IsNullOrWhiteSpace(profile.DisplayName) ? username : profile.DisplayName) : profile.FullName)</h3>
+                        <h3 class="user-fullname">@ResolvedTitleName</h3>
                         @if (isAdmin)
                         {
                             <span class="role-badge badge-admin"><i class="bi bi-shield-check"></i> Admin</span>
                         }
                     </div>
                     <div class="user-meta-row">
-                        <span class="user-tag">@@@username</span>
-                        <span class="meta-dot">•</span>
-                        <span class="user-email-text">@userEmail</span>
+                        @if (!string.IsNullOrWhiteSpace(ResolvedHandleTag))
+                        {
+                            <span class="user-tag">@@@ResolvedHandleTag</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(userEmail))
+                        {
+                            @if (!string.IsNullOrWhiteSpace(ResolvedHandleTag))
+                            {
+                                <span class="meta-dot">•</span>
+                            }
+                            <span class="user-email-text">@userEmail</span>
+                        }
                         @if (currentStreak > 0)
                         {
                             <span class="meta-dot">•</span>
@@ -97,8 +106,8 @@
             <div class="modal-body">
                 @if (showToast)
                 {
-                    <div class="modal-toast">
-                        <i class="bi bi-check-circle-fill"></i>
+                    <div class="modal-toast @(isToastError ? "toast-error" : "toast-success")">
+                        <i class="bi @(isToastError ? "bi-exclamation-circle-fill" : "bi-check-circle-fill")"></i>
                         <span>@toastMessage</span>
                     </div>
                 }
@@ -108,13 +117,19 @@
                     <div class="tab-pane">
                         <div class="form-grid">
                             <div class="form-field">
-                                <label class="field-label">Họ và tên</label>
-                                <input class="form-control-custom" @bind="profile.FullName" placeholder="Nhập họ và tên..." maxlength="80" />
+                                <label class="field-label">
+                                    Họ và tên
+                                    <span class="field-badge-readonly"><i class="bi bi-lock-fill"></i> Cố định từ tài khoản</span>
+                                </label>
+                                <input class="form-control-custom readonly-field" value="@ResolvedFullName" readonly title="Họ và tên tự động từ hồ sơ, không thể thay đổi" />
                             </div>
 
                             <div class="form-field">
-                                <label class="field-label">Tên hiển thị</label>
-                                <input class="form-control-custom" @bind="profile.DisplayName" placeholder="Tên thường gọi..." maxlength="50" />
+                                <label class="field-label">Tên hiển thị (@@)</label>
+                                <input class="form-control-custom" value="@profile.DisplayName" @oninput="OnDisplayNameInput" placeholder="Ví dụ: cuongnane, anhnhi..." maxlength="30" />
+                                <span class="field-hint-notice">
+                                    <i class="bi bi-info-circle-fill"></i> Lưu ý: Bạn chỉ có thể đổi username sau 30 ngày. Không dùng tiếng Việt có dấu.
+                                </span>
                             </div>
 
                             <div class="form-field full-width">
@@ -301,12 +316,48 @@
     private bool isEditingAvatar;
     private bool isSaving;
     private bool showToast;
+    private bool isToastError;
     private string toastMessage = "";
     private int currentStreak;
     private int bestStreak;
 
     private static readonly string[] AvailableEmojis = ["🎓", "🦁", "🚀", "🐼", "🔥", "💎", "⭐", "🐉", "🦊", "🎯", "👑", "🦄"];
     private static readonly string[] AvailableColors = ["#6366f1", "#0ea5e9", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6"];
+
+    private string userFullNameClaim = "";
+
+    private string ResolvedFullName
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(profile.FullName)) return profile.FullName;
+            if (!string.IsNullOrWhiteSpace(userFullNameClaim)) return userFullNameClaim;
+            return "Học viên";
+        }
+    }
+
+    private string ResolvedTitleName
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(profile.FullName)) return profile.FullName;
+            if (!string.IsNullOrWhiteSpace(userFullNameClaim)) return userFullNameClaim;
+            if (!string.IsNullOrWhiteSpace(profile.DisplayName)) return profile.DisplayName;
+            return "Học viên";
+        }
+    }
+
+    private string ResolvedHandleTag
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(profile.DisplayName)) 
+                return profile.DisplayName.Trim().Replace(" ", "");
+            if (!string.IsNullOrWhiteSpace(username) && !username.Contains(' ') && username != userFullNameClaim && username != profile.FullName) 
+                return username.Trim();
+            return "";
+        }
+    }
 
     public async Task OpenAsync(string tab = "info")
     {
@@ -331,10 +382,26 @@
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
             var user = authState.User;
             isAdmin = user.IsInRole("Admin") || user.HasClaim(c => c.Type == ClaimTypes.Role && c.Value == "Admin");
-            username = user.Identity?.Name ?? "user";
+            username = user.Identity?.Name ?? "";
             userEmail = user.FindFirst(ClaimTypes.Email)?.Value ?? "";
 
+            userFullNameClaim = user.FindFirst("name")?.Value 
+                             ?? user.FindFirst(ClaimTypes.Name)?.Value 
+                             ?? user.FindFirst(ClaimTypes.GivenName)?.Value 
+                             ?? "";
+
             profile = await ProfileSvc.GetAsync();
+            if (string.IsNullOrWhiteSpace(profile.FullName) && !string.IsNullOrWhiteSpace(userFullNameClaim))
+            {
+                profile.FullName = userFullNameClaim;
+            }
+
+            // If DisplayName was accidentally equal to FullName from past bug, clean it up so it is empty
+            if (!string.IsNullOrWhiteSpace(profile.DisplayName) && (profile.DisplayName == profile.FullName || profile.DisplayName == userFullNameClaim))
+            {
+                profile.DisplayName = "";
+            }
+
             if (string.IsNullOrWhiteSpace(profile.AvatarEmoji)) profile.AvatarEmoji = "🎓";
             if (string.IsNullOrWhiteSpace(profile.AvatarColor)) profile.AvatarColor = "#6366f1";
             if (string.IsNullOrWhiteSpace(profile.TargetExam)) profile.TargetExam = "HSK";
@@ -360,21 +427,58 @@
         profile.AvatarColor = col;
     }
 
+    private void OnDisplayNameInput(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString() ?? "";
+        profile.DisplayName = SanitizeUsername(raw);
+    }
+
+    private static string SanitizeUsername(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return "";
+        string normalized = input.Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder();
+        foreach (char c in normalized)
+        {
+            var uc = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c);
+            if (uc != System.Globalization.UnicodeCategory.NonSpacingMark)
+            {
+                sb.Append(c);
+            }
+        }
+        string clean = sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
+        clean = clean.Replace("đ", "d", StringComparison.OrdinalIgnoreCase);
+        clean = System.Text.RegularExpressions.Regex.Replace(clean, @"[^a-zA-Z0-9._-]", "").ToLowerInvariant();
+        return clean;
+    }
+
     private async Task SaveProfileAsync()
     {
         isSaving = true;
+        showToast = false;
         StateHasChanged();
 
         try
         {
-            await ProfileSvc.SaveAsync(profile);
-            toastMessage = "Đã lưu thông tin hồ sơ thành công!";
-            showToast = true;
-            isEditingAvatar = false;
+            var result = await ProfileSvc.SaveAsync(profile);
+            if (result.Success)
+            {
+                isToastError = false;
+                toastMessage = "Đã lưu thông tin hồ sơ vào cơ sở dữ liệu thành công!";
+                showToast = true;
+                isEditingAvatar = false;
+            }
+            else
+            {
+                isToastError = true;
+                toastMessage = result.ErrorMessage ?? "Có lỗi xảy ra khi lưu thông tin.";
+                showToast = true;
+            }
         }
         catch
         {
-            toastMessage = "Có lỗi xảy ra khi lưu thông tin.";
+            isToastError = true;
+            toastMessage = "Không thể kết nối đến máy chủ để lưu thông tin.";
             showToast = true;
         }
         finally
@@ -383,7 +487,7 @@
             StateHasChanged();
         }
 
-        _ = Task.Delay(3000).ContinueWith(_ =>
+        _ = Task.Delay(3500).ContinueWith(_ =>
         {
             showToast = false;
             InvokeAsync(StateHasChanged);
