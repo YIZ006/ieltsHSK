@@ -156,14 +156,23 @@
 
                                 @* ── Action Navigation List ── *@
                                 <div class="popover-nav-list">
-                                    <a href="/profile" class="popover-nav-item" @onclick="() => showUserMenu = false">
+                                    <button type="button" class="popover-nav-item" @onclick='() => HandleOpenProfile("info")'>
                                         <div class="nav-item-icon bg-blue"><i class="bi bi-person-gear"></i></div>
                                         <div class="nav-item-content">
                                             <span class="nav-item-title">Hồ sơ cá nhân</span>
                                             <span class="nav-item-subtitle">Cài đặt tài khoản & mục tiêu</span>
                                         </div>
                                         <i class="bi bi-chevron-right nav-item-arrow"></i>
-                                    </a>
+                                    </button>
+
+                                    <button type="button" class="popover-nav-item" @onclick='() => HandleOpenProfile("stats")'>
+                                        <div class="nav-item-icon bg-green"><i class="bi bi-trophy"></i></div>
+                                        <div class="nav-item-content">
+                                            <span class="nav-item-title">Thành tích & Lịch sử</span>
+                                            <span class="nav-item-subtitle">Xem điểm thi và tiến độ</span>
+                                        </div>
+                                        <i class="bi bi-chevron-right nav-item-arrow"></i>
+                                    </button>
 
                                     @if (isAdmin)
                                     {
@@ -225,6 +234,9 @@
     [Parameter]
     public EventCallback OnShowRegister { get; set; }
 
+    [Parameter]
+    public EventCallback<string> OnOpenProfile { get; set; }
+
     private bool showUserMenu = false;
     private bool showStreakMenu = false;
     private string welcomeName = "User";
@@ -236,6 +248,19 @@
     private bool isAdmin = false;
     private int currentStreak;
     private int bestStreak;
+
+    private async Task HandleOpenProfile(string tab)
+    {
+        showUserMenu = false;
+        if (OnOpenProfile.HasDelegate)
+        {
+            await OnOpenProfile.InvokeAsync(tab);
+        }
+        else
+        {
+            NavigationManager.NavigateTo("/profile");
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
