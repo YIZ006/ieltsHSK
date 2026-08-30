@@ -72,32 +72,43 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
         return local;
     }
 
-    public async Task SaveAsync(UserProfile profile)
+    public async Task<(bool Success, string? ErrorMessage)> SaveAsync(UserProfile profile)
     {
-        _inMemoryProfile = profile;
-        await localStorage.SetItemAsync(StorageKey, profile);
         if (httpClient != null)
         {
             try
             {
-                await httpClient.PutAsJsonAsync("api/user/profile", new
+                var response = await httpClient.PutAsJsonAsync("api/user/profile", new
                 {
                     FullName = profile.FullName,
+                    Username = string.IsNullOrWhiteSpace(profile.DisplayName) ? null : profile.DisplayName.Trim(),
                     Avatar = profile.AvatarEmoji,
                     Level = profile.StudyLevel
                 });
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorObj = await response.Content.ReadFromJsonAsync<BackendErrorDto>();
+                    return (false, errorObj?.Message ?? "Không thể lưu thông tin vào máy chủ.");
+                }
             }
             catch
             {
                 // Non-fatal if offline
             }
         }
+
+        _inMemoryProfile = profile;
+        await localStorage.SetItemAsync(StorageKey, profile);
+        return (true, null);
     }
 
     public static void InvalidateCache()
     {
         _inMemoryProfile = null;
     }
+
+    private sealed record BackendErrorDto(string? Message);
 
     private sealed record BackendUserDto(
         int Id,

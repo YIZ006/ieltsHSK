@@ -106,8 +106,8 @@
             <div class="modal-body">
                 @if (showToast)
                 {
-                    <div class="modal-toast">
-                        <i class="bi bi-check-circle-fill"></i>
+                    <div class="modal-toast @(isToastError ? "toast-error" : "toast-success")">
+                        <i class="bi @(isToastError ? "bi-exclamation-circle-fill" : "bi-check-circle-fill")"></i>
                         <span>@toastMessage</span>
                     </div>
                 }
@@ -316,6 +316,7 @@
     private bool isEditingAvatar;
     private bool isSaving;
     private bool showToast;
+    private bool isToastError;
     private string toastMessage = "";
     private int currentStreak;
     private int bestStreak;
@@ -429,18 +430,30 @@
     private async Task SaveProfileAsync()
     {
         isSaving = true;
+        showToast = false;
         StateHasChanged();
 
         try
         {
-            await ProfileSvc.SaveAsync(profile);
-            toastMessage = "Đã lưu thông tin hồ sơ thành công!";
-            showToast = true;
-            isEditingAvatar = false;
+            var result = await ProfileSvc.SaveAsync(profile);
+            if (result.Success)
+            {
+                isToastError = false;
+                toastMessage = "Đã lưu thông tin hồ sơ vào cơ sở dữ liệu thành công!";
+                showToast = true;
+                isEditingAvatar = false;
+            }
+            else
+            {
+                isToastError = true;
+                toastMessage = result.ErrorMessage ?? "Có lỗi xảy ra khi lưu thông tin.";
+                showToast = true;
+            }
         }
         catch
         {
-            toastMessage = "Có lỗi xảy ra khi lưu thông tin.";
+            isToastError = true;
+            toastMessage = "Không thể kết nối đến máy chủ để lưu thông tin.";
             showToast = true;
         }
         finally
@@ -449,7 +462,7 @@
             StateHasChanged();
         }
 
-        _ = Task.Delay(3000).ContinueWith(_ =>
+        _ = Task.Delay(3500).ContinueWith(_ =>
         {
             showToast = false;
             InvokeAsync(StateHasChanged);
