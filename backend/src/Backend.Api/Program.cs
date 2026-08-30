@@ -11,6 +11,8 @@ using Microsoft.Extensions.Caching.Memory;
 var builder = WebApplication.CreateBuilder(args);
 
 const string frontendCorsPolicy = "FrontendCorsPolicy";
+var frontendUrl = builder.Configuration["Frontend:BaseUrl"] ?? "https://localhost:7102";
+const string frontendHttpUrl = "http://localhost:5102";
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpClient();
@@ -21,10 +23,9 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy(frontendCorsPolicy, policy =>
     {
-        policy.SetIsOriginAllowed(_ => true)
+        policy.WithOrigins(frontendUrl, frontendHttpUrl)
             .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
+            .AllowAnyMethod();
     });
 });
 
@@ -69,27 +70,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+await app.Services.SeedDataAsync();
 
-try
+if (app.Environment.IsDevelopment())
 {
-    await app.Services.SeedDataAsync();
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"[Startup Warning] SeedDataAsync encountered an issue: {ex.Message}");
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
-// Always enable Swagger for testing
-app.UseSwagger();
-app.UseSwaggerUI();
-
+app.UseHttpsRedirection();
 app.UseCors(frontendCorsPolicy);
 
 app.UseAuthentication();
 app.UseAuthorization();
-
-// Root health check endpoint for Render
-app.MapGet("/", () => Results.Ok(new { status = "healthy", app = "IELTS & HSK Backend API", timestamp = DateTime.UtcNow }));
 
 app.MapGet("/api/ielts/courses", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
