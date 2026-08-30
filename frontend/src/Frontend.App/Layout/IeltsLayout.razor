@@ -15,7 +15,9 @@
                 <button class="sb-mobile-toggle" @onclick="ToggleMobileSidebar" title="Menu">
                     <i class="bi bi-list"></i>
                 </button>
-                <NavMenu OnShowLogin="() => authModal?.Show(true)" OnShowRegister="() => authModal?.Show(false)" />
+                <NavMenu OnShowLogin="() => authModal?.Show(true)"
+                         OnShowRegister="() => authModal?.Show(false)"
+                         OnOpenProfile="@(async tab => { if (profileModal != null) await profileModal.OpenAsync(tab); })" />
             </div>
         </header>
 
@@ -28,9 +30,11 @@
 </div>
 
 <AuthModal @ref="authModal" />
+<ProfileModal @ref="profileModal" />
 
 @code {
     private AuthModal? authModal;
+    private ProfileModal? profileModal;
     private LeftSidebar? leftSidebar;
     private bool sidebarCollapsed;
 
