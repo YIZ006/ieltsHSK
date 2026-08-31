@@ -70,19 +70,27 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
-await app.Services.SeedDataAsync();
 
-if (app.Environment.IsDevelopment())
+try
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    await app.Services.SeedDataAsync();
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[Startup Warning] SeedDataAsync encountered an issue: {ex.Message}");
 }
 
-app.UseHttpsRedirection();
+// Enable Swagger in all environments
+app.UseSwagger();
+app.UseSwaggerUI();
+
 app.UseCors(frontendCorsPolicy);
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Root health check endpoint for Render & container monitoring
+app.MapGet("/", () => Results.Ok(new { status = "healthy", app = "IELTS & HSK Backend API", timestamp = DateTime.UtcNow }));
 
 app.MapGet("/api/ielts/courses", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
