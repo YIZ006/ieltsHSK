@@ -24,6 +24,13 @@ public static class DependencyInjection
                 connStr = connStr.Substring("ConnectionStrings:DefaultConnection=".Length).Trim();
             else if (connStr.StartsWith("DefaultConnection=", StringComparison.OrdinalIgnoreCase))
                 connStr = connStr.Substring("DefaultConnection=".Length).Trim();
+
+            // Strip SQL Server-only parameters like Trust Server Certificate which causes Npgsql to throw
+            connStr = System.Text.RegularExpressions.Regex.Replace(
+                connStr, 
+                @";?\s*Trust\s*Server\s*Certificate\s*=\s*(true|false);?", 
+                ";", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim(';', ' ');
         }
 
         services.AddDbContext<AppDbContext>(options =>
