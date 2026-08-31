@@ -93,18 +93,25 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
 
     public async Task<(bool Success, string ErrorMessage)> RegisterAsync(RegisterRequest request)
     {
-        var response = await httpClient.PostAsJsonAsync("api/auth/register", request);
-        if (response.IsSuccessStatusCode)
+        try
         {
-            return (true, string.Empty);
-        }
+            var response = await httpClient.PostAsJsonAsync("api/auth/register", request);
+            if (response.IsSuccessStatusCode)
+            {
+                return (true, string.Empty);
+            }
 
-        var error = await response.Content.ReadAsStringAsync();
-        if (string.IsNullOrWhiteSpace(error))
-        {
-            error = "Đăng ký thất bại. Vui lòng kiểm tra lại thông tin.";
+            var error = await response.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(error))
+            {
+                error = "Đăng ký thất bại. Vui lòng kiểm tra lại thông tin.";
+            }
+            return (false, error.Trim('"'));
         }
-        return (false, error.Trim('"'));
+        catch (Exception ex)
+        {
+            return (false, "Lỗi kết nối máy chủ: " + ex.Message);
+        }
     }
 
     public async Task<bool> CheckUsernameExistsAsync(string username)
@@ -123,20 +130,27 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
 
     public async Task<bool> LoginAsync(LoginRequest request)
     {
-        var response = await httpClient.PostAsJsonAsync("api/auth/login", request);
-        if (!response.IsSuccessStatusCode)
+        try
+        {
+            var response = await httpClient.PostAsJsonAsync("api/auth/login", request);
+            if (!response.IsSuccessStatusCode)
+            {
+                return false;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
+            if (result == null) return false;
+
+            // Xóa dữ liệu user cũ trước khi lưu token mới
+            await ClearUserDataAsync();
+            await localStorage.SetItemAsync("authToken", result.Token);
+            ((CustomAuthStateProvider)authStateProvider).NotifyUserAuthentication(result.Token);
+            return true;
+        }
+        catch
         {
             return false;
         }
-
-        var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
-        if (result == null) return false;
-
-        // Xóa dữ liệu user cũ trước khi lưu token mới
-        await ClearUserDataAsync();
-        await localStorage.SetItemAsync("authToken", result.Token);
-        ((CustomAuthStateProvider)authStateProvider).NotifyUserAuthentication(result.Token);
-        return true;
     }
 
     public async Task<(bool Success, bool IsAdmin, string ErrorMessage)> AdminLoginAsync(LoginRequest request)

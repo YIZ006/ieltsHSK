@@ -11,8 +11,23 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, Microsoft.Extensions.Configuration.IConfiguration configuration)
     {
+        var connStr = configuration.GetConnectionString("DefaultConnection") 
+                      ?? configuration["ConnectionStrings:DefaultConnection"]
+                      ?? configuration["ConnectionStrings__DefaultConnection"];
+
+        if (!string.IsNullOrWhiteSpace(connStr))
+        {
+            connStr = connStr.Trim().Trim('"').Trim('\'');
+            if (connStr.StartsWith("ConnectionStrings__DefaultConnection=", StringComparison.OrdinalIgnoreCase))
+                connStr = connStr.Substring("ConnectionStrings__DefaultConnection=".Length).Trim();
+            else if (connStr.StartsWith("ConnectionStrings:DefaultConnection=", StringComparison.OrdinalIgnoreCase))
+                connStr = connStr.Substring("ConnectionStrings:DefaultConnection=".Length).Trim();
+            else if (connStr.StartsWith("DefaultConnection=", StringComparison.OrdinalIgnoreCase))
+                connStr = connStr.Substring("DefaultConnection=".Length).Trim();
+        }
+
         services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("DefaultConnection"), npgsqlOptions =>
+            options.UseNpgsql(connStr, npgsqlOptions =>
                 {
                     npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5,
                         maxRetryDelay: TimeSpan.FromSeconds(10), errorCodesToAdd: null);
