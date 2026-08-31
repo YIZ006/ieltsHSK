@@ -11,8 +11,6 @@ using Microsoft.Extensions.Caching.Memory;
 var builder = WebApplication.CreateBuilder(args);
 
 const string frontendCorsPolicy = "FrontendCorsPolicy";
-var frontendUrl = builder.Configuration["Frontend:BaseUrl"] ?? "https://localhost:7102";
-const string frontendHttpUrl = "http://localhost:5102";
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpClient();
@@ -23,9 +21,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy(frontendCorsPolicy, policy =>
     {
-        policy.WithOrigins(frontendUrl, frontendHttpUrl)
+        policy.SetIsOriginAllowed(_ => true)
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
