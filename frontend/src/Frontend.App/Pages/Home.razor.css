@@ -1,13 +1,4 @@
 .landing-container {
-    --ielts-color: #0095f6;
-    --ielts-glow: rgba(0, 149, 246, 0.35);
-    --toeic-color: #8b5cf6;
-    --toeic-glow: rgba(139, 92, 246, 0.35);
-    --hsk-color: #ed4956;
-    --hsk-glow: rgba(237, 73, 86, 0.35);
-    --card-bg: #ffffff;
-    --card-border: #e2e8f0;
-
     min-height: calc(100vh - 60px);
     background-color: #ffffff;
     color: #1e293b;
@@ -16,7 +7,7 @@
     align-items: center;
     justify-content: center;
     padding: 2rem;
-    font-family: 'Inter', 'Be Vietnam Pro', sans-serif;
+    font-family: 'Be Vietnam Pro', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     position: relative;
     overflow: hidden;
 }
@@ -32,12 +23,12 @@
     font-weight: 800;
     margin-bottom: 1rem;
     color: #0f172a;
-    letter-spacing: -1px;
+    letter-spacing: -0.03em;
 }
 
 .subtitle {
-    font-size: 1.25rem;
-    color: var(--ig-text-secondary);
+    font-size: 1.15rem;
+    color: #64748b;
     max-width: 600px;
     margin: 0 auto;
     line-height: 1.6;
@@ -47,21 +38,22 @@
     display: flex;
     gap: 2rem;
     z-index: 1;
-    max-width: 1000px;
+    max-width: 1060px;
     width: 100%;
+    align-items: stretch;
 }
 
 .path-card {
     flex: 1;
     position: relative;
     background: #ffffff;
-    border: 1px solid #e2e8f0;
+    border: 1.5px solid #e2e8f0;
     border-radius: 24px;
-    padding: 3rem 2rem;
+    padding: 3.2rem 2.2rem 2.5rem;
     text-decoration: none;
-    color: #1e293b;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
-    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    color: #0f172a;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -71,59 +63,39 @@
 
 .path-card:hover {
     transform: translateY(-8px);
-    border-color: #cbd5e1;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.12);
 }
 
-.card-glow {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 250px;
-    height: 250px;
-    border-radius: 50%;
-    filter: blur(60px);
-    z-index: 0;
-    pointer-events: none;
-    transition: opacity 0.4s ease, transform 0.4s ease;
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.8);
+.ielts-card:hover {
+    border-color: #bae6fd;
 }
 
-.path-card:hover .card-glow {
-    opacity: 0.6;
-    transform: translate(-50%, -50%) scale(1.2);
+.toeic-card:hover {
+    border-color: #ddd6fe;
 }
 
-.ielts-glow {
-    background: #0095f6;
-}
-
-.toeic-glow {
-    background: #8b5cf6;
-}
-
-.hsk-glow {
-    background: #ed4956;
+.hsk-card:hover {
+    border-color: #fecaca;
 }
 
 .card-content {
     display: flex;
     flex-direction: column;
     align-items: center;
+    height: 100%;
+    width: 100%;
     position: relative;
     z-index: 1;
 }
 
 .icon-wrapper {
-    font-size: 4rem;
+    font-size: 3.8rem;
     margin-bottom: 1.5rem;
     transition: transform 0.3s ease;
 }
 
 .ielts-icon {
-    color: #0095f6;
+    color: #0284c7;
 }
 
 .toeic-icon {
@@ -140,39 +112,50 @@
 
 .path-card h2 {
     font-size: 1.85rem;
-    font-weight: 700;
+    font-weight: 800;
     margin-bottom: 1rem;
     color: #0f172a;
+    letter-spacing: -0.02em;
 }
 
 .path-card p {
     color: #64748b;
     line-height: 1.6;
-    margin-bottom: 2rem;
+    margin-bottom: 2.2rem;
     font-size: 0.95rem;
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 72px;
 }
 
 .explore-btn {
-    padding: 0.75rem 2rem;
+    width: 175px;
+    height: 44px;
     border-radius: 9999px;
     font-weight: 700;
-    font-size: 0.95rem;
-    transition: all 0.25s ease;
+    font-size: 0.92rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: transparent;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-sizing: border-box;
 }
 
 .ielts-card .explore-btn {
-    background-color: transparent;
-    color: #0095f6;
-    border: 1.5px solid #0095f6;
+    color: #0284c7;
+    border: 1.5px solid #0284c7;
 }
 
 .ielts-card:hover .explore-btn {
-    background-color: #0095f6;
+    background-color: #0284c7;
     color: #ffffff;
+    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
 }
 
 .toeic-card .explore-btn {
-    background-color: transparent;
     color: #8b5cf6;
     border: 1.5px solid #8b5cf6;
 }
@@ -180,10 +163,10 @@
 .toeic-card:hover .explore-btn {
     background-color: #8b5cf6;
     color: #ffffff;
+    box-shadow: 0 4px 14px rgba(139, 92, 246, 0.3);
 }
 
 .hsk-card .explore-btn {
-    background-color: transparent;
     color: #ed4956;
     border: 1.5px solid #ed4956;
 }
@@ -191,6 +174,7 @@
 .hsk-card:hover .explore-btn {
     background-color: #ed4956;
     color: #ffffff;
+    box-shadow: 0 4px 14px rgba(237, 73, 86, 0.3);
 }
 
 @media (max-width: 768px) {
@@ -199,5 +183,8 @@
     }
     .main-title {
         font-size: 2.5rem;
+    }
+    .path-card p {
+        min-height: auto;
     }
 }
