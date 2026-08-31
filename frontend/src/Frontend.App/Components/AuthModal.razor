@@ -283,19 +283,27 @@
     {
         IsLoading = true;
         ErrorMessage = string.Empty;
-        
-        var success = await AuthService.LoginAsync(loginModel);
-        if (success)
+        try
         {
-            Close();
-            NavigationManager.NavigateTo("/ielts", forceLoad: false);
+            var success = await AuthService.LoginAsync(loginModel);
+            if (success)
+            {
+                Close();
+                NavigationManager.NavigateTo("/ielts", forceLoad: false);
+            }
+            else
+            {
+                ErrorMessage = "Tên đăng nhập / Email hoặc mật khẩu không chính xác.";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            ErrorMessage = "Tên đăng nhập / Email hoặc mật khẩu không chính xác.";
+            ErrorMessage = "Lỗi đăng nhập: " + ex.Message;
         }
-        
-        IsLoading = false;
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
     private async Task HandleRegister()
@@ -304,29 +312,37 @@
         ErrorMessage = string.Empty;
         usernameStatusMessage = string.Empty;
 
-        // Check username existence before submitting
-        isUsernameTaken = await AuthService.CheckUsernameExistsAsync(registerModel.Username.Trim());
-        if (isUsernameTaken)
+        try
         {
-            ErrorMessage = "Tên đăng nhập này đã tồn tại. Vui lòng chọn tên đăng nhập khác.";
-            usernameStatusMessage = "Tên đăng nhập này đã tồn tại.";
+            // Check username existence before submitting
+            isUsernameTaken = await AuthService.CheckUsernameExistsAsync(registerModel.Username.Trim());
+            if (isUsernameTaken)
+            {
+                ErrorMessage = "Tên đăng nhập này đã tồn tại. Vui lòng chọn tên đăng nhập khác.";
+                usernameStatusMessage = "Tên đăng nhập này đã tồn tại.";
+                return;
+            }
+
+            var (success, error) = await AuthService.RegisterAsync(registerModel);
+            if (success)
+            {
+                IsLogin = true; // Switch to login after successful registration
+                ErrorMessage = "Đăng ký thành công! Vui lòng đăng nhập.";
+                registerModel = new();
+            }
+            else
+            {
+                ErrorMessage = !string.IsNullOrEmpty(error) ? error : "Đăng ký thất bại. Email hoặc Tên đăng nhập có thể đã được sử dụng.";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = "Lỗi đăng ký: " + ex.Message;
+        }
+        finally
+        {
             IsLoading = false;
-            return;
         }
-
-        var (success, error) = await AuthService.RegisterAsync(registerModel);
-        if (success)
-        {
-            IsLogin = true; // Switch to login after successful registration
-            ErrorMessage = "Đăng ký thành công! Vui lòng đăng nhập.";
-            registerModel = new();
-        }
-        else
-        {
-            ErrorMessage = !string.IsNullOrEmpty(error) ? error : "Đăng ký thất bại. Email hoặc Tên đăng nhập có thể đã được sử dụng.";
-        }
-
-        IsLoading = false;
     }
 
     [JSInvokable]
