@@ -17,6 +17,10 @@ builder.Services.AddHttpClient();
 builder.Services.AddMemoryCache();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+});
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(frontendCorsPolicy, policy =>
@@ -1403,7 +1407,8 @@ app.MapPost("/api/test-submissions", async (
         ExamTitle = submission.ExamTitle,
         AttemptNumber = submission.AttemptNumber,
         Status = submission.Status,
-        R2StorageKey = submission.R2StorageKey
+        R2StorageKey = submission.R2StorageKey,
+        SubmittedAt = submission.SubmittedAt
     });
 });
 
@@ -1423,7 +1428,7 @@ app.MapGet("/api/test-submissions/sync", async (
         if (int.TryParse(subClaim, out var parsedUid)) userId = parsedUid;
     }
 
-    var query = dbContext.TestSubmissions.AsQueryable();
+    var query = dbContext.TestSubmissions.AsNoTracking().AsQueryable();
 
     if (userId.HasValue && userId.Value > 0)
     {
@@ -1441,6 +1446,28 @@ app.MapGet("/api/test-submissions/sync", async (
     var list = await query
         .OrderByDescending(s => s.SubmittedAt)
         .Take(100)
+        .Select(s => new
+        {
+            s.Id,
+            s.UserId,
+            s.StudentName,
+            s.UserEmail,
+            s.SessionId,
+            s.Skill,
+            s.ExamUrl,
+            s.ExamTitle,
+            s.AttemptNumber,
+            s.BandScore,
+            s.CorrectCount,
+            s.TotalCount,
+            s.DetailsJson,
+            s.R2StorageKey,
+            s.Status,
+            s.TeacherFeedback,
+            s.AudioKey,
+            s.SubmittedAt,
+            s.GradedAt
+        })
         .ToListAsync(cancellationToken);
 
     return Results.Ok(list);
@@ -1528,7 +1555,7 @@ app.MapGet("/api/admin/test-submissions", async (
     Backend.Infrastructure.Persistence.AppDbContext dbContext,
     CancellationToken cancellationToken) =>
 {
-    var query = dbContext.TestSubmissions.AsQueryable();
+    var query = dbContext.TestSubmissions.AsNoTracking().AsQueryable();
 
     if (!string.IsNullOrEmpty(skill) && skill != "all")
     {
