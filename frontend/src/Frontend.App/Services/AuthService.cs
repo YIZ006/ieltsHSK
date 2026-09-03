@@ -144,6 +144,13 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
             // Xóa dữ liệu user cũ trước khi lưu token mới
             await ClearUserDataAsync();
             await localStorage.SetItemAsync("authToken", result.Token);
+
+            if (!string.IsNullOrWhiteSpace(result.FullName) || !string.IsNullOrWhiteSpace(result.Email))
+            {
+                var initialProfile = new { FullName = result.FullName ?? "", Email = result.Email ?? "" };
+                await localStorage.SetItemAsync("user_profile", initialProfile);
+            }
+
             ((CustomAuthStateProvider)authStateProvider).NotifyUserAuthentication(result.Token);
             return true;
         }
@@ -208,6 +215,13 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
             // Xóa dữ liệu user cũ trước khi lưu token mới
             await ClearUserDataAsync();
             await localStorage.SetItemAsync("authToken", result.Token);
+
+            if (!string.IsNullOrWhiteSpace(result.FullName) || !string.IsNullOrWhiteSpace(result.Email))
+            {
+                var initialProfile = new { FullName = result.FullName ?? "", Email = result.Email ?? "" };
+                await localStorage.SetItemAsync("user_profile", initialProfile);
+            }
+
             ((CustomAuthStateProvider)authStateProvider).NotifyUserAuthentication(result.Token);
             return (true, string.Empty);
         }
@@ -234,6 +248,13 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
             // Xóa dữ liệu user cũ trước khi lưu token mới
             await ClearUserDataAsync();
             await localStorage.SetItemAsync("authToken", result.Token);
+
+            if (!string.IsNullOrWhiteSpace(result.FullName) || !string.IsNullOrWhiteSpace(result.Email))
+            {
+                var initialProfile = new { FullName = result.FullName ?? "", Email = result.Email ?? "" };
+                await localStorage.SetItemAsync("user_profile", initialProfile);
+            }
+
             ((CustomAuthStateProvider)authStateProvider).NotifyUserAuthentication(result.Token);
             return (true, string.Empty);
         }

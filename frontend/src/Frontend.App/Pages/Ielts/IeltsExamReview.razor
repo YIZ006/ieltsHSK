@@ -11,6 +11,7 @@
 @inject NavigationManager Navigation
 @inject HttpClient Http
 @inject IJSRuntime JS
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 
 <PageTitle>Đáp án & Giải thích chi tiết: @(examTitle ?? "IELTS Test Review") - ieltsHSK</PageTitle>
 
@@ -591,6 +592,86 @@
             string examUrlToLoad = !string.IsNullOrWhiteSpace(QueryExamUrl) 
                 ? QueryExamUrl 
                 : submission?.ExamUrl ?? GetDefaultExamUrl(currentSkill);
+
+            // ─── TỰ ĐỘNG ĐỒNG BỘ TRẠNG THÁI VÀ ĐIỂM SỐ TỪ DATABASE SERVER ───
+            try
+            {
+                var baseUrl = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101/";
+                var ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                var norm = ExamSubmissionService.NormalizeUrl(examUrlToLoad);
+                var latestUrl = $"{baseUrl.TrimEnd('/')}/api/test-submissions/latest?skill={Uri.EscapeDataString(currentSkill)}&examUrl={Uri.EscapeDataString(norm)}&_t={ts}";
+                if (!string.IsNullOrEmpty(QuerySessionId))
+                {
+                    latestUrl += $"&sessionId={Uri.EscapeDataString(QuerySessionId)}";
+                }
+                if (QueryMockTestId.HasValue)
+                {
+                    latestUrl += $"&mockTestId={QueryMockTestId.Value}";
+                }
+
+                var dbSub = await Http.GetFromJsonAsync<TestSubmissionDbResponseDto>(latestUrl);
+                if (dbSub != null)
+                {
+                    if (submission == null)
+                    {
+                        submission = new IeltsSubmissionRecord
+                        {
+                            Id = dbSub.Id.ToString(),
+                            Skill = dbSub.Skill,
+                            ExamUrl = dbSub.ExamUrl,
+                            ExamTitle = !string.IsNullOrWhiteSpace(dbSub.ExamTitle) ? dbSub.ExamTitle : (examTitle ?? "Exam"),
+                            SessionId = dbSub.SessionId,
+                            BandScore = dbSub.BandScore > 0 ? dbSub.BandScore : null,
+                            CorrectCount = dbSub.CorrectCount,
+                            TotalQuestions = dbSub.TotalCount,
+                            Status = dbSub.Status,
+                            TeacherFeedback = dbSub.TeacherFeedback,
+                            SubmittedAt = dbSub.SubmittedAt
+                        };
+                    }
+                    else
+                    {
+                        submission.Status = dbSub.Status;
+                        submission.BandScore = dbSub.BandScore > 0 ? dbSub.BandScore : submission.BandScore;
+                        submission.TeacherFeedback = !string.IsNullOrWhiteSpace(dbSub.TeacherFeedback) ? dbSub.TeacherFeedback : submission.TeacherFeedback;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(dbSub.DetailsJson))
+                    {
+                        try
+                        {
+                            using var doc = System.Text.Json.JsonDocument.Parse(dbSub.DetailsJson);
+                            var root = doc.RootElement;
+
+                            if (root.TryGetProperty("scoreReport", out var scoreElem) && scoreElem.ValueKind == System.Text.Json.JsonValueKind.Object)
+                            {
+                                var report = System.Text.Json.JsonSerializer.Deserialize<IeltsScoreReport>(scoreElem.GetRawText(), new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                if (report != null) submission.Score = report;
+                            }
+
+                            if (currentSkill.Equals("Writing", StringComparison.OrdinalIgnoreCase) && submission.Writing == null)
+                            {
+                                if (root.TryGetProperty("tasks", out _))
+                                {
+                                    submission.Writing = System.Text.Json.JsonSerializer.Deserialize<WritingSubmissionData>(dbSub.DetailsJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                }
+                            }
+                            else if (currentSkill.Equals("Speaking", StringComparison.OrdinalIgnoreCase) && submission.Speaking == null)
+                            {
+                                if (root.TryGetProperty("answers", out _))
+                                {
+                                    submission.Speaking = System.Text.Json.JsonSerializer.Deserialize<SpeakingSubmissionData>(dbSub.DetailsJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[IeltsExamReview] Live DB sync: {ex.Message}");
+            }
 
             // Tải dữ liệu đề thi theo kỹ năng
             if (currentSkill.Equals("Reading", StringComparison.OrdinalIgnoreCase) || currentSkill.Equals("Listening", StringComparison.OrdinalIgnoreCase))

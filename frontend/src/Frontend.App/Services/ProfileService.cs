@@ -5,6 +5,7 @@ namespace Frontend.App.Services;
 
 public sealed class UserProfile
 {
+    public int? Id { get; set; }
     public string AvatarEmoji { get; set; } = "🎓";
     public string AvatarColor { get; set; } = "#6c5ce7";
     public string DisplayName { get; set; } = "";
@@ -51,6 +52,7 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
                 var srvUser = await httpClient.GetFromJsonAsync<BackendUserDto>("api/user/me");
                 if (srvUser != null)
                 {
+                    if (srvUser.Id > 0) local.Id = srvUser.Id;
                     if (!string.IsNullOrWhiteSpace(srvUser.FullName))
                     {
                         local.FullName = srvUser.FullName;

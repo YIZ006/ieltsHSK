@@ -30,6 +30,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<IeltsVocabulary> IeltsVocabularies { get; set; }
     public DbSet<IeltsVocabularyImport> IeltsVocabularyImports { get; set; }
     public DbSet<IeltsVocabularyProgress> IeltsVocabularyProgresses { get; set; }
+    public DbSet<GrammarStructure> GrammarStructures { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -2,9 +2,12 @@
 @layout Frontend.App.Layout.IeltsLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
 @inject MockTestService MockTestService
 @inject ExamSubmissionService SubmissionService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 
 <PageTitle>IELTS Mock Tests - Luyện Thi Thử</PageTitle>
 
@@ -128,9 +131,9 @@
                                     </div>
                                     @if (wSub != null)
                                     {
-                                        @if (wSub.Status == "Graded" && wSub.BandScore.HasValue && wSub.BandScore.Value > 0)
+                                        @if ((wSub.Status == "Graded" || wSub.Status == "Scored") && (wSub.BandScore.HasValue || wSub.Score?.Overall > 0))
                                         {
-                                            <span class="skill-score-badge">Band @wSub.BandScore.Value.ToString("0.0")</span>
+                                            <span class="skill-score-badge">Band @((wSub.BandScore ?? wSub.Score?.Overall ?? 0).ToString("0.0"))</span>
                                         }
                                         else
                                         {
@@ -162,7 +165,7 @@
                                     </div>
                                     @if (sSub != null)
                                     {
-                                        @if (sSub.Status == "Graded" && sSub.BandScore.HasValue && sSub.BandScore.Value > 0)
+                                        @if (sSub.Status == "Graded" && sSub.BandScore.HasValue)
                                         {
                                             <span class="skill-score-badge">Band @sSub.BandScore.Value.ToString("0.0")</span>
                                         }
@@ -209,14 +212,19 @@
     private List<IeltsSubmissionRecord> submissions = new();
     private bool isLoading = true;
 
+    private DotNetObjectReference<IeltsMockTests>? _dotNetRef;
+    private int? _visibilityHookId;
+    private DateTimeOffset _lastLoad = DateTimeOffset.MinValue;
+
     protected override async Task OnInitializedAsync()
     {
+        _lastLoad = DateTimeOffset.UtcNow;
         isLoading = true;
         try
         {
             var allTests = await MockTestService.GetMockTestsAsync();
-            mockTests = allTests.Where(t => 
-                string.IsNullOrEmpty(t.ToeicUrl) && 
+            mockTests = allTests.Where(t =>
+                string.IsNullOrEmpty(t.ToeicUrl) &&
                 string.IsNullOrEmpty(t.HskUrl) &&
                 !(t.Title != null && t.Title.Contains("HSK", StringComparison.OrdinalIgnoreCase)) &&
                 !(t.CollectionName != null && t.CollectionName.Contains("HSK", StringComparison.OrdinalIgnoreCase)) &&
@@ -236,6 +244,51 @@
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            _visibilityHookId = await JS.InvokeAsync<int>("TabVisibility.register", _dotNetRef);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[IeltsMockTests] Tab visibility hook: {ex.Message}");
+        }
+    }
+
+    // Được JS gọi khi người dùng quay lại tab này (VD: sau khi chấm điểm ở tab khác),
+    // để badge "Chờ chấm" kịp đổi thành band chính thức mà không cần F5.
+    [JSInvokable]
+    public async Task OnTabVisibleAsync()
+    {
+        if (DateTimeOffset.UtcNow - _lastLoad < TimeSpan.FromSeconds(2)) return;
+        _lastLoad = DateTimeOffset.UtcNow;
+        try
+        {
+            submissions = await SubmissionService.GetAllAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[IeltsMockTests] Refresh on visible: {ex.Message}");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_visibilityHookId.HasValue)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("TabVisibility.unregister", _visibilityHookId.Value);
+            }
+            catch (JSDisconnectedException) { }
+        }
+        _dotNetRef?.Dispose();
+    }
+
     private IeltsSubmissionRecord? GetLatestSub(string skill, string? examUrl, MockTestDto test)
     {
         var normExam = ExamSubmissionService.NormalizeUrl(examUrl);
@@ -250,7 +303,8 @@
                     s.ExamTitle.Contains(test.Title, StringComparison.OrdinalIgnoreCase)
                 ))
             )
-            .OrderByDescending(s => s.SubmittedAt)
+            .OrderByDescending(s => s.Status == "Graded" || s.Status == "Scored" ? 1 : 0)
+            .ThenByDescending(s => s.SubmittedAt)
             .FirstOrDefault();
     }
 

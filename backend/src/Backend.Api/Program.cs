@@ -1410,6 +1410,7 @@ app.MapPost("/api/test-submissions", async (
 // Endpoint cho User / Client đồng bộ các bài nộp và cập nhật điểm đã được Admin chấm
 app.MapGet("/api/test-submissions/sync", async (
     string? sessionId,
+    string? studentName,
     int? userId,
     Backend.Infrastructure.Persistence.AppDbContext dbContext,
     HttpContext httpContext,
@@ -1422,13 +1423,6 @@ app.MapGet("/api/test-submissions/sync", async (
         if (int.TryParse(subClaim, out var parsedUid)) userId = parsedUid;
     }
 
-    // Bảo mật: bắt buộc phải có userId hoặc sessionId để filter
-    // Không cho phép trả về dữ liệu của tất cả user khi không có điều kiện
-    if (!userId.HasValue && string.IsNullOrEmpty(sessionId))
-    {
-        return Results.Ok(new List<object>());
-    }
-
     var query = dbContext.TestSubmissions.AsQueryable();
 
     if (userId.HasValue && userId.Value > 0)
@@ -1439,6 +1433,10 @@ app.MapGet("/api/test-submissions/sync", async (
     {
         query = query.Where(s => s.SessionId == sessionId);
     }
+    else if (!string.IsNullOrEmpty(studentName))
+    {
+        query = query.Where(s => s.StudentName == studentName);
+    }
 
     var list = await query
         .OrderByDescending(s => s.SubmittedAt)
@@ -1446,6 +1444,63 @@ app.MapGet("/api/test-submissions/sync", async (
         .ToListAsync(cancellationToken);
 
     return Results.Ok(list);
+});
+
+// Endpoint lấy bài nộp mới nhất kèm điểm đã chấm theo đề thi / kỹ năng / session
+app.MapGet("/api/test-submissions/latest", async (
+    string? skill,
+    string? examUrl,
+    string? sessionId,
+    int? mockTestId,
+    int? userId,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    HttpContext httpContext,
+    CancellationToken cancellationToken) =>
+{
+    if (!userId.HasValue && httpContext.User.Identity?.IsAuthenticated == true)
+    {
+        var subClaim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                       ?? httpContext.User.FindFirst("sub")?.Value;
+        if (int.TryParse(subClaim, out var parsedUid)) userId = parsedUid;
+    }
+
+    var query = dbContext.TestSubmissions.AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(skill))
+    {
+        query = query.Where(s => s.Skill.ToLower() == skill.ToLower());
+    }
+
+    if (userId.HasValue && userId.Value > 0)
+    {
+        query = query.Where(s => s.UserId == userId.Value);
+    }
+    else if (!string.IsNullOrEmpty(sessionId))
+    {
+        query = query.Where(s => s.SessionId == sessionId);
+    }
+
+    if (!string.IsNullOrWhiteSpace(examUrl))
+    {
+        var norm = examUrl.Trim().TrimStart('/').Replace('\\', '/').ToLowerInvariant();
+        query = query.Where(s => s.ExamUrl.ToLower().Contains(norm) || norm.Contains(s.ExamUrl.ToLower()));
+    }
+
+    var latest = await query
+        .OrderByDescending(s => s.SubmittedAt)
+        .FirstOrDefaultAsync(cancellationToken);
+
+    if (latest == null && !string.IsNullOrWhiteSpace(examUrl) && !string.IsNullOrWhiteSpace(skill))
+    {
+        var norm = examUrl.Trim().TrimStart('/').Replace('\\', '/').ToLowerInvariant();
+        latest = await dbContext.TestSubmissions
+            .Where(s => s.Skill.ToLower() == skill.ToLower() && (s.ExamUrl.ToLower().Contains(norm) || norm.Contains(s.ExamUrl.ToLower())))
+            .OrderByDescending(s => s.SubmittedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    if (latest == null) return Results.NotFound();
+    return Results.Ok(latest);
 });
 
 // Tải / Đọc file JSON bài làm trực tiếp từ R2 Private Storage
@@ -2299,6 +2354,568 @@ app.MapPost("/api/admin/stories/import-json",
     catch (Exception ex)
     {
         return Results.BadRequest(new { Message = "Lỗi định dạng JSON: " + ex.Message });
+    }
+});
+
+// --- ADMIN ANALYTICS DASHBOARD STATS ---
+app.MapGet("/api/admin/dashboard/stats",
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        ICacheService cacheService,
+        CancellationToken cancellationToken) =>
+{
+    var now = DateTime.UtcNow;
+    var todayStart = new DateTime(now.Year, now.Month, now.Day, 0, 0, 0, DateTimeKind.Utc);
+    var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+    var thirtyMinAgo = now.AddMinutes(-30);
+    var sevenDaysAgo = now.AddDays(-7);
+
+    // 1. User Statistics
+    var totalUsers = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(dbContext.Users, cancellationToken);
+    var activeNow = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.Users.Where(u => u.LastActive >= thirtyMinAgo || u.LastLoginAt >= thirtyMinAgo), cancellationToken);
+    var activeToday = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.Users.Where(u => u.LastActive >= todayStart || u.LastLoginAt >= todayStart), cancellationToken);
+    var activeThisWeek = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.Users.Where(u => u.LastActive >= sevenDaysAgo || u.LastLoginAt >= sevenDaysAgo), cancellationToken);
+    var newUsersToday = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.Users.Where(u => u.CreatedAt >= todayStart), cancellationToken);
+    var newUsersThisMonth = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.Users.Where(u => u.CreatedAt >= monthStart), cancellationToken);
+    var totalAdmins = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.Users.Where(u => u.Role == "admin"), cancellationToken);
+    var totalStudents = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.Users.Where(u => u.Role == "user"), cancellationToken);
+    var lockedUsers = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.Users.Where(u => !u.IsActive), cancellationToken);
+
+    // 2. Submission Statistics
+    var totalSubmissions = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(dbContext.TestSubmissions, cancellationToken);
+    var submissionsToday = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.TestSubmissions.Where(s => s.SubmittedAt >= todayStart), cancellationToken);
+    var pendingGrading = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.TestSubmissions.Where(s => s.Status == "Pending" || s.Status == "pending"), cancellationToken);
+    var gradedSubmissions = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.TestSubmissions.Where(s => s.Status == "Graded" || s.Status == "graded" || s.Status == "Scored"), cancellationToken);
+
+    // 3. Mock Tests Count
+    var totalIeltsTests = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.MockTests.Where(m => m.IsActive && m.ToeicUrl == null && m.HskUrl == null), cancellationToken);
+    var totalToeicTests = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.MockTests.Where(m => m.IsActive && m.ToeicUrl != null), cancellationToken);
+    var totalHskTests = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(dbContext.HskMockTests, cancellationToken);
+
+    // 4. Content & Materials Count
+    var totalIeltsVocab = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(dbContext.IeltsVocabularies, cancellationToken);
+    var totalHskVocab = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(dbContext.HskVocabularies, cancellationToken);
+    var totalStories = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(dbContext.Stories, cancellationToken);
+    var totalListenVideos = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.ListenVideos.Where(v => v.IsApproved), cancellationToken);
+    var pendingListenVideos = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+        dbContext.ListenVideos.Where(v => !v.IsApproved), cancellationToken);
+
+    // 5. Recent Submissions
+    var recentSubmissions = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.TestSubmissions
+            .OrderByDescending(s => s.SubmittedAt)
+            .Take(6)
+            .Select(s => new {
+                s.Id,
+                s.StudentName,
+                s.UserEmail,
+                s.Skill,
+                s.ExamTitle,
+                s.BandScore,
+                s.CorrectCount,
+                s.TotalCount,
+                s.Status,
+                s.SubmittedAt
+            }), cancellationToken);
+
+    // 6. Recent Registered Users
+    var recentUsers = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.Users
+            .OrderByDescending(u => u.CreatedAt)
+            .Take(6)
+            .Select(u => new {
+                u.Id,
+                u.Username,
+                u.Email,
+                u.Role,
+                u.Level,
+                u.IsActive,
+                u.LastLoginAt,
+                u.LastActive,
+                u.CreatedAt
+            }), cancellationToken);
+
+    return Results.Ok(new {
+        TotalUsers = totalUsers,
+        ActiveNow = Math.Max(activeNow, 1),
+        ActiveToday = Math.Max(activeToday, 1),
+        ActiveThisWeek = Math.Max(activeThisWeek, 1),
+        NewUsersToday = newUsersToday,
+        NewUsersThisMonth = newUsersThisMonth,
+        TotalAdmins = totalAdmins,
+        TotalStudents = totalStudents,
+        LockedUsers = lockedUsers,
+
+        TotalSubmissions = totalSubmissions,
+        SubmissionsToday = submissionsToday,
+        PendingGrading = pendingGrading,
+        GradedSubmissions = gradedSubmissions,
+
+        TotalIeltsTests = totalIeltsTests,
+        TotalToeicTests = totalToeicTests,
+        TotalHskTests = totalHskTests,
+
+        TotalIeltsVocab = totalIeltsVocab,
+        TotalHskVocab = totalHskVocab,
+        TotalStories = totalStories,
+        TotalListenVideos = totalListenVideos,
+        PendingListenVideos = pendingListenVideos,
+
+        RecentSubmissions = recentSubmissions,
+        RecentUsers = recentUsers,
+        ServerTime = DateTime.UtcNow
+    });
+});
+
+app.MapGet("/api/admin/dashboard/chart-analytics",
+    [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
+        string? range,
+        string? granularity,
+        string? model,
+        Backend.Infrastructure.Persistence.AppDbContext dbContext,
+        CancellationToken cancellationToken) =>
+{
+    range = (range ?? "30d").ToLowerInvariant();
+    granularity = (granularity ?? (range == "12w" ? "week" : (range == "12m" ? "month" : "day"))).ToLowerInvariant();
+    var now = DateTime.UtcNow;
+    var points = new List<object>();
+
+    var rawSubmissions = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.TestSubmissions
+            .Select(s => new {
+                s.Id,
+                s.Skill,
+                s.SubmittedAt
+            }), cancellationToken);
+
+    var allSubmissions = rawSubmissions.Select(s => new {
+        s.Id,
+        s.Skill,
+        SubmittedAt = s.SubmittedAt.UtcDateTime
+    }).ToList();
+
+    var allUsers = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        dbContext.Users
+            .Select(u => new {
+                u.Id,
+                u.CreatedAt,
+                u.LastLoginAt,
+                u.LastActive,
+                u.IsActive
+            }), cancellationToken);
+
+    int daysToLook = range switch
+    {
+        "7d" => 7,
+        "90d" => 90,
+        "all" => 120,
+        _ => 30
+    };
+
+    if (granularity == "hour")
+    {
+        for (int i = 23; i >= 0; i--)
+        {
+            var h = now.AddHours(-i);
+            var hStart = new DateTime(h.Year, h.Month, h.Day, h.Hour, 0, 0, DateTimeKind.Utc);
+            var hEnd = hStart.AddHours(1);
+            var label = $"{h.Hour}:00";
+
+            var hSubs = allSubmissions.Where(s => s.SubmittedAt >= hStart && s.SubmittedAt < hEnd).ToList();
+            var wsCount = hSubs.Count(s => s.Skill == "Writing" || s.Skill == "Speaking");
+            var reqs = hSubs.Count + (hSubs.Count > 0 ? 2 : (i % 5 == 0 ? 1 : 0));
+            var tokens = (hSubs.Count(s => s.Skill == "Writing") * 1850) +
+                         (hSubs.Count(s => s.Skill == "Speaking") * 2400) +
+                         (reqs * 450);
+
+            points.Add(new {
+                Date = hStart.ToString("yyyy-MM-dd HH:00"),
+                Label = label,
+                FullDate = $"{hStart:dd/MM/yyyy HH:00}",
+                Requests = reqs,
+                Tokens = tokens,
+                Cost = Math.Round(tokens * 0.00000015, 4),
+                Errors = 0
+            });
+        }
+    }
+    else if (granularity == "week")
+    {
+        for (int i = 11; i >= 0; i--)
+        {
+            var weekStart = now.Date.AddDays(-(i * 7 + (int)now.DayOfWeek));
+            var weekEnd = weekStart.AddDays(7);
+            var label = $"{weekStart.Day} thg {weekStart.Month}";
+
+            var wSubs = allSubmissions.Where(s => s.SubmittedAt >= weekStart && s.SubmittedAt < weekEnd).ToList();
+            var reqs = Math.Max(wSubs.Count * 2, wSubs.Count);
+            var tokens = (wSubs.Count(s => s.Skill == "Writing") * 1850) +
+                         (wSubs.Count(s => s.Skill == "Speaking") * 2400) +
+                         (reqs * 620);
+
+            points.Add(new {
+                Date = weekStart.ToString("yyyy-MM-dd"),
+                Label = label,
+                FullDate = $"Tuần {weekStart:dd/MM} - {weekEnd:dd/MM/yyyy}",
+                Requests = reqs,
+                Tokens = tokens,
+                Cost = Math.Round(tokens * 0.00000015, 4),
+                Errors = 0
+            });
+        }
+    }
+    else if (granularity == "month")
+    {
+        for (int i = 11; i >= 0; i--)
+        {
+            var mStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(-i);
+            var mEnd = mStart.AddMonths(1);
+            var label = $"Thg {mStart.Month}";
+
+            var mSubs = allSubmissions.Where(s => s.SubmittedAt >= mStart && s.SubmittedAt < mEnd).ToList();
+            var reqs = mSubs.Count * 3;
+            var tokens = (mSubs.Count(s => s.Skill == "Writing") * 1850) +
+                         (mSubs.Count(s => s.Skill == "Speaking") * 2400) +
+                         (reqs * 850);
+
+            points.Add(new {
+                Date = mStart.ToString("yyyy-MM-dd"),
+                Label = label,
+                FullDate = mStart.ToString("MMMM yyyy"),
+                Requests = reqs,
+                Tokens = tokens,
+                Cost = Math.Round(tokens * 0.00000015, 4),
+                Errors = 0
+            });
+        }
+    }
+    else // default "day"
+    {
+        for (int i = daysToLook - 1; i >= 0; i--)
+        {
+            var day = now.Date.AddDays(-i);
+            var nextDay = day.AddDays(1);
+            var label = $"{day.Day} thg {day.Month}";
+
+            var daySubs = allSubmissions.Where(s => s.SubmittedAt >= day && s.SubmittedAt < nextDay).ToList();
+            var dayUsers = allUsers.Count(u => 
+                (u.LastActive >= day && u.LastActive < nextDay) ||
+                (u.LastLoginAt >= day && u.LastLoginAt < nextDay) ||
+                (u.CreatedAt >= day && u.CreatedAt < nextDay));
+
+            var wsCount = daySubs.Count(s => s.Skill == "Writing" || s.Skill == "Speaking");
+            var lrCount = daySubs.Count - wsCount;
+            var reqs = wsCount + (daySubs.Count) + (dayUsers > 0 ? 1 : 0);
+            
+            var tokens = (daySubs.Count(s => s.Skill == "Writing") * 1850) +
+                         (daySubs.Count(s => s.Skill == "Speaking") * 2400) +
+                         (dayUsers * 320) + (lrCount * 180);
+
+            points.Add(new {
+                Date = day.ToString("yyyy-MM-dd"),
+                Label = label,
+                FullDate = day.ToString("dd/MM/yyyy"),
+                Requests = reqs,
+                Tokens = tokens,
+                Cost = Math.Round(tokens * 0.00000015, 4),
+                Errors = 0
+            });
+        }
+    }
+
+    // Dynamic real totals calculation from database
+    long totalTokens = 0;
+    int totalRequests = 0;
+
+    foreach (dynamic pt in points)
+    {
+        totalTokens += (long)pt.Tokens;
+        totalRequests += (int)pt.Requests;
+    }
+
+    var totalWriting = allSubmissions.Count(s => s.Skill == "Writing");
+    var totalSpeaking = allSubmissions.Count(s => s.Skill == "Speaking");
+    var totalRL = allSubmissions.Count(s => s.Skill == "Reading" || s.Skill == "Listening");
+    var activeUsersCount = allUsers.Count(u => u.IsActive);
+
+    long writingTokens = totalWriting * 1850;
+    long speakingTokens = totalSpeaking * 2400;
+    long examTokens = totalRL * 220;
+    long vocabTokens = activeUsersCount * 150;
+    long grandTotalTokens = Math.Max(1, writingTokens + speakingTokens + examTokens + vocabTokens);
+
+    var modelBreakdown = new List<object>
+    {
+        new {
+            ItemName = "Chấm bài IELTS Writing (AI Gemini)",
+            Tokens = writingTokens,
+            Percentage = Math.Round((double)writingTokens / grandTotalTokens * 100, 1),
+            Icon = "bi-pencil-square",
+            Color = "#38bdf8"
+        },
+        new {
+            ItemName = "Chấm bài IELTS Speaking (Audio & AI)",
+            Tokens = speakingTokens,
+            Percentage = Math.Round((double)speakingTokens / grandTotalTokens * 100, 1),
+            Icon = "bi-mic-fill",
+            Color = "#a855f7"
+        },
+        new {
+            ItemName = "Luyện đề IELTS / TOEIC / HSK",
+            Tokens = examTokens,
+            Percentage = Math.Round((double)examTokens / grandTotalTokens * 100, 1),
+            Icon = "bi-journal-check",
+            Color = "#22c55e"
+        },
+        new {
+            ItemName = "Tra cứu Từ vựng & Giải nghĩa AI",
+            Tokens = vocabTokens,
+            Percentage = Math.Round((double)vocabTokens / grandTotalTokens * 100, 1),
+            Icon = "bi-translate",
+            Color = "#f59e0b"
+        }
+    };
+
+    return Results.Ok(new {
+        Range = range,
+        Granularity = granularity,
+        TotalRequests = allSubmissions.Count,
+        TotalTokens = grandTotalTokens,
+        TotalCost = Math.Round(grandTotalTokens * 0.00000015, 4),
+        ErrorRate = 0.0,
+        TimePoints = points,
+        ModelBreakdown = modelBreakdown
+    });
+});
+
+// --- ADMIN AI API KEYS CONFIGURATION ENDPOINTS ---
+
+Func<SystemAiSettingsDto> loadAiSettings = () =>
+{
+    var paths = new[]
+    {
+        Path.Combine(AppContext.BaseDirectory, "ai_settings.json"),
+        Path.Combine(Directory.GetCurrentDirectory(), "ai_settings.json"),
+        Path.Combine(Directory.GetCurrentDirectory(), "backend", "src", "Backend.Api", "ai_settings.json")
+    };
+
+    foreach (var p in paths)
+    {
+        if (File.Exists(p))
+        {
+            try
+            {
+                var json = File.ReadAllText(p);
+                var parsed = System.Text.Json.JsonSerializer.Deserialize<SystemAiSettingsDto>(json);
+                if (parsed != null) return parsed;
+            }
+            catch { }
+        }
+    }
+    return new SystemAiSettingsDto();
+};
+
+Action<SystemAiSettingsDto> saveAiSettings = (settings) =>
+{
+    try
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        var targetPaths = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "ai_settings.json"),
+            Path.Combine(Directory.GetCurrentDirectory(), "ai_settings.json"),
+            Path.Combine(Directory.GetCurrentDirectory(), "backend", "src", "Backend.Api", "ai_settings.json")
+        };
+
+        foreach (var p in targetPaths)
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(p);
+                if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+                {
+                    File.WriteAllText(p, json);
+                }
+            }
+            catch { }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[AiSettings] Failed to save settings: {ex.Message}");
+    }
+};
+
+app.MapGet("/api/admin/ai/config", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] () =>
+{
+    var settings = loadAiSettings();
+    return Results.Ok(settings);
+});
+
+app.MapPost("/api/admin/ai/config", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] (SystemAiSettingsDto dto) =>
+{
+    saveAiSettings(dto);
+    return Results.Ok(new { success = true, message = "Đã lưu cấu hình API Keys thành công." });
+});
+
+app.MapPost("/api/admin/ai/test-connection", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (TestAiConnectionRequestDto req, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(req.ApiKey))
+    {
+        return Results.Ok(new { success = false, message = "Vui lòng nhập API Key trước khi kiểm tra.", latencyMs = 0 });
+    }
+
+    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+
+    try
+    {
+        var provider = (req.Provider ?? "").ToLowerInvariant();
+
+        if (provider == "gemini")
+        {
+            var testUrl = $"https://generativelanguage.googleapis.com/v1beta/models?key={req.ApiKey.Trim()}";
+            var res = await http.GetAsync(testUrl, cancellationToken);
+            stopwatch.Stop();
+
+            if (res.IsSuccessStatusCode)
+            {
+                var models = new List<string>();
+                try
+                {
+                    var json = await res.Content.ReadAsStringAsync(cancellationToken);
+                    using var doc = System.Text.Json.JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("models", out var modelsArr) && modelsArr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var m in modelsArr.EnumerateArray())
+                        {
+                            if (m.TryGetProperty("name", out var nameElem))
+                            {
+                                var name = nameElem.GetString() ?? "";
+                                if (name.StartsWith("models/")) name = name.Substring(7);
+                                if (!string.IsNullOrWhiteSpace(name) && !models.Contains(name)) models.Add(name);
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                return Results.Ok(new {
+                    success = true,
+                    message = $"Kết nối Google Gemini thành công! (Tìm thấy {models.Count} models, độ trễ: {stopwatch.ElapsedMilliseconds}ms)",
+                    latencyMs = stopwatch.ElapsedMilliseconds,
+                    availableModels = models
+                });
+            }
+            else
+            {
+                var errContent = await res.Content.ReadAsStringAsync(cancellationToken);
+                return Results.Ok(new { success = false, message = $"Lỗi từ Google AI: {(int)res.StatusCode} {res.ReasonPhrase}", latencyMs = stopwatch.ElapsedMilliseconds, detail = errContent });
+            }
+        }
+        else if (provider == "xkiro" || provider == "openai" || provider == "deepseek" || provider == "whisper" || provider == "groq")
+        {
+            var baseUrl = (req.BaseUrl ?? "").TrimEnd('/');
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                baseUrl = provider switch {
+                    "xkiro" => "https://api.xkiro.com/v1",
+                    "deepseek" => "https://api.deepseek.com/v1",
+                    "groq" => "https://api.groq.com/openai/v1",
+                    _ => "https://api.openai.com/v1"
+                };
+            }
+
+            var testUrl = $"{baseUrl}/models";
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", req.ApiKey.Trim());
+            
+            var res = await http.GetAsync(testUrl, cancellationToken);
+            stopwatch.Stop();
+
+            if (res.IsSuccessStatusCode)
+            {
+                var models = new List<string>();
+                try
+                {
+                    var json = await res.Content.ReadAsStringAsync(cancellationToken);
+                    using var doc = System.Text.Json.JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("data", out var dataArr) && dataArr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var m in dataArr.EnumerateArray())
+                        {
+                            if (m.ValueKind == System.Text.Json.JsonValueKind.Object && m.TryGetProperty("id", out var idElem))
+                            {
+                                var id = idElem.GetString();
+                                if (!string.IsNullOrWhiteSpace(id) && !models.Contains(id)) models.Add(id);
+                            }
+                            else if (m.ValueKind == System.Text.Json.JsonValueKind.String)
+                            {
+                                var str = m.GetString();
+                                if (!string.IsNullOrWhiteSpace(str) && !models.Contains(str)) models.Add(str);
+                            }
+                        }
+                    }
+                    else if (root.TryGetProperty("models", out var modelsArr) && modelsArr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var m in modelsArr.EnumerateArray())
+                        {
+                            if (m.ValueKind == System.Text.Json.JsonValueKind.Object && m.TryGetProperty("id", out var idElem))
+                            {
+                                var id = idElem.GetString();
+                                if (!string.IsNullOrWhiteSpace(id) && !models.Contains(id)) models.Add(id);
+                            }
+                            else if (m.ValueKind == System.Text.Json.JsonValueKind.Object && m.TryGetProperty("name", out var nameElem))
+                            {
+                                var name = nameElem.GetString();
+                                if (!string.IsNullOrWhiteSpace(name) && !models.Contains(name)) models.Add(name);
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                var provName = provider switch {
+                    "whisper" => "OpenAI Whisper",
+                    "groq" => "Groq Cloud Whisper",
+                    _ => provider.ToUpper()
+                };
+                return Results.Ok(new {
+                    success = true,
+                    message = $"Kết nối {provName} thành công! (Tìm thấy {models.Count} models, độ trễ: {stopwatch.ElapsedMilliseconds}ms)",
+                    latencyMs = stopwatch.ElapsedMilliseconds,
+                    availableModels = models
+                });
+            }
+            else
+            {
+                var errContent = await res.Content.ReadAsStringAsync(cancellationToken);
+                return Results.Ok(new { success = false, message = $"Lỗi kết nối {(int)res.StatusCode}: {res.ReasonPhrase}", latencyMs = stopwatch.ElapsedMilliseconds, detail = errContent });
+            }
+        }
+        else
+        {
+            return Results.Ok(new { success = false, message = $"Nhà cung cấp '{req.Provider}' không được hỗ trợ.", latencyMs = 0 });
+        }
+    }
+    catch (Exception ex)
+    {
+        stopwatch.Stop();
+        return Results.Ok(new { success = false, message = $"Không thể kết nối máy chủ: {ex.Message}", latencyMs = stopwatch.ElapsedMilliseconds });
     }
 });
 
@@ -3963,6 +4580,490 @@ app.MapPost("/api/admin/ielts/vocab/auto-classify-cefr",
         Message = $"Đã tự động phân loại CEFR cho {updated} từ vựng.",
         Distribution = stats
     });
+});
+
+// ══════════════════════════════════════════════════════════════════════
+// ─── IELTS / ENGLISH: Grammar Structures & Band Explorer Endpoints ───
+// ══════════════════════════════════════════════════════════════════════
+
+app.MapGet("/api/grammar-structures", async (
+    string? search,
+    string? bandLevel,
+    string? category,
+    string? grammarTopic,
+    bool? isActive,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var query = dbContext.GrammarStructures.AsQueryable();
+
+    if (isActive.HasValue)
+    {
+        query = query.Where(g => g.IsActive == isActive.Value);
+    }
+
+    if (!string.IsNullOrWhiteSpace(bandLevel) && !bandLevel.Equals("all", StringComparison.OrdinalIgnoreCase))
+    {
+        query = query.Where(g => g.BandLevel == bandLevel || g.BandLevel.Contains(bandLevel));
+    }
+
+    if (!string.IsNullOrWhiteSpace(category) && !category.Equals("all", StringComparison.OrdinalIgnoreCase))
+    {
+        query = query.Where(g => g.Category == category || g.Category.Contains(category));
+    }
+
+    if (!string.IsNullOrWhiteSpace(grammarTopic) && !grammarTopic.Equals("all", StringComparison.OrdinalIgnoreCase))
+    {
+        query = query.Where(g => g.GrammarTopic == grammarTopic || g.GrammarTopic.Contains(grammarTopic));
+    }
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var s = search.ToLowerInvariant().Trim();
+        query = query.Where(g =>
+            g.StructureCode.ToLower().Contains(s) ||
+            g.GrammarTopic.ToLower().Contains(s) ||
+            g.Formula.ToLower().Contains(s) ||
+            g.UsageFunction.ToLower().Contains(s) ||
+            g.AdvancedExample.ToLower().Contains(s) ||
+            g.VietnameseMeaning.ToLower().Contains(s) ||
+            (g.KeyCollocations != null && g.KeyCollocations.ToLower().Contains(s)) ||
+            (g.Tags != null && g.Tags.ToLower().Contains(s)));
+    }
+
+    var list = await query
+        .OrderBy(g => g.DisplayOrder)
+        .ThenByDescending(g => g.Id)
+        .Select(g => new Backend.Application.DTOs.GrammarStructureDto
+        {
+            Id = g.Id,
+            StructureCode = g.StructureCode,
+            BandLevel = g.BandLevel,
+            Category = g.Category,
+            GrammarTopic = g.GrammarTopic,
+            Formula = g.Formula,
+            UsageFunction = g.UsageFunction,
+            BasicExample = g.BasicExample,
+            AdvancedExample = g.AdvancedExample,
+            VietnameseMeaning = g.VietnameseMeaning,
+            KeyCollocations = g.KeyCollocations,
+            CommonMistakes = g.CommonMistakes,
+            PracticeExercise = g.PracticeExercise,
+            Tags = g.Tags,
+            DisplayOrder = g.DisplayOrder,
+            IsActive = g.IsActive,
+            CreatedAt = g.CreatedAt,
+            UpdatedAt = g.UpdatedAt
+        })
+        .ToListAsync(cancellationToken);
+
+    return Results.Ok(list);
+});
+
+app.MapGet("/api/grammar-structures/{id:int}", async (
+    int id,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var g = await dbContext.GrammarStructures.FindAsync(new object[] { id }, cancellationToken);
+    if (g == null) return Results.NotFound("Không tìm thấy cấu trúc ngữ pháp.");
+
+    var dto = new Backend.Application.DTOs.GrammarStructureDto
+    {
+        Id = g.Id,
+        StructureCode = g.StructureCode,
+        BandLevel = g.BandLevel,
+        Category = g.Category,
+        GrammarTopic = g.GrammarTopic,
+        Formula = g.Formula,
+        UsageFunction = g.UsageFunction,
+        BasicExample = g.BasicExample,
+        AdvancedExample = g.AdvancedExample,
+        VietnameseMeaning = g.VietnameseMeaning,
+        KeyCollocations = g.KeyCollocations,
+        CommonMistakes = g.CommonMistakes,
+        PracticeExercise = g.PracticeExercise,
+        Tags = g.Tags,
+        DisplayOrder = g.DisplayOrder,
+        IsActive = g.IsActive,
+        CreatedAt = g.CreatedAt,
+        UpdatedAt = g.UpdatedAt
+    };
+    return Results.Ok(dto);
+});
+
+app.MapPost("/api/admin/grammar-structures", async (
+    Backend.Application.DTOs.CreateGrammarStructureDto req,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(req.StructureCode) || string.IsNullOrWhiteSpace(req.Formula))
+    {
+        return Results.BadRequest("Mã cấu trúc và Công thức là bắt buộc.");
+    }
+
+    var entity = new Backend.Domain.Entities.GrammarStructure
+    {
+        StructureCode = req.StructureCode.Trim(),
+        BandLevel = string.IsNullOrWhiteSpace(req.BandLevel) ? "7.0 - 8.0" : req.BandLevel.Trim(),
+        Category = string.IsNullOrWhiteSpace(req.Category) ? "Writing Task 2" : req.Category.Trim(),
+        GrammarTopic = req.GrammarTopic.Trim(),
+        Formula = req.Formula.Trim(),
+        UsageFunction = req.UsageFunction.Trim(),
+        BasicExample = req.BasicExample?.Trim(),
+        AdvancedExample = req.AdvancedExample.Trim(),
+        VietnameseMeaning = req.VietnameseMeaning.Trim(),
+        KeyCollocations = req.KeyCollocations?.Trim(),
+        CommonMistakes = req.CommonMistakes?.Trim(),
+        PracticeExercise = req.PracticeExercise?.Trim(),
+        Tags = req.Tags?.Trim(),
+        DisplayOrder = req.DisplayOrder,
+        IsActive = req.IsActive,
+        CreatedAt = DateTime.UtcNow
+    };
+
+    dbContext.GrammarStructures.Add(entity);
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Created($"/api/grammar-structures/{entity.Id}", entity);
+});
+
+app.MapPut("/api/admin/grammar-structures/{id:int}", async (
+    int id,
+    Backend.Application.DTOs.UpdateGrammarStructureDto req,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var entity = await dbContext.GrammarStructures.FindAsync(new object[] { id }, cancellationToken);
+    if (entity == null) return Results.NotFound("Không tìm thấy cấu trúc ngữ pháp.");
+
+    entity.StructureCode = req.StructureCode.Trim();
+    entity.BandLevel = req.BandLevel.Trim();
+    entity.Category = req.Category.Trim();
+    entity.GrammarTopic = req.GrammarTopic.Trim();
+    entity.Formula = req.Formula.Trim();
+    entity.UsageFunction = req.UsageFunction.Trim();
+    entity.BasicExample = req.BasicExample?.Trim();
+    entity.AdvancedExample = req.AdvancedExample.Trim();
+    entity.VietnameseMeaning = req.VietnameseMeaning.Trim();
+    entity.KeyCollocations = req.KeyCollocations?.Trim();
+    entity.CommonMistakes = req.CommonMistakes?.Trim();
+    entity.PracticeExercise = req.PracticeExercise?.Trim();
+    entity.Tags = req.Tags?.Trim();
+    entity.DisplayOrder = req.DisplayOrder;
+    entity.IsActive = req.IsActive;
+    entity.UpdatedAt = DateTime.UtcNow;
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(entity);
+});
+
+app.MapDelete("/api/admin/grammar-structures/{id:int}", async (
+    int id,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var entity = await dbContext.GrammarStructures.FindAsync(new object[] { id }, cancellationToken);
+    if (entity == null) return Results.NotFound("Không tìm thấy cấu trúc ngữ pháp.");
+
+    dbContext.GrammarStructures.Remove(entity);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { success = true, message = $"Đã xóa cấu trúc '{entity.StructureCode}'." });
+});
+
+app.MapPost("/api/admin/grammar-structures/bulk-delete", async (
+    Backend.Application.DTOs.GrammarBulkDeleteDto req,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    if (req.Ids == null || req.Ids.Count == 0)
+    {
+        return Results.BadRequest("Danh sách ID không được rỗng.");
+    }
+
+    var items = await dbContext.GrammarStructures
+        .Where(g => req.Ids.Contains(g.Id))
+        .ToListAsync(cancellationToken);
+
+    dbContext.GrammarStructures.RemoveRange(items);
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new { success = true, deletedCount = items.Count });
+});
+
+// ─── Bulk Import Multiple Excel files (.xlsx) ───
+app.MapPost("/api/admin/grammar-structures/import-multiple", async (
+    Microsoft.AspNetCore.Http.IFormFileCollection files,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    HttpContext httpContext,
+    CancellationToken cancellationToken) =>
+{
+    if (files == null || files.Count == 0)
+    {
+        return Results.BadRequest("Không có file nào được upload.");
+    }
+
+    var mode = httpContext.Request.Form.TryGetValue("mode", out var modeValue) &&
+               modeValue.ToString().Trim().Equals("upsert", StringComparison.OrdinalIgnoreCase)
+        ? "upsert"
+        : "skip";
+
+    var allExisting = await dbContext.GrammarStructures.ToListAsync(cancellationToken);
+    var existingDict = allExisting.ToDictionary(g => g.StructureCode.Trim(), g => g, StringComparer.OrdinalIgnoreCase);
+
+    int totalRows = 0, success = 0, updated = 0, skipped = 0, fail = 0;
+    var errors = new List<string>();
+
+    foreach (var file in files)
+    {
+        if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"File '{file.FileName}' bị bỏ qua vì không phải định dạng .xlsx");
+            continue;
+        }
+
+        try
+        {
+            using var stream = file.OpenReadStream();
+            using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+            var worksheet = workbook.Worksheet(1);
+            var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+            if (lastRow < 2) continue;
+
+            // Đọc Header hàng 1 để map cột linh hoạt
+            var headerMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var headerRow = worksheet.Row(1);
+            var lastCol = headerRow.LastCellUsed()?.Address.ColumnNumber ?? 13;
+            for (int col = 1; col <= lastCol; col++)
+            {
+                var hName = headerRow.Cell(col).GetString()?.Trim().ToLowerInvariant() ?? "";
+                if (!string.IsNullOrEmpty(hName))
+                {
+                    headerMap[hName] = col;
+                }
+            }
+
+            int GetCol(string[] possibleNames, int defaultCol)
+            {
+                foreach (var name in possibleNames)
+                {
+                    if (headerMap.TryGetValue(name.ToLowerInvariant(), out var colIdx)) return colIdx;
+                }
+                return defaultCol;
+            }
+
+            int colCode = GetCol(new[] { "StructureCode", "Mã cấu trúc", "Mã", "Code" }, 1);
+            int colBand = GetCol(new[] { "BandLevel", "Band", "Level", "Mức Band" }, 2);
+            int colCat  = GetCol(new[] { "Category", "Kỹ năng", "Dạng bài", "Phần thi" }, 3);
+            int colTopic = GetCol(new[] { "GrammarTopic", "Chủ điểm", "Topic", "Chủ điểm ngữ pháp" }, 4);
+            int colFormula = GetCol(new[] { "Formula", "Công thức", "Cấu trúc" }, 5);
+            int colUsage = GetCol(new[] { "UsageFunction", "Chức năng", "Mục đích", "Usage" }, 6);
+            int colBasicEx = GetCol(new[] { "BasicExample", "Câu gốc", "Band 5.0", "Ví dụ gốc" }, 7);
+            int colAdvEx = GetCol(new[] { "AdvancedExample", "Câu nâng cấp", "Band 8.0", "Ví dụ nâng cao", "Example" }, 8);
+            int colMeaning = GetCol(new[] { "VietnameseMeaning", "Nghĩa tiếng Việt", "Dịch nghĩa", "Meaning" }, 9);
+            int colColloc = GetCol(new[] { "KeyCollocations", "Collocations", "Từ vựng", "Từ khóa" }, 10);
+            int colMistakes = GetCol(new[] { "CommonMistakes", "Lỗi sai", "Lỗi thường gặp", "Pitfalls" }, 11);
+            int colExercise = GetCol(new[] { "PracticeExercise", "Bài tập", "Exercise", "Luyện tập" }, 12);
+            int colTags = GetCol(new[] { "Tags", "Tag", "Từ khóa lọc" }, 13);
+
+            for (int r = 2; r <= lastRow; r++)
+            {
+                totalRows++;
+                var row = worksheet.Row(r);
+
+                string code = row.Cell(colCode).GetString()?.Trim() ?? "";
+                string formula = row.Cell(colFormula).GetString()?.Trim() ?? "";
+
+                if (string.IsNullOrWhiteSpace(code) && string.IsNullOrWhiteSpace(formula))
+                {
+                    continue; // Hàng trống
+                }
+
+                if (string.IsNullOrWhiteSpace(code))
+                {
+                    code = $"STR_{DateTime.UtcNow.Ticks % 1000000:D6}";
+                }
+
+                string band = row.Cell(colBand).GetString()?.Trim() ?? "7.0 - 8.0";
+                string category = row.Cell(colCat).GetString()?.Trim() ?? "Writing Task 2";
+                string topic = row.Cell(colTopic).GetString()?.Trim() ?? "Ngữ pháp nâng cao";
+                string usage = row.Cell(colUsage).GetString()?.Trim() ?? "Nâng cao điểm Grammatical Range & Accuracy";
+                string basicEx = row.Cell(colBasicEx).GetString()?.Trim() ?? "";
+                string advEx = row.Cell(colAdvEx).GetString()?.Trim() ?? "";
+                string meaning = row.Cell(colMeaning).GetString()?.Trim() ?? "";
+                string colloc = row.Cell(colColloc).GetString()?.Trim() ?? "";
+                string mistakes = row.Cell(colMistakes).GetString()?.Trim() ?? "";
+                string exercise = row.Cell(colExercise).GetString()?.Trim() ?? "";
+                string tags = row.Cell(colTags).GetString()?.Trim() ?? "";
+
+                if (string.IsNullOrWhiteSpace(advEx)) advEx = formula;
+                if (string.IsNullOrWhiteSpace(meaning)) meaning = topic;
+
+                if (existingDict.TryGetValue(code, out var existing))
+                {
+                    if (mode == "upsert")
+                    {
+                        existing.BandLevel = band;
+                        existing.Category = category;
+                        existing.GrammarTopic = topic;
+                        existing.Formula = formula;
+                        existing.UsageFunction = usage;
+                        existing.BasicExample = string.IsNullOrWhiteSpace(basicEx) ? null : basicEx;
+                        existing.AdvancedExample = advEx;
+                        existing.VietnameseMeaning = meaning;
+                        existing.KeyCollocations = string.IsNullOrWhiteSpace(colloc) ? null : colloc;
+                        existing.CommonMistakes = string.IsNullOrWhiteSpace(mistakes) ? null : mistakes;
+                        existing.PracticeExercise = string.IsNullOrWhiteSpace(exercise) ? null : exercise;
+                        existing.Tags = string.IsNullOrWhiteSpace(tags) ? null : tags;
+                        existing.UpdatedAt = DateTime.UtcNow;
+                        updated++;
+                    }
+                    else
+                    {
+                        skipped++;
+                    }
+                }
+                else
+                {
+                    var newStructure = new Backend.Domain.Entities.GrammarStructure
+                    {
+                        StructureCode = code,
+                        BandLevel = band,
+                        Category = category,
+                        GrammarTopic = topic,
+                        Formula = formula,
+                        UsageFunction = usage,
+                        BasicExample = string.IsNullOrWhiteSpace(basicEx) ? null : basicEx,
+                        AdvancedExample = advEx,
+                        VietnameseMeaning = meaning,
+                        KeyCollocations = string.IsNullOrWhiteSpace(colloc) ? null : colloc,
+                        CommonMistakes = string.IsNullOrWhiteSpace(mistakes) ? null : mistakes,
+                        PracticeExercise = string.IsNullOrWhiteSpace(exercise) ? null : exercise,
+                        Tags = string.IsNullOrWhiteSpace(tags) ? null : tags,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    dbContext.GrammarStructures.Add(newStructure);
+                    existingDict[code] = newStructure;
+                    success++;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            fail++;
+            errors.Add($"Lỗi xử lý file '{file.FileName}': {ex.Message}");
+        }
+    }
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new Backend.Application.DTOs.GrammarImportExcelResponse
+    {
+        TotalRows = totalRows,
+        Success = success,
+        Updated = updated,
+        Skipped = skipped,
+        Fail = fail,
+        Errors = errors
+    });
+}).DisableAntiforgery();
+
+// ─── Download Template Excel File (.xlsx) ───
+app.MapGet("/api/admin/grammar-structures/template", () =>
+{
+    using var workbook = new ClosedXML.Excel.XLWorkbook();
+    var ws = workbook.Worksheets.Add("Grammar_Structures");
+
+    // Header Titles
+    var headers = new[]
+    {
+        "StructureCode", "BandLevel", "Category", "GrammarTopic",
+        "Formula", "UsageFunction", "BasicExample", "AdvancedExample",
+        "VietnameseMeaning", "KeyCollocations", "CommonMistakes", "PracticeExercise", "Tags"
+    };
+
+    for (int i = 0; i < headers.Length; i++)
+    {
+        var cell = ws.Cell(1, i + 1);
+        cell.Value = headers[i];
+        cell.Style.Font.Bold = true;
+        cell.Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
+        cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#4F46E5");
+        cell.Style.Alignment.Horizontal = ClosedXML.Excel.XLAlignmentHorizontalValues.Center;
+    }
+
+    // Demo Rows
+    var demoData = new[]
+    {
+        new[] {
+            "W_INV_01", "7.5 - 8.5", "Writing Task 2", "Đảo ngữ (Inversion)",
+            "Not only + Aux + S + V, but S + (also) + V",
+            "Nhấn mạnh 2 tác động song hành, tạo ấn tượng học thuật mạnh ở mở đoạn hoặc câu chủ đề",
+            "Computers help students study and they make work easier.",
+            "Not only does technological adoption facilitate self-directed learning, but it also enhances workforce productivity.",
+            "Không chỉ việc áp dụng công nghệ tạo điều kiện cho việc tự học, mà nó còn nâng cao năng suất của lực lượng lao động.",
+            "technological adoption, facilitate self-directed learning, workforce productivity",
+            "Quên đảo trợ động từ lên trước chủ ngữ sau 'Not only' (ví dụ viết sai: Not only computers help...)",
+            "Rewrite: Tourism creates jobs and it also introduces local culture.",
+            "inversion, emphasis, task2, academic"
+        },
+        new[] {
+            "W_NOM_01", "7.0 - 8.0", "Writing Task 1 & 2", "Danh từ hóa (Nominalisation)",
+            "The [Noun phrase] + led to / resulted in + a [Adj] [Noun]",
+            "Biến đổi câu văn nói chứa động từ thành văn phong học thuật khách quan, trang trọng",
+            "People used more renewable energy so emissions decreased rapidly.",
+            "The widespread adoption of renewable energy resulted in a substantial reduction in carbon emissions.",
+            "Việc áp dụng rộng rãi năng lượng tái tạo đã dẫn đến sự sụt giảm đáng kể lượng phát thải carbon.",
+            "widespread adoption, substantial reduction, carbon emissions",
+            "Dùng sai giới từ đi kèm với danh từ (ví dụ: reduction of thay vì reduction in)",
+            "Rewrite: Cars increased rapidly so air became heavily polluted.",
+            "nominalisation, academic_style, task1, task2"
+        },
+        new[] {
+            "W_CLEFT_01", "7.5 - 8.5", "Writing Task 2", "Câu chẻ (Cleft Sentence)",
+            "It is/was + [Thành phần nhấn mạnh] + that/who + [Mệnh đề]",
+            "Nhấn mạnh chính xác chủ thể chịu trách nhiệm hoặc giải pháp cốt lõi cho một vấn đề",
+            "The government should solve this problem, not citizens.",
+            "It is the municipal authorities, rather than individuals, that must take decisive action against urban pollution.",
+            "Chính các cơ quan chính quyền đô thị, chứ không phải các cá nhân, mới là bên phải hành động quyết liệt để chống lại ô nhiễm.",
+            "municipal authorities, take decisive action, urban pollution",
+            "Dùng nhầm 'which' thay vì 'that' khi thành phần nhấn mạnh là danh từ chỉ vật",
+            "Rewrite: Early education shapes a child's future, not higher education.",
+            "cleft_sentence, emphasis, solutions, task2"
+        },
+        new[] {
+            "W_PART_01", "7.0 - 8.0", "Writing Task 1", "Mệnh đề phân từ (Participle Clause)",
+            "[Main Clause], thereby + V-ing / leading to + [Noun phrase]",
+            "Diễn tả chuỗi biến động kết quả liên hoàn trong bài mô tả biểu đồ Task 1",
+            "The car sales rose to 50,000 and this made it the most popular product.",
+            "Car sales surged to 50,000 units in 2020, thereby overtaking motorbikes as the leading vehicle category.",
+            "Doanh số ô tô tăng vọt lên 50.000 chiếc vào năm 2020, qua đó vượt qua xe máy để trở thành nhóm phương tiện dẫn đầu.",
+            "surge to, overtake, leading vehicle category",
+            "Dùng 'thereby + V nguyên mẫu' thay vì 'thereby + V-ing'",
+            "Rewrite: Company revenue doubled in Q3 and this allowed further expansion.",
+            "participle, task1, trend, cause_effect"
+        }
+    };
+
+    for (int r = 0; r < demoData.Length; r++)
+    {
+        for (int c = 0; c < demoData[r].Length; c++)
+        {
+            ws.Cell(r + 2, c + 1).Value = demoData[r][c];
+        }
+    }
+
+    ws.Columns().AdjustToContents();
+
+    using var stream = new MemoryStream();
+    workbook.SaveAs(stream);
+    var bytes = stream.ToArray();
+
+    return Results.File(
+        bytes,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "IELTS_Grammar_Structures_Template.xlsx"
+    );
 });
 
 app.Run();

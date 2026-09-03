@@ -18,14 +18,18 @@
 </head>
 
 <body>
-    <div id="app">
-        <div class="chibi-loader">
-            <div class="chibi-track">
-                <div class="chibi-mask"></div>
-                <img class="chibi-runner" src="images/chibi.png" alt="" />
+    <div id="app"></div>
+
+    <!-- PET LOADER OVERLAY (Tách biệt khỏi #app để không bị unmount đột ngột/tàng hình khi Blazor nạp xong) -->
+    <div id="app-loader" class="pet-loader">
+        <div class="pet-track">
+            <div class="pet-fill" id="pet-fill"></div>
+            <div class="pet-runner-wrapper" id="pet-runner-wrapper">
+                <div class="pet-runner" id="pet-runner"></div>
+                <div class="pet-shadow"></div>
             </div>
-            <div class="chibi-percent"></div>
         </div>
+        <div class="pet-percent" id="pet-percent">0%</div>
     </div>
 
     <div id="blazor-error-ui">
@@ -35,7 +39,98 @@
     </div>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="js/googleAuth.js"></script>
-    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="_framework/blazor.webassembly.js" autostart="false"></script>
+    <script>
+        // Điều phối tiến trình tải mượt mà: Chạy thoăn thoắt -> Bật nhảy rướn cao -> Tiếp đất nén lực -> Fade-out êm ái
+        (function () {
+            const loader = document.getElementById('app-loader');
+            const fill = document.getElementById('pet-fill');
+            const runnerWrapper = document.getElementById('pet-runner-wrapper');
+            const runner = document.getElementById('pet-runner');
+            const percentText = document.getElementById('pet-percent');
+
+            let currentProgress = 0;
+            let targetProgress = 0;
+            let blazorReady = false;
+            let isJumping = false;
+            let isComplete = false;
+
+            function updateUI(p) {
+                const rounded = Math.min(100, Math.round(p));
+                fill.style.width = p + '%';
+                runnerWrapper.style.left = p + '%';
+                percentText.textContent = rounded + '%';
+
+                // Khi tiến độ >= 75%: Pet chuyển sang rướn người và bật vọt lên đỉnh
+                if (p >= 75 && !isJumping) {
+                    isJumping = true;
+                    runner.classList.add('jumping');
+                } else if (p < 75 && isJumping) {
+                    isJumping = false;
+                    runner.classList.remove('jumping');
+                }
+
+                // Khi chạm 100%: Chờ tiếp đất 300ms rồi fade-out êm ái
+                if (p >= 99.5 && !isComplete) {
+                    isComplete = true;
+                    setTimeout(() => {
+                        loader.classList.add('fade-out');
+                        setTimeout(() => {
+                            loader.style.display = 'none';
+                        }, 500);
+                    }, 300);
+                }
+            }
+
+            // Vòng lặp animation 60FPS nội suy mượt mà
+            function tick() {
+                if (!isComplete) {
+                    const diff = targetProgress - currentProgress;
+                    if (diff > 0) {
+                        const step = Math.max(0.4, diff * 0.1);
+                        currentProgress = Math.min(targetProgress, currentProgress + step);
+                        updateUI(currentProgress);
+                    }
+                    requestAnimationFrame(tick);
+                }
+            }
+            requestAnimationFrame(tick);
+
+            // Giả lập tiến trình lướt êm ái ban đầu
+            targetProgress = 35;
+            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 65); }, 250);
+            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 85); }, 600);
+            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 92); }, 1200);
+            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 97); }, 2500);
+
+            // Safety Fallback: Tự động mở màn hình sau 4.5s để không bao giờ bị đứng
+            setTimeout(() => {
+                blazorReady = true;
+                targetProgress = 100;
+            }, 4500);
+
+            function startBlazor() {
+                if (window.Blazor && !window._blazorStarted) {
+                    window._blazorStarted = true;
+                    Blazor.start().then(() => {
+                        blazorReady = true;
+                        targetProgress = 100;
+                    }).catch(err => {
+                        console.warn("Blazor boot notice:", err);
+                        blazorReady = true;
+                        targetProgress = 100;
+                    });
+                }
+            }
+
+            if (window.Blazor) {
+                startBlazor();
+            } else {
+                window.addEventListener('DOMContentLoaded', startBlazor);
+                window.addEventListener('load', startBlazor);
+            }
+        })();
+    </script>
     <script>
         // Scroll to Element Helper
         window.scrollToElementId = function (elementId) {
@@ -68,6 +163,7 @@
     <script src="js/guard.js"></script>
     <script src="js/youtubePlayer.js"></script>
     <script src="js/exam-session.js"></script>
+    <script src="js/tab-visibility.js"></script>
     <script src="js/speaking-interop.js"></script>
     <script src="js/speak-along-interop.js"></script>
     <script src="js/toeicAudio.js"></script>

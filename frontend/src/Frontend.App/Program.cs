@@ -67,6 +67,7 @@ builder.Services.AddScoped(sp =>
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
     return new ExamSubmissionService(localStorage, httpClient);
 });
+builder.Services.AddScoped<GrammarStructureService>();
 
 builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();

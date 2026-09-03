@@ -129,31 +129,64 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             throw new Exception("Invalid Google token.");
         }
 
-        var user = await dbContext.Users.SingleOrDefaultAsync(u => u.Email == payload.Email.Trim().ToLowerInvariant(), cancellationToken);
+        var normalizedEmail = payload.Email.Trim().ToLowerInvariant();
+        var user = await dbContext.Users.SingleOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
         
+        // Nếu user chưa từng đăng ký, tự động tạo tài khoản với thông tin thực từ Google
         if (user == null)
         {
-            // Do not auto-register. Throw a specific error so frontend can redirect to registration.
-            throw new Exception($"UserNotRegistered|{payload.Email}");
+            var baseUsername = normalizedEmail.Split('@')[0];
+            var username = baseUsername;
+            var suffix = 1;
+            while (await dbContext.Users.AnyAsync(u => u.Username == username, cancellationToken))
+            {
+                username = $"{baseUsername}{suffix++}";
+            }
+
+            user = new User
+            {
+                Username = username,
+                FullName = !string.IsNullOrWhiteSpace(payload.Name) ? payload.Name.Trim() : username,
+                Email = normalizedEmail,
+                Avatar = !string.IsNullOrWhiteSpace(payload.Picture) ? payload.Picture : null,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString())
+            };
+
+            dbContext.Users.Add(user);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            dbContext.UserActivityLogs.Add(new UserActivityLog
+            {
+                UserId = user.Id,
+                Action = "register_google",
+                Detail = "Auto-registered via Google OAuth"
+            });
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            if (!user.IsActive)
+            {
+                throw new Exception("Account is disabled. Please contact admin.");
+            }
+
+            // Tự động đồng bộ tên nếu trong database đang là rỗng hoặc "Học viên"
+            if ((string.IsNullOrWhiteSpace(user.FullName) || user.FullName == "Học viên" || user.FullName == user.Username) && !string.IsNullOrWhiteSpace(payload.Name))
+            {
+                user.FullName = payload.Name.Trim();
+            }
+
+            user.LastLoginAt = DateTime.UtcNow;
+            dbContext.UserActivityLogs.Add(new UserActivityLog
+            {
+                UserId = user.Id,
+                Action = "login_google",
+                Detail = "Google login"
+            });
+            await dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        if (!user.IsActive)
-        {
-            throw new Exception("Account is disabled. Please contact admin.");
-        }
-
-        user.LastLoginAt = DateTime.UtcNow;
-        
-        dbContext.UserActivityLogs.Add(new UserActivityLog
-        {
-            UserId = user.Id,
-            Action = "login_google",
-            Detail = "Google login"
-        });
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        var token = GenerateJwtToken(user, 1.0 / 24.0); // 1 hour for Google login
+        var token = GenerateJwtToken(user, 30); // 30 days token
         return new AuthResponse(token, user.FullName, user.Email);
     }
 
@@ -176,10 +209,11 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
 
         var normalizedEmail = payload.Email.Trim().ToLowerInvariant();
 
-        // Nếu email đã tồn tại → không cho đăng ký thêm
-        if (await dbContext.Users.AnyAsync(u => u.Email == normalizedEmail, cancellationToken))
+        // Nếu email đã tồn tại → chuyển qua login
+        var existingUser = await dbContext.Users.SingleOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
+        if (existingUser != null)
         {
-            throw new Exception("EmailAlreadyExists|" + normalizedEmail);
+            return await LoginWithGoogleAsync(request, cancellationToken);
         }
 
         // Tạo username duy nhất từ email
@@ -197,7 +231,8 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             Username = username,
             FullName = !string.IsNullOrWhiteSpace(payload.Name) ? payload.Name.Trim() : username,
             Email = normalizedEmail,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()) // random, không dùng
+            Avatar = !string.IsNullOrWhiteSpace(payload.Picture) ? payload.Picture : null,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString())
         };
 
         dbContext.Users.Add(user);
@@ -213,7 +248,7 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var token = GenerateJwtToken(user, 1.0 / 24.0); // 1 hour cho Google session
+        var token = GenerateJwtToken(user, 30); // 30 days token
         return new AuthResponse(token, user.FullName, user.Email);
     }
 

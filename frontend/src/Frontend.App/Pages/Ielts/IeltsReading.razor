@@ -484,7 +484,7 @@ else
 
     private async Task AutoSaveCheckpointAsync()
     {
-        if (isFinished || exam == null || string.IsNullOrEmpty(_examUrlLoaded)) return;
+        if (isFinished || isSubmitting || exam == null || string.IsNullOrEmpty(_examUrlLoaded)) return;
 
         var cp = new ExamCheckpointDto
         {

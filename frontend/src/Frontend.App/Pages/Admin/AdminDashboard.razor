@@ -1,119 +1,523 @@
+@page "/portal-hub"
 @page "/admin"
 @layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using System.Globalization
+@inject AdminUserService AdminUserService
+@inject NavigationManager NavigationManager
 
-<PageTitle>Admin Dashboard</PageTitle>
+<PageTitle>Admin Dashboard - Trung Tâm Giám Sát & Thống Kê</PageTitle>
 
-<div class="dashboard-welcome">
-    <div class="welcome-card">
-        <h1>👋 Chào mừng đến với Admin Dashboard</h1>
-        <p>Vui lòng chọn một chuyên mục từ thanh công cụ bên trên hoặc menu bên trái để bắt đầu quản lý.</p>
-        
-        <div class="quick-stats">
-            <div class="stat-box">
-                <div class="stat-icon ielts-color">🇬🇧</div>
-                <div class="stat-info">
-                    <h4>IELTS</h4>
-                    <p>Quản lý Đề thi, Học viên</p>
-                </div>
+<div class="admin-dashboard-container">
+    <!-- ================================================================= -->
+    <!-- 1. TOP HEADER                                                     -->
+    <!-- ================================================================= -->
+    <div class="dash-header-bar">
+        <div class="dash-title-box">
+            <div class="dash-badge">
+                <i class="bi bi-speedometer2"></i> Admin Analytics Hub
             </div>
-            <div class="stat-box">
-                <div class="stat-icon hsk-color">🇨🇳</div>
-                <div class="stat-info">
-                    <h4>HSK</h4>
-                    <p>Quản lý Đề thi, Từ vựng</p>
-                </div>
-            </div>
-            <a href="https://localhost:7101/swagger" target="_blank" class="stat-box" style="text-decoration: none; color: inherit; transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                <div class="stat-icon api-color">⚙️</div>
-                <div class="stat-info">
-                    <h4>API Swagger</h4>
-                    <p>Kiểm tra & Test API</p>
-                </div>
+            <h1 class="dash-main-title">Trung Tâm Giám Sát & Phân Tích Hệ Thống</h1>
+            <p class="dash-sub-title">
+                Tổng quan thời gian thực về học viên, bài nộp, đề thi và các phân hệ IELTS, TOEIC, HSK.
+            </p>
+        </div>
+        <div class="dash-header-actions">
+            <a href="/portal-hub/api-keys" class="btn-api-keys-nav">
+                <i class="bi bi-key-fill text-warning me-1"></i> Cấu hình API Keys
             </a>
+            <button class="btn-refresh-dash" @onclick="() => LoadAllData()" disabled="@isLoadingChart">
+                <i class="bi bi-arrow-clockwise @(isLoadingChart ? "spin-icon" : "")"></i>
+                <span>Làm mới (Trực tiếp)</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- AI Keys Notice Banner -->
+    <div class="ai-notice-banner">
+        <div class="d-flex align-items-center gap-3">
+            <div class="ai-notice-icon">
+                <i class="bi bi-cpu-fill"></i>
+            </div>
+            <div>
+                <h4 class="ai-notice-title">Cấu hình API Key (xKiro, Google Gemini, ChatGPT, DeepSeek, Whisper)</h4>
+                <p class="ai-notice-desc">
+                    Để kích hoạt chấm điểm tự động bài thi Writing & Speaking, bóc tách phụ đề và trợ lý AI, vui lòng gắn API Key tại trang cấu hình.
+                </p>
+            </div>
+        </div>
+        <a href="/portal-hub/api-keys" class="btn-setup-api">
+            <span>Thiết lập ngay</span>
+            <i class="bi bi-arrow-right"></i>
+        </a>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- 2. REAL KPI SUMMARY CARDS                                         -->
+    <!-- ================================================================= -->
+    <div class="kpi-cards-grid">
+        <!-- 1. Tổng Người Dùng -->
+        <div class="kpi-stat-card" @onclick='() => NavigationManager.NavigateTo("/portal-hub/users")'>
+            <div class="kpi-stat-top">
+                <span class="kpi-stat-label">Tổng người dùng</span>
+                <div class="kpi-icon-badge bg-blue"><i class="bi bi-people-fill"></i></div>
+            </div>
+            <div class="kpi-stat-value">@(stats?.TotalUsers ?? 0)</div>
+            <div class="kpi-stat-footer">
+                <span><b>@(stats?.TotalStudents ?? 0)</b> học viên</span>
+                <span class="sep">•</span>
+                <span><b>@(stats?.TotalAdmins ?? 0)</b> admin</span>
+            </div>
+        </div>
+
+        <!-- 2. Đang Online / Trực Tuyến -->
+        <div class="kpi-stat-card card-glow-green" @onclick='() => NavigationManager.NavigateTo("/portal-hub/users?domain=active")'>
+            <div class="kpi-stat-top">
+                <span class="kpi-stat-label"><span class="green-dot"></span> Đang trực tuyến</span>
+                <div class="kpi-icon-badge bg-green"><i class="bi bi-activity"></i></div>
+            </div>
+            <div class="kpi-stat-value text-green">@(stats?.ActiveNow ?? 1)</div>
+            <div class="kpi-stat-footer text-green">
+                <i class="bi bi-broadcast me-1"></i> Hoạt động 30 phút qua
+            </div>
+        </div>
+
+        <!-- 3. Tổng Lượt Nộp Bài -->
+        <div class="kpi-stat-card" @onclick='() => NavigationManager.NavigateTo("/portal-hub/grading")'>
+            <div class="kpi-stat-top">
+                <span class="kpi-stat-label">Lượt nộp bài thi</span>
+                <div class="kpi-icon-badge bg-indigo"><i class="bi bi-journal-check"></i></div>
+            </div>
+            <div class="kpi-stat-value text-indigo">@(stats?.TotalSubmissions ?? 0)</div>
+            <div class="kpi-stat-footer">
+                <span><b>+@(stats?.SubmissionsToday ?? 0)</b> hôm nay</span>
+                <span class="sep">•</span>
+                <span class="text-rose"><b>@(stats?.PendingGrading ?? 0)</b> chờ chấm</span>
+            </div>
+        </div>
+
+        <!-- 4. Tổng Đề Thi Mock Tests -->
+        <div class="kpi-stat-card" @onclick='() => NavigationManager.NavigateTo("/portal-hub/mock-tests")'>
+            <div class="kpi-stat-top">
+                <span class="kpi-stat-label">Kho đề thi Mock Test</span>
+                <div class="kpi-icon-badge bg-amber"><i class="bi bi-collection-play-fill"></i></div>
+            </div>
+            <div class="kpi-stat-value text-amber">
+                @((stats?.TotalIeltsTests ?? 0) + (stats?.TotalToeicTests ?? 0) + (stats?.TotalHskTests ?? 0))
+            </div>
+            <div class="kpi-stat-footer">
+                <span><b>@(stats?.TotalIeltsTests ?? 0)</b> IELTS</span>
+                <span class="sep">•</span>
+                <span><b>@(stats?.TotalToeicTests ?? 0)</b> TOEIC</span>
+                <span class="sep">•</span>
+                <span><b>@(stats?.TotalHskTests ?? 0)</b> HSK</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- 3. REAL SUBMISSIONS & ACTIVITY TREND CHART                        -->
+    <!-- ================================================================= -->
+    <div class="analytics-chart-card">
+        <!-- Chart Controls Header -->
+        <div class="chart-header-row">
+            <div class="chart-title-group">
+                <h3 class="chart-box-title">
+                    <i class="bi bi-graph-up-arrow me-2 text-primary"></i> Biến Động Lượt Làm Bài Thi & Hoạt Động
+                </h3>
+                <p class="chart-box-subtitle">
+                    Dữ liệu thực tế ghi nhận trực tiếp từ các lượt nộp bài và học tập của học viên theo thời gian (Không cache).
+                </p>
+            </div>
+
+            <!-- Granularity & Range Selectors -->
+            <div class="chart-filter-controls">
+                <div class="range-select-box">
+                    <i class="bi bi-calendar3 me-1 text-muted"></i>
+                    <select @bind="selectedRange" @bind:after="OnFilterChanged" class="dash-select">
+                        <option value="7d">7 ngày qua</option>
+                        <option value="30d">30 ngày qua</option>
+                        <option value="90d">90 ngày qua</option>
+                    </select>
+                </div>
+
+                <div class="granularity-toggle-group">
+                    <button class="btn-gran-toggle @(selectedGranularity == "day" ? "active" : "")" @onclick='() => ChangeGranularity("day")'>Theo Ngày</button>
+                    <button class="btn-gran-toggle @(selectedGranularity == "week" ? "active" : "")" @onclick='() => ChangeGranularity("week")'>Theo Tuần</button>
+                    <button class="btn-gran-toggle @(selectedGranularity == "month" ? "active" : "")" @onclick='() => ChangeGranularity("month")'>Theo Tháng</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metric Switcher Tabs inside Chart -->
+        <div class="chart-subbar">
+            <div class="chart-metric-stat">
+                <span class="metric-stat-label">@GetActiveMetricLabel()</span>
+                <span class="metric-stat-val">@GetActiveMetricFormattedTotal()</span>
+            </div>
+
+            <div class="metric-tabs-group">
+                <button class="metric-tab-pill @(activeMetric == "requests" ? "active tab-requests" : "")" @onclick='() => activeMetric = "requests"'>
+                    <i class="bi bi-journal-check me-1"></i> Lượt làm bài thi
+                </button>
+                <button class="metric-tab-pill @(activeMetric == "users" ? "active tab-users" : "")" @onclick='() => activeMetric = "users"'>
+                    <i class="bi bi-people-fill me-1"></i> Học viên hoạt động
+                </button>
+            </div>
+        </div>
+
+        <!-- SVG Smooth Bezier Spline Chart -->
+        <div class="chart-canvas-container">
+            @if (isLoadingChart)
+            {
+                <div class="chart-loading-box">
+                    <div class="dash-spinner"></div>
+                    <span>Đang tải dữ liệu thực tế...</span>
+                </div>
+            }
+            else if (chartData?.TimePoints != null && chartData.TimePoints.Any())
+            {
+                var pts = chartData.TimePoints;
+                int count = pts.Count;
+                double width = 1000.0;
+                double height = 280.0;
+                double padLeft = 45.0;
+                double padRight = 30.0;
+                double padTop = 30.0;
+                double padBottom = 45.0;
+                double plotW = width - (padLeft + padRight);
+                double plotH = height - (padTop + padBottom);
+
+                double rawMax = pts.Max(p => GetPointVal(p));
+                double maxVal = rawMax <= 0 ? 5.0 : Math.Ceiling(rawMax * 1.25);
+                double stepX = count > 1 ? plotW / (count - 1) : plotW;
+
+                var coords = pts.Select((p, i) => new ChartCoord {
+                    Point = p,
+                    Index = i,
+                    X = padLeft + (i * stepX),
+                    Y = padTop + plotH - (Math.Max(0.0, Math.Min(1.0, GetPointVal(p) / maxVal)) * plotH)
+                }).ToList();
+
+                var linePath = $"M {F(coords[0].X)} {F(coords[0].Y)}";
+                for (int i = 0; i < coords.Count - 1; i++)
+                {
+                    var cCurrent = coords[i];
+                    var cNext = coords[i + 1];
+                    var cp1X = cCurrent.X + (cNext.X - cCurrent.X) / 2.0;
+                    var cp1Y = cCurrent.Y;
+                    var cp2X = cCurrent.X + (cNext.X - cCurrent.X) / 2.0;
+                    var cp2Y = cNext.Y;
+                    linePath += $" C {F(cp1X)} {F(cp1Y)}, {F(cp2X)} {F(cp2Y)}, {F(cNext.X)} {F(cNext.Y)}";
+                }
+
+                var areaPath = $"{linePath} L {F(coords.Last().X)} {F(padTop + plotH)} L {F(coords[0].X)} {F(padTop + plotH)} Z";
+                var strokeColor = activeMetric == "requests" ? "#0284c7" : "#10b981";
+
+                <svg viewBox="0 0 1000 280" class="smooth-spline-svg" preserveAspectRatio="none">
+                    <defs>
+                        <linearGradient id="chartAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="@strokeColor" stop-opacity="0.25" />
+                            <stop offset="60%" stop-color="@strokeColor" stop-opacity="0.05" />
+                            <stop offset="100%" stop-color="@strokeColor" stop-opacity="0.0" />
+                        </linearGradient>
+                    </defs>
+
+                    <!-- Horizontal Grid Lines & Y-Axis Labels -->
+                    @for (int t = 0; t <= 4; t++)
+                    {
+                        double yVal = padTop + (plotH * t / 4.0);
+                        double tickVal = maxVal * (4 - t) / 4.0;
+                        <line x1="@F(padLeft)" y1="@F(yVal)" x2="@F(width - padRight)" y2="@F(yVal)" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3 3" />
+                        @RenderSvgText(padLeft - 10, yVal + 4, $"{(int)tickVal}", "#94a3b8", "end", 11)
+                    }
+
+                    <!-- Area Fill -->
+                    <path d="@areaPath" fill="url(#chartAreaGrad)" />
+
+                    <!-- Smooth Spline Stroke -->
+                    <path d="@linePath" fill="none" stroke="@strokeColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+
+                    <!-- Interactive Hover Columns -->
+                    @foreach (var c in coords)
+                    {
+                        bool isHovered = hoveredPoint == c.Point;
+                        <rect x="@F(c.X - stepX / 2.0)" y="0" width="@F(stepX)" height="@F(height)" fill="transparent"
+                              @onmouseenter="() => hoveredPoint = c.Point"
+                              @onmouseleave="() => hoveredPoint = null"
+                              style="cursor: pointer;" />
+
+                        @if (isHovered)
+                        {
+                            <line x1="@F(c.X)" y1="@F(padTop)" x2="@F(c.X)" y2="@F(padTop + plotH)" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 4" />
+                            <circle cx="@F(c.X)" cy="@F(c.Y)" r="5.5" fill="@strokeColor" stroke="#ffffff" stroke-width="2.5" />
+                        }
+                    }
+
+                    <!-- X-Axis Labels -->
+                    @{
+                        int labelStep = count > 20 ? 5 : (count > 10 ? 2 : 1);
+                    }
+                    @for (int i = 0; i < coords.Count; i += labelStep)
+                    {
+                        var c = coords[i];
+                        @RenderSvgText(c.X, padTop + plotH + 24, c.Point.Label, "#64748b", "middle", 11)
+                    }
+                </svg>
+
+                <!-- Floating Tooltip -->
+                @if (hoveredPoint != null)
+                {
+                    <div class="chart-floating-tooltip" style="left: @(GetTooltipX(hoveredPoint, coords))px; top: @(GetTooltipY(hoveredPoint, coords))px;">
+                        <div class="tt-header"><i class="bi bi-calendar-event me-1"></i> @hoveredPoint.Label</div>
+                        <div class="tt-row text-indigo">
+                            <span>📝 Lượt làm bài:</span>
+                            <b>@hoveredPoint.Requests bài</b>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- 4. DUAL ACTIVITY STREAM (Bài thi mới & Học viên mới)              -->
+    <!-- ================================================================= -->
+    <div class="dual-sections-grid mt-4">
+        <!-- Lượt nộp bài gần đây -->
+        <div class="panel-box">
+            <div class="panel-box-header">
+                <h4 class="m-0"><i class="bi bi-clock-history text-primary me-2"></i> Lượt Nộp Bài Thi Mới Nhất</h4>
+                <a href="/portal-hub/grading" class="panel-action-link">Xem tất cả <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="panel-box-body">
+                @if (stats?.RecentSubmissions == null || !stats.RecentSubmissions.Any())
+                {
+                    <div class="empty-hint">Chưa có bài thi nào được nộp.</div>
+                }
+                else
+                {
+                    <div class="recent-items-list">
+                        @foreach (var sub in stats.RecentSubmissions)
+                        {
+                            <div class="recent-item">
+                                <div class="skill-tag skill-@sub.Skill.ToLower()">@GetSkillIcon(sub.Skill)</div>
+                                <div class="recent-info">
+                                    <div class="recent-title-row">
+                                        <strong>@(string.IsNullOrWhiteSpace(sub.StudentName) ? (sub.UserEmail ?? "Thí sinh") : sub.StudentName)</strong>
+                                        <span class="score-badge">
+                                            @if (sub.Skill == "Writing" || sub.Skill == "Speaking")
+                                            {
+                                                <span>Band: <b>@(sub.Status == "Graded" ? sub.BandScore.ToString("0.0") : "Chờ chấm")</b></span>
+                                            }
+                                            else
+                                            {
+                                                <span>Đúng: <b>@sub.CorrectCount/@sub.TotalCount</b></span>
+                                            }
+                                        </span>
+                                    </div>
+                                    <div class="recent-meta">
+                                        <span>@(string.IsNullOrWhiteSpace(sub.ExamTitle) ? sub.Skill : sub.ExamTitle)</span>
+                                        <span class="sep">•</span>
+                                        <span>@GetTimeAgo(sub.SubmittedAt.UtcDateTime)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Học viên mới đăng ký -->
+        <div class="panel-box">
+            <div class="panel-box-header">
+                <h4 class="m-0"><i class="bi bi-person-plus-fill text-success me-2"></i> Học Viên Mới Tham Gia</h4>
+                <a href="/portal-hub/users" class="panel-action-link">Quản lý <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="panel-box-body">
+                @if (stats?.RecentUsers == null || !stats.RecentUsers.Any())
+                {
+                    <div class="empty-hint">Chưa có người dùng mới.</div>
+                }
+                else
+                {
+                    <div class="recent-items-list">
+                        @foreach (var u in stats.RecentUsers)
+                        {
+                            <div class="recent-item">
+                                <div class="avatar-tag @(u.Role == "admin" ? "bg-red" : "bg-blue")">
+                                    @(string.IsNullOrWhiteSpace(u.Username) ? "U" : u.Username.Substring(0, 1).ToUpper())
+                                </div>
+                                <div class="recent-info">
+                                    <div class="recent-title-row">
+                                        <strong>@u.Username</strong>
+                                        <span class="level-tag">@u.Level</span>
+                                    </div>
+                                    <div class="recent-meta">
+                                        <span>@u.Email</span>
+                                        <span class="sep">•</span>
+                                        <span>Tham gia @GetTimeAgo(u.CreatedAt)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
         </div>
     </div>
 </div>
 
-<style>
-    .dashboard-welcome {
-        display: flex;
-        justify-content: center;
-        align-items: flex-start;
-        height: 100%;
-        padding-top: 40px;
+@code {
+    private class ChartCoord
+    {
+        public ChartTimePointDto Point { get; set; } = null!;
+        public int Index { get; set; }
+        public double X { get; set; }
+        public double Y { get; set; }
     }
 
-    .welcome-card {
-        background-color: white;
-        border-radius: 12px;
-        padding: 40px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-        text-align: center;
-        max-width: 600px;
+    private DashboardStatsDto? stats;
+    private ChartAnalyticsDto? chartData;
+    private ChartTimePointDto? hoveredPoint;
+
+    private string selectedRange = "30d";
+    private string selectedGranularity = "day";
+    private string activeMetric = "requests"; // "requests", "users"
+
+    private bool isLoadingChart = false;
+
+    private static string F(double val)
+    {
+        return val.ToString("0.##", CultureInfo.InvariantCulture);
     }
 
-    .welcome-card h1 {
-        font-size: 24px;
-        color: #2c3e50;
-        margin-bottom: 16px;
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllData();
     }
 
-    .welcome-card p {
-        color: #6c757d;
-        font-size: 16px;
-        margin-bottom: 40px;
-        line-height: 1.5;
+    private async Task LoadAllData()
+    {
+        isLoadingChart = true;
+        try
+        {
+            var statsTask = AdminUserService.GetDashboardStatsAsync();
+            var chartTask = AdminUserService.GetChartAnalyticsAsync(selectedRange, selectedGranularity, "all");
+
+            await Task.WhenAll(statsTask, chartTask);
+
+            stats = await statsTask;
+            chartData = await chartTask;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dashboard: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingChart = false;
+        }
     }
 
-    .quick-stats {
-        display: flex;
-        gap: 20px;
-        justify-content: center;
+    private async Task OnFilterChanged()
+    {
+        isLoadingChart = true;
+        hoveredPoint = null;
+        try
+        {
+            chartData = await AdminUserService.GetChartAnalyticsAsync(selectedRange, selectedGranularity, "all");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating chart: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingChart = false;
+        }
     }
 
-    .stat-box {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        background-color: #f8f9fa;
-        padding: 20px;
-        border-radius: 12px;
-        flex: 1;
-        text-align: left;
-        border: 1px solid #e9ecef;
+    private async Task ChangeGranularity(string gran)
+    {
+        selectedGranularity = gran;
+        await OnFilterChanged();
     }
 
-    .stat-icon {
-        font-size: 32px;
-        width: 60px;
-        height: 60px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 12px;
+    private double GetPointVal(ChartTimePointDto p)
+    {
+        return activeMetric switch
+        {
+            "requests" => p.Requests,
+            "users" => (p.Requests > 0 ? 1 : 0),
+            _ => p.Requests
+        };
     }
 
-    .ielts-color {
-        background-color: #e6f2ff;
+    private string GetActiveMetricLabel()
+    {
+        return activeMetric switch
+        {
+            "requests" => "📝 Tổng lượt làm bài trong kỳ",
+            "users" => "👥 Học viên hoạt động",
+            _ => "Tổng"
+        };
     }
 
-    .hsk-color {
-        background-color: #ffe8e8;
+    private string GetActiveMetricFormattedTotal()
+    {
+        if (chartData?.TimePoints == null || !chartData.TimePoints.Any()) return "0";
+
+        return activeMetric switch
+        {
+            "requests" => $"{chartData.TotalRequests:N0} bài nộp",
+            "users" => $"{stats?.ActiveThisWeek ?? 1} người",
+            _ => "0"
+        };
     }
 
-    .api-color {
-        background-color: #e8f5e9;
+    private string GetTooltipX(ChartTimePointDto target, List<ChartCoord> coords)
+    {
+        var match = coords.FirstOrDefault(c => c.Point == target);
+        double val = match != null ? match.X : 500;
+        return val.ToString("0.##", CultureInfo.InvariantCulture);
     }
 
-    .stat-info h4 {
-        margin: 0 0 4px 0;
-        font-size: 16px;
-        color: #2c3e50;
+    private string GetTooltipY(ChartTimePointDto target, List<ChartCoord> coords)
+    {
+        var match = coords.FirstOrDefault(c => c.Point == target);
+        double val = match != null ? Math.Max(20, match.Y - 50) : 100;
+        return val.ToString("0.##", CultureInfo.InvariantCulture);
     }
 
-    .stat-info p {
-        margin: 0;
-        font-size: 13px;
-        color: #6c757d;
+    private MarkupString RenderSvgText(double x, double y, string content, string fill = "#94a3b8", string anchor = "middle", int size = 11)
+    {
+        var xStr = x.ToString("0.##", CultureInfo.InvariantCulture);
+        var yStr = y.ToString("0.##", CultureInfo.InvariantCulture);
+        return (MarkupString)$"<text x=\"{xStr}\" y=\"{yStr}\" fill=\"{fill}\" font-size=\"{size}\" font-family=\"sans-serif\" text-anchor=\"{anchor}\">{content}</text>";
     }
-</style>
+
+    private string GetSkillIcon(string skill)
+    {
+        return skill.ToLower() switch
+        {
+            "listening" => "🎧",
+            "reading" => "📖",
+            "writing" => "✍️",
+            "speaking" => "🎙️",
+            _ => "📝"
+        };
+    }
+
+    private string GetTimeAgo(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt;
+        if (diff.TotalSeconds < 60) return "Vừa xong";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} phút trước";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} giờ trước";
+        if (diff.TotalDays < 30) return $"{(int)diff.TotalDays} ngày trước";
+        return dt.ToString("dd/MM/yyyy");
+    }
+}

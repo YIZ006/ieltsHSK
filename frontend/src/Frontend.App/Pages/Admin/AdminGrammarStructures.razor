@@ -1,0 +1,859 @@
+@page "/portal-hub/grammar"
+@page "/admin/grammar"
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject GrammarStructureService GrammarService
+@inject IJSRuntime JS
+
+<PageTitle>Quản lý Cấu trúc Ngữ pháp theo Band - Admin Hub</PageTitle>
+
+<div class="grammar-admin-container">
+    <!-- Header -->
+    <div class="grammar-header">
+        <div>
+            <h2>📚 Ngân hàng Cấu trúc Ngữ pháp theo Band</h2>
+            <p class="subtitle">Kho công thức, cấu trúc câu nâng cao và các mẫu câu ăn điểm Band 7.0 – 8.5+ cho IELTS Writing & Speaking.</p>
+        </div>
+        <div class="header-stats">
+            <div class="stat-pill total">
+                <span class="stat-num">@structures.Count</span>
+                <span class="stat-lbl">Tổng cấu trúc</span>
+            </div>
+            <div class="stat-pill high-band">
+                <span class="stat-num">@structures.Count(s => s.BandLevel.Contains("7.") || s.BandLevel.Contains("8."))</span>
+                <span class="stat-lbl">Band 7.5+</span>
+            </div>
+            <div class="stat-pill task2">
+                <span class="stat-num">@structures.Count(s => s.Category.Contains("Task 2"))</span>
+                <span class="stat-lbl">Writing Task 2</span>
+            </div>
+            <div class="stat-pill topics">
+                <span class="stat-num">@structures.Select(s => s.GrammarTopic).Distinct().Count()</span>
+                <span class="stat-lbl">Chủ điểm</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert / Toast Banner -->
+    @if (!string.IsNullOrEmpty(bannerMessage))
+    {
+        <div class="alert-banner @(bannerIsSuccess ? "alert-success" : "alert-danger")">
+            <i class="bi @(bannerIsSuccess ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill") me-2"></i>
+            <span>@bannerMessage</span>
+            <button class="btn-close-banner" @onclick="() => bannerMessage = null">×</button>
+        </div>
+    }
+
+    <!-- Toolbar -->
+    <div class="toolbar-card">
+        <div class="toolbar-left">
+            <div class="search-box">
+                <i class="bi bi-search"></i>
+                <input type="text" placeholder="Tìm theo mã, công thức, ví dụ, từ vựng..." 
+                       @bind="searchKeyword" @bind:event="oninput" @bind:after="ApplyFilters" />
+                @if (!string.IsNullOrEmpty(searchKeyword))
+                {
+                    <button class="clear-search-btn" @onclick="ClearSearch">×</button>
+                }
+            </div>
+
+            <div class="filter-group">
+                <select @bind="selectedBandFilter" @bind:after="ApplyFilters" class="filter-select">
+                    <option value="all">Tất cả Band</option>
+                    <option value="5.0 - 6.0">Band 5.0 - 6.0</option>
+                    <option value="6.5 - 7.0">Band 6.5 - 7.0</option>
+                    <option value="7.0 - 8.0">Band 7.0 - 8.0</option>
+                    <option value="7.5 - 8.5">Band 7.5 - 8.5</option>
+                </select>
+
+                <select @bind="selectedCategoryFilter" @bind:after="ApplyFilters" class="filter-select">
+                    <option value="all">Tất cả Kỹ năng</option>
+                    <option value="Writing Task 1">Writing Task 1</option>
+                    <option value="Writing Task 2">Writing Task 2</option>
+                    <option value="Writing Task 1 & 2">Writing Task 1 & 2</option>
+                    <option value="Speaking">Speaking</option>
+                    <option value="General">Chung (General)</option>
+                </select>
+
+                <select @bind="selectedTopicFilter" @bind:after="ApplyFilters" class="filter-select">
+                    <option value="all">Tất cả Chủ điểm</option>
+                    @foreach (var topic in availableTopics)
+                    {
+                        <option value="@topic">@topic</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="toolbar-actions">
+            @if (selectedIds.Count > 0)
+            {
+                <button class="btn-bulk-delete" @onclick="ConfirmBulkDelete">
+                    <i class="bi bi-trash3-fill me-1"></i> Xóa đã chọn (@selectedIds.Count)
+                </button>
+            }
+
+            <a href="@GrammarService.GetTemplateDownloadUrl()" target="_blank" class="btn-action-outline" title="Tải file Excel mẫu với 12 cột chuẩn">
+                <i class="bi bi-file-earmark-arrow-down-fill text-primary me-1"></i> Tải mẫu Excel
+            </a>
+
+            <button class="btn-action-outline" @onclick="OpenImportModal" title="Import nhiều file Excel cùng lúc">
+                <i class="bi bi-file-earmark-excel-fill text-success me-1"></i> Import Excel
+            </button>
+
+            <button class="btn-action-primary" @onclick="OpenCreateModal">
+                <i class="bi bi-plus-lg me-1"></i> Thêm cấu trúc
+            </button>
+        </div>
+    </div>
+
+    <!-- Data Table Card -->
+    <div class="table-card">
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2 text-muted">Đang nạp danh sách cấu trúc ngữ pháp...</p>
+            </div>
+        }
+        else if (filteredStructures.Count == 0)
+        {
+            <div class="empty-state">
+                <div class="empty-icon"><i class="bi bi-journal-x"></i></div>
+                <h5>Không tìm thấy cấu trúc nào</h5>
+                <p class="text-muted">Thử thay đổi từ khóa tìm kiếm hoặc nhập thêm cấu trúc từ file Excel.</p>
+                <button class="btn-action-primary mt-2" @onclick="OpenImportModal">
+                    <i class="bi bi-file-earmark-excel me-1"></i> Import file Excel ngay
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="grammar-table">
+                    <thead>
+                        <tr>
+                            <th class="th-cb">
+                                <input type="checkbox" checked="@isAllSelected" @onchange="ToggleSelectAll" />
+                            </th>
+                            <th class="th-code">Mã / Band</th>
+                            <th class="th-topic">Chủ điểm & Công thức</th>
+                            <th class="th-usage">Chức năng biểu đạt</th>
+                            <th class="th-example">Ví dụ nâng cao (Band 7.5+) & Nghĩa</th>
+                            <th class="th-action text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in pagedStructures)
+                        {
+                            var isSelected = selectedIds.Contains(item.Id);
+                            var isExpanded = expandedIds.Contains(item.Id);
+
+                            <tr class="@(isSelected ? "row-selected" : "") @(isExpanded ? "row-expanded" : "")">
+                                <td class="td-cb">
+                                    <input type="checkbox" checked="@isSelected" @onchange="() => ToggleSelectItem(item.Id)" />
+                                </td>
+                                <td class="td-code">
+                                    <div class="code-box">
+                                        <span class="structure-code">@item.StructureCode</span>
+                                        <div class="badges-stack">
+                                            <span class="band-badge @GetBandBadgeClass(item.BandLevel)">Band @item.BandLevel</span>
+                                            <span class="category-badge">@item.Category</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="td-topic">
+                                    <div class="topic-title">
+                                        <i class="bi bi-bookmark-star-fill text-warning me-1"></i>
+                                        <strong>@item.GrammarTopic</strong>
+                                    </div>
+                                    <div class="formula-box">
+                                        <code>@item.Formula</code>
+                                        <button class="btn-copy-formula" @onclick="() => CopyToClipboard(item.Formula)" title="Sao chép công thức">
+                                            <i class="bi bi-clipboard"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                <td class="td-usage">
+                                    <p class="usage-text">@item.UsageFunction</p>
+                                </td>
+                                <td class="td-example">
+                                    <div class="adv-example-box">
+                                        <span class="adv-text">@item.AdvancedExample</span>
+                                    </div>
+                                    <div class="vn-meaning-box">
+                                        <small class="text-muted">🇻🇳 @item.VietnameseMeaning</small>
+                                    </div>
+                                </td>
+                                <td class="td-action text-end">
+                                    <div class="action-buttons">
+                                        <button class="btn-icon @(isExpanded ? "active" : "")" @onclick="() => ToggleExpand(item.Id)" title="Xem chi tiết & Lỗi thường gặp">
+                                            <i class="bi @(isExpanded ? "bi-chevron-up" : "bi-eye")"></i>
+                                        </button>
+                                        <button class="btn-icon edit" @onclick="() => OpenEditModal(item)" title="Chỉnh sửa">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                        <button class="btn-icon delete" @onclick="() => ConfirmDelete(item)" title="Xóa">
+                                            <i class="bi bi-trash3"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            @if (isExpanded)
+                            {
+                                <tr class="details-row">
+                                    <td colspan="6">
+                                        <div class="details-expanded-pane">
+                                            <div class="details-grid">
+                                                @if (!string.IsNullOrWhiteSpace(item.BasicExample))
+                                                {
+                                                    <div class="detail-box basic-box">
+                                                        <h6><i class="bi bi-arrow-down-circle text-secondary me-1"></i> Câu gốc (Band 5.0 - 5.5):</h6>
+                                                        <p><s>@item.BasicExample</s></p>
+                                                    </div>
+                                                }
+                                                <div class="detail-box adv-box">
+                                                    <h6><i class="bi bi-arrow-up-circle text-primary me-1"></i> Câu nâng cấp (Band 7.5 - 8.5):</h6>
+                                                    <p><b>@item.AdvancedExample</b></p>
+                                                </div>
+                                            </div>
+
+                                            <div class="details-meta-grid mt-2">
+                                                @if (!string.IsNullOrWhiteSpace(item.KeyCollocations))
+                                                {
+                                                    <div class="detail-meta-item">
+                                                        <strong><i class="bi bi-tags-fill text-info me-1"></i> Từ vựng / Collocations:</strong>
+                                                        <span>@item.KeyCollocations</span>
+                                                    </div>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(item.CommonMistakes))
+                                                {
+                                                    <div class="detail-meta-item mistake">
+                                                        <strong><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> Lỗi sai kinh điển:</strong>
+                                                        <span>@item.CommonMistakes</span>
+                                                    </div>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(item.PracticeExercise))
+                                                {
+                                                    <div class="detail-meta-item practice">
+                                                        <strong><i class="bi bi-pencil-fill text-success me-1"></i> Bài tập viết lại câu:</strong>
+                                                        <span>@item.PracticeExercise</span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="pagination-bar">
+                <div class="page-info">
+                    <span>Hiển thị <b>@(((currentPage - 1) * pageSize) + 1)</b> - <b>@Math.Min(currentPage * pageSize, filteredStructures.Count)</b> trong tổng số <b>@filteredStructures.Count</b> cấu trúc</span>
+                    <select class="form-select form-select-sm page-size-select ms-2" @bind="pageSize" @bind:after="OnPageSizeChanged">
+                        <option value="10">10 / trang</option>
+                        <option value="20">20 / trang</option>
+                        <option value="50">50 / trang</option>
+                        <option value="100">100 / trang</option>
+                    </select>
+                </div>
+
+                @if (totalPages > 1)
+                {
+                    <div class="pagination-buttons">
+                        <button class="btn-page" disabled="@(currentPage == 1)" @onclick="() => GoToPage(currentPage - 1)">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+
+                        @foreach (var p in GetVisiblePages())
+                        {
+                            <button class="btn-page @(currentPage == p ? "active" : "")" @onclick="() => GoToPage(p)">
+                                @p
+                            </button>
+                        }
+
+                        <button class="btn-page" disabled="@(currentPage == totalPages)" @onclick="() => GoToPage(currentPage + 1)">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<!-- ════════════ MODAL: THÊM / SỬA CẤU TRÚC ════════════ -->
+@if (showEditModal)
+{
+    <div class="modal-backdrop-custom">
+        <div class="modal-dialog-custom modal-lg">
+            <div class="modal-header-custom">
+                <h4>@(editingId == 0 ? "➕ Thêm Cấu trúc Ngữ pháp Mới" : $"✏️ Sửa Cấu trúc [{editModel.StructureCode}]")</h4>
+                <button class="btn-close-custom" @onclick="CloseEditModal">×</button>
+            </div>
+            <div class="modal-body-custom">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Mã Cấu Trúc <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" placeholder="VD: W_INV_01" @bind="editModel.StructureCode" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Mức Band <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" placeholder="VD: 7.5 - 8.5" @bind="editModel.BandLevel" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Kỹ Năng / Phần Thi</label>
+                        <select class="form-select" @bind="editModel.Category">
+                            <option value="Writing Task 2">Writing Task 2</option>
+                            <option value="Writing Task 1">Writing Task 1</option>
+                            <option value="Writing Task 1 & 2">Writing Task 1 & 2</option>
+                            <option value="Speaking">Speaking</option>
+                            <option value="General">General</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Chủ Điểm Ngữ Pháp <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" placeholder="VD: Đảo ngữ (Inversion)" @bind="editModel.GrammarTopic" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Mục Đích / Chức Năng</label>
+                        <input type="text" class="form-control" placeholder="VD: Nhấn mạnh 2 tác động đồng thời" @bind="editModel.UsageFunction" />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label">Công Thức Cấu Trúc <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control font-monospace" placeholder="VD: Not only + Aux + S + V, but S + also + V" @bind="editModel.Formula" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Câu Gốc Band 5.0 - 5.5 (Tùy chọn)</label>
+                        <textarea class="form-control" rows="2" placeholder="VD: Computers help students study and work." @bind="editModel.BasicExample"></textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Câu Nâng Cấp Band 7.5 - 8.5 <span class="text-danger">*</span></label>
+                        <textarea class="form-control" rows="2" placeholder="VD: Not only does technological adoption facilitate learning, but it also..." @bind="editModel.AdvancedExample"></textarea>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label">Dịch Nghĩa Tiếng Việt <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" placeholder="Bản dịch nghĩa chuẩn tiếng Việt" @bind="editModel.VietnameseMeaning" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Từ Vựng / Collocations Đi Kèm</label>
+                        <input type="text" class="form-control" placeholder="VD: technological adoption, workforce productivity" @bind="editModel.KeyCollocations" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Lỗi Thường Gặp</label>
+                        <input type="text" class="form-control" placeholder="VD: Quên đảo trợ động từ lên trước chủ ngữ" @bind="editModel.CommonMistakes" />
+                    </div>
+
+                    <div class="col-md-8">
+                        <label class="form-label">Bài Tập Luyện Tập</label>
+                        <input type="text" class="form-control" placeholder="VD: Rewrite: Tourism creates jobs and introduces culture." @bind="editModel.PracticeExercise" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Tags (Từ khóa lọc)</label>
+                        <input type="text" class="form-control" placeholder="VD: inversion, emphasis, task2" @bind="editModel.Tags" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer-custom">
+                <button class="btn btn-secondary" @onclick="CloseEditModal">Hủy</button>
+                <button class="btn btn-primary" disabled="@isSaving" @onclick="SaveStructureAsync">
+                    @(isSaving ? "Đang lưu..." : "💾 Lưu Cấu Trúc")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ════════════ MODAL: IMPORT NHIỀU FILE EXCEL ════════════ -->
+@if (showImportModal)
+{
+    <div class="modal-backdrop-custom">
+        <div class="modal-dialog-custom modal-md">
+            <div class="modal-header-custom">
+                <h4>📤 Import Danh Sách Cấu Trúc Từ Excel (.xlsx)</h4>
+                <button class="btn-close-custom" @onclick="CloseImportModal">×</button>
+            </div>
+            <div class="modal-body-custom">
+                <div class="import-mode-box mb-3">
+                    <label class="form-label fw-bold">Cách xử lý khi trùng mã StructureCode:</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="importMode" id="modeUpsert" value="upsert" 
+                               checked="@(importMode == "upsert")" @onchange='() => importMode = "upsert"' />
+                        <label class="form-check-label" for="modeUpsert">
+                            <b>Ghi đè (Cập nhật)</b> – Làm mới nội dung nếu mã đã tồn tại
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="importMode" id="modeSkip" value="skip" 
+                               checked="@(importMode == "skip")" @onchange='() => importMode = "skip"' />
+                        <label class="form-check-label" for="modeSkip">
+                            <b>Bỏ qua</b> – Giữ nguyên bản ghi cũ, chỉ thêm mới
+                        </label>
+                    </div>
+                </div>
+
+                <div class="upload-dropzone">
+                    <i class="bi bi-cloud-arrow-up-fill upload-icon"></i>
+                    <p class="mb-1 fw-bold">Kéo thả hoặc chọn nhiều file Excel (.xlsx)</p>
+                    <small class="text-muted">Hỗ trợ tự động map 12 cột chuẩn hoặc tiếng Việt</small>
+                    <InputFile OnChange="HandleFileSelected" multiple accept=".xlsx" class="dropzone-input" />
+                </div>
+
+                @if (selectedFiles.Count > 0)
+                {
+                    <div class="selected-files-list mt-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="fw-bold">File đã chọn (@selectedFiles.Count):</span>
+                            <button class="btn btn-sm btn-link text-danger p-0" @onclick="() => selectedFiles.Clear()">Xóa tất cả</button>
+                        </div>
+                        @foreach (var file in selectedFiles)
+                        {
+                            <div class="file-item">
+                                <i class="bi bi-file-earmark-excel-fill text-success me-2"></i>
+                                <span class="file-name">@file.Name</span>
+                                <span class="file-size text-muted">(@((file.Size / 1024.0).ToString("0.0")) KB)</span>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (importResult != null)
+                {
+                    <div class="import-result-summary mt-3 @(importResult.Fail > 0 ? "has-errors" : "all-success")">
+                        <h6>📊 Kết quả Import:</h6>
+                        <div class="d-flex gap-2 flex-wrap mb-1">
+                            <span class="badge bg-success">Thành công: @importResult.Success</span>
+                            <span class="badge bg-info text-dark">Cập nhật: @importResult.Updated</span>
+                            <span class="badge bg-secondary">Bỏ qua: @importResult.Skipped</span>
+                            @if (importResult.Fail > 0)
+                            {
+                                <span class="badge bg-danger">Lỗi: @importResult.Fail</span>
+                            }
+                        </div>
+                        @if (importResult.Errors.Any())
+                        {
+                            <ul class="error-list">
+                                @foreach (var err in importResult.Errors.Take(5))
+                                {
+                                    <li>@err</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="modal-footer-custom">
+                <button class="btn btn-secondary" @onclick="CloseImportModal">Đóng</button>
+                <button class="btn btn-primary" disabled="@(isImporting || selectedFiles.Count == 0)" @onclick="ExecuteImportAsync">
+                    @if (isImporting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                        <span>Đang xử lý import...</span>
+                    }
+                    else
+                    {
+                        <span>🚀 Tiến hành Import (@selectedFiles.Count file)</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<GrammarStructureDto> structures = new();
+    private List<GrammarStructureDto> filteredStructures = new();
+    private HashSet<int> selectedIds = new();
+    private HashSet<int> expandedIds = new();
+
+    private string searchKeyword = "";
+    private string selectedBandFilter = "all";
+    private string selectedCategoryFilter = "all";
+    private string selectedTopicFilter = "all";
+
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private bool isImporting = false;
+
+    private string? bannerMessage;
+    private bool bannerIsSuccess = true;
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 20;
+    private int totalPages => Math.Max(1, (int)Math.Ceiling((double)filteredStructures.Count / pageSize));
+    private List<GrammarStructureDto> pagedStructures => filteredStructures.Skip((currentPage - 1) * pageSize).Take(pageSize).ToList();
+    private bool isAllSelected => pagedStructures.Count > 0 && pagedStructures.All(p => selectedIds.Contains(p.Id));
+
+    private List<string> availableTopics => structures
+        .Where(s => !string.IsNullOrWhiteSpace(s.GrammarTopic))
+        .Select(s => s.GrammarTopic)
+        .Distinct()
+        .OrderBy(t => t)
+        .ToList();
+
+    // Edit Modal State
+    private bool showEditModal = false;
+    private int editingId = 0;
+    private CreateGrammarStructureDto editModel = new();
+
+    // Import Modal State
+    private bool showImportModal = false;
+    private string importMode = "upsert";
+    private List<IBrowserFile> selectedFiles = new();
+    private GrammarImportExcelResponse? importResult;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStructuresAsync();
+    }
+
+    private async Task LoadStructuresAsync(bool forceRefresh = false)
+    {
+        isLoading = true;
+        try
+        {
+            structures = await GrammarService.GetStructuresAsync(forceRefresh);
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            ShowBanner($"Lỗi tải danh sách cấu trúc: {ex.Message}", false);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        var query = structures.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(selectedBandFilter) && selectedBandFilter != "all")
+        {
+            query = query.Where(s => s.BandLevel == selectedBandFilter || s.BandLevel.Contains(selectedBandFilter));
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedCategoryFilter) && selectedCategoryFilter != "all")
+        {
+            query = query.Where(s => s.Category == selectedCategoryFilter || s.Category.Contains(selectedCategoryFilter));
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedTopicFilter) && selectedTopicFilter != "all")
+        {
+            query = query.Where(s => s.GrammarTopic == selectedTopicFilter);
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchKeyword))
+        {
+            var k = searchKeyword.ToLowerInvariant().Trim();
+            query = query.Where(s =>
+                s.StructureCode.ToLower().Contains(k) ||
+                s.GrammarTopic.ToLower().Contains(k) ||
+                s.Formula.ToLower().Contains(k) ||
+                s.UsageFunction.ToLower().Contains(k) ||
+                s.AdvancedExample.ToLower().Contains(k) ||
+                s.VietnameseMeaning.ToLower().Contains(k) ||
+                (s.KeyCollocations != null && s.KeyCollocations.ToLower().Contains(k)) ||
+                (s.Tags != null && s.Tags.ToLower().Contains(k)));
+        }
+
+        filteredStructures = query.ToList();
+        currentPage = 1;
+    }
+
+    private void ClearSearch()
+    {
+        searchKeyword = "";
+        ApplyFilters();
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        bool isChecked = (bool)(e.Value ?? false);
+        if (isChecked)
+        {
+            foreach (var item in pagedStructures) selectedIds.Add(item.Id);
+        }
+        else
+        {
+            foreach (var item in pagedStructures) selectedIds.Remove(item.Id);
+        }
+    }
+
+    private void ToggleSelectItem(int id)
+    {
+        if (selectedIds.Contains(id)) selectedIds.Remove(id);
+        else selectedIds.Add(id);
+    }
+
+    private void ToggleExpand(int id)
+    {
+        if (expandedIds.Contains(id)) expandedIds.Remove(id);
+        else expandedIds.Add(id);
+    }
+
+    private void GoToPage(int page)
+    {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+    }
+
+    private void OnPageSizeChanged()
+    {
+        currentPage = 1;
+    }
+
+    private List<int> GetVisiblePages()
+    {
+        var list = new List<int>();
+        int start = Math.Max(1, currentPage - 2);
+        int end = Math.Min(totalPages, start + 4);
+        if (end - start < 4) start = Math.Max(1, end - 4);
+        for (int i = start; i <= end; i++) list.Add(i);
+        return list;
+    }
+
+    private string GetBandBadgeClass(string band)
+    {
+        if (band.Contains("8.") || band.Contains("7.5")) return "band-c2";
+        if (band.Contains("7.") || band.Contains("6.5")) return "band-c1";
+        if (band.Contains("6.")) return "band-b2";
+        return "band-b1";
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            ShowBanner("Đã sao chép công thức vào bộ nhớ tạm!", true);
+        }
+        catch
+        {
+            ShowBanner("Không thể sao chép tự động.", false);
+        }
+    }
+
+    private void OpenCreateModal()
+    {
+        editingId = 0;
+        editModel = new CreateGrammarStructureDto
+        {
+            StructureCode = $"W_STR_{DateTime.UtcNow.Ticks % 10000:D4}",
+            BandLevel = "7.5 - 8.5",
+            Category = "Writing Task 2",
+            GrammarTopic = "Đảo ngữ (Inversion)",
+            UsageFunction = "Nhấn mạnh tác động kép, nâng cao điểm GRA",
+            IsActive = true
+        };
+        showEditModal = true;
+    }
+
+    private void OpenEditModal(GrammarStructureDto item)
+    {
+        editingId = item.Id;
+        editModel = new CreateGrammarStructureDto
+        {
+            StructureCode = item.StructureCode,
+            BandLevel = item.BandLevel,
+            Category = item.Category,
+            GrammarTopic = item.GrammarTopic,
+            Formula = item.Formula,
+            UsageFunction = item.UsageFunction,
+            BasicExample = item.BasicExample,
+            AdvancedExample = item.AdvancedExample,
+            VietnameseMeaning = item.VietnameseMeaning,
+            KeyCollocations = item.KeyCollocations,
+            CommonMistakes = item.CommonMistakes,
+            PracticeExercise = item.PracticeExercise,
+            Tags = item.Tags,
+            DisplayOrder = item.DisplayOrder,
+            IsActive = item.IsActive
+        };
+        showEditModal = true;
+    }
+
+    private void CloseEditModal()
+    {
+        showEditModal = false;
+    }
+
+    private async Task SaveStructureAsync()
+    {
+        if (string.IsNullOrWhiteSpace(editModel.StructureCode) || string.IsNullOrWhiteSpace(editModel.Formula))
+        {
+            ShowBanner("Vui lòng nhập Mã cấu trúc và Công thức.", false);
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            if (editingId == 0)
+            {
+                var created = await GrammarService.CreateAsync(editModel);
+                if (created != null)
+                {
+                    ShowBanner($"Đã thêm cấu trúc '{created.StructureCode}' thành công!", true);
+                    CloseEditModal();
+                    await LoadStructuresAsync(forceRefresh: true);
+                }
+                else
+                {
+                    ShowBanner("Thêm mới thất bại. Vui lòng kiểm tra lại.", false);
+                }
+            }
+            else
+            {
+                var ok = await GrammarService.UpdateAsync(editingId, new UpdateGrammarStructureDto
+                {
+                    StructureCode = editModel.StructureCode,
+                    BandLevel = editModel.BandLevel,
+                    Category = editModel.Category,
+                    GrammarTopic = editModel.GrammarTopic,
+                    Formula = editModel.Formula,
+                    UsageFunction = editModel.UsageFunction,
+                    BasicExample = editModel.BasicExample,
+                    AdvancedExample = editModel.AdvancedExample,
+                    VietnameseMeaning = editModel.VietnameseMeaning,
+                    KeyCollocations = editModel.KeyCollocations,
+                    CommonMistakes = editModel.CommonMistakes,
+                    PracticeExercise = editModel.PracticeExercise,
+                    Tags = editModel.Tags,
+                    DisplayOrder = editModel.DisplayOrder,
+                    IsActive = editModel.IsActive
+                });
+
+                if (ok)
+                {
+                    ShowBanner("Đã cập nhật cấu trúc thành công!", true);
+                    CloseEditModal();
+                    await LoadStructuresAsync(forceRefresh: true);
+                }
+                else
+                {
+                    ShowBanner("Cập nhật thất bại.", false);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowBanner($"Lỗi lưu cấu trúc: {ex.Message}", false);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ConfirmDelete(GrammarStructureDto item)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"Bạn có chắc chắn muốn xóa cấu trúc '{item.StructureCode}' ({item.GrammarTopic}) không?");
+        if (!confirmed) return;
+
+        var ok = await GrammarService.DeleteAsync(item.Id);
+        if (ok)
+        {
+            ShowBanner($"Đã xóa cấu trúc '{item.StructureCode}' thành công!", true);
+            selectedIds.Remove(item.Id);
+            await LoadStructuresAsync(forceRefresh: true);
+        }
+        else
+        {
+            ShowBanner("Xóa cấu trúc thất bại.", false);
+        }
+    }
+
+    private async Task ConfirmBulkDelete()
+    {
+        if (selectedIds.Count == 0) return;
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"Bạn có chắc chắn muốn XÓA HÀNG LOẠT {selectedIds.Count} cấu trúc đã chọn không?");
+        if (!confirmed) return;
+
+        var count = await GrammarService.BulkDeleteAsync(selectedIds.ToList());
+        if (count > 0)
+        {
+            ShowBanner($"Đã xóa thành công {count} cấu trúc!", true);
+            selectedIds.Clear();
+            await LoadStructuresAsync(forceRefresh: true);
+        }
+        else
+        {
+            ShowBanner("Xóa hàng loạt thất bại.", false);
+        }
+    }
+
+    // Import Modal Handlers
+    private void OpenImportModal()
+    {
+        selectedFiles.Clear();
+        importResult = null;
+        showImportModal = true;
+    }
+
+    private void CloseImportModal()
+    {
+        showImportModal = false;
+    }
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFiles.Clear();
+        foreach (var file in e.GetMultipleFiles(50))
+        {
+            if (file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+            {
+                selectedFiles.Add(file);
+            }
+        }
+    }
+
+    private async Task ExecuteImportAsync()
+    {
+        if (selectedFiles.Count == 0) return;
+        isImporting = true;
+        importResult = null;
+
+        try
+        {
+            importResult = await GrammarService.ImportMultipleExcelAsync(selectedFiles, importMode);
+            if (importResult != null)
+            {
+                ShowBanner($"Import hoàn tất: {importResult.Success} thêm mới, {importResult.Updated} cập nhật, {importResult.Skipped} bỏ qua.", importResult.Fail == 0);
+                await LoadStructuresAsync(forceRefresh: true);
+            }
+            else
+            {
+                ShowBanner("Import thất bại. Vui lòng kiểm tra định dạng file Excel.", false);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowBanner($"Lỗi khi import file: {ex.Message}", false);
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private void ShowBanner(string message, bool success)
+    {
+        bannerMessage = message;
+        bannerIsSuccess = success;
+    }
+}
