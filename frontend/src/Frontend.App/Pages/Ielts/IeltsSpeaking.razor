@@ -390,7 +390,7 @@
                     @(savedSubmission.Status == "Graded" ? "🎉 Đã có kết quả chấm điểm" : "⏳ Đang chờ Giáo viên có trình độ chuyên môn chấm điểm")
                 </strong>
             </div>
-            @if (savedSubmission.Status == "Graded" && savedSubmission.BandScore.HasValue && savedSubmission.BandScore.Value > 0)
+            @if (savedSubmission.Status == "Graded" && savedSubmission.BandScore.HasValue)
             {
                 <div class="sp-score-total">
                     <span>Band</span>
@@ -861,37 +861,51 @@
     {
         if (isFinished || isSubmitting) return;
         isSubmitting = true;
-        await InvokeAsync(StateHasChanged);
-
-        if (timeExpired && state == SpeakingState.Recording)
-        {
-            await StopRecording();
-        }
-
-        savedSubmission = BuildSubmission(timeExpired);
-        savedSubmission = await Submissions.SaveSpeakingSubmissionAsync(savedSubmission);
-        scoreReport = savedSubmission.Score;
-        await CheckpointService.ClearCheckpointAsync("Speaking", currentExamUrl, QueryMockTestId);
-
         isFinished = true;
         sessionSecondsLeft = 0;
-        isSubmitting = false;
         _timer?.Dispose();
         _sessionTimer?.Dispose();
-        try { await JS.InvokeVoidAsync("SpeakingInterop.stopRecording"); } catch { }
-        if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
-        await ExamSession.LockTestContentAsync(".sp-body");
-        await ExamSession.SetUnloadWarningAsync(false);
-        await JS.InvokeVoidAsync("SpeakingInterop.stopMicStream");
         await InvokeAsync(StateHasChanged);
 
-        if (!timeExpired)
+        try
         {
+            if (timeExpired && state == SpeakingState.Recording)
+            {
+                await StopRecording();
+            }
+
+            savedSubmission = BuildSubmission(timeExpired);
+            savedSubmission = await Submissions.SaveSpeakingSubmissionAsync(savedSubmission);
+            scoreReport = savedSubmission.Score;
+            await CheckpointService.ClearCheckpointAsync("Speaking", currentExamUrl, QueryMockTestId);
+            try { await JS.InvokeVoidAsync("SpeakingInterop.stopRecording"); } catch { }
+            try { if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired); } catch { }
+            try { await ExamSession.LockTestContentAsync(".sp-body"); } catch { }
+            try { await ExamSession.SetUnloadWarningAsync(false); } catch { }
+            try { await JS.InvokeVoidAsync("SpeakingInterop.stopMicStream"); } catch { }
+
+            if (!timeExpired)
+            {
+                try
+                {
+                    await JS.InvokeVoidAsync("alert", "🎉 Bài thi Speaking đã được nộp thành công!\nKết quả chấm điểm và nhận xét chi tiết sẽ sớm được thông báo cho bạn.");
+                }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Speaking] Lỗi khi nộp bài: {ex.Message}");
             try
             {
-                await JS.InvokeVoidAsync("alert", "🎉 Bài thi Speaking đã được nộp thành công!\nKết quả chấm điểm và nhận xét chi tiết sẽ sớm được thông báo cho bạn.");
+                await JS.InvokeVoidAsync("alert", "Đã xảy ra lỗi khi nộp bài. Vui lòng thử lại!");
             }
             catch { }
+        }
+        finally
+        {
+            isSubmitting = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 

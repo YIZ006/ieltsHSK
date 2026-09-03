@@ -154,9 +154,11 @@ public sealed class TestSubmissionSyncDto
 {
     public int Id { get; set; }
     public int? UserId { get; set; }
+    public string? StudentName { get; set; }
     public string? SessionId { get; set; }
     public string Skill { get; set; } = "";
     public string ExamUrl { get; set; } = "";
+    public string? ExamTitle { get; set; }
     public double BandScore { get; set; }
     public int CorrectCount { get; set; }
     public int TotalCount { get; set; }

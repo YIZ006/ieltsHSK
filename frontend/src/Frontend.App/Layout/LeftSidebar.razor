@@ -11,13 +11,8 @@
         @if (!isCollapsed)
         {
             <a href="/" class="sb-brand" title="Trang chủ ieltsHSK">
-                <span class="sb-brand-icon">
-                    <i class="bi bi-box-fill"></i>
-                </span>
-                <div class="sb-brand-text-wrapper">
-                    <span class="sb-brand-text">ieltsHSK</span>
-                    <span class="sb-brand-badge sb-brand-badge-@selectedProgram.ToLowerInvariant()" @key="selectedProgram">@(selectedProgram == "HSK" ? "HSK 3.0" : selectedProgram)</span>
-                </div>
+                <img src="images/ieltsHSK-logo-white.png" alt="ieltsHSK" class="sb-brand-img" />
+                <span class="sb-brand-badge sb-brand-badge-@selectedProgram.ToLowerInvariant()" @key="selectedProgram">@(selectedProgram == "HSK" ? "HSK 3.0" : selectedProgram)</span>
             </a>
             <button class="sb-collapse-btn" @onclick="ToggleCollapse" title="Thu gọn thanh bên">
                 <i class="bi bi-layout-sidebar-inset"></i>
@@ -177,10 +172,8 @@
         },
         ["HSK"] = new()
         {
-            new LearningSectionDto{ Name="Hôm nay", Route="/hsk", Icon="bi-house-door-fill", Language="HSK", OrderIndex=1, Description="Tổng quan HSK" },
-            new LearningSectionDto{ Name="Từ vựng HSK", Route="/hsk/tu-vung", Icon="bi-book-half", Language="HSK", OrderIndex=2, Description="Từ vựng HSK 1-6" },
-            new LearningSectionDto{ Name="Phòng thi thử", Route="/hsk/mock-tests", Icon="bi-journal-check", Language="HSK", OrderIndex=3, Description="Đề thi HSK" },
-            new LearningSectionDto{ Name="Tổng quan HSK 1–6", Route="/hsk/overview", Icon="bi-grid-fill", Language="HSK", OrderIndex=4, Description="Tổng hợp cấp độ" },
+            new LearningSectionDto{ Name="Luyện đề HSK", Route="/hsk/luyen-de", Icon="bi-journal-text", Language="HSK", OrderIndex=1, Description="Luyện đề thi HSK các cấp" },
+            new LearningSectionDto{ Name="Từ vựng HSK", Route="/hsk/tu-vung", Icon="bi-spellcheck", Language="HSK", OrderIndex=2, Description="Từ vựng HSK 1-9" },
         }
     };
 

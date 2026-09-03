@@ -1,42 +1,70 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @inject NavigationManager NavigationManager
 @inject Frontend.App.Services.AuthService AuthService
 @inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
 
-<div class="admin-layout theme-@activeDomain.ToLower()">
-    <!-- Top Horizontal Navbar -->
-    <header class="admin-topbar">
-        <div class="topbar-logo" @onclick='() => NavigationManager.NavigateTo("/admin")'>
-            <span class="logo-icon">
-                @if (activeDomain == "TOEIC") { <span>🏆</span> }
-                else if (activeDomain == "HSK") { <span>🇨🇳</span> }
-                else if (activeDomain == "USERS") { <span>👥</span> }
-                else { <span>🇬🇧</span> }
-            </span>
-            <span class="logo-text">Admin Hub</span>
+@if (isCheckingAuth)
+{
+    <div class="admin-auth-guard">
+        <div class="auth-guard-card">
+            <div class="spinner-border text-primary" role="status" style="width: 2.5rem; height: 2.5rem;"></div>
+            <h4 style="font-weight: 800; font-size: 1.15rem; margin: 0;">Đang xác thực quyền Quản trị viên...</h4>
+            <p style="font-size: 0.88rem; color: #64748b; margin: 0;">Hệ thống đang kiểm tra phiên làm việc bảo mật</p>
         </div>
+    </div>
+}
+else if (!isAdminAuthenticated)
+{
+    <div class="admin-auth-guard">
+        <div class="auth-guard-card">
+            <div class="auth-guard-icon">
+                <i class="bi bi-shield-lock-fill"></i>
+            </div>
+            <h3 style="font-weight: 800; font-size: 1.25rem; margin: 0;">Yêu cầu Đăng nhập Quản trị</h3>
+            <p style="font-size: 0.88rem; color: #64748b; margin: 0; text-align: center;">
+                Bạn cần đăng nhập bằng tài khoản Quản trị viên (Admin) để có quyền truy cập khu vực này.
+            </p>
+            <button type="button" class="btn btn-primary" style="font-weight: 700; border-radius: 10px; padding: 8px 24px;" @onclick="NavigateToLogin">
+                <i class="bi bi-box-arrow-in-right"></i> Đăng nhập ngay
+            </button>
+        </div>
+    </div>
+}
+else
+{
+    <div class="admin-layout theme-@activeDomain.ToLower()">
+        <!-- Top Horizontal Navbar -->
+        <header class="admin-topbar">
+            <div class="topbar-logo" @onclick='() => NavigationManager.NavigateTo("/portal-hub")'>
+                <span class="logo-icon">
+                    @if (activeDomain == "TOEIC") { <span>🏆</span> }
+                    else if (activeDomain == "HSK") { <span>🇨🇳</span> }
+                    else if (activeDomain == "USERS") { <span>👥</span> }
+                    else { <span>🇬🇧</span> }
+                </span>
+                <span class="logo-text">Admin Hub</span>
+            </div>
 
-        <nav class="topbar-nav">
-            <button class="nav-tab tab-ielts @(activeDomain == "IELTS" ? "active" : "")" @onclick='() => SwitchDomain("IELTS")'>
-                <span class="tab-icon">🇬🇧</span> IELTS
-            </button>
-            <button class="nav-tab tab-toeic @(activeDomain == "TOEIC" ? "active" : "")" @onclick='() => SwitchDomain("TOEIC")'>
-                <span class="tab-icon">🏆</span> TOEIC
-            </button>
-            <button class="nav-tab tab-hsk @(activeDomain == "HSK" ? "active" : "")" @onclick='() => SwitchDomain("HSK")'>
-                <span class="tab-icon">🇨🇳</span> HSK
-            </button>
-            <button class="nav-tab tab-users @(activeDomain == "USERS" ? "active" : "")" @onclick='() => SwitchDomain("USERS")'>
-                <span class="tab-icon">👥</span> Học viên & Users
-            </button>
-            <a href="http://localhost:5101/swagger" target="_blank" class="nav-tab tab-swagger" style="text-decoration: none;">
-                <span class="tab-icon">⚙️</span> Swagger API
-            </a>
-        </nav>
+            <nav class="topbar-nav">
+                <button class="nav-tab tab-ielts @(activeDomain == "IELTS" ? "active" : "")" @onclick='() => SwitchDomain("IELTS")'>
+                    <span class="tab-icon">🇬🇧</span> IELTS
+                </button>
+                <button class="nav-tab tab-toeic @(activeDomain == "TOEIC" ? "active" : "")" @onclick='() => SwitchDomain("TOEIC")'>
+                    <span class="tab-icon">🏆</span> TOEIC
+                </button>
+                <button class="nav-tab tab-hsk @(activeDomain == "HSK" ? "active" : "")" @onclick='() => SwitchDomain("HSK")'>
+                    <span class="tab-icon">🇨🇳</span> HSK
+                </button>
+                <button class="nav-tab tab-users @(activeDomain == "USERS" ? "active" : "")" @onclick='() => SwitchDomain("USERS")'>
+                    <span class="tab-icon">👥</span> Học viên & Users
+                </button>
+                <a href="http://localhost:5101/swagger" target="_blank" class="nav-tab tab-swagger" style="text-decoration: none;">
+                    <span class="tab-icon">⚙️</span> Swagger API
+                </a>
+            </nav>
 
-        <div class="topbar-user">
-            @if (isAdminAuthenticated)
-            {
+            <div class="topbar-user">
                 <span class="user-avatar">@(string.IsNullOrWhiteSpace(adminName) ? "A" : adminName.Substring(0, 1).ToUpper())</span>
                 <div class="user-info-text">
                     <span class="user-name" title="@adminEmail">@(string.IsNullOrWhiteSpace(adminName) ? "Quản trị viên" : adminName)</span>
@@ -45,164 +73,177 @@
                 <button type="button" class="btn-admin-logout" @onclick="HandleLogout" title="Đăng xuất khỏi Admin Hub">
                     <i class="bi bi-box-arrow-right"></i>
                 </button>
-            }
-            else
-            {
-                <button type="button" class="btn-topbar-login" @onclick="NavigateToLogin">
-                    <i class="bi bi-shield-lock-fill"></i> Đăng nhập
-                </button>
-            }
-        </div>
-    </header>
-
-    <div class="admin-body">
-        <!-- Left Vertical Sidebar -->
-        <aside class="admin-sidebar">
-            <div class="sidebar-header">
-                <h3>
-                    @if (activeDomain == "USERS")
-                    {
-                        <span>Quản lý Tài khoản</span>
-                    }
-                    else
-                    {
-                        <span>Quản lý @activeDomain</span>
-                    }
-                </h3>
             </div>
+        </header>
 
-            <ul class="sidebar-menu">
-                @if (activeDomain == "IELTS")
-                {
-                    <li class="menu-item @(IsActive("/admin/mock-tests") ? "active" : "")">
-                        <a href="/admin/mock-tests">
-                            <i class="bi bi-journal-text"></i> Quản lý đề thi (Mock Tests)
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/grading") ? "active" : "")">
-                        <a href="/admin/grading">
-                            <i class="bi bi-pencil-square"></i> Chấm điểm Writing & Speaking
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/listen-videos") ? "active" : "")">
-                        <a href="/admin/listen-videos">
-                            <i class="bi bi-camera-video"></i> Duyệt Video Nghe Điền
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/stories") ? "active" : "")">
-                        <a href="/admin/stories">
-                            <i class="bi bi-book"></i> Quản lý Đọc truyện
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/ielts-vocab") ? "active" : "")">
-                        <a href="/admin/ielts-vocab">
-                            <i class="bi bi-journal-bookmark-fill"></i> Ngân hàng Từ vựng IELTS
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/speak-along") ? "active" : "")">
-                        <a href="/admin/speak-along">
-                            <i class="bi bi-mic-fill"></i> Quản lý Nói Theo (Shadowing)
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/navigation") ? "active" : "")">
-                        <a href="/admin/navigation">
-                            <i class="bi bi-list-nested"></i> Cấu hình Menu (Navigation)
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/users") && (NavigationManager.Uri.Contains("ielts") || !NavigationManager.Uri.Contains("domain")) ? "active" : "")">
-                        <a href="/admin/users?domain=ielts">
-                            <i class="bi bi-people-fill"></i> Học viên IELTS
-                        </a>
-                    </li>
-                }
-                else if (activeDomain == "TOEIC")
-                {
-                    <li class="menu-item @(IsActive("/admin/toeic-mock-tests") ? "active" : "")">
-                        <a href="/admin/toeic-mock-tests">
-                            <i class="bi bi-journal-text"></i> Quản lý đề thi TOEIC
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/toeic-builder") ? "active" : "")">
-                        <a href="/admin/toeic-builder">
-                            <i class="bi bi-pencil-square"></i> Tạo & Sửa đề TOEIC
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/navigation") ? "active" : "")">
-                        <a href="/admin/navigation">
-                            <i class="bi bi-list-nested"></i> Cấu hình Menu (Navigation)
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/users") && NavigationManager.Uri.Contains("toeic") ? "active" : "")">
-                        <a href="/admin/users?domain=toeic">
-                            <i class="bi bi-people-fill"></i> Học viên TOEIC
-                        </a>
-                    </li>
-                }
-                else if (activeDomain == "HSK")
-                {
-                    <li class="menu-item @(IsActive("/admin/hsk-mock-tests") ? "active" : "")">
-                        <a href="/admin/hsk-mock-tests">
-                            <i class="bi bi-journal-check"></i> Quản lý Đề thi HSK
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/hsk-vocab") ? "active" : "")">
-                        <a href="/admin/hsk-vocab">
-                            <i class="bi bi-translate"></i> Ngân hàng Từ vựng HSK
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/navigation") ? "active" : "")">
-                        <a href="/admin/navigation">
-                            <i class="bi bi-list-nested"></i> Cấu hình Menu (Navigation)
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/admin/users") && NavigationManager.Uri.Contains("hsk") ? "active" : "")">
-                        <a href="/admin/users?domain=hsk">
-                            <i class="bi bi-people-fill"></i> Học viên HSK
-                        </a>
-                    </li>
-                }
-                else if (activeDomain == "USERS")
-                {
-                    <li class="menu-item @(IsActive("/admin/users") && !NavigationManager.Uri.Contains("domain=") ? "active" : "")">
-                        <a href="/admin/users">
-                            <i class="bi bi-people-fill"></i> Tất cả người dùng
-                        </a>
-                    </li>
-                    <li class="menu-item @(NavigationManager.Uri.Contains("domain=ielts") ? "active" : "")">
-                        <a href="/admin/users?domain=ielts">
-                            <i class="bi bi-mortarboard-fill text-primary"></i> Học viên IELTS
-                        </a>
-                    </li>
-                    <li class="menu-item @(NavigationManager.Uri.Contains("domain=toeic") ? "active" : "")">
-                        <a href="/admin/users?domain=toeic">
-                            <i class="bi bi-trophy-fill text-warning"></i> Học viên TOEIC
-                        </a>
-                    </li>
-                    <li class="menu-item @(NavigationManager.Uri.Contains("domain=hsk") ? "active" : "")">
-                        <a href="/admin/users?domain=hsk">
-                            <i class="bi bi-translate text-danger"></i> Học viên HSK
-                        </a>
-                    </li>
-                    <li class="menu-item @(NavigationManager.Uri.Contains("domain=admin") ? "active" : "")">
-                        <a href="/admin/users?domain=admin">
-                            <i class="bi bi-shield-lock-fill text-danger"></i> Ban Quản trị (Admin)
-                        </a>
-                    </li>
-                }
-            </ul>
-        </aside>
+        <div class="admin-body">
+            <!-- Left Vertical Sidebar -->
+            <aside class="admin-sidebar">
+                <div class="sidebar-header">
+                    <h3>
+                        @if (activeDomain == "USERS")
+                        {
+                            <span>Quản lý Tài khoản</span>
+                        }
+                        else
+                        {
+                            <span>Quản lý @activeDomain</span>
+                        }
+                    </h3>
+                </div>
 
-        <!-- Main Content Area -->
-        <main class="admin-content">
-            @Body
-        </main>
+                <ul class="sidebar-menu">
+                    <li class="menu-item @(currentUrl == "portal-hub" || currentUrl == "admin" || currentUrl == "" ? "active" : "")">
+                        <a href="/portal-hub">
+                            <i class="bi bi-speedometer2"></i> Dashboard Tổng quan
+                        </a>
+                    </li>
+                    @if (activeDomain == "IELTS")
+                    {
+                        <li class="menu-item @(IsActive("/portal-hub/mock-tests") ? "active" : "")">
+                            <a href="/portal-hub/mock-tests">
+                                <i class="bi bi-journal-text"></i> Quản lý đề thi (Mock Tests)
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/grading") ? "active" : "")">
+                            <a href="/portal-hub/grading">
+                                <i class="bi bi-pencil-square"></i> Chấm điểm Writing & Speaking
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/listen-videos") ? "active" : "")">
+                            <a href="/portal-hub/listen-videos">
+                                <i class="bi bi-camera-video"></i> Duyệt Video Nghe Điền
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/stories") ? "active" : "")">
+                            <a href="/portal-hub/stories">
+                                <i class="bi bi-book"></i> Quản lý Đọc truyện
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/ielts-vocab") ? "active" : "")">
+                            <a href="/portal-hub/ielts-vocab">
+                                <i class="bi bi-journal-bookmark-fill"></i> Ngân hàng Từ vựng IELTS
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/grammar") ? "active" : "")">
+                            <a href="/portal-hub/grammar">
+                                <i class="bi bi-diagram-3-fill"></i> Cấu trúc theo Band
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/speak-along") ? "active" : "")">
+                            <a href="/portal-hub/speak-along">
+                                <i class="bi bi-mic-fill"></i> Quản lý Nói Theo (Shadowing)
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/navigation") ? "active" : "")">
+                            <a href="/portal-hub/navigation">
+                                <i class="bi bi-list-nested"></i> Cấu hình Menu (Navigation)
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/users") && (NavigationManager.Uri.Contains("ielts") || !NavigationManager.Uri.Contains("domain")) ? "active" : "")">
+                            <a href="/portal-hub/users?domain=ielts">
+                                <i class="bi bi-people-fill"></i> Học viên IELTS
+                            </a>
+                        </li>
+                    }
+                    else if (activeDomain == "TOEIC")
+                    {
+                        <li class="menu-item @(IsActive("/portal-hub/toeic-mock-tests") ? "active" : "")">
+                            <a href="/portal-hub/toeic-mock-tests">
+                                <i class="bi bi-journal-text"></i> Quản lý đề thi TOEIC
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/toeic-builder") ? "active" : "")">
+                            <a href="/portal-hub/toeic-builder">
+                                <i class="bi bi-pencil-square"></i> Tạo & Sửa đề TOEIC
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/navigation") ? "active" : "")">
+                            <a href="/portal-hub/navigation">
+                                <i class="bi bi-list-nested"></i> Cấu hình Menu (Navigation)
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/users") && NavigationManager.Uri.Contains("toeic") ? "active" : "")">
+                            <a href="/portal-hub/users?domain=toeic">
+                                <i class="bi bi-people-fill"></i> Học viên TOEIC
+                            </a>
+                        </li>
+                    }
+                    else if (activeDomain == "HSK")
+                    {
+                        <li class="menu-item @(IsActive("/portal-hub/hsk-mock-tests") ? "active" : "")">
+                            <a href="/portal-hub/hsk-mock-tests">
+                                <i class="bi bi-journal-check"></i> Quản lý Đề thi HSK
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/hsk-vocab") ? "active" : "")">
+                            <a href="/portal-hub/hsk-vocab">
+                                <i class="bi bi-translate"></i> Ngân hàng Từ vựng HSK
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/navigation") ? "active" : "")">
+                            <a href="/portal-hub/navigation">
+                                <i class="bi bi-list-nested"></i> Cấu hình Menu (Navigation)
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/users") && NavigationManager.Uri.Contains("hsk") ? "active" : "")">
+                            <a href="/portal-hub/users?domain=hsk">
+                                <i class="bi bi-people-fill"></i> Học viên HSK
+                            </a>
+                        </li>
+                    }
+                    else if (activeDomain == "USERS")
+                    {
+                        <li class="menu-item @(IsActive("/portal-hub/users") && !NavigationManager.Uri.Contains("domain=") ? "active" : "")">
+                            <a href="/portal-hub/users">
+                                <i class="bi bi-people-fill"></i> Tất cả người dùng
+                            </a>
+                        </li>
+                        <li class="menu-item @(NavigationManager.Uri.Contains("domain=ielts") ? "active" : "")">
+                            <a href="/portal-hub/users?domain=ielts">
+                                <i class="bi bi-mortarboard-fill text-primary"></i> Học viên IELTS
+                            </a>
+                        </li>
+                        <li class="menu-item @(NavigationManager.Uri.Contains("domain=toeic") ? "active" : "")">
+                            <a href="/portal-hub/users?domain=toeic">
+                                <i class="bi bi-trophy-fill text-warning"></i> Học viên TOEIC
+                            </a>
+                        </li>
+                        <li class="menu-item @(NavigationManager.Uri.Contains("domain=hsk") ? "active" : "")">
+                            <a href="/portal-hub/users?domain=hsk">
+                                <i class="bi bi-translate text-danger"></i> Học viên HSK
+                            </a>
+                        </li>
+                        <li class="menu-item @(NavigationManager.Uri.Contains("domain=admin") ? "active" : "")">
+                            <a href="/portal-hub/users?domain=admin">
+                                <i class="bi bi-shield-lock-fill text-danger"></i> Ban Quản trị (Admin)
+                            </a>
+                        </li>
+                    }
+
+                    <li class="sidebar-divider my-2"></li>
+                    <li class="menu-item @(IsActive("/portal-hub/api-keys") || IsActive("/portal-hub/ai-settings") ? "active" : "")">
+                        <a href="/portal-hub/api-keys">
+                            <i class="bi bi-key-fill text-warning"></i> Cấu hình API & AI
+                        </a>
+                    </li>
+                </ul>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="admin-content">
+                @Body
+            </main>
+        </div>
     </div>
-</div>
+}
 
 @code {
     private string activeDomain = "IELTS";
     private string currentUrl = "";
+    private bool isCheckingAuth = true;
     private bool isAdminAuthenticated = false;
+    private bool isDisposed = false;
     private string? adminName;
     private string? adminEmail;
 
@@ -212,44 +253,77 @@
         NavigationManager.LocationChanged += OnLocationChanged;
         
         UpdateActiveDomain(currentUrl);
-        await CheckAdminAuthState();
+        await CheckAdminAuthState(initial: true);
     }
 
-    private async Task CheckAdminAuthState()
+    private async Task CheckAdminAuthState(bool initial = false)
     {
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User;
-        isAdminAuthenticated = user.Identity?.IsAuthenticated == true && user.IsInRole("admin");
-        
-        if (isAdminAuthenticated)
+        if (isDisposed) return;
+        if (initial) isCheckingAuth = true;
+
+        try
         {
-            adminName = user.Identity?.Name 
-                ?? user.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value 
-                ?? user.FindFirst("name")?.Value 
-                ?? user.FindFirst("unique_name")?.Value;
-            adminEmail = user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value 
-                ?? user.FindFirst("email")?.Value;
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            isAdminAuthenticated = user.Identity?.IsAuthenticated == true && user.IsInRole("admin");
+            
+            if (isAdminAuthenticated)
+            {
+                adminName = user.Identity?.Name 
+                    ?? user.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value 
+                    ?? user.FindFirst("name")?.Value 
+                    ?? user.FindFirst("unique_name")?.Value;
+                adminEmail = user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value 
+                    ?? user.FindFirst("email")?.Value;
+            }
+            else
+            {
+                adminName = null;
+                adminEmail = null;
+                
+                var currentPath = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+                if (!currentPath.Contains("login", StringComparison.OrdinalIgnoreCase))
+                {
+                    var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
+                    NavigationManager.NavigateTo($"/portal-hub/login?returnUrl={returnUrl}");
+                    return;
+                }
+            }
         }
-        else
+        catch (Exception ex)
         {
-            adminName = null;
-            adminEmail = null;
+            Console.WriteLine($"[AdminLayout] CheckAdminAuthState error: {ex.Message}");
+            isAdminAuthenticated = false;
+        }
+        finally
+        {
+            if (initial) isCheckingAuth = false;
+            if (!isDisposed)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
         }
     }
 
     private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
-        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
-        UpdateActiveDomain(currentUrl);
-        await CheckAdminAuthState();
-        StateHasChanged();
+        if (isDisposed) return;
+        try
+        {
+            currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+            UpdateActiveDomain(currentUrl);
+            await CheckAdminAuthState(initial: false);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminLayout] OnLocationChanged error: {ex.Message}");
+        }
     }
 
     private void UpdateActiveDomain(string url)
     {
-        if (url.StartsWith("admin/users", StringComparison.OrdinalIgnoreCase) || url.StartsWith("admin/ielts-users", StringComparison.OrdinalIgnoreCase))
+        if (url.Contains("users", StringComparison.OrdinalIgnoreCase))
         {
-            // If explicit domain param in query
             if (NavigationManager.Uri.Contains("domain=toeic", StringComparison.OrdinalIgnoreCase))
                 activeDomain = "TOEIC";
             else if (NavigationManager.Uri.Contains("domain=hsk", StringComparison.OrdinalIgnoreCase))
@@ -277,19 +351,19 @@
     {
         activeDomain = domain;
         if (domain == "IELTS")
-            NavigationManager.NavigateTo("/admin/mock-tests");
+            NavigationManager.NavigateTo("/portal-hub/mock-tests");
         else if (domain == "TOEIC")
-            NavigationManager.NavigateTo("/admin/toeic-mock-tests");
+            NavigationManager.NavigateTo("/portal-hub/toeic-mock-tests");
         else if (domain == "HSK")
-            NavigationManager.NavigateTo("/admin/hsk-mock-tests");
+            NavigationManager.NavigateTo("/portal-hub/hsk-mock-tests");
         else
-            NavigationManager.NavigateTo("/admin/users");
+            NavigationManager.NavigateTo("/portal-hub/users");
     }
 
     private void NavigateToLogin()
     {
         var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
-        NavigationManager.NavigateTo($"/admin/login?returnUrl={returnUrl}");
+        NavigationManager.NavigateTo($"/portal-hub/login?returnUrl={returnUrl}");
     }
 
     private async Task HandleLogout()
@@ -298,7 +372,7 @@
         isAdminAuthenticated = false;
         adminName = null;
         adminEmail = null;
-        NavigationManager.NavigateTo("/admin/login", forceLoad: true);
+        NavigationManager.NavigateTo("/portal-hub/login", forceLoad: true);
     }
 
     private bool IsActive(string path)
@@ -308,6 +382,7 @@
 
     public void Dispose()
     {
+        isDisposed = true;
         NavigationManager.LocationChanged -= OnLocationChanged;
     }
 }

@@ -9,6 +9,15 @@
 @implements IDisposable
 
 <nav class="navbar">
+    @if (IsHomePage)
+    {
+        <div class="navbar-brand-area">
+            <a href="/" class="topbar-brand" title="ieltsHSK - Trang chủ">
+                <img src="images/ieltsHSK-logo.png" alt="ieltsHSK" class="topbar-brand-img" />
+            </a>
+        </div>
+    }
+
     <div class="navbar-collapse">
         <div class="navbar-spacer"></div>
 
@@ -176,7 +185,7 @@
 
                                     @if (isAdmin)
                                     {
-                                        <a href="/admin/users" class="popover-nav-item" @onclick="() => showUserMenu = false">
+                                        <a href="/portal-hub/users" class="popover-nav-item" @onclick="() => showUserMenu = false">
                                             <div class="nav-item-icon bg-purple"><i class="bi bi-shield-lock"></i></div>
                                             <div class="nav-item-content">
                                                 <span class="nav-item-title">Trang Quản Trị</span>
@@ -312,6 +321,22 @@
         catch { }
 
         ExamHeader.OnChange += OnExamHeaderChanged;
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private bool IsHomePage
+    {
+        get
+        {
+            var rel = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+            var path = rel.Split('?', '#')[0].Trim('/');
+            return string.IsNullOrEmpty(path);
+        }
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        InvokeAsync(StateHasChanged);
     }
 
     private void ApplyProfile(UserProfile profile)
@@ -374,6 +399,7 @@
     public void Dispose()
     {
         ExamHeader.OnChange -= OnExamHeaderChanged;
+        NavigationManager.LocationChanged -= OnLocationChanged;
     }
 
     private async Task Logout()

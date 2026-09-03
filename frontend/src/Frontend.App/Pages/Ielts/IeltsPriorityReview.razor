@@ -166,45 +166,45 @@
                         <circle cx="660" cy="@GetSkillAvgY("Speaking")" r="10" fill="none" stroke="#fb923c" stroke-width="1.5" opacity="0.6" />
 
                         <!-- X-Axis Labels -->
-                        <text x="120" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">🎧 L (@(listeningAvg > 0 ? listeningAvg.ToString("0.0") : "—"))</text>
-                        <text x="300" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">📖 R (@(readingAvg > 0 ? readingAvg.ToString("0.0") : "—"))</text>
-                        <text x="480" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">✍️ W (@(writingAvg > 0 ? writingAvg.ToString("0.0") : "—"))</text>
-                        <text x="660" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">🗣️ S (@(speakingAvg > 0 ? speakingAvg.ToString("0.0") : "—"))</text>
+                        <text x="120" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">🎧 L (@(hasListening ? listeningAvg.ToString("0.0") : "—"))</text>
+                        <text x="300" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">📖 R (@(hasReading ? readingAvg.ToString("0.0") : "—"))</text>
+                        <text x="480" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">✍️ W (@(hasWriting ? writingAvg.ToString("0.0") : "—"))</text>
+                        <text x="660" y="246" fill="#cbd5e1" font-size="12" font-weight="bold" text-anchor="middle">🗣️ S (@(hasSpeaking ? speakingAvg.ToString("0.0") : "—"))</text>
                     </svg>
                 </div>
 
                 <!-- Asset Breakdown Cards -->
                 <div class="terminal-assets-grid">
-                    <div class="asset-card @(listeningAvg > 0 && listeningAvg == GetMinScore() ? "asset-weak" : "")">
+                    <div class="asset-card @(hasListening && listeningAvg == GetMinScore() ? "asset-weak" : "")">
                         <div class="asset-top">
                             <span class="asset-name">🎧 LISTENING</span>
                             <span class="asset-signal @(listeningAvg >= 7 ? "buy" : listeningAvg >= 5.5 ? "hold" : "sell")">@(listeningAvg >= 7 ? "BULLISH" : listeningAvg >= 5.5 ? "NEUTRAL" : "FOCUS")</span>
                         </div>
-                        <div class="asset-value">Band @(listeningAvg > 0 ? listeningAvg.ToString("0.0") : "—")</div>
-                        <div class="asset-sub">TB @totalAttempts lần | @(listeningAvg > 0 && listeningAvg == GetMinScore() ? "⚠ Ưu tiên cải thiện" : "Ổn định")</div>
+                        <div class="asset-value">Band @(hasListening ? listeningAvg.ToString("0.0") : "—")</div>
+                        <div class="asset-sub">TB @totalAttempts lần | @(hasListening && listeningAvg == GetMinScore() ? "⚠ Ưu tiên cải thiện" : "Ổn định")</div>
                     </div>
-                    <div class="asset-card @(readingAvg > 0 && readingAvg == GetMinScore() ? "asset-weak" : "")">
+                    <div class="asset-card @(hasReading && readingAvg == GetMinScore() ? "asset-weak" : "")">
                         <div class="asset-top">
                             <span class="asset-name">📖 READING</span>
                             <span class="asset-signal @(readingAvg >= 7 ? "buy" : readingAvg >= 5.5 ? "hold" : "sell")">@(readingAvg >= 7 ? "BULLISH" : readingAvg >= 5.5 ? "NEUTRAL" : "FOCUS")</span>
                         </div>
-                        <div class="asset-value">Band @(readingAvg > 0 ? readingAvg.ToString("0.0") : "—")</div>
-                        <div class="asset-sub">TB @totalAttempts lần | @(readingAvg > 0 && readingAvg == GetMinScore() ? "⚠ Ưu tiên cải thiện" : "Ổn định")</div>
+                        <div class="asset-value">Band @(hasReading ? readingAvg.ToString("0.0") : "—")</div>
+                        <div class="asset-sub">TB @totalAttempts lần | @(hasReading && readingAvg == GetMinScore() ? "⚠ Ưu tiên cải thiện" : "Ổn định")</div>
                     </div>
-                    <div class="asset-card @(writingAvg > 0 && writingAvg == GetMinScore() ? "asset-weak" : "")">
+                    <div class="asset-card @(hasWriting && writingAvg == GetMinScore() ? "asset-weak" : "")">
                         <div class="asset-top">
                             <span class="asset-name">✍️ WRITING</span>
                             <span class="asset-signal @(writingAvg >= 7 ? "buy" : writingAvg >= 5.5 ? "hold" : "sell")">@(writingAvg >= 7 ? "BULLISH" : writingAvg >= 5.5 ? "NEUTRAL" : "FOCUS")</span>
                         </div>
-                        <div class="asset-value">Band @(writingAvg > 0 ? writingAvg.ToString("0.0") : "—")</div>
+                        <div class="asset-value">Band @(hasWriting ? writingAvg.ToString("0.0") : "—")</div>
                         <div class="asset-sub">TB @totalAttempts lần | AI Evaluated</div>
                     </div>
-                    <div class="asset-card @(speakingAvg > 0 && speakingAvg == GetMinScore() ? "asset-weak" : "")">
+                    <div class="asset-card @(hasSpeaking && speakingAvg == GetMinScore() ? "asset-weak" : "")">
                         <div class="asset-top">
                             <span class="asset-name">🗣️ SPEAKING</span>
                             <span class="asset-signal @(speakingAvg >= 7 ? "buy" : speakingAvg >= 5.5 ? "hold" : "sell")">@(speakingAvg >= 7 ? "BULLISH" : speakingAvg >= 5.5 ? "NEUTRAL" : "FOCUS")</span>
                         </div>
-                        <div class="asset-value">Band @(speakingAvg > 0 ? speakingAvg.ToString("0.0") : "—")</div>
+                        <div class="asset-value">Band @(hasSpeaking ? speakingAvg.ToString("0.0") : "—")</div>
                         <div class="asset-sub">TB @totalAttempts lần | Fluency & Lexical</div>
                     </div>
                 </div>
@@ -284,6 +284,10 @@
     private double readingAvg = 0;
     private double writingAvg = 0;
     private double speakingAvg = 0;
+    private bool hasListening = false;
+    private bool hasReading = false;
+    private bool hasWriting = false;
+    private bool hasSpeaking = false;
     private List<SubmissionSummaryDto> recentResults = new();
     private List<ReviewTask> reviewTasks = new();
 
@@ -305,12 +309,22 @@
                 var writing   = submissions.Where(s => s.Skill == "Writing").ToList();
                 var speaking  = submissions.Where(s => s.Skill == "Speaking").ToList();
 
-                listeningAvg = listening.Any() ? listening.Average(s => s.BandScore) : 0;
-                readingAvg   = reading.Any()   ? reading.Average(s => s.BandScore)   : 0;
-                writingAvg   = writing.Any()   ? writing.Average(s => s.BandScore)   : 0;
-                speakingAvg  = speaking.Any()  ? speaking.Average(s => s.BandScore)  : 0;
+                hasListening = listening.Any();
+                hasReading   = reading.Any();
+                hasWriting   = writing.Any();
+                hasSpeaking  = speaking.Any();
 
-                var scores = new[] { listeningAvg, readingAvg, writingAvg, speakingAvg }.Where(x => x > 0).ToList();
+                listeningAvg = hasListening ? listening.Average(s => s.BandScore) : 0;
+                readingAvg   = hasReading   ? reading.Average(s => s.BandScore)   : 0;
+                writingAvg   = hasWriting   ? writing.Average(s => s.BandScore)   : 0;
+                speakingAvg  = hasSpeaking  ? speaking.Average(s => s.BandScore)  : 0;
+
+                var scores = new List<double>();
+                if (hasListening) scores.Add(listeningAvg);
+                if (hasReading) scores.Add(readingAvg);
+                if (hasWriting) scores.Add(writingAvg);
+                if (hasSpeaking) scores.Add(speakingAvg);
+                
                 overallBand = scores.Any() ? Math.Round(scores.Average() * 2) / 2.0 : 0;
             }
         }
@@ -397,14 +411,13 @@
 
     private string GetWeakestSkill()
     {
-        var scores = new Dictionary<string, double>
-        {
-            ["Listening"] = listeningAvg,
-            ["Reading"]   = readingAvg,
-            ["Writing"]   = writingAvg,
-            ["Speaking"]  = speakingAvg
-        };
-        var valid = scores.Where(x => x.Value > 0).ToList();
+        var scores = new Dictionary<string, double>();
+        if (hasListening) scores["Listening"] = listeningAvg;
+        if (hasReading) scores["Reading"] = readingAvg;
+        if (hasWriting) scores["Writing"] = writingAvg;
+        if (hasSpeaking) scores["Speaking"] = speakingAvg;
+        
+        var valid = scores.ToList();
         return valid.Any() ? valid.OrderBy(x => x.Value).First().Key : "";
     }
 
@@ -437,7 +450,12 @@
 
     private double GetMinScore()
     {
-        var scores = new[] { listeningAvg, readingAvg, writingAvg, speakingAvg }.Where(x => x > 0).ToList();
+        var scores = new List<double>();
+        if (hasListening) scores.Add(listeningAvg);
+        if (hasReading) scores.Add(readingAvg);
+        if (hasWriting) scores.Add(writingAvg);
+        if (hasSpeaking) scores.Add(speakingAvg);
+        
         return scores.Any() ? scores.Min() : 0;
     }
 
