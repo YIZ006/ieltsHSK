@@ -77,7 +77,14 @@
                                     </div>
                                     @if (lSub != null)
                                     {
-                                        <span class="skill-score-badge">Band @(lSub.BandScore?.ToString("0.0") ?? lSub.Score?.Overall.ToString("0.0") ?? "—")</span>
+                                        @if (lSub.BandScore.HasValue && lSub.BandScore.Value > 0)
+                                        {
+                                            <span class="skill-score-badge">Band @lSub.BandScore.Value.ToString("0.0")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="skill-score-badge pending"><i class="bi bi-check-circle"></i> Đã làm</span>
+                                        }
                                     }
                                 </div>
                                 <div class="skill-btn-group">
@@ -104,7 +111,14 @@
                                     </div>
                                     @if (rSub != null)
                                     {
-                                        <span class="skill-score-badge">Band @(rSub.BandScore?.ToString("0.0") ?? rSub.Score?.Overall.ToString("0.0") ?? "—")</span>
+                                        @if (rSub.BandScore.HasValue && rSub.BandScore.Value > 0)
+                                        {
+                                            <span class="skill-score-badge">Band @rSub.BandScore.Value.ToString("0.0")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="skill-score-badge pending"><i class="bi bi-check-circle"></i> Đã làm</span>
+                                        }
                                     }
                                 </div>
                                 <div class="skill-btn-group">
@@ -165,9 +179,9 @@
                                     </div>
                                     @if (sSub != null)
                                     {
-                                        @if (sSub.Status == "Graded" && sSub.BandScore.HasValue)
+                                        @if ((sSub.Status == "Graded" || sSub.Status == "Scored") && (sSub.BandScore.HasValue || sSub.Score?.Overall > 0))
                                         {
-                                            <span class="skill-score-badge">Band @sSub.BandScore.Value.ToString("0.0")</span>
+                                            <span class="skill-score-badge">Band @((sSub.BandScore ?? sSub.Score?.Overall ?? 0).ToString("0.0"))</span>
                                         }
                                         else
                                         {
@@ -291,12 +305,11 @@
 
     private IeltsSubmissionRecord? GetLatestSub(string skill, string? examUrl, MockTestDto test)
     {
-        var normExam = ExamSubmissionService.NormalizeUrl(examUrl);
         return submissions
             .Where(s => string.Equals(s.Skill, skill, StringComparison.OrdinalIgnoreCase))
             .Where(s => 
                 (s.MockTestId.HasValue && s.MockTestId == test.Id) ||
-                (!string.IsNullOrEmpty(normExam) && ExamSubmissionService.NormalizeUrl(s.ExamUrl) == normExam) ||
+                ExamSubmissionService.IsUrlMatch(s.ExamUrl, examUrl) ||
                 (!string.IsNullOrWhiteSpace(s.TestTitle) && string.Equals(s.TestTitle, test.Title, StringComparison.OrdinalIgnoreCase)) ||
                 (!string.IsNullOrWhiteSpace(s.ExamTitle) && (
                     string.Equals(s.ExamTitle, test.Title, StringComparison.OrdinalIgnoreCase) ||
