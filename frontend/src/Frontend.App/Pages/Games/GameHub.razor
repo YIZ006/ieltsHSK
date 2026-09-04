@@ -1,0 +1,2334 @@
+@page "/games"
+@page "/tro-choi"
+@page "/ielts/games"
+@page "/ielts/tro-choi"
+@page "/toeic/games"
+@page "/toeic/tro-choi"
+@page "/hsk/games"
+@page "/hsk/tro-choi"
+@layout Frontend.App.Layout.MainLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject IeltsService IeltsService
+@inject HskService HskSvc
+@inject ProfileService ProfileSvc
+@inject IJSRuntime JS
+@inject NavigationManager NavManager
+@implements IDisposable
+
+<PageTitle>Đấu Trường Trò Chơi Học Tập - ieltsHSK</PageTitle>
+
+<div class="game-hub-page">
+    <!-- Header Banner -->
+    <div class="game-hub-header">
+        <div class="header-left">
+            <div class="hub-badge">
+                <i class="bi bi-controller"></i> ARCADE ZONE
+            </div>
+            <h1>Đấu Trường Trò Chơi Học Tập</h1>
+            <p>Khám phá các trò chơi ngôn ngữ tương tác, thử thách tư duy phản xạ và củng cố vốn từ vựng học thuật một cách cuốn hút nhất.</p>
+        </div>
+
+        <div class="hub-quick-stats">
+            <div class="quick-stat-item">
+                <div class="stat-num">@wordleScore</div>
+                <div class="stat-lbl"><i class="bi bi-star-fill"></i> Điểm Wordle</div>
+            </div>
+            <div class="quick-stat-item">
+                <div class="stat-num">@wordleStreak</div>
+                <div class="stat-lbl"><i class="bi bi-fire"></i> Chuỗi Thắng</div>
+            </div>
+            <div class="quick-stat-item">
+                <div class="stat-num">@vocabPool.Count</div>
+                <div class="stat-lbl"><i class="bi bi-book-half"></i> Kho Từ Vựng</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gallery Section -->
+    <div class="section-title-row">
+        <h2><i class="bi bi-controller me-2"></i>Kho Trò Chơi Học Thuật</h2>
+        <span class="text-muted">Bấm vào bất kỳ trò chơi nào để xem luật chơi và khởi động toàn màn hình</span>
+    </div>
+
+    <div class="games-gallery">
+        <!-- Game 1: IELTS Wordle -->
+        <div class="game-card featured" @onclick='() => OpenGameInfo("wordle")'>
+            <div class="card-badge">HOT • IELTS & TOEIC</div>
+            <div class="card-icon-bubble wordle-bubble">
+                <i class="bi bi-puzzle-fill"></i>
+            </div>
+            <h3>IELTS Wordle: Mật Thư Ngữ Cảnh</h3>
+            <p>Đoán từ vựng học thuật trong 6 lượt qua câu ngữ cảnh khuyết từ, nghĩa tiếng Việt và manh mối ký tự theo phong cách Wordle kinh điển.</p>
+            <div class="card-tags">
+                <span><i class="bi bi-bullseye"></i> 6 lượt đoán</span>
+                <span><i class="bi bi-chat-quote"></i> Câu ngữ cảnh</span>
+                <span><i class="bi bi-award-fill text-warning"></i> +30 XP</span>
+            </div>
+            <button class="btn-play-card" @onclick:stopPropagation="true" @onclick='() => OpenGameInfo("wordle")'>
+                <i class="bi bi-info-circle-fill"></i> Xem cách chơi & Bắt đầu
+            </button>
+        </div>
+
+        <!-- Game 2: HSK Vocab Shooter -->
+        <div class="game-card hsk-card" @onclick='() => OpenGameInfo("hsk-shooter")'>
+            <div class="card-badge hsk-badge">HSK 1-6 • PHẢN XẠ NHANH</div>
+            <div class="card-icon-bubble hsk-bubble">
+                <i class="bi bi-crosshair"></i>
+            </div>
+            <h3>Máy Bay Bắn Từ Vựng HSK</h3>
+            <p>Gõ pinyin siêu tốc để phóng laser bắn hạ các từ vựng chữ Hán đang rơi từ trên cao xuống trước khi chạm đáy phi thuyền.</p>
+            <div class="card-tags">
+                <span><i class="bi bi-airplane-fill"></i> Game Arcade</span>
+                <span><i class="bi bi-spellcheck"></i> HSK 1 - HSK 6</span>
+                <span><i class="bi bi-heart-fill text-danger"></i> 5 Mạng</span>
+            </div>
+            <button class="btn-play-card hsk-btn-card" @onclick:stopPropagation="true" @onclick='() => OpenGameInfo("hsk-shooter")'>
+                <i class="bi bi-info-circle-fill"></i> Xem cách chơi & Bắt đầu
+            </button>
+        </div>
+
+        <!-- Game 3: Collocation Rush -->
+        <div class="game-card coming-soon">
+            <div class="card-badge soon-badge">SẮP RA MẮT</div>
+            <div class="card-icon-bubble soon-bubble">
+                <i class="bi bi-shuffle"></i>
+            </div>
+            <h3>Collocation Rush: Băng Chuyền Cụm Từ</h3>
+            <p>Nối nhanh các cụm từ đi liền với nhau (make / do / take / pay) theo nhịp băng chuyền để nâng band Lexical Resource.</p>
+            <div class="card-tags">
+                <span><i class="bi bi-hourglass-split"></i> Đang hoàn thiện</span>
+                <span><i class="bi bi-book"></i> Collocations</span>
+            </div>
+            <button class="btn-play-card disabled" disabled>
+                <i class="bi bi-lock-fill"></i> Sắp ra mắt
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================================
+     MODAL 1: GAME INFO & HOW-TO-PLAY (THÔNG TIN & HƯỚNG DẪN CÁCH CHƠI)
+     ===================================================================== -->
+@if (selectedGameForInfo == "wordle")
+{
+    <div class="modal-backdrop" @onclick="CloseGameInfo">
+        <div class="game-info-modal" @onclick:stopPropagation="true">
+            <button class="btn-close-modal-top" @onclick="CloseGameInfo" title="Đóng">
+                <i class="bi bi-x-lg"></i>
+            </button>
+
+            <div class="info-header">
+                <div class="info-icon-bubble wordle-bubble">
+                    <i class="bi bi-puzzle-fill"></i>
+                </div>
+                <div>
+                    <span class="info-tag">IELTS & TOEIC • TRÍ TUỆ</span>
+                    <h2>IELTS Wordle: Mật Thư Ngữ Cảnh</h2>
+                    <p class="info-sub">Giải mã từ vựng học thuật bằng tư duy phản biện và suy luận ngữ cảnh</p>
+                </div>
+            </div>
+
+            <div class="how-to-play-section">
+                <h4><i class="bi bi-lightbulb text-warning me-2"></i>Hướng Dẫn Cách Chơi</h4>
+                
+                <div class="rules-grid">
+                    <div class="rule-box">
+                        <div class="rule-badge">1</div>
+                        <div class="rule-content">
+                            <strong>Đọc manh mối:</strong> Quan sát <b>Nghĩa tiếng Việt</b>, từ loại, cấp độ CEFR và đặc biệt là <b>Câu ví dụ khuyết từ</b> để phán đoán từ vựng.
+                        </div>
+                    </div>
+                    <div class="rule-box">
+                        <div class="rule-badge">2</div>
+                        <div class="rule-content">
+                            <strong>Đoán từ trong 6 lượt:</strong> Nhập từ có đúng số lượng ô chữ cái từ bàn phím máy tính hoặc bàn phím ảo rồi nhấn <b>ENTER</b>.
+                        </div>
+                    </div>
+                    <div class="rule-box">
+                        <div class="rule-badge">3</div>
+                        <div class="rule-content">
+                            <strong>Nhận biết màu sắc ô chữ:</strong>
+                            <div class="color-demo-row mt-2">
+                                <span class="demo-cell correct">A</span> Đúng chữ, đúng vị trí
+                            </div>
+                            <div class="color-demo-row">
+                                <span class="demo-cell present">B</span> Có trong từ nhưng sai vị trí
+                            </div>
+                            <div class="color-demo-row">
+                                <span class="demo-cell absent">C</span> Không có trong từ
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rule-box">
+                        <div class="rule-badge">4</div>
+                        <div class="rule-content">
+                            <strong>Gợi ý thông minh 💡:</strong> Nếu gặp khó, hãy bấm nút <b>Gợi ý chữ</b>. Hệ thống sẽ chỉ mở những chữ cái bạn <b>CHƯA đoán đúng</b>!
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Difficulty & CEFR selection -->
+                <div class="info-options-box">
+                    <label class="options-label"><i class="bi bi-bar-chart-steps me-2"></i>Độ Khó CEFR (Kho Từ Import):</label>
+                    <div class="cefr-btn-group">
+                        <button class="cefr-chip @(selectedCefr == "all" ? "active" : "")" @onclick='() => { selectedCefr = "all"; ApplyDifficultyFilter(); }'>
+                            Tất cả (A2 - C1)
+                        </button>
+                        <button class="cefr-chip @(selectedCefr == "A2" ? "active" : "")" @onclick='() => { selectedCefr = "A2"; ApplyDifficultyFilter(); }'>
+                            A2 (Cơ bản)
+                        </button>
+                        <button class="cefr-chip @(selectedCefr == "B1" ? "active" : "")" @onclick='() => { selectedCefr = "B1"; ApplyDifficultyFilter(); }'>
+                            B1 (Tiền trung cấp)
+                        </button>
+                        <button class="cefr-chip @(selectedCefr == "B2" ? "active" : "")" @onclick='() => { selectedCefr = "B2"; ApplyDifficultyFilter(); }'>
+                            B2 (Trung cấp)
+                        </button>
+                        <button class="cefr-chip @(selectedCefr == "C1" ? "active" : "")" @onclick='() => { selectedCefr = "C1"; ApplyDifficultyFilter(); }'>
+                            C1 (Nâng cao)
+                        </button>
+                    </div>
+
+                    <label class="options-label mt-3"><i class="bi bi-fonts me-2"></i>Số Lượng Chữ Cái Trong Từ (Cố định):</label>
+                    <div class="diff-btn-group">
+                        <button class="diff-btn @(selectedWordLength == "5" ? "active" : "")" @onclick='() => { selectedWordLength = "5"; ApplyDifficultyFilter(); }'>
+                            5 Chữ (Chuẩn Wordle ⭐)
+                        </button>
+                        <button class="diff-btn @(selectedWordLength == "4" ? "active" : "")" @onclick='() => { selectedWordLength = "4"; ApplyDifficultyFilter(); }'>
+                            4 Chữ (Dễ)
+                        </button>
+                        <button class="diff-btn @(selectedWordLength == "6" ? "active" : "")" @onclick='() => { selectedWordLength = "6"; ApplyDifficultyFilter(); }'>
+                            6 Chữ (Vừa)
+                        </button>
+                        <button class="diff-btn @(selectedWordLength == "7" ? "active" : "")" @onclick='() => { selectedWordLength = "7"; ApplyDifficultyFilter(); }'>
+                            7 Chữ (Khó)
+                        </button>
+                        <button class="diff-btn @(selectedWordLength == "all" ? "active" : "")" @onclick='() => { selectedWordLength = "all"; ApplyDifficultyFilter(); }'>
+                            Ngẫu nhiên (4 - 7 chữ)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-actions">
+                <button class="btn-start-game-big" @onclick="StartWordleGame">
+                    <i class="bi bi-arrows-fullscreen me-2"></i> CHƠI TOÀN MÀN HÌNH
+                </button>
+                <button class="btn-cancel-game" @onclick="CloseGameInfo">
+                    Quay lại
+                </button>
+            </div>
+        </div>
+    </div>
+}
+else if (selectedGameForInfo == "hsk-shooter")
+{
+    <div class="modal-backdrop" @onclick="CloseGameInfo">
+        <div class="game-info-modal" @onclick:stopPropagation="true">
+            <button class="btn-close-modal-top" @onclick="CloseGameInfo" title="Đóng">
+                <i class="bi bi-x-lg"></i>
+            </button>
+
+            <div class="info-header">
+                <div class="info-icon-bubble hsk-bubble">
+                    <i class="bi bi-crosshair"></i>
+                </div>
+                <div>
+                    <span class="info-tag hsk-tag">HSK 1 - 6 • ARCADE</span>
+                    <h2>Máy Bay Bắn Từ Vựng HSK</h2>
+                    <p class="info-sub">Gõ pinyin thần tốc để bảo vệ phi thuyền trước mưa từ vựng chữ Hán</p>
+                </div>
+            </div>
+
+            <div class="how-to-play-section">
+                <h4><i class="bi bi-lightbulb text-warning me-2"></i>Hướng Dẫn Cách Chơi</h4>
+                <div class="rules-grid">
+                    <div class="rule-box">
+                        <div class="rule-badge">1</div>
+                        <div class="rule-content">
+                            <strong>Từ vựng rơi xuống:</strong> Các từ chữ Hán kèm pinyin sẽ rơi dần từ đỉnh màn hình xuống căn cứ.
+                        </div>
+                    </div>
+                    <div class="rule-box">
+                        <div class="rule-badge">2</div>
+                        <div class="rule-content">
+                            <strong>Gõ Pinyin:</strong> Gõ đúng chữ cái pinyin (không cần dấu thanh điệu) để kích hoạt pháo laser bắn nổ từ vựng.
+                        </div>
+                    </div>
+                    <div class="rule-box">
+                        <div class="rule-badge">3</div>
+                        <div class="rule-content">
+                            <strong>Bảo toàn mạng sống:</strong> Mỗi từ chạm đáy sẽ làm mất 1 mạng (<span class="text-danger">❤</span>). Bạn có 5 mạng trong mỗi ván!
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Level selection -->
+                <div class="info-options-box">
+                    <label class="options-label"><i class="bi bi-bar-chart-steps me-2"></i>Chọn Cấp Độ HSK Mục Tiêu:</label>
+                    <div class="diff-btn-group">
+                        @for (int i = 1; i <= 6; i++)
+                        {
+                            var lvl = $"HSK{i}";
+                            <button class="diff-btn @(hskShooterSelectedLevel == lvl ? "active" : "")" @onclick="() => hskShooterSelectedLevel = lvl">
+                                @lvl
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-actions">
+                <button class="btn-start-game-big hsk-btn" @onclick="StartHskShooterGame">
+                    <i class="bi bi-arrows-fullscreen me-2"></i> CHƠI TOÀN MÀN HÌNH
+                </button>
+                <button class="btn-cancel-game" @onclick="CloseGameInfo">
+                    Quay lại
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- =====================================================================
+     MODAL 2: FULLSCREEN IELTS WORDLE GAME WINDOW
+     ===================================================================== -->
+@if (isPlayingWordle)
+{
+    <div class="fullscreen-game-overlay" @ref="wordleOverlayRef" @onkeydown="HandleKeyDown" tabindex="0" @onclick="FocusWordle">
+        <!-- Topbar -->
+        <header class="fullscreen-topbar">
+            <div class="topbar-left">
+                <div class="fs-game-badge">
+                    <i class="bi bi-puzzle-fill text-success"></i> IELTS WORDLE
+                </div>
+                <span class="fs-game-title">Mật Thư Ngữ Cảnh</span>
+            </div>
+
+            <div class="topbar-center">
+                <span class="fs-stat-pill text-warning"><i class="bi bi-star-fill"></i> Điểm: <b>@wordleScore</b></span>
+                <span class="fs-stat-pill text-danger"><i class="bi bi-fire"></i> Chuỗi: <b>@wordleStreak</b> 🔥</span>
+                <span class="fs-stat-pill text-info"><i class="bi bi-bullseye"></i> Lượt: <b>@(currentGuessIndex + 1)/@MaxGuesses</b></span>
+            </div>
+
+            <div class="topbar-right">
+                <button class="btn-fs-tool" @onclick="NextWord" title="Đổi từ vựng khác">
+                    <i class="bi bi-arrow-clockwise"></i> Đổi từ
+                </button>
+                <button class="btn-fs-exit" @onclick="CloseWordleGame" title="Thoát trò chơi">
+                    <i class="bi bi-x-lg me-1"></i> Thoát
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Body -->
+        <main class="fullscreen-game-body">
+            @if (currentWord == null)
+            {
+                <div class="fs-loading-box">
+                    <div class="spinner"></div>
+                    <p>Đang chuẩn bị từ vựng...</p>
+                </div>
+            }
+            else
+            {
+                <div class="wordle-desktop-layout">
+                    <!-- Left column: Clues & Context -->
+                    <div class="wordle-clue-column">
+                        <div class="clue-panel">
+                            <div class="clue-tags-row">
+                                <span class="badge-pos">@(string.IsNullOrWhiteSpace(currentWord.PartOfSpeech) ? "TỪ VỰNG" : currentWord.PartOfSpeech.ToUpperInvariant())</span>
+                                @if (!string.IsNullOrWhiteSpace(currentWord.CefrLevel))
+                                {
+                                    <span class="badge-cefr">CEFR @currentWord.CefrLevel.ToUpperInvariant()</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(currentWord.Topic))
+                                {
+                                    <span class="badge-topic"><i class="bi bi-tag-fill"></i> @currentWord.Topic</span>
+                                }
+                                <span class="badge-len"><i class="bi bi-fonts"></i> @WordLength chữ cái</span>
+                            </div>
+
+                            <div class="clue-meaning-card">
+                                <div class="meaning-lbl"><i class="bi bi-translate text-success me-2"></i>Nghĩa tiếng Việt:</div>
+                                <div class="meaning-txt">@currentWord.Meaning</div>
+                            </div>
+
+                            @if (hintLetterIndices.Count > 0)
+                            {
+                                <div class="hints-active-box">
+                                    <i class="bi bi-lightbulb-fill text-warning me-2"></i>
+                                    <span>Manh mối đã mở:</span>
+                                    @foreach (var kvp in hintLetterIndices.OrderBy(k => k.Key))
+                                    {
+                                        <span class="hint-char-chip">Ô @(kvp.Key + 1): <b>@kvp.Value</b></span>
+                                    }
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(ContextSentence))
+                            {
+                                <div class="clue-sentence-card">
+                                    <div class="sent-lbl"><i class="bi bi-chat-quote-fill text-info me-2"></i>Câu ngữ cảnh:</div>
+                                    <div class="sent-en-txt">
+                                        @((MarkupString)FormattedSentenceHtml)
+                                    </div>
+                                    @if (showSentenceTranslation && !string.IsNullOrWhiteSpace(currentWord.ExampleMeaning))
+                                    {
+                                        <div class="sent-vi-txt">
+                                            <i class="bi bi-arrow-return-right me-1 text-muted"></i> @currentWord.ExampleMeaning
+                                        </div>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(currentWord.ExampleMeaning))
+                                    {
+                                        <button class="btn-toggle-trans" @onclick="() => showSentenceTranslation = true">
+                                            <i class="bi bi-eye"></i> Xem bản dịch câu
+                                        </button>
+                                    }
+                                </div>
+                            }
+
+                            <div class="clue-helper-actions">
+                                <button class="btn-action-hint" @onclick="UseLetterHint" disabled="@isGameOver" title="Gợi ý chữ cái chưa đoán đúng (Phím tắt: 1)">
+                                    <i class="bi bi-lightbulb-fill text-warning"></i> Gợi ý chữ
+                                    <span class="kbd-badge-sm">1</span>
+                                </button>
+                                <button class="btn-action-sound" @onclick="PronounceWord" title="Nghe phát âm (Phím tắt: 2)">
+                                    <i class="bi bi-volume-up-fill text-info"></i> Phát âm
+                                    <span class="kbd-badge-sm">2</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right column: Grid & Keyboard -->
+                    <div class="wordle-board-column">
+                        <!-- Wordle Grid -->
+                        <div class="fullscreen-grid-wrapper">
+                            <div class="wordle-grid">
+                                @for (int r = 0; r < MaxGuesses; r++)
+                                {
+                                    var rowIndex = r;
+                                    var rowGuess = rowIndex < guesses.Count ? guesses[rowIndex] : (rowIndex == currentGuessIndex ? currentInput : "");
+                                    var rowEvaluations = rowIndex < guessEvaluations.Count ? guessEvaluations[rowIndex] : null;
+
+                                    <div class="wordle-row @(rowIndex == currentGuessIndex && shakeCurrentRow ? "shake" : "")">
+                                        @for (int c = 0; c < WordLength; c++)
+                                        {
+                                            var colIndex = c;
+                                            var letter = colIndex < rowGuess.Length ? rowGuess[colIndex].ToString().ToUpperInvariant() : "";
+                                            var evalStatus = rowEvaluations != null && colIndex < rowEvaluations.Count ? rowEvaluations[colIndex] : "empty";
+
+                                            <div class="wordle-cell @evalStatus @(!string.IsNullOrEmpty(letter) && evalStatus == "empty" ? "pop" : "")">
+                                                @letter
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Toast Notification -->
+                        @if (!string.IsNullOrEmpty(toastMessage))
+                        {
+                            <div class="fs-toast-alert">
+                                @toastMessage
+                            </div>
+                        }
+
+                        <!-- Virtual Keyboard -->
+                        <div class="fullscreen-keyboard">
+                            <div class="keyboard-row">
+                                @foreach (var key in KeyRow1)
+                                {
+                                    <button class="key-btn @GetKeyClass(key)" @onclick="() => OnVirtualKeyPress(key)">@key</button>
+                                }
+                            </div>
+                            <div class="keyboard-row">
+                                @foreach (var key in KeyRow2)
+                                {
+                                    <button class="key-btn @GetKeyClass(key)" @onclick="() => OnVirtualKeyPress(key)">@key</button>
+                                }
+                            </div>
+                            <div class="keyboard-row">
+                                <button class="key-btn key-enter" @onclick='() => OnVirtualKeyPress("ENTER")'>ENTER</button>
+                                @foreach (var key in KeyRow3)
+                                {
+                                    <button class="key-btn @GetKeyClass(key)" @onclick="() => OnVirtualKeyPress(key)">@key</button>
+                                }
+                                <button class="key-btn key-backspace" @onclick='() => OnVirtualKeyPress("BACKSPACE")'>
+                                    <i class="bi bi-backspace"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Victory / Loss Modal inside Fullscreen -->
+            @if (showResultModal && currentWord != null)
+            {
+                <div class="fs-modal-backdrop" @onclick="() => showResultModal = false" tabindex="0" @onkeydown="HandleKeyDown">
+                    <div class="fs-result-card @(isGameWon ? "won" : "lost")" @onclick:stopPropagation="true" tabindex="0" @onkeydown="HandleKeyDown">
+                        @if (isGameWon)
+                        {
+                            <span class="res-trophy">🏆</span>
+                            <h2>XUẤT SẮC! BẠN ĐÃ GIẢI MÃ THÀNH CÔNG</h2>
+                            <p class="res-subtitle">Đoán đúng ở lượt thứ <b>@(guesses.Count)/@MaxGuesses</b> • Nhận <b>+30 XP</b></p>
+                        }
+                        else
+                        {
+                            <span class="res-trophy lost">💡</span>
+                            <h2>HẾT LƯỢT ĐOÁN!</h2>
+                            <p class="res-subtitle">Từ vựng bí ẩn đã được giải mã bên dưới</p>
+                        }
+
+                        <div class="res-summary-box">
+                            <div class="res-word-row">
+                                <span class="rw-word">@currentWord.Word.ToUpperInvariant()</span>
+                                <button class="btn-res-audio" @onclick="PronounceWord" title="Nghe phát âm">
+                                    <i class="bi bi-volume-up-fill"></i>
+                                </button>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(currentWord.Phonetic))
+                            {
+                                <div class="rw-phonetic">@currentWord.Phonetic</div>
+                            }
+                            <div class="rw-meaning">
+                                <strong>Nghĩa:</strong> @currentWord.Meaning
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(currentWord.Example))
+                            {
+                                <div class="rw-example">
+                                    <div class="ex-en">“@currentWord.Example”</div>
+                                    @if (!string.IsNullOrWhiteSpace(currentWord.ExampleMeaning))
+                                    {
+                                        <div class="ex-vi">@currentWord.ExampleMeaning</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <div class="res-action-buttons">
+                            <button class="btn-res-next-big" @onclick="NextWord" autofocus>
+                                Từ tiếp theo <span class="kbd-badge">Enter ↵</span> <i class="bi bi-arrow-right"></i>
+                            </button>
+                            <button class="btn-res-exit-sub" @onclick="CloseWordleGame">
+                                Thoát ra danh sách trò chơi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </main>
+    </div>
+}
+
+<!-- =====================================================================
+     MODAL 3: FULLSCREEN HSK SHOOTER GAME WINDOW (STAGE SYSTEM)
+     ===================================================================== -->
+@if (isPlayingHskShooter)
+{
+    <div class="fullscreen-game-overlay hsk-game-overlay @(IsHskGamePaused ? "is-paused" : "")" @ref="hskOverlayRef" tabindex="0" @onkeydown="HandleHskKeyDown" @onclick="FocusHskOnBackgroundClick">
+        <!-- Topbar -->
+        <header class="fullscreen-topbar hsk-topbar">
+            <div class="topbar-left">
+                <div class="fs-game-badge hsk-badge-pill">
+                    <i class="bi bi-crosshair"></i> HSK SHOOTER
+                </div>
+                <span class="fs-game-title">Cấp độ: <b>@hskShooterSelectedLevel</b></span>
+                @if (hskShooterState == HskGameState.Playing || hskShooterState == HskGameState.Paused)
+                {
+                    <button type="button" class="hsk-stage-badge-btn @(_currentStageIndex == _totalStages - 1 ? "boss-stage" : "")" @onclick="OpenStageMap" title="Xem bản đồ tầng (Tạm dừng game)">
+                        <span class="topbar-user-avt" style="background: @_userAvatarColor" title="@_userDisplayName">@_userAvatarEmoji</span>
+                        <span>Tầng @(_currentStageIndex + 1)/@_totalStages</span>
+                    </button>
+                }
+            </div>
+
+            <div class="topbar-center">
+                <span class="fs-stat-pill text-warning"><i class="bi bi-star-fill"></i> Điểm: <b>@hskScore</b></span>
+                <span class="fs-stat-pill text-danger"><i class="bi bi-heart-fill"></i> Mạng: <b>@Math.Max(0, hskLives) ❤</b></span>
+                <span class="fs-stat-pill text-info"><i class="bi bi-bullseye"></i> Đã bắn: <b>@hskWordsShot</b></span>
+                @if (hskCombo >= 2)
+                {
+                    <span class="fs-stat-pill hsk-combo-pill"><i class="bi bi-fire"></i> Combo <b>x@(hskCombo)</b></span>
+                }
+            </div>
+
+            <div class="topbar-right">
+                <button class="btn-bgm @(_isBgmOn ? "active" : "")" @onclick="ToggleBgm" title="Bật/Tắt Nhạc Nền (Phím 1)">
+                    <i class="bi @(_isBgmOn ? "bi-music-note-beamed" : "bi-volume-mute-fill")"></i>
+                    @(_isBgmOn ? "Nhạc: BẬT" : "Nhạc: TẮT")
+                    <span class="kbd-badge-sm">1</span>
+                </button>
+                <button class="btn-pinyin-toggle @(!_showPinyin ? "pinyin-off" : "")" @onclick="TogglePinyin" title="Bật/Tắt hiển thị Pinyin gợi ý (Phím 2)">
+                    <i class="bi @(_showPinyin ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                    @(_showPinyin ? "Ẩn Pinyin" : "Hiện Pinyin")
+                    <span class="kbd-badge-sm">2</span>
+                </button>
+                <button class="btn-fs-tool" @onclick="ToggleHskPause" title="Tạm dừng / Tiếp tục (Phím 3)">
+                    <i class="bi @(hskShooterState == HskGameState.Paused ? "bi-play-fill" : "bi-pause-fill")"></i>
+                    @(hskShooterState == HskGameState.Paused ? "Tiếp tục" : "Tạm dừng")
+                    <span class="kbd-badge-sm">3</span>
+                </button>
+                <button class="btn-fs-exit" @onclick="CloseHskShooterGame" title="Thoát trò chơi (Phím Esc)">
+                    <i class="bi bi-x-lg me-1"></i> Thoát
+                    <span class="kbd-badge-sm">Esc</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Shooter Battlefield -->
+        <main class="hsk-battlefield @(IsHskGamePaused ? "is-paused" : "")" @onclick="FocusHskInput">
+            <!-- Corner Floating Map Button in Battlefield -->
+            @if (hskShooterState == HskGameState.Playing || hskShooterState == HskGameState.Paused)
+            {
+                <button type="button" class="hsk-corner-map-fab" @onclick="OpenStageMap" @onclick:stopPropagation="true" title="Xem bản đồ tháp tầng (Tạm dừng game)">
+                    <div class="fab-user-avatar" style="background: @_userAvatarColor" title="@_userDisplayName - Tầng @(_currentStageIndex + 1)">
+                        <span>@_userAvatarEmoji</span>
+                        <span class="fab-avatar-online"></span>
+                    </div>
+                    <span class="fab-text">
+                        <span class="fab-title">BẢN ĐỒ TẦNG</span>
+                        <span class="fab-stage">Tầng @(_currentStageIndex + 1)/@_totalStages</span>
+                    </span>
+                </button>
+            }
+
+            <!-- Damage Flash overlay -->
+            @if (showDamageFlash)
+            {
+                <div class="hsk-damage-flash"></div>
+            }
+
+            <!-- Floating Flaming Combo Banner -->
+            @if (hskCombo >= 2)
+            {
+                <div class="hsk-combo-banner">
+                    <span class="combo-fire">🔥</span>
+                    <span class="combo-count">@hskCombo</span>
+                    <span class="combo-text">COMBO!</span>
+                </div>
+            }
+
+            <!-- Stage Progress Bar -->
+            @if (hskShooterState == HskGameState.Playing || hskShooterState == HskGameState.Paused)
+            {
+                <div class="hsk-stage-progress-bar">
+                    <div class="hsk-stage-progress-fill" style="width: @((double)hskWordsShotInStage / Math.Max(1, _currentStageTotalWords) * 100)%"></div>
+                </div>
+            }
+
+            <!-- Falling Words (Only Hanzi by default) -->
+            @foreach (var word in hskActiveWords)
+            {
+                <div @key="word.Key" class="falling-word @(word.IsDestroyed ? "destroyed" : "") @(IsHskTargeted(word) ? "targeted" : "") @(IsHskGamePaused ? "paused-anim" : "")"
+                     style="--fall-duration: @(word.FallDurationCss)s; --x-pos: @(word.XPercentCss)%; @(IsHskGamePaused ? "animation-play-state: paused;" : "")">
+                    <span class="word-hanzi">@word.Vocab.Hanzi</span>
+                    @if (_showPinyin)
+                    {
+                        <span class="word-pinyin">@word.Vocab.Pinyin</span>
+                    }
+                </div>
+            }
+
+            <!-- Laser Bullets (Đạn bắn vào từ vựng) -->
+            @foreach (var bullet in hskBullets)
+            {
+                <div class="hsk-bullet @(IsHskGamePaused ? "paused-anim" : "")"
+                     style="--start-x: @(bullet.StartXCss)%; --start-y: @(bullet.StartYCss)%; --target-x: @(bullet.TargetXCss)%; --target-y: @(bullet.TargetYCss)%; @(IsHskGamePaused ? "animation-play-state: paused;" : "")">
+                    <div class="bullet-bolt"></div>
+                </div>
+            }
+
+            <!-- Impact Explosions (Va chạm nổ từ vựng) -->
+            @foreach (var impact in hskImpacts)
+            {
+                <div class="hsk-impact-burst @(IsHskGamePaused ? "paused-anim" : "")"
+                     style="--target-x: @(impact.XCss)%; --target-y: @(impact.YCss)%; @(IsHskGamePaused ? "animation-play-state: paused;" : "")">
+                    <div class="impact-ring"></div>
+                    <span class="impact-flash">💥</span>
+                </div>
+            }
+
+            <!-- Airplane -->
+            @if (hskShooterState == HskGameState.Playing || hskShooterState == HskGameState.Paused)
+            {
+                <div class="hsk-airplane"><i class="bi bi-airplane-fill"></i></div>
+            }
+
+            <!-- In-game Realtime Missed Alert Toast (Hiện đáp án từ vừa bỏ lỡ để cải thiện) -->
+            @if (_showMissedBanner && _lastMissedVocab != null)
+            {
+                <div class="hsk-missed-alert-banner">
+                    <span class="missed-tag">❌ BỎ LỠ</span>
+                    <span class="missed-hanzi">@_lastMissedVocab.Hanzi</span>
+                    <span class="missed-pinyin">[@_lastMissedVocab.Pinyin]</span>
+                    <span class="missed-meaning">— @_lastMissedVocab.Meaning</span>
+                </div>
+            }
+
+            <!-- Pinyin Input -->
+            @if (hskShooterState == HskGameState.Playing && !_showStageComplete && !_showStageMap)
+            {
+                <div class="hsk-input-dock" @onclick:stopPropagation="true">
+                    <input @ref="hskInputRef" type="text" @bind="hskInputValue" @bind:event="oninput"
+                           @onkeydown="HandleInputKeyDown"
+                           @onkeydown:stopPropagation="true"
+                           placeholder="Gõ pinyin bắn từ vựng rơi..." autocomplete="off" spellcheck="false" autofocus />
+                </div>
+            }
+
+            <!-- Paused Screen -->
+            @if (hskShooterState == HskGameState.Paused && !_showStageMap)
+            {
+                <div class="hsk-dialog-card">
+                    <h2><i class="bi bi-pause-circle-fill text-warning me-2"></i>TẠM DỪNG</h2>
+                    <p>Trò chơi đang tạm dừng. Hãy bấm Tiếp tục khi bạn sẵn sàng!</p>
+                    <div class="hsk-dialog-btns">
+                        <button class="btn-hsk-resume" @onclick="ToggleHskPause">Tiếp tục chơi</button>
+                        <button class="btn-hsk-quit" @onclick="CloseHskShooterGame">Thoát ra ngoài</button>
+                    </div>
+                </div>
+            }
+
+            <!-- Game Over Screen -->
+            @if (hskShooterState == HskGameState.GameOver)
+            {
+                <div class="hsk-dialog-card gameover">
+                    <h2><i class="bi bi-award-fill text-warning me-2"></i>KẾT THÚC!</h2>
+                    <p>Bạn đã để lọt quá nhiều từ vựng.</p>
+                    <div class="hsk-score-grid">
+                        <div class="hsk-score-box">
+                            <div class="val text-warning">@hskScore</div>
+                            <div class="lbl">Tổng Điểm</div>
+                        </div>
+                        <div class="hsk-score-box">
+                            <div class="val text-success">@hskWordsShot</div>
+                            <div class="lbl">Từ Bắn Được</div>
+                        </div>
+                        <div class="hsk-score-box">
+                            <div class="val text-info">@hskNewLearned</div>
+                            <div class="lbl">Từ Thuộc Mới</div>
+                        </div>
+                    </div>
+
+                    @if (_missedWordsInStage.Count > 0)
+                    {
+                        <div class="hsk-review-section">
+                            <div class="review-header">
+                                <i class="bi bi-lightbulb-fill text-warning me-2"></i>
+                                <b>Đáp án các từ đã bỏ lỡ (để ôn tập cải thiện):</b>
+                            </div>
+                            <div class="review-items-scroll">
+                                @foreach (var m in _missedWordsInStage.DistinctBy(x => x.Id))
+                                {
+                                    <div class="review-item">
+                                        <b class="review-hanzi">@m.Hanzi</b>
+                                        <span class="review-pinyin">[@m.Pinyin]</span>
+                                        <span class="review-meaning">— @m.Meaning</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <div class="hsk-dialog-btns">
+                        <button class="btn-hsk-resume" @onclick="() => LoadStage(_currentStageIndex)" autofocus>Chơi lại tầng @(_currentStageIndex + 1) <span class="kbd-badge">Enter ↵</span></button>
+                        <button class="btn-hsk-quit" @onclick="CloseHskShooterGame">Thoát ra danh sách game</button>
+                    </div>
+                </div>
+            }
+
+            <!-- Stage Complete Overlay -->
+            @if (_showStageComplete)
+            {
+                <div class="hsk-stage-complete-overlay" tabindex="0" @onkeydown="HandleHskKeyDown" @onclick:stopPropagation="true">
+                    <div class="hsk-stage-complete-card">
+                        <div class="stage-complete-trophy">@(_currentStageIndex == _totalStages - 1 ? "🏆" : "⭐")</div>
+                        <h2>🎉 XUẤT SẮC QUA MÀN! HOÀN THÀNH TẦNG @(_currentStageIndex + 1)!</h2>
+                        <p>@(_currentStageIndex == _totalStages - 1 ? "Tuyệt vời! Bạn đã chinh phục toàn bộ cấp độ này." : "Chuẩn bị tiến vào tầng tiếp theo với độ khó tăng dần.")</p>
+                        
+                        <div class="stage-complete-stats">
+                            <div class="stage-stat-pill">
+                                <div class="val text-success">@hskWordsShotInStage</div>
+                                <div class="lbl">Từ đã bắn</div>
+                            </div>
+                            <div class="stage-stat-pill">
+                                <div class="val text-danger">@Math.Max(0, hskLives)</div>
+                                <div class="lbl">Mạng còn</div>
+                            </div>
+                            <div class="stage-stat-pill">
+                                <div class="val text-warning">@hskScore</div>
+                                <div class="lbl">Tổng điểm</div>
+                            </div>
+                        </div>
+
+                        @if (_missedWordsInStage.Count > 0)
+                        {
+                            <div class="hsk-review-section">
+                                <div class="review-header">
+                                    <i class="bi bi-lightbulb-fill text-warning me-2"></i>
+                                    <b>Đáp án các từ đã bỏ lỡ trong tầng này:</b>
+                                </div>
+                                <div class="review-items-scroll">
+                                    @foreach (var m in _missedWordsInStage.DistinctBy(x => x.Id))
+                                    {
+                                        <div class="review-item">
+                                            <b class="review-hanzi">@m.Hanzi</b>
+                                            <span class="review-pinyin">[@m.Pinyin]</span>
+                                            <span class="review-meaning">— @m.Meaning</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        @if (_currentStageIndex < _totalStages - 1)
+                        {
+                            <div class="stage-countdown-box">
+                                <div class="sc-label">Tự động tiến vào Tầng @(_currentStageIndex + 2) sau:</div>
+                                <div class="sc-circle">
+                                    <span class="sc-number">@_stageCountdown</span>
+                                </div>
+                                <div class="sc-sub">Nhấn <b>Enter</b> hoặc bấm nút bên dưới để vào ngay</div>
+                            </div>
+
+                            <button class="btn-hsk-resume w-100" @onclick="SkipCountdownAndNextStage" autofocus>
+                                Tiến vào Tầng @(_currentStageIndex + 2) ngay <span class="kbd-badge">Enter ↵</span> <i class="bi bi-arrow-right"></i>
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="btn-hsk-resume w-100" @onclick="CloseHskShooterGame" autofocus>
+                                Chiến thắng & Thoát <span class="kbd-badge">Enter ↵</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Resume Progress Dialog -->
+            @if (_showResumeDialog)
+            {
+                <div class="hsk-resume-overlay" tabindex="0" @onkeydown="HandleHskKeyDown" @onclick:stopPropagation="true">
+                    <div class="hsk-resume-card">
+                        <div class="resume-icon">💾</div>
+                        <h3>Đã tìm thấy dữ liệu lưu</h3>
+                        <p>Bạn đã từng chơi cấp độ <b>@hskShooterSelectedLevel</b> đến <b>Tầng @(_savedStageIndex + 1)</b>. Bạn có muốn tiếp tục hay chơi lại từ đầu?</p>
+                        <div class="save-warning-box">
+                            Lưu ý: Nếu chọn tiếp tục, các từ ở tầng trước sẽ không xuất hiện lại trong lần chơi này.
+                        </div>
+                        <div class="hsk-resume-btns">
+                            <button class="btn-resume-continue" @onclick="ResumeFromSavedStage" autofocus>Tiếp tục từ Tầng @(_savedStageIndex + 1) <span class="kbd-badge">Enter ↵</span></button>
+                            <button class="btn-resume-restart" @onclick="StartFreshFromStage0">Chơi lại từ đầu (Tầng 1)</button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Stage Map Modal (Bản đồ tháp tầng) -->
+            @if (_showStageMap)
+            {
+                <div class="stage-map-overlay" tabindex="0" @onkeydown="HandleHskKeyDown" @onclick:stopPropagation="true">
+                    <header class="stage-map-header">
+                        <div class="header-left">
+                            <div class="header-title-group">
+                                <h3><i class="bi bi-map-fill me-2"></i> BẢN ĐỒ THÁP TẦNG - @hskShooterSelectedLevel</h3>
+                                <span class="header-sub">Dí chuột kéo lên/xuống để xem toàn bộ các tầng</span>
+                            </div>
+                            <div class="header-user-status" title="@_userDisplayName">
+                                <div class="header-user-avt" style="background: @_userAvatarColor">@_userAvatarEmoji</div>
+                                <div class="header-user-meta">
+                                    <span class="user-meta-name">@_userDisplayName</span>
+                                    <span class="user-meta-floor"><i class="bi bi-geo-alt-fill text-danger"></i> Đang ở Tầng @(_currentStageIndex + 1)/@_totalStages</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="header-right">
+                            <button type="button" class="btn-resume-from-map" @onclick="ResumeAndCloseMap" title="Tiếp tục chơi">
+                                <i class="bi bi-play-fill"></i> Tiếp tục chơi
+                            </button>
+                            <button type="button" class="btn-close-map" @onclick="CloseStageMap" title="Đóng bản đồ (Esc)"><i class="bi bi-x-lg"></i></button>
+                        </div>
+                    </header>
+                    <div class="stage-map-scroll" id="hskStageMapScroll">
+                        <!-- Summit Banner at Top (Đỉnh tháp - Trùm cuối) -->
+                        <div class="stage-map-summit">
+                            <div class="summit-crown">👑</div>
+                            <div class="summit-content">
+                                <div class="summit-title">ĐỈNH THÁP - TRẬN CHIẾN TRÙM CUỐI (Tầng @_totalStages)</div>
+                                <div class="summit-sub">Chinh phục toàn bộ @hskVocabPool.Count từ vựng để mở khóa danh hiệu quán quân @hskShooterSelectedLevel!</div>
+                            </div>
+                        </div>
+
+                        <!-- Reverse list: Summit on top (Tầng N), Base at bottom (Tầng 1) -->
+                        @for (int i = _totalStages - 1; i >= 0; i--)
+                        {
+                            var stageIdx = i;
+                            var isBoss = stageIdx == _totalStages - 1;
+                            var isCurrent = stageIdx == _currentStageIndex;
+                            var isActive = isCurrent && !_showStageComplete;
+                            var isDone = stageIdx < _currentStageIndex || stageIdx < _maxUnlockedStageIndex;
+                            var isUnlocked = stageIdx <= _maxUnlockedStageIndex;
+                            var isLocked = !isUnlocked;
+
+                            var rowClass = "stage-map-row";
+                            if (isBoss) rowClass += " stage-boss";
+                            if (isDone && !isActive) rowClass += " stage-done";
+                            if (isActive) rowClass += " stage-active";
+                            if (isLocked) rowClass += " stage-locked";
+
+                            var diffClass = isBoss ? "boss" : (stageIdx < 3 ? "easy" : (stageIdx < 6 ? "medium" : "hard"));
+                            var diffText = isBoss ? "Trùm Cuối" : (stageIdx < 3 ? "Dễ" : (stageIdx < 6 ? "Vừa" : "Khó"));
+
+                            <div class="@rowClass" id="@(isCurrent ? "currentActiveStageRow" : null)">
+                                <div class="stage-num-circle @(isCurrent ? "has-player-avatar" : "")">
+                                    @if (isCurrent)
+                                    {
+                                        <div class="player-map-avatar-circle" style="background: @_userAvatarColor" title="@_userDisplayName đang ở Tầng @(stageIdx + 1)">
+                                            <span class="avatar-icon">@_userAvatarEmoji</span>
+                                            <span class="floor-num-badge">T@(stageIdx + 1)</span>
+                                            <div class="sonar-wave"></div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        @(isBoss ? "☠️" : (stageIdx + 1).ToString())
+                                    }
+                                </div>
+                                <div class="stage-map-info">
+                                    <div class="stage-map-title">
+                                        <span>Tầng @(stageIdx + 1) @(isBoss ? "- Trận chiến cuối cùng" : "")</span>
+                                        @if (isActive)
+                                        {
+                                            <span class="player-location-tag" style="border-color: @_userAvatarColor">
+                                                <span class="tag-avt" style="background: @_userAvatarColor">@_userAvatarEmoji</span>
+                                                <span class="tag-text">VỊ TRÍ CỦA BẠN</span>
+                                                <span class="tag-beacon"></span>
+                                            </span>
+                                        }
+                                        else if (isDone)
+                                        {
+                                            <span class="done-tag">⭐ ĐÃ QUA</span>
+                                        }
+                                        else if (isLocked)
+                                        {
+                                            <span class="locked-tag">🔒 CHƯA MỞ</span>
+                                        }
+                                    </div>
+                                    <div class="stage-map-sub">
+                                        <span class="diff-chip @diffClass">@diffText</span>
+                                        <span class="stage-word-count">Từ @(stageIdx * WordsPerStage + 1) - @(Math.Min((stageIdx + 1) * WordsPerStage, hskVocabPool.Count))</span>
+                                    </div>
+                                </div>
+                                <div class="stage-action">
+                                    @if (isActive)
+                                    {
+                                        <button type="button" class="btn-stage-play" @onclick="ResumeAndCloseMap">ĐANG CHƠI ▶</button>
+                                    }
+                                    else if (isUnlocked)
+                                    {
+                                        <button type="button" class="btn-stage-play replay" @onclick="() => ReplayStage(stageIdx)">Chơi lại ↺</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn-stage-play locked" disabled title="Hãy vượt qua các tầng trước để mở khóa"><i class="bi bi-lock-fill"></i> Đã khóa</button>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Base Banner at Bottom (Chân tháp - Tầng 1) -->
+                        <div class="stage-map-base">
+                            <div class="base-flag">🚩</div>
+                            <div class="base-content">
+                                <div class="base-title">CHÂN THÁP - XUẤT PHÁT (Tầng 1)</div>
+                                <div class="base-sub">Khởi đầu hành trình học từ vựng @hskShooterSelectedLevel</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </main>
+    </div>
+}
+
+@code {
+    // === GALLERY & MODAL ROUTING STATE ===
+    private string? selectedGameForInfo;
+    private bool isPlayingWordle;
+    private bool isPlayingHskShooter;
+
+    // === WORDLE GAME STATE ===
+    private const int MaxGuesses = 6;
+    private List<IeltsVocabularyItem> vocabPool = new();
+    private List<IeltsVocabularyItem> filteredPool = new();
+    private IeltsVocabularyItem? currentWord;
+
+    private int WordLength => currentWord?.Word.Trim().Length ?? 5;
+    private string ContextSentence => currentWord?.Example ?? "";
+
+    private List<string> guesses = new();
+    private List<List<string>> guessEvaluations = new();
+    private string currentInput = "";
+    private int currentGuessIndex => guesses.Count;
+    private bool isGameOver;
+    private bool isGameWon;
+    private bool showResultModal;
+    private bool shakeCurrentRow;
+    private string toastMessage = "";
+    private bool showSentenceTranslation;
+
+    private int wordleScore = 0;
+    private int wordleStreak = 0;
+    private Dictionary<int, char> hintLetterIndices = new();
+    private string selectedCefr = "all";
+    private string selectedWordLength = "5";
+    private readonly HashSet<int> playedIeltsVocabIds = new();
+    private readonly HashSet<string> playedIeltsWords = new();
+
+    private Dictionary<char, string> keyStatuses = new();
+
+    private static readonly string[] KeyRow1 = { "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P" };
+    private static readonly string[] KeyRow2 = { "A", "S", "D", "F", "G", "H", "J", "K", "L" };
+    private static readonly string[] KeyRow3 = { "Z", "X", "C", "V", "B", "N", "M" };
+
+    private ElementReference wordleOverlayRef;
+
+    // === HSK SHOOTER GAME STATE ===
+    private enum HskGameState { Menu, Playing, Paused, GameOver }
+    private HskGameState hskShooterState = HskGameState.Menu;
+    private string hskShooterSelectedLevel = "HSK1";
+    private List<HskVocabularyItem> hskVocabPool = new();
+    private List<FallingWord> hskActiveWords = new();
+    private int hskSpawnIndex;
+    private int hskScore;
+    private const int HskMaxLives = 5;
+    private int hskLives = HskMaxLives;
+    private int hskWordsShot;
+    private int hskNewLearned;
+    private int hskCombo = 0;
+    private bool showDamageFlash = false;
+    private bool _showMissedBanner = false;
+    private HskVocabularyItem? _lastMissedVocab;
+    private readonly List<HskVocabularyItem> _missedWordsInStage = new();
+    private CancellationTokenSource? _missedAlertCts;
+    private string _hskInputValue = "";
+    private string hskInputValue
+    {
+        get => _hskInputValue;
+        set
+        {
+            _hskInputValue = value;
+            TryMatchHskWord();
+        }
+    }
+    private ElementReference hskInputRef;
+    private ElementReference hskOverlayRef;
+    private Timer? hskTimer;
+    private readonly Random hskRng = new();
+
+    private sealed class FallingWord
+    {
+        public string Key { get; init; } = Guid.NewGuid().ToString();
+        public required HskVocabularyItem Vocab { get; init; }
+        public DateTime SpawnTime { get; set; }
+        public double FallDurationSec { get; init; }
+        public double XPercent { get; init; }
+        public bool IsDestroyed { get; set; }
+
+        public string FallDurationCss => FallDurationSec.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+        public string XPercentCss => XPercent.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private sealed class ActiveBullet
+    {
+        public long Id { get; init; }
+        public double StartX { get; init; } = 50.0;
+        public double StartY { get; init; } = 86.0;
+        public double TargetX { get; init; }
+        public double TargetY { get; init; }
+        public string StartXCss => StartX.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+        public string StartYCss => StartY.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+        public string TargetXCss => TargetX.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+        public string TargetYCss => TargetY.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private sealed class ActiveImpact
+    {
+        public long Id { get; init; }
+        public double X { get; init; }
+        public double Y { get; init; }
+        public string XCss => X.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+        public string YCss => Y.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private readonly List<ActiveBullet> hskBullets = new();
+    private readonly List<ActiveImpact> hskImpacts = new();
+    private long _bulletCounter = 0;
+    private long _impactCounter = 0;
+    private bool _isBgmOn = false;
+    private int _stageCountdown = 3;
+    private Timer? _countdownTimer;
+    private DateTime _lastHskSpawnTime = DateTime.MinValue;
+
+    private static readonly List<IeltsVocabularyItem> FallbackVocab = new()
+    {
+        new IeltsVocabularyItem { Word = "pollution", Phonetic = "/pəˈluːʃn/", PartOfSpeech = "noun", Meaning = "Sự ô nhiễm", Example = "Air pollution is a severe environmental challenge in modern megacities.", ExampleMeaning = "Ô nhiễm không khí là một thách thức môi trường nghiêm trọng ở các siêu đô thị hiện đại.", Topic = "Environment", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "climate", Phonetic = "/ˈklaɪmət/", PartOfSpeech = "noun", Meaning = "Khí hậu", Example = "Climate change poses existential threats to island nations globally.", ExampleMeaning = "Biến đổi khí hậu đặt ra các mối đe dọa sinh tồn cho các quốc đảo trên toàn cầu.", Topic = "Environment", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "develop", Phonetic = "/dɪˈveləp/", PartOfSpeech = "verb", Meaning = "Phát triển", Example = "Children develop cognitive abilities rapidly in early childhood.", ExampleMeaning = "Trẻ em phát triển các khả năng nhận thức nhanh chóng trong thời thơ ấu.", Topic = "Education", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "achieve", Phonetic = "/əˈtʃiːv/", PartOfSpeech = "verb", Meaning = "Đạt được", Example = "Hard work and dedication allow students to achieve high band scores.", ExampleMeaning = "Sự chăm chỉ và cống hiến giúp học sinh đạt được điểm số cao.", Topic = "Education", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "economic", Phonetic = "/ˌekəˈnɒmɪk/", PartOfSpeech = "adj", Meaning = "Thuộc kinh tế", Example = "Rapid economic growth has transformed living standards nationwide.", ExampleMeaning = "Tăng trưởng kinh tế nhanh chóng đã thay đổi mức sống trên toàn quốc.", Topic = "Economy", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "resource", Phonetic = "/rɪˈsɔːs/", PartOfSpeech = "noun", Meaning = "Tài nguyên, nguồn lực", Example = "Renewable natural resources include solar, wind, and tidal power.", ExampleMeaning = "Tài nguyên thiên nhiên tái tạo bao gồm năng lượng mặt trời, gió và thủy triều.", Topic = "Environment", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "analysis", Phonetic = "/əˈnæləsɪs/", PartOfSpeech = "noun", Meaning = "Sự phân tích", Example = "Statistical analysis revealed significant trends across all age groups.", ExampleMeaning = "Phân tích thống kê đã tiết lộ các xu hướng đáng kể ở mọi nhóm tuổi.", Topic = "Science", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "education", Phonetic = "/ˌedʒuˈkeɪʃn/", PartOfSpeech = "noun", Meaning = "Giáo dục", Example = "Quality tertiary education equips graduates with vital workplace skills.", ExampleMeaning = "Giáo dục đại học chất lượng trang bị cho sinh viên tốt nghiệp các kỹ năng làm việc quan trọng.", Topic = "Education", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "technology", Phonetic = "/tekˈnɒlədʒi/", PartOfSpeech = "noun", Meaning = "Công nghệ", Example = "Modern digital technology revolutionizes remote communication.", ExampleMeaning = "Công nghệ kỹ thuật số hiện đại cách mạng hóa giao tiếp từ xa.", Topic = "Technology", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "critical", Phonetic = "/ˈkrɪtɪkl/", PartOfSpeech = "adj", Meaning = "Quan trọng, phản biện", Example = "Critical thinking is an essential skill for academic research.", ExampleMeaning = "Tư duy phản biện là một kỹ năng thiết yếu cho nghiên cứu học thuật.", Topic = "Education", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "environment", Phonetic = "/ɪnˈvaɪrənmənt/", PartOfSpeech = "noun", Meaning = "Môi trường", Example = "Protecting the global environment requires international cooperation.", ExampleMeaning = "Bảo vệ môi trường toàn cầu đòi hỏi sự hợp tác quốc tế.", Topic = "Environment", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "opinion", Phonetic = "/əˈpɪnjən/", PartOfSpeech = "noun", Meaning = "Ý kiến, quan điểm", Example = "Public opinion remains deeply divided regarding the proposed policy.", ExampleMeaning = "Dư luận công chúng vẫn bị chia rẽ sâu sắc về chính sách được đề xuất.", Topic = "Society", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "impact", Phonetic = "/ˈɪmpækt/", PartOfSpeech = "noun", Meaning = "Tác động, ảnh hưởng", Example = "Human activities produce an enormous impact on natural habitats.", ExampleMeaning = "Các hoạt động của con người tạo ra tác động to lớn đến môi trường sống tự nhiên.", Topic = "Environment", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "significant", Phonetic = "/sɪɡˈnɪfɪkənt/", PartOfSpeech = "adj", Meaning = "Đáng kể, quan trọng", Example = "There is a significant difference between theoretical and applied science.", ExampleMeaning = "Có một sự khác biệt đáng kể giữa khoa học lý thuyết và khoa học ứng dụng.", Topic = "Academic", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "sustainable", Phonetic = "/səˈsteɪnəbl/", PartOfSpeech = "adj", Meaning = "Bền vững", Example = "Sustainable agriculture minimizes toxic chemical runoff into waterways.", ExampleMeaning = "Nông nghiệp bền vững giảm thiểu dòng chảy hóa chất độc hại vào nguồn nước.", Topic = "Environment", CefrLevel = "C1" },
+        new IeltsVocabularyItem { Word = "diversity", Phonetic = "/daɪˈvɜːsəti/", PartOfSpeech = "noun", Meaning = "Sự đa dạng", Example = "Cultural diversity enriches societal viewpoints and creative problem solving.", ExampleMeaning = "Sự đa dạng văn hóa làm phong phú thêm quan điểm xã hội và giải quyết vấn đề sáng tạo.", Topic = "Society", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "innovation", Phonetic = "/ˌɪnəˈveɪʃn/", PartOfSpeech = "noun", Meaning = "Sự đổi mới, sáng tạo", Example = "Technological innovation drives efficiency across traditional manufacturing sectors.", ExampleMeaning = "Đổi mới công nghệ thúc đẩy hiệu quả trong các lĩnh vực sản xuất truyền thống.", Topic = "Technology", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "challenge", Phonetic = "/ˈtʃælɪndʒ/", PartOfSpeech = "noun", Meaning = "Thử thách", Example = "Overpopulation presents a monumental challenge for urban planners.", ExampleMeaning = "Dân số quá đông đặt ra một thách thức to lớn cho các nhà quy hoạch đô thị.", Topic = "Society", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "evidence", Phonetic = "/ˈevɪdəns/", PartOfSpeech = "noun", Meaning = "Bằng chứng", Example = "Scientific evidence firmly supports the efficacy of renewable energy.", ExampleMeaning = "Bằng chứng khoa học ủng hộ mạnh mẽ hiệu quả của năng lượng tái tạo.", Topic = "Science", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "strategy", Phonetic = "/ˈstrætədʒi/", PartOfSpeech = "noun", Meaning = "Chiến lược", Example = "Effective marketing strategies attract international consumers.", ExampleMeaning = "Các chiến lược tiếp thị hiệu quả thu hút người tiêu dùng quốc tế.", Topic = "Business", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "tradition", Phonetic = "/trəˈdɪʃn/", PartOfSpeech = "noun", Meaning = "Truyền thống", Example = "Preserving ancient traditions preserves cultural identity across generations.", ExampleMeaning = "Gìn giữ các truyền thống cổ xưa bảo tồn bản sắc văn hóa qua nhiều thế hệ.", Topic = "Culture", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "community", Phonetic = "/kəˈmjuːnəti/", PartOfSpeech = "noun", Meaning = "Cộng đồng", Example = "Local communities organized clean-up campaigns along the coastline.", ExampleMeaning = "Các cộng đồng địa phương đã tổ chức các chiến dịch dọn rác dọc theo bờ biển.", Topic = "Society", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "knowledge", Phonetic = "/ˈnɒlɪdʒ/", PartOfSpeech = "noun", Meaning = "Kiến thức", Example = "Acquiring domain knowledge is crucial for solving specialized problems.", ExampleMeaning = "Tiếp thu kiến thức chuyên ngành là rất quan trọng để giải quyết các vấn đề chuyên sâu.", Topic = "Education", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "consumer", Phonetic = "/kənˈsjuːmə(r)/", PartOfSpeech = "noun", Meaning = "Người tiêu dùng", Example = "Informed consumers demand transparency in sustainable supply chains.", ExampleMeaning = "Người tiêu dùng hiểu biết đòi hỏi sự minh bạch trong các chuỗi cung ứng bền vững.", Topic = "Economy", CefrLevel = "B2" }
+    };
+
+    private string FormattedSentenceHtml
+    {
+        get
+        {
+            if (currentWord == null || string.IsNullOrWhiteSpace(currentWord.Example)) return "";
+            var ex = currentWord.Example;
+            var w = currentWord.Word.Trim();
+            
+            var regex = new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(w), System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (regex.IsMatch(ex))
+            {
+                var replacement = $"<span class='blank-target'>[ {new string('_', Math.Min(w.Length, 8))} ]</span>";
+                return regex.Replace(ex, replacement, 1);
+            }
+
+            return ex + $" <span class='blank-target'>[ {new string('_', w.Length)} ]</span>";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        vocabPool = [.. FallbackVocab];
+        _ = LoadVocabularyFromApiAsync();
+        _ = LoadUserProfileAsync();
+    }
+
+    private async Task LoadUserProfileAsync()
+    {
+        try
+        {
+            var profile = await ProfileSvc.GetAsync();
+            if (profile != null)
+            {
+                if (!string.IsNullOrWhiteSpace(profile.AvatarEmoji)) _userAvatarEmoji = profile.AvatarEmoji;
+                if (!string.IsNullOrWhiteSpace(profile.AvatarColor)) _userAvatarColor = profile.AvatarColor;
+                if (!string.IsNullOrWhiteSpace(profile.DisplayName)) _userDisplayName = profile.DisplayName;
+                else if (!string.IsNullOrWhiteSpace(profile.FullName)) _userDisplayName = profile.FullName;
+                StateHasChanged();
+            }
+        }
+        catch { }
+    }
+
+    private void OpenGameInfo(string gameKey) => selectedGameForInfo = gameKey;
+    private void CloseGameInfo() => selectedGameForInfo = null;
+
+    // === WORDLE ACTIONS ===
+    private async Task StartWordleGame()
+    {
+        selectedGameForInfo = null;
+        ApplyDifficultyFilter();
+        StartNewRound();
+        isPlayingWordle = true;
+        await Task.Delay(50);
+        await FocusWordle();
+    }
+
+    private async Task FocusWordle()
+    {
+        try { await wordleOverlayRef.FocusAsync(); } catch { }
+    }
+
+    private void CloseWordleGame()
+    {
+        isPlayingWordle = false;
+        showResultModal = false;
+    }
+
+    private async Task LoadVocabularyFromApiAsync()
+    {
+        try
+        {
+            var all = await IeltsService.GetVocabularyAsync();
+            if (all != null && all.Count > 0)
+            {
+                var allowedCefr = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "A2", "B1", "B2", "C1" };
+                var clean = all
+                    .Where(v => v.IsActive && !string.IsNullOrWhiteSpace(v.Word))
+                    .Where(v => v.Word.Trim().All(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')))
+                    .Where(v => v.Word.Trim().Length >= 4 && v.Word.Trim().Length <= 8)
+                    .Where(v => string.IsNullOrEmpty(v.CefrLevel) || allowedCefr.Contains(v.CefrLevel.Trim()))
+                    .ToList();
+
+                if (clean.Count > 0)
+                {
+                    vocabPool = clean;
+                    ApplyDifficultyFilter();
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GameHub] Background vocab load: {ex.Message}");
+        }
+    }
+
+    private void ApplyDifficultyFilter()
+    {
+        var source = vocabPool.Count > 0 ? vocabPool : FallbackVocab;
+        var query = source.AsEnumerable();
+
+        // 1. Lọc theo cấp độ CEFR từ kho đã import (A2 - C1)
+        if (selectedCefr != "all")
+        {
+            query = query.Where(v => string.Equals(v.CefrLevel?.Trim(), selectedCefr, StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            var allowedCefr = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "A2", "B1", "B2", "C1" };
+            query = query.Where(v => string.IsNullOrEmpty(v.CefrLevel) || allowedCefr.Contains(v.CefrLevel.Trim()));
+        }
+
+        // 2. Chỉ được phép các từ đủ số lượng chữ trong từ (độ dài chính xác)
+        if (int.TryParse(selectedWordLength, out var exactLen) && exactLen >= 4 && exactLen <= 8)
+        {
+            query = query.Where(v => v.Word.Trim().Length == exactLen);
+        }
+        else
+        {
+            query = query.Where(v => v.Word.Trim().Length >= 4 && v.Word.Trim().Length <= 7);
+        }
+
+        // Đảm bảo từ tiếng Anh hợp lệ, chỉ gồm chữ cái A-Z
+        query = query.Where(v => v.Word.Trim().All(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')));
+
+        filteredPool = query.ToList();
+
+        if (filteredPool.Count == 0)
+        {
+            filteredPool = source.Where(v => v.Word.Trim().Length >= 4 && v.Word.Trim().Length <= 7).ToList();
+        }
+    }
+
+    private void StartNewRound()
+    {
+        if (filteredPool.Count == 0) ApplyDifficultyFilter();
+        if (filteredPool.Count == 0) return;
+
+        var rng = new Random();
+
+        // KHÔNG ĐƯỢC ĐỂ CÁC TỪ TRÙNG LẶP LẠI (chọn từ chưa từng chơi trong phiên này)
+        var unplayed = filteredPool.Where(v =>
+            (v.Id <= 0 || !playedIeltsVocabIds.Contains(v.Id)) &&
+            !playedIeltsWords.Contains(v.Word.Trim().ToUpperInvariant())
+        ).ToList();
+
+        if (unplayed.Count == 0)
+        {
+            // Đã chơi hết toàn bộ từ trong kho theo bộ lọc hiện tại -> reset để bắt đầu vòng mới
+            playedIeltsVocabIds.Clear();
+            playedIeltsWords.Clear();
+            unplayed = filteredPool.ToList();
+            ShowToast("Bạn đã giải mã hết tất cả từ vựng trong cấp độ này! Bắt đầu vòng quay mới.");
+        }
+
+        currentWord = unplayed[rng.Next(unplayed.Count)];
+        if (currentWord.Id > 0) playedIeltsVocabIds.Add(currentWord.Id);
+        playedIeltsWords.Add(currentWord.Word.Trim().ToUpperInvariant());
+
+        guesses.Clear();
+        guessEvaluations.Clear();
+        keyStatuses.Clear();
+        currentInput = "";
+        isGameOver = false;
+        isGameWon = false;
+        showResultModal = false;
+        shakeCurrentRow = false;
+        toastMessage = "";
+        showSentenceTranslation = false;
+        hintLetterIndices.Clear();
+    }
+
+    private void NextWord()
+    {
+        StartNewRound();
+        StateHasChanged();
+        _ = FocusWordle();
+    }
+
+    private void UseLetterHint()
+    {
+        if (isGameOver || currentWord == null) return;
+
+        var target = currentWord.Word.Trim().ToUpperInvariant();
+
+        // 1. Tập hợp các vị trí đã được đoán ĐÚNG (correct) trong các lượt trước
+        var alreadyCorrectIndices = new HashSet<int>();
+        for (int r = 0; r < guessEvaluations.Count; r++)
+        {
+            var evals = guessEvaluations[r];
+            for (int c = 0; c < evals.Count; c++)
+            {
+                if (evals[c] == "correct")
+                {
+                    alreadyCorrectIndices.Add(c);
+                }
+            }
+        }
+
+        // 2. Chỉ tìm các vị trí CHƯA được mở gợi ý VÀ CHƯA TỪNG ĐOÁN ĐÚNG
+        var candidates = new List<int>();
+        for (int i = 0; i < target.Length; i++)
+        {
+            if (!hintLetterIndices.ContainsKey(i) && !alreadyCorrectIndices.Contains(i))
+            {
+                candidates.Add(i);
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            ShowToast("Bạn đã đoán đúng hoặc đã mở gợi ý tất cả các chữ cái rồi!");
+            return;
+        }
+
+        // 3. Chọn 1 vị trí chưa đúng để gợi ý
+        var chosenIndex = candidates[0];
+        hintLetterIndices[chosenIndex] = target[chosenIndex];
+        ShowToast($"Gợi ý: Ký tự ở ô số {chosenIndex + 1} là '{target[chosenIndex]}'!");
+        StateHasChanged();
+    }
+
+    private async Task PronounceWord()
+    {
+        if (currentWord == null) return;
+        try
+        {
+            var word = currentWord.Word.Trim().Replace("'", "\\'");
+            await JS.InvokeVoidAsync("eval", $"if ('speechSynthesis' in window) {{ var u = new SpeechSynthesisUtterance('{word}'); u.lang = 'en-US'; window.speechSynthesis.speak(u); }}");
+        }
+        catch { }
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (!isPlayingWordle) return;
+
+        var key = e.Key.ToUpperInvariant();
+
+        // Nếu bảng kết quả đang hiện hoặc ván đã kết thúc -> bấm ENTER hoặc SPACE để sang màn/từ tiếp theo ngay!
+        if (showResultModal || isGameOver)
+        {
+            if (key == "ENTER" || key == " " || key == "SPACE")
+            {
+                NextWord();
+            }
+            else if (key == "ESCAPE")
+            {
+                CloseWordleGame();
+            }
+            return;
+        }
+
+        // Phím tắt 1: Gợi ý chữ cái chưa đoán đúng
+        if (key == "1" || e.Code == "Digit1" || e.Code == "Numpad1")
+        {
+            UseLetterHint();
+            return;
+        }
+
+        // Phím tắt 2: Phát âm tiếng Anh của từ vựng
+        if (key == "2" || e.Code == "Digit2" || e.Code == "Numpad2")
+        {
+            _ = PronounceWord();
+            return;
+        }
+
+        if (key == "ENTER") SubmitGuess();
+        else if (key == "BACKSPACE") DeleteChar();
+        else if (key.Length == 1 && char.IsLetter(key[0])) AddChar(key[0]);
+    }
+
+    private void OnVirtualKeyPress(string key)
+    {
+        if (!isPlayingWordle) return;
+
+        if (showResultModal || isGameOver)
+        {
+            if (key == "ENTER") NextWord();
+            return;
+        }
+
+        if (isGameOver) return;
+
+        if (key == "ENTER") SubmitGuess();
+        else if (key == "BACKSPACE") DeleteChar();
+        else if (key.Length == 1 && char.IsLetter(key[0])) AddChar(key[0]);
+    }
+
+    private void AddChar(char c)
+    {
+        if (currentInput.Length < WordLength)
+        {
+            currentInput += char.ToUpperInvariant(c);
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.keyClick()");
+            StateHasChanged();
+        }
+    }
+
+    private void DeleteChar()
+    {
+        if (currentInput.Length > 0)
+        {
+            currentInput = currentInput.Substring(0, currentInput.Length - 1);
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.keyDelete()");
+            StateHasChanged();
+        }
+    }
+
+    private void SubmitGuess()
+    {
+        if (currentWord == null || isGameOver) return;
+
+        if (currentInput.Length < WordLength)
+        {
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.keyEnterError()");
+            TriggerShake();
+            ShowToast($"Cần nhập đủ {WordLength} chữ cái!");
+            return;
+        }
+
+        var guess = currentInput.ToUpperInvariant();
+        var target = currentWord.Word.Trim().ToUpperInvariant();
+
+        var evals = EvaluateGuess(guess, target);
+
+        guesses.Add(guess);
+        guessEvaluations.Add(evals);
+
+        for (int i = 0; i < guess.Length; i++)
+        {
+            char letter = guess[i];
+            string status = evals[i];
+
+            if (!keyStatuses.TryGetValue(letter, out var oldStatus) || oldStatus != "correct")
+            {
+                if (status == "correct" || (status == "present" && oldStatus != "present"))
+                {
+                    keyStatuses[letter] = status;
+                }
+                else if (oldStatus == null)
+                {
+                    keyStatuses[letter] = status;
+                }
+            }
+        }
+
+        currentInput = "";
+
+        if (guess == target)
+        {
+            isGameOver = true;
+            isGameWon = true;
+            wordleScore += 30;
+            wordleStreak++;
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.win()");
+            _ = Task.Delay(300).ContinueWith(_ => InvokeAsync(PronounceWord));
+            _ = Task.Delay(500).ContinueWith(_ => InvokeAsync(async () =>
+            {
+                showResultModal = true;
+                StateHasChanged();
+                await FocusWordle();
+            }));
+            return;
+        }
+
+        if (guesses.Count >= MaxGuesses)
+        {
+            isGameOver = true;
+            isGameWon = false;
+            wordleStreak = 0;
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.lose()");
+            _ = Task.Delay(300).ContinueWith(_ => InvokeAsync(PronounceWord));
+            _ = Task.Delay(500).ContinueWith(_ => InvokeAsync(async () =>
+            {
+                showResultModal = true;
+                StateHasChanged();
+                await FocusWordle();
+            }));
+            return;
+        }
+        // Nộp hợp lệ nhưng chưa đúng: âm enter nhẹ
+        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.keyEnterOk()");
+
+        StateHasChanged();
+    }
+
+    private static List<string> EvaluateGuess(string guess, string target)
+    {
+        var result = new List<string>(new string[guess.Length]);
+        var targetCounts = new Dictionary<char, int>();
+
+        foreach (var c in target) targetCounts[c] = targetCounts.GetValueOrDefault(c, 0) + 1;
+
+        for (int i = 0; i < guess.Length; i++)
+        {
+            if (guess[i] == target[i])
+            {
+                result[i] = "correct";
+                targetCounts[guess[i]]--;
+            }
+        }
+
+        for (int i = 0; i < guess.Length; i++)
+        {
+            if (result[i] != null) continue;
+            char c = guess[i];
+            if (targetCounts.GetValueOrDefault(c, 0) > 0)
+            {
+                result[i] = "present";
+                targetCounts[c]--;
+            }
+            else
+            {
+                result[i] = "absent";
+            }
+        }
+
+        return result;
+    }
+
+    private void TriggerShake()
+    {
+        shakeCurrentRow = true;
+        StateHasChanged();
+        _ = Task.Delay(400).ContinueWith(_ => InvokeAsync(() =>
+        {
+            shakeCurrentRow = false;
+            StateHasChanged();
+        }));
+    }
+
+    private void ShowToast(string msg)
+    {
+        toastMessage = msg;
+        StateHasChanged();
+        _ = Task.Delay(2400).ContinueWith(_ => InvokeAsync(() =>
+        {
+            toastMessage = "";
+            StateHasChanged();
+        }));
+    }
+
+    private string GetKeyClass(string key)
+    {
+        if (key.Length == 1 && keyStatuses.TryGetValue(key[0], out var status)) return status;
+        return "";
+    }
+
+    // === HSK SHOOTER ACTIONS & LOGIC ===
+    private const int WordsPerStage = 20;
+    private bool _showPinyin = false;
+    private int _currentStageIndex = 0;
+    private int _totalStages = 1;
+    private int _savedStageIndex = 0;
+    private int _maxUnlockedStageIndex = 0;
+    private bool _showStageMap = false;
+    private bool _showResumeDialog = false;
+    private bool _showStageComplete = false;
+    
+    private List<HskVocabularyItem> _currentStageWords = new();
+    private int _currentStageTotalWords = 0;
+    private int hskWordsShotInStage = 0;
+    // User Profile for Map & Battlefield Presence
+    private string _userAvatarEmoji = "🎓";
+    private string _userAvatarColor = "#38bdf8";
+    private string _userDisplayName = "Bạn";
+
+    private DateTime? _hskPauseStartTime;
+    private bool _wasPausedByMap = false;
+    private bool IsHskGamePaused => hskShooterState == HskGameState.Paused || _showStageMap;
+
+    private void TogglePinyin() => _showPinyin = !_showPinyin;
+
+    private async Task OpenStageMap()
+    {
+        _ = LoadUserProfileAsync();
+        if (hskShooterState == HskGameState.Playing && !_showStageComplete)
+        {
+            _wasPausedByMap = true;
+            ToggleHskPause();
+        }
+        else if (hskShooterState == HskGameState.Paused && !_hskPauseStartTime.HasValue)
+        {
+            _hskPauseStartTime = DateTime.UtcNow;
+        }
+
+        _showStageMap = true;
+        StateHasChanged();
+        try
+        {
+            await Task.Delay(50);
+            await JS.InvokeVoidAsync("window.initStageMapDrag");
+        }
+        catch { }
+    }
+
+    private void CloseStageMap()
+    {
+        _showStageMap = false;
+        if (_wasPausedByMap)
+        {
+            _wasPausedByMap = false;
+            if (hskShooterState == HskGameState.Paused)
+            {
+                ToggleHskPause();
+                return;
+            }
+        }
+        StateHasChanged();
+        _ = FocusHskInput();
+    }
+
+    private void ResumeAndCloseMap()
+    {
+        _showStageMap = false;
+        _wasPausedByMap = false;
+        if (hskShooterState == HskGameState.Paused)
+        {
+            ToggleHskPause();
+        }
+        else
+        {
+            StateHasChanged();
+            _ = FocusHskInput();
+        }
+    }
+
+    private async Task StartHskShooterGame()
+    {
+        selectedGameForInfo = null;
+        isPlayingHskShooter = true;
+        await LoadLevelAndCheckProgress(hskShooterSelectedLevel);
+    }
+
+    private async Task LoadLevelAndCheckProgress(string level)
+    {
+        hskShooterSelectedLevel = level;
+        var all = await HskSvc.GetVocabularyAsync(level);
+        hskVocabPool = all?.Where(v => v.IsActive && !string.IsNullOrWhiteSpace(v.Pinyin)).ToList() ?? new();
+        if (hskVocabPool.Count == 0) return;
+
+        // Shuffle the entire pool once per level load
+        for (int i = hskVocabPool.Count - 1; i > 0; i--)
+        {
+            int j = hskRng.Next(i + 1);
+            (hskVocabPool[i], hskVocabPool[j]) = (hskVocabPool[j], hskVocabPool[i]);
+        }
+
+        _totalStages = (int)Math.Ceiling(hskVocabPool.Count / (double)WordsPerStage);
+        if (_totalStages == 0) _totalStages = 1;
+
+        // Check LocalStorage for saved progress and max unlocked stage
+        try
+        {
+            var savedStageStr = await JS.InvokeAsync<string>("localStorage.getItem", $"hsk_progress_{level}");
+            var maxUnlockedStr = await JS.InvokeAsync<string>("localStorage.getItem", $"hsk_max_unlocked_{level}");
+
+            if (int.TryParse(maxUnlockedStr, out var maxUnlocked) && maxUnlocked >= 0)
+            {
+                _maxUnlockedStageIndex = Math.Min(maxUnlocked, _totalStages - 1);
+            }
+            else if (int.TryParse(savedStageStr, out var savedFallback) && savedFallback >= 0)
+            {
+                _maxUnlockedStageIndex = Math.Min(savedFallback, _totalStages - 1);
+            }
+            else
+            {
+                _maxUnlockedStageIndex = 0;
+            }
+
+            if (int.TryParse(savedStageStr, out var savedStage) && savedStage > 0 && savedStage < _totalStages)
+            {
+                _savedStageIndex = savedStage;
+                _showResumeDialog = true;
+                StateHasChanged();
+                _ = FocusHskOverlay();
+                return;
+            }
+        }
+        catch { /* Ignore JS interop errors during prerendering/initialization */ }
+
+        await StartFreshFromStage0();
+    }
+
+    private async Task StartFreshFromStage0()
+    {
+        _showResumeDialog = false;
+        hskScore = 0;
+        hskLives = HskMaxLives;
+        hskWordsShot = 0;
+        hskNewLearned = 0;
+        hskCombo = 0;
+        _missedWordsInStage.Clear();
+        await LoadStage(0);
+    }
+
+    private async Task ResumeFromSavedStage()
+    {
+        _showResumeDialog = false;
+        hskScore = 0;
+        hskLives = HskMaxLives;
+        hskWordsShot = 0;
+        hskNewLearned = 0;
+        hskCombo = 0;
+        _missedWordsInStage.Clear();
+        await LoadStage(_savedStageIndex);
+    }
+
+    private async Task ReplayStage(int stageIdx)
+    {
+        _showStageMap = false;
+        _wasPausedByMap = false;
+        _hskPauseStartTime = null;
+        await LoadStage(stageIdx);
+    }
+
+    private async Task NextStage()
+    {
+        if (_currentStageIndex < _totalStages - 1)
+        {
+            await LoadStage(_currentStageIndex + 1);
+        }
+    }
+
+    private async Task LoadStage(int stageIndex)
+    {
+        _countdownTimer?.Dispose();
+        _showStageComplete = false;
+        _hskPauseStartTime = null;
+        _wasPausedByMap = false;
+        _currentStageIndex = stageIndex;
+        _maxUnlockedStageIndex = Math.Max(_maxUnlockedStageIndex, stageIndex);
+        _lastHskSpawnTime = DateTime.MinValue;
+        hskBullets.Clear();
+        hskImpacts.Clear();
+        
+        // Save progress & max unlocked
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", $"hsk_progress_{hskShooterSelectedLevel}", _currentStageIndex.ToString());
+            await JS.InvokeVoidAsync("localStorage.setItem", $"hsk_max_unlocked_{hskShooterSelectedLevel}", _maxUnlockedStageIndex.ToString());
+        }
+        catch { }
+
+        int skip = stageIndex * WordsPerStage;
+        int take = (stageIndex == _totalStages - 1) ? hskVocabPool.Count - skip : WordsPerStage;
+        
+        _currentStageWords = hskVocabPool.Skip(skip).Take(take).ToList();
+        _currentStageTotalWords = _currentStageWords.Count;
+        
+        hskSpawnIndex = 0;
+        hskWordsShotInStage = 0;
+        hskActiveWords.Clear();
+        hskInputValue = "";
+        hskCombo = 0;
+        hskLives = HskMaxLives; // Qua mỗi màn luôn reset 5 tim đầy đủ
+        _showMissedBanner = false;
+        _lastMissedVocab = null;
+        _missedWordsInStage.Clear();
+        hskShooterState = HskGameState.Playing;
+
+        hskTimer?.Dispose();
+        hskTimer = new Timer(OnHskTick, null, 100, 100);
+
+        if (_isBgmOn)
+        {
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.startBgm()");
+        }
+
+        _ = FocusHskInput();
+        StateHasChanged();
+    }
+
+    private void TriggerStageComplete()
+    {
+        hskTimer?.Dispose();
+        _showStageComplete = true;
+        _stageCountdown = 3;
+        _maxUnlockedStageIndex = Math.Max(_maxUnlockedStageIndex, Math.Min(_currentStageIndex + 1, _totalStages - 1));
+        try
+        {
+            _ = JS.InvokeVoidAsync("localStorage.setItem", $"hsk_max_unlocked_{hskShooterSelectedLevel}", _maxUnlockedStageIndex.ToString());
+        }
+        catch { }
+        StateHasChanged();
+        _ = FocusHskOverlay();
+
+        // Phát âm thanh đếm ngược 3s chuẩn bị sang màn
+        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.countdownTick(3)");
+
+        _countdownTimer?.Dispose();
+        _countdownTimer = new Timer(OnCountdownTick, null, 1000, 1000);
+    }
+
+    private void OnCountdownTick(object? state)
+    {
+        InvokeAsync(async () =>
+        {
+            if (!_showStageComplete || !isPlayingHskShooter)
+            {
+                _countdownTimer?.Dispose();
+                return;
+            }
+
+            _stageCountdown--;
+            if (_stageCountdown > 0)
+            {
+                _ = JS.InvokeVoidAsync("eval", $"window.WordleSfx?.countdownTick({_stageCountdown})");
+                StateHasChanged();
+            }
+            else
+            {
+                // Hết 3 giây đếm ngược -> Âm thanh GO và tự động sang màn tiếp theo!
+                _countdownTimer?.Dispose();
+                _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.countdownGo()");
+                if (_currentStageIndex < _totalStages - 1)
+                {
+                    await NextStage();
+                }
+                else
+                {
+                    CloseHskShooterGame();
+                }
+            }
+        });
+    }
+
+    private async Task SkipCountdownAndNextStage()
+    {
+        _countdownTimer?.Dispose();
+        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.countdownGo()");
+        if (_currentStageIndex < _totalStages - 1)
+        {
+            await NextStage();
+        }
+        else
+        {
+            CloseHskShooterGame();
+        }
+    }
+
+    private void OnHskTick(object? state)
+    {
+        if (hskShooterState != HskGameState.Playing || _showStageComplete || _showStageMap) return;
+
+        InvokeAsync(() =>
+        {
+            var now = DateTime.UtcNow;
+
+            for (int i = hskActiveWords.Count - 1; i >= 0; i--)
+            {
+                var w = hskActiveWords[i];
+                if (w.IsDestroyed) continue;
+                if ((now - w.SpawnTime).TotalSeconds >= w.FallDurationSec)
+                {
+                    hskActiveWords.RemoveAt(i);
+                    hskLives = Math.Max(0, hskLives - 1);
+                    hskCombo = 0;
+                    _lastMissedVocab = w.Vocab;
+                    _missedWordsInStage.Add(w.Vocab);
+                    ShowMissedAlert();
+                    _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.damageHit()");
+                    TriggerDamageFlash();
+                    if (hskLives <= 0)
+                    {
+                        hskShooterState = HskGameState.GameOver;
+                        hskTimer?.Dispose();
+                        _countdownTimer?.Dispose();
+                        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.lose()");
+                        StateHasChanged();
+                        _ = FocusHskOverlay();
+                        return;
+                    }
+                }
+            }
+
+            // Kiểm tra hoàn thành tầng
+            if (hskSpawnIndex >= _currentStageWords.Count && hskActiveWords.Count(w => !w.IsDestroyed) == 0)
+            {
+                TriggerStageComplete();
+                return;
+            }
+
+            // =========================================================================
+            // TỐC ĐỘ CỰC DỄ VÀ RA LẦN LƯỢT ĐÚNG ĐỘ KHÓ BÀN:
+            // Tầng 1 - 2 (Cực dễ): Ra đúng 1 từ duy nhất, rơi cực chậm (15s)
+            // Tầng 3 - 4 (Dễ vừa): 1-2 từ (11-13s)
+            // Tầng 5 - 6 (Trung bình): 2 từ (9-10s)
+            // Tầng 7+ (Khó): 2-3 từ (7-8s)
+            // Tầng Boss: 3-4 từ (5.5s)
+            // =========================================================================
+            bool isBoss = _currentStageIndex == _totalStages - 1;
+
+            int maxConcurrent = _currentStageIndex switch
+            {
+                0 => 1,       // Tầng 1: Cực dễ - đúng 1 từ lần lượt
+                1 => 1,       // Tầng 2: Cực dễ - đúng 1 từ lần lượt
+                2 => 1,       // Tầng 3: 1 từ
+                3 or 4 => 2,  // Tầng 4 - 5: tối đa 2 từ
+                5 or 6 => 2,  // Tầng 6 - 7: tối đa 2 từ
+                _ => isBoss ? 4 : 3
+            };
+
+            double baseFallSec = _currentStageIndex switch
+            {
+                0 => 15.0,    // Tầng 1: 15 giây rất chậm và dễ
+                1 => 13.5,    // Tầng 2: 13.5 giây
+                2 => 12.0,    // Tầng 3: 12 giây
+                3 => 10.5,    // Tầng 4: 10.5 giây
+                4 => 9.5,     // Tầng 5: 9.5 giây
+                5 => 8.5,     // Tầng 6: 8.5 giây
+                6 => 7.5,     // Tầng 7: 7.5 giây
+                _ => isBoss ? 5.5 : 6.5
+            };
+
+            double minSpawnIntervalSec = _currentStageIndex switch
+            {
+                0 or 1 => 2.5, // Giãn cách 2.5 giây giữa các từ
+                2 or 3 => 2.0,
+                _ => 1.5
+            };
+
+            var activeCount = hskActiveWords.Count(w => !w.IsDestroyed);
+            var elapsedSinceLast = (now - _lastHskSpawnTime).TotalSeconds;
+            var requiredInterval = activeCount == 0 ? 0.6 : minSpawnIntervalSec;
+
+            if (activeCount < maxConcurrent && hskSpawnIndex < _currentStageWords.Count && elapsedSinceLast >= requiredInterval)
+            {
+                var vocab = _currentStageWords[hskSpawnIndex];
+                hskSpawnIndex++;
+                _lastHskSpawnTime = now;
+                
+                var fallSec = baseFallSec + hskRng.NextDouble() * 2.0;
+
+                hskActiveWords.Add(new FallingWord
+                {
+                    Vocab = vocab,
+                    SpawnTime = now,
+                    FallDurationSec = fallSec,
+                    XPercent = 14 + hskRng.NextDouble() * 72 // 14% to 86%
+                });
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    private async Task FocusHskInput()
+    {
+        try { await hskInputRef.FocusAsync(); } catch { }
+    }
+
+    private async Task FocusHskOverlay()
+    {
+        try { await hskOverlayRef.FocusAsync(); } catch { }
+    }
+
+    private void FocusHskOnBackgroundClick()
+    {
+        if (hskShooterState == HskGameState.Playing && !_showStageComplete && !_showStageMap && !_showResumeDialog)
+        {
+            _ = FocusHskInput();
+        }
+    }
+
+    private async void TriggerDamageFlash()
+    {
+        showDamageFlash = true;
+        StateHasChanged();
+        await Task.Delay(350);
+        showDamageFlash = false;
+        StateHasChanged();
+    }
+
+    private void ShowMissedAlert()
+    {
+        _showMissedBanner = true;
+        _missedAlertCts?.Cancel();
+        _missedAlertCts = new CancellationTokenSource();
+        var token = _missedAlertCts.Token;
+        _ = Task.Delay(4000, token).ContinueWith(t =>
+        {
+            if (!t.IsCanceled)
+            {
+                _showMissedBanner = false;
+                InvokeAsync(StateHasChanged);
+            }
+        });
+    }
+
+    private async Task HandleInputKeyDown(KeyboardEventArgs e)
+    {
+        var key = e.Key.ToUpperInvariant();
+
+        // 1. Phím 1: Bật/Tắt Nhạc
+        if (key == "1" || e.Code == "Digit1" || e.Code == "Numpad1")
+        {
+            await ToggleBgm();
+            return;
+        }
+
+        // 2. Phím 2: Ẩn/Hiện Pinyin
+        if (key == "2" || e.Code == "Digit2" || e.Code == "Numpad2")
+        {
+            TogglePinyin();
+            return;
+        }
+
+        // 3. Phím 3: Tạm dừng / Tiếp tục
+        if (key == "3" || e.Code == "Digit3" || e.Code == "Numpad3")
+        {
+            ToggleHskPause();
+            return;
+        }
+
+        // Phím Escape: Thoát trò chơi
+        if (key == "ESCAPE" || e.Code == "Escape")
+        {
+            CloseHskShooterGame();
+            return;
+        }
+    }
+
+    private async Task HandleHskKeyDown(KeyboardEventArgs e)
+    {
+        if (!isPlayingHskShooter) return;
+
+        var key = e.Key.ToUpperInvariant();
+
+        // 0. Bản đồ tầng đang mở -> Esc để đóng, Enter/Space/3 để tiếp tục chơi
+        if (_showStageMap)
+        {
+            if (key == "ESCAPE" || e.Code == "Escape")
+            {
+                CloseStageMap();
+                return;
+            }
+            if (key == "ENTER" || key == " " || key == "SPACE" || key == "3" || e.Code == "Digit3" || e.Code == "Numpad3")
+            {
+                ResumeAndCloseMap();
+                return;
+            }
+            return;
+        }
+
+        // 1. Sang màn khi hoàn thành tầng (Next stage hoặc bấm Enter qua màn ngay, Esc để thoát)
+        if (_showStageComplete)
+        {
+            if (key == "ENTER" || key == " " || key == "SPACE")
+            {
+                await SkipCountdownAndNextStage();
+            }
+            else if (key == "ESCAPE" || e.Code == "Escape")
+            {
+                CloseHskShooterGame();
+            }
+            return;
+        }
+
+        // 2. Tiếp tục khi có hộp thoại lưu tiến trình
+        if (_showResumeDialog)
+        {
+            if (key == "ENTER" || key == " " || key == "SPACE")
+            {
+                await ResumeFromSavedStage();
+            }
+            else if (key == "ESCAPE" || e.Code == "Escape")
+            {
+                await StartFreshFromStage0();
+            }
+            return;
+        }
+
+        // 3. Kết thúc game (Game Over) -> Enter chơi lại ngay, Esc thoát
+        if (hskShooterState == HskGameState.GameOver)
+        {
+            if (key == "ENTER" || key == " " || key == "SPACE")
+            {
+                await LoadStage(_currentStageIndex);
+            }
+            else if (key == "ESCAPE" || e.Code == "Escape")
+            {
+                CloseHskShooterGame();
+            }
+            return;
+        }
+
+        // 4. Tạm dừng -> 3/Enter/Space tiếp tục, Esc thoát
+        if (hskShooterState == HskGameState.Paused)
+        {
+            if (key == "ENTER" || key == " " || key == "SPACE" || key == "3" || e.Code == "Digit3" || e.Code == "Numpad3")
+            {
+                ToggleHskPause();
+            }
+            else if (key == "ESCAPE" || e.Code == "Escape")
+            {
+                CloseHskShooterGame();
+            }
+            return;
+        }
+
+        // 5. Đang chơi:
+        if (hskShooterState == HskGameState.Playing && !_showStageComplete && !_showStageMap && !_showResumeDialog)
+        {
+            // Phím 1: Bật/Tắt Nhạc
+            if (key == "1" || e.Code == "Digit1" || e.Code == "Numpad1")
+            {
+                await ToggleBgm();
+                return;
+            }
+
+            // Phím 2: Ẩn/Hiện Pinyin
+            if (key == "2" || e.Code == "Digit2" || e.Code == "Numpad2")
+            {
+                TogglePinyin();
+                return;
+            }
+
+            // Phím 3: Tạm dừng
+            if (key == "3" || e.Code == "Digit3" || e.Code == "Numpad3")
+            {
+                ToggleHskPause();
+                return;
+            }
+
+            // Phím Escape: Thoát trò chơi
+            if (key == "ESCAPE" || e.Code == "Escape")
+            {
+                CloseHskShooterGame();
+                return;
+            }
+
+            // Phím Backspace khi click chuột ra ngoài chiến trường: Chỉ xóa ký tự trong ô nhập, KHÔNG BAO GIỜ THOÁT GAME
+            if (key == "BACKSPACE" || e.Code == "Backspace")
+            {
+                if (!string.IsNullOrEmpty(hskInputValue))
+                {
+                    hskInputValue = hskInputValue[..^1];
+                    _ = JS.InvokeVoidAsync("eval", "window.focusHskInput?.()");
+                    StateHasChanged();
+                }
+                return;
+            }
+
+            // Tự động gõ chữ vào ô nhập kể cả khi click nhầm chuột ra ngoài
+            if (e.Key.Length == 1 && char.IsLetter(e.Key[0]))
+            {
+                hskInputValue += e.Key.ToLowerInvariant();
+                _ = JS.InvokeVoidAsync("eval", "window.focusHskInput?.()");
+                StateHasChanged();
+                return;
+            }
+        }
+    }
+
+    private async Task ToggleBgm()
+    {
+        try
+        {
+            _isBgmOn = await JS.InvokeAsync<bool>("eval", "window.WordleSfx?.toggleBgm() ?? false");
+            StateHasChanged();
+        }
+        catch { }
+    }
+
+    private void ToggleHskPause()
+    {
+        if (hskShooterState == HskGameState.Playing)
+        {
+            hskShooterState = HskGameState.Paused;
+            _hskPauseStartTime = DateTime.UtcNow;
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm()");
+        }
+        else if (hskShooterState == HskGameState.Paused)
+        {
+            hskShooterState = HskGameState.Playing;
+            if (_hskPauseStartTime.HasValue)
+            {
+                var pausedDuration = DateTime.UtcNow - _hskPauseStartTime.Value;
+                _hskPauseStartTime = null;
+                foreach (var w in hskActiveWords)
+                {
+                    w.SpawnTime += pausedDuration;
+                }
+                _lastHskSpawnTime += pausedDuration;
+            }
+
+            if (_isBgmOn)
+            {
+                _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.startBgm()");
+            }
+            _ = FocusHskInput();
+        }
+        StateHasChanged();
+    }
+
+    private void CloseHskShooterGame()
+    {
+        hskTimer?.Dispose();
+        _countdownTimer?.Dispose();
+        _hskPauseStartTime = null;
+        _wasPausedByMap = false;
+        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm()");
+        hskShooterState = HskGameState.Menu;
+        isPlayingHskShooter = false;
+        _showStageMap = false;
+        _showStageComplete = false;
+        _showResumeDialog = false;
+        hskBullets.Clear();
+        hskImpacts.Clear();
+    }
+
+    private bool IsHskTargeted(FallingWord word)
+    {
+        if (string.IsNullOrWhiteSpace(hskInputValue)) return false;
+        var normalized = NormalizePinyin(hskInputValue);
+        return NormalizePinyin(word.Vocab.Pinyin).StartsWith(normalized, StringComparison.Ordinal);
+    }
+
+    private void TryMatchHskWord()
+    {
+        if (string.IsNullOrWhiteSpace(hskInputValue) || hskShooterState != HskGameState.Playing || _showStageComplete || _showStageMap) return;
+
+        var normalized = NormalizePinyin(hskInputValue);
+        var match = hskActiveWords.FirstOrDefault(w => !w.IsDestroyed && NormalizePinyin(w.Vocab.Pinyin) == normalized);
+
+        if (match != null)
+        {
+            _ = HandleHskWordHit(match);
+        }
+    }
+
+    private async Task HandleHskWordHit(FallingWord match)
+    {
+        hskInputValue = "";
+
+        // 1. Tọa độ mục tiêu của từ vựng rơi tại thời điểm bắn trúng
+        double targetX = match.XPercent;
+        double elapsed = (DateTime.UtcNow - match.SpawnTime).TotalSeconds;
+        double progress = Math.Clamp(elapsed / match.FallDurationSec, 0.0, 0.95);
+        double targetY = Math.Clamp(5.0 + progress * 75.0, 10.0, 80.0);
+
+        // 2. Bắn đạn laser từ máy bay (50%, 86%) hướng thẳng tới từ vựng
+        var bullet = new ActiveBullet
+        {
+            Id = ++_bulletCounter,
+            StartX = 50.0,
+            StartY = 86.0,
+            TargetX = targetX,
+            TargetY = targetY
+        };
+        hskBullets.Add(bullet);
+
+        // Âm thanh bắn laser
+        try { await JS.InvokeVoidAsync("eval", "window.WordleSfx?.laserShoot()"); } catch { }
+        StateHasChanged();
+
+        // 3. Sau 180ms: Đạn chạm vào từ vựng -> Kích hoạt hiệu ứng va chạm nổ và âm thanh nổ
+        await Task.Delay(180);
+        hskBullets.Remove(bullet);
+        
+        // Âm thanh va chạm đạn nổ
+        try { await JS.InvokeVoidAsync("eval", "window.WordleSfx?.bulletHit()"); } catch { }
+
+        var impact = new ActiveImpact
+        {
+            Id = ++_impactCounter,
+            X = targetX,
+            Y = targetY
+        };
+        hskImpacts.Add(impact);
+
+        match.IsDestroyed = true;
+        hskCombo++;
+        int comboBonus = hskCombo >= 2 ? (hskCombo * 5) : 0;
+        hskScore += 10 + comboBonus;
+        hskWordsShot++;
+        hskWordsShotInStage++;
+
+        // Âm thanh combo khi đoán trúng nhiều từ liên tiếp (>= 2)
+        if (hskCombo >= 2)
+        {
+            try { await JS.InvokeVoidAsync("eval", $"window.WordleSfx?.comboSound({hskCombo})"); } catch { }
+        }
+
+        _ = HskSvc.UpdateVocabProgressAsync(match.Vocab.Id, true).ContinueWith(t =>
+        {
+            if (t.Result) hskNewLearned++;
+        });
+
+        StateHasChanged();
+
+        // 4. Sau 320ms: Thu hồi hiệu ứng nổ và xóa thẻ từ vựng
+        await Task.Delay(320);
+        hskImpacts.Remove(impact);
+        hskActiveWords.Remove(match);
+
+        if (hskSpawnIndex >= _currentStageWords.Count && hskActiveWords.Count(w => !w.IsDestroyed) == 0)
+        {
+            TriggerStageComplete();
+        }
+
+        StateHasChanged();
+    }
+
+    private static string NormalizePinyin(string pinyin)
+    {
+        if (string.IsNullOrEmpty(pinyin)) return "";
+        var decomposed = pinyin.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in decomposed)
+        {
+            var uc = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c);
+            if (uc != System.Globalization.UnicodeCategory.NonSpacingMark)
+            {
+                if (c >= 'a' && c <= 'z') sb.Append(c);
+            }
+        }
+        return sb.ToString();
+    }
+
+    public void Dispose()
+    {
+        hskTimer?.Dispose();
+        _countdownTimer?.Dispose();
+        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm()");
+    }
+}

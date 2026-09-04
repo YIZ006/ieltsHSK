@@ -162,6 +162,7 @@
             new LearningSectionDto{ Name="Dashboard", Route="/toeic", Icon="bi-speedometer2", Language="TOEIC", OrderIndex=1, Description="Tổng quan TOEIC" },
             new LearningSectionDto{ Name="Luyện đề", Route="/toeic/test", Icon="bi-journal-text", Language="TOEIC", OrderIndex=2, Description="Đề thi chuẩn ETS" },
             new LearningSectionDto{ Name="Từ vựng", Route="/toeic/flashcards", Icon="bi-layers", Language="TOEIC", OrderIndex=3, Description="Flashcard 70 từ" },
+            new LearningSectionDto{ Name="Trò chơi", Route="/toeic/games", Icon="bi-controller", Language="TOEIC", OrderIndex=4, Description="Game học từ & phản xạ" },
         },
         ["IELTS"] = new()
         {
@@ -169,11 +170,13 @@
             new LearningSectionDto{ Name="Truyện đệm", Route="/ielts/stories", Icon="bi-book", Language="IELTS", OrderIndex=2, Description="Luyện đọc qua truyện" },
             new LearningSectionDto{ Name="Nghe điền từ", Route="/ielts/listen-fill", Icon="bi-headphones", Language="IELTS", OrderIndex=3, Description="Luyện nghe gõ từ" },
             new LearningSectionDto{ Name="Phòng thi thử", Route="/ielts/mock-tests", Icon="bi-journal-check", Language="IELTS", OrderIndex=4, Description="Phòng thi thử" },
+            new LearningSectionDto{ Name="Trò chơi", Route="/ielts/games", Icon="bi-controller", Language="IELTS", OrderIndex=5, Description="Game học từ & phản xạ" },
         },
         ["HSK"] = new()
         {
             new LearningSectionDto{ Name="Luyện đề HSK", Route="/hsk/luyen-de", Icon="bi-journal-text", Language="HSK", OrderIndex=1, Description="Luyện đề thi HSK các cấp" },
             new LearningSectionDto{ Name="Từ vựng HSK", Route="/hsk/tu-vung", Icon="bi-spellcheck", Language="HSK", OrderIndex=2, Description="Từ vựng HSK 1-9" },
+            new LearningSectionDto{ Name="Trò chơi", Route="/hsk/games", Icon="bi-controller", Language="HSK", OrderIndex=3, Description="Game học từ & phản xạ" },
         }
     };
 
@@ -195,7 +198,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        DetectProgramFromUrl(NavManager.Uri);
+        bool detected = DetectProgramFromUrl(NavManager.Uri);
         
         // Immediate instant synchronous population (0ms delay, zero white boxes)
         SetInstantMenu(selectedProgram);
@@ -211,13 +214,23 @@
             var prog = await LocalStorage.GetItemAsync<string>("sidebar_program");
             if (!string.IsNullOrWhiteSpace(prog) && Programs.Any(p => p.Key == prog))
             {
-                if (DetectProgramFromUrl(NavManager.Uri))
+                // If URL did not specify an explicit program prefix, restore from LocalStorage
+                if (!detected && selectedProgram != prog)
                 {
+                    selectedProgram = prog;
                     SetInstantMenu(selectedProgram);
                 }
             }
         }
         catch { }
+
+        // If at generic /games or /tro-choi, replace with program-specific route
+        var rel = NavManager.ToBaseRelativePath(NavManager.Uri).ToLowerInvariant();
+        if (rel == "games" || rel == "tro-choi")
+        {
+            var targetUrl = $"/{selectedProgram.ToLowerInvariant()}/{rel}";
+            NavManager.NavigateTo(targetUrl, replace: true);
+        }
 
         await LoadMenuAsync();
 
@@ -242,7 +255,7 @@
     private bool DetectProgramFromUrl(string url)
     {
         var relative = NavManager.ToBaseRelativePath(url).ToLowerInvariant();
-        string targetProg = selectedProgram;
+        string? targetProg = null;
         if (relative.StartsWith("hsk"))
         {
             targetProg = "HSK";
@@ -256,11 +269,16 @@
             targetProg = "TOEIC";
         }
 
-        if (targetProg != selectedProgram)
+        if (targetProg != null)
         {
-            selectedProgram = targetProg;
-            SetInstantMenu(selectedProgram);
-            return true;
+            try { _ = LocalStorage.SetItemAsync("sidebar_program", targetProg); } catch { }
+
+            if (targetProg != selectedProgram)
+            {
+                selectedProgram = targetProg;
+                SetInstantMenu(selectedProgram);
+                return true;
+            }
         }
         return false;
     }
@@ -270,7 +288,31 @@
         var data = await NavService.GetAsync(selectedProgram);
         if (data.Count > 0)
         {
-            menuItems = data.OrderBy(m => m.OrderIndex).ToList();
+            menuItems = data.Where(m => m.Route != "/hsk/vocab-shooter").OrderBy(m => m.OrderIndex).ToList();
+
+            var gameRoute = $"/{selectedProgram.ToLowerInvariant()}/games";
+            // Normalize any generic or other-program game routes to current program
+            foreach (var item in menuItems)
+            {
+                if (item.Route == "/games" || item.Route == "/tro-choi" || item.Route == "/ielts/games" || item.Route == "/toeic/games" || item.Route == "/hsk/games")
+                {
+                    item.Route = gameRoute;
+                }
+            }
+
+            if (!menuItems.Any(m => m.Route == gameRoute || m.Route.EndsWith("/games", StringComparison.OrdinalIgnoreCase) || m.Route.EndsWith("/tro-choi", StringComparison.OrdinalIgnoreCase)))
+            {
+                menuItems.Add(new LearningSectionDto
+                {
+                    Name = "Trò chơi",
+                    Route = gameRoute,
+                    Icon = "bi-controller",
+                    Language = selectedProgram,
+                    OrderIndex = menuItems.Count + 1,
+                    Description = "Game học từ & phản xạ"
+                });
+            }
+
             StateHasChanged();
         }
     }
@@ -323,6 +365,14 @@
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
+        var rel = NavManager.ToBaseRelativePath(e.Location).ToLowerInvariant();
+        if (rel == "games" || rel == "tro-choi")
+        {
+            var targetUrl = $"/{selectedProgram.ToLowerInvariant()}/{rel}";
+            NavManager.NavigateTo(targetUrl, replace: true);
+            return;
+        }
+
         bool changed = DetectProgramFromUrl(e.Location);
         if (changed || menuItems.Count == 0)
         {

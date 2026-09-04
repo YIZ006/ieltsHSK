@@ -67,7 +67,8 @@ public class HskService
             new HskLearningSection { Name = "Luyện đọc", Route = "/hsk/reading", Icon = "bi-journal-text", Description = "Đọc hiểu đoạn văn, nối câu và sắp xếp câu" },
             new HskLearningSection { Name = "Luyện viết", Route = "/hsk/writing", Icon = "bi-pencil-square", Description = "Tập viết chữ Hán, điền từ và dịch thuật" },
             new HskLearningSection { Name = "Luyện nói HSKK", Route = "/hsk/speaking", Icon = "bi-mic-fill", Description = "Luyện phát âm, đọc to và miêu tả tranh" },
-            new HskLearningSection { Name = "Thi thử HSK", Route = "/hsk/mock-tests", Icon = "bi-journal-check", Description = "Bộ đề thi thử mô phỏng thời gian thực" }
+            new HskLearningSection { Name = "Thi thử HSK", Route = "/hsk/mock-tests", Icon = "bi-journal-check", Description = "Bộ đề thi thử mô phỏng thời gian thực" },
+            new HskLearningSection { Name = "Bắn Từ Vựng", Route = "/hsk/vocab-shooter", Icon = "bi-crosshair", Description = "Gõ pinyin bắn từ vựng rơi" }
         };
     }
 

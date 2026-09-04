@@ -188,6 +188,308 @@
                 window.speechSynthesis.cancel();
             }
         };
+
+        // Auto-focus game input (dùng cho HskVocabShooter popup)
+        // Gọi từ OnAfterRenderAsync sau khi <input> đã được render vào DOM
+        window.focusGameInput = function (inputElement) {
+            if (!inputElement) return;
+            try {
+                // .focus() để nhận keyboard trên desktop
+                inputElement.focus({ preventScroll: true });
+                // Đặt cursor vào cuối chuỗi (nếu có text)
+                const len = inputElement.value ? inputElement.value.length : 0;
+                inputElement.setSelectionRange(len, len);
+            } catch (e) {
+                // Fallback nếu element ref không hợp lệ
+                console.warn('[focusGameInput] focus failed:', e);
+            }
+        };
+
+        // ─── Keyboard Sound Effects (Web Audio API — không cần file âm thanh) ───
+        window.WordleSfx = (function () {
+            let _ctx = null;
+            function ctx() {
+                if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
+                // Resume nếu bị suspend (auto-play policy)
+                if (_ctx.state === 'suspended') _ctx.resume();
+                return _ctx;
+            }
+
+            // Tạo một oscillator ngắn
+            function beep(freq, type, gainVal, durationSec, startTimeSec) {
+                try {
+                    const c = ctx();
+                    const osc = c.createOscillator();
+                    const gain = c.createGain();
+                    osc.connect(gain);
+                    gain.connect(c.destination);
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, c.currentTime + startTimeSec);
+                    gain.gain.setValueAtTime(gainVal, c.currentTime + startTimeSec);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + startTimeSec + durationSec);
+                    osc.start(c.currentTime + startTimeSec);
+                    osc.stop(c.currentTime + startTimeSec + durationSec);
+                } catch (e) { }
+            }
+
+            return {
+                // Gõ một ký tự: click ngắn giống bàn phím cơ
+                keyClick: function () {
+                    beep(1100, 'square', 0.06, 0.055, 0);
+                    beep(900, 'square', 0.03, 0.03, 0.01);
+                },
+                // Xóa ký tự: âm thấp hơn
+                keyDelete: function () {
+                    beep(600, 'triangle', 0.07, 0.07, 0);
+                },
+                // Enter hợp lệ (nộp đúng số chữ): hai nốt nhẹ lên
+                keyEnterOk: function () {
+                    beep(880, 'sine', 0.08, 0.08, 0);
+                    beep(1100, 'sine', 0.06, 0.1, 0.06);
+                },
+                // Enter thiếu chữ hoặc lỗi: âm rè ngắn
+                keyEnterError: function () {
+                    beep(200, 'sawtooth', 0.1, 0.12, 0);
+                },
+                // Đoán đúng (win): fanfare nhỏ
+                win: function () {
+                    [523, 659, 784, 1047].forEach(function (f, i) {
+                        beep(f, 'sine', 0.12, 0.18, i * 0.1);
+                    });
+                },
+                // Hết lượt (lose): âm xuống dần
+                lose: function () {
+                    [440, 370, 294, 220].forEach(function (f, i) {
+                        beep(f, 'triangle', 0.1, 0.2, i * 0.12);
+                    });
+                },
+
+                // ─── HSK Máy Bay Bắn Từ Vựng ───
+                // Tiếng đạn laser bắn từ máy bay
+                laserShoot: function () {
+                    try {
+                        const c = ctx();
+                        const osc = c.createOscillator();
+                        const gain = c.createGain();
+                        osc.connect(gain);
+                        gain.connect(c.destination);
+                        osc.type = 'sawtooth';
+                        const t = c.currentTime;
+                        osc.frequency.setValueAtTime(980, t);
+                        osc.frequency.exponentialRampToValueAtTime(140, t + 0.16);
+                        gain.gain.setValueAtTime(0.12, t);
+                        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+                        osc.start(t);
+                        osc.stop(t + 0.16);
+                    } catch (e) { }
+                },
+
+                // Tiếng nổ / va chạm đạn trúng từ vựng
+                bulletHit: function () {
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+                        // 1. Âm trầm nổ boom (thump)
+                        const osc = c.createOscillator();
+                        const gain = c.createGain();
+                        osc.connect(gain);
+                        gain.connect(c.destination);
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(170, t);
+                        osc.frequency.exponentialRampToValueAtTime(35, t + 0.22);
+                        gain.gain.setValueAtTime(0.25, t);
+                        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+                        osc.start(t);
+                        osc.stop(t + 0.22);
+
+                        // 2. Tiếng nổ va chạm vỡ vụn
+                        const snap = c.createOscillator();
+                        const snapGain = c.createGain();
+                        snap.connect(snapGain);
+                        snapGain.connect(c.destination);
+                        snap.type = 'square';
+                        snap.frequency.setValueAtTime(450, t);
+                        snap.frequency.exponentialRampToValueAtTime(80, t + 0.12);
+                        snapGain.gain.setValueAtTime(0.12, t);
+                        snapGain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+                        snap.start(t);
+                        snap.stop(t + 0.12);
+                    } catch (e) { }
+                },
+
+                // Tiếng khi từ rơi chạm đáy gây trừ máu (Damage Hit)
+                damageHit: function () {
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+                        // Âm cảnh báo rè thấp (alarm buzz / impact)
+                        const osc = c.createOscillator();
+                        const gain = c.createGain();
+                        osc.connect(gain);
+                        gain.connect(c.destination);
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(140, t);
+                        osc.frequency.linearRampToValueAtTime(60, t + 0.28);
+                        gain.gain.setValueAtTime(0.28, t);
+                        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+                        osc.start(t);
+                        osc.stop(t + 0.28);
+
+                        // Tiếng đập thình thịch thứ 2
+                        beep(90, 'triangle', 0.22, 0.25, 0.05);
+                    } catch (e) { }
+                },
+
+                // Tiếng thưởng Combo khi bắn trúng liên tiếp
+                comboSound: function (combo) {
+                    try {
+                        const baseFreq = Math.min(1200, 440 + (combo * 70));
+                        beep(baseFreq, 'sine', 0.12, 0.15, 0);
+                        beep(baseFreq * 1.25, 'triangle', 0.08, 0.18, 0.06);
+                    } catch (e) { }
+                },
+
+                // Tiếng đếm ngược 3, 2, 1
+                countdownTick: function (num) {
+                    const freqs = { 3: 523, 2: 659, 1: 784 };
+                    const f = freqs[num] || 600;
+                    beep(f, 'sine', 0.15, 0.18, 0);
+                    beep(f * 1.5, 'triangle', 0.05, 0.12, 0.02);
+                },
+
+                // Tiếng bắt đầu màn mới (GO!)
+                countdownGo: function () {
+                    [523, 659, 784, 1046].forEach(function (f, i) {
+                        beep(f, 'square', 0.1, 0.22, i * 0.07);
+                    });
+                },
+
+                // ─── Nhạc Nền Game (Web Audio Retro Arcade Synth BGM Loop) ───
+                _bgmTimer: null,
+                _bgmPlaying: false,
+                _bgmStep: 0,
+                startBgm: function () {
+                    if (this._bgmPlaying) return;
+                    this._bgmPlaying = true;
+                    const self = this;
+                    const melody = [
+                        523, 0, 659, 0,  784, 880, 784, 0,
+                        659, 0, 523, 0,  587, 0, 659, 0,
+                        784, 0, 880, 0,  1046, 0, 880, 784,
+                        659, 587, 523, 0, 440, 0, 523, 0
+                    ];
+                    const bass = [
+                        261, 261, 261, 261, 220, 220, 220, 220,
+                        174, 174, 174, 174, 196, 196, 196, 196,
+                        261, 261, 261, 261, 220, 220, 220, 220,
+                        174, 174, 174, 174, 196, 196, 246, 196
+                    ];
+
+                    this._bgmStep = 0;
+                    this._bgmTimer = setInterval(function () {
+                        if (!self._bgmPlaying) return;
+                        const step = self._bgmStep % melody.length;
+                        const note = melody[step];
+                        const bNote = bass[step];
+                        if (note > 0) {
+                            beep(note, 'sine', 0.035, 0.16, 0);
+                        }
+                        if (step % 2 === 0 && bNote > 0) {
+                            beep(bNote, 'triangle', 0.042, 0.2, 0);
+                        }
+                        self._bgmStep++;
+                    }, 175);
+                },
+
+                stopBgm: function () {
+                    this._bgmPlaying = false;
+                    if (this._bgmTimer) {
+                        clearInterval(this._bgmTimer);
+                        this._bgmTimer = null;
+                    }
+                },
+
+                toggleBgm: function () {
+                    if (this._bgmPlaying) {
+                        this.stopBgm();
+                        return false;
+                    } else {
+                        this.startBgm();
+                        return true;
+                    }
+                },
+
+                isBgmPlaying: function () {
+                    return this._bgmPlaying;
+                }
+            };
+        })();
+
+        // Auto-focus helper cho HSK Shooter
+        window.focusHskInput = function () {
+            try {
+                const input = document.querySelector('.hsk-input-dock input');
+                if (input && document.activeElement !== input) {
+                    input.focus();
+                }
+            } catch (e) { }
+        };
+
+        // Tự động focus lại ô nhập khi click chuột ra ngoài chiến trường
+        document.addEventListener('pointerdown', function (e) {
+            const overlay = document.querySelector('.hsk-game-overlay');
+            if (overlay && !e.target.closest('button, .hsk-dialog-card, .hsk-stage-map-card, .hsk-resume-overlay, .hsk-stage-complete-overlay, .stage-map-overlay')) {
+                const input = overlay.querySelector('.hsk-input-dock input');
+                if (input && document.activeElement !== input) {
+                    setTimeout(() => input.focus(), 0);
+                }
+            }
+        });
+
+        // Drag-to-scroll cho Bản Đồ Tầng HSK Shooter (Dí chuột kéo lên kéo xuống)
+        window.initStageMapDrag = function () {
+            const el = document.getElementById('hskStageMapScroll');
+            if (!el || el.dataset.dragInit) return;
+            el.dataset.dragInit = 'true';
+
+            let startY = 0;
+            let scrollTop = 0;
+
+            if (!window._hskMapDragWindowInit) {
+                window._hskMapDragWindowInit = true;
+                window.addEventListener('mouseup', function () {
+                    const scrollEl = document.getElementById('hskStageMapScroll');
+                    if (scrollEl) {
+                        scrollEl._isDraggingMap = false;
+                        scrollEl.classList.remove('is-dragging');
+                    }
+                });
+            }
+
+            el.addEventListener('mousedown', function (e) {
+                if (e.target.closest('button, .btn-stage-play, .btn-close-map, .btn-resume-from-map')) return;
+                el._isDraggingMap = true;
+                el.classList.add('is-dragging');
+                startY = e.pageY - el.offsetTop;
+                scrollTop = el.scrollTop;
+            });
+
+            el.addEventListener('mousemove', function (e) {
+                if (!el._isDraggingMap) return;
+                e.preventDefault();
+                const y = e.pageY - el.offsetTop;
+                const walk = (y - startY) * 1.5;
+                el.scrollTop = scrollTop - walk;
+            });
+
+            // Tự động cuộn căn giữa tầng đang ở
+            setTimeout(function () {
+                const activeRow = document.getElementById('currentActiveStageRow');
+                if (activeRow) {
+                    activeRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        };
     </script>
 </body>
 

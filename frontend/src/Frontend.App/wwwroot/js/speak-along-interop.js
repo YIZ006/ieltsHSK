@@ -12,6 +12,7 @@ window.SpeakAlongInterop = {
     _analyser: null,
     _animFrame: null,
     _waveformCanvas: null,
+    _karaokeTimers: [],
 
     // Text-to-Speech with Karaoke Word Sync & Rate control
     speakTextWithKaraoke: function (text, lang, rate, dotNetRef) {
@@ -21,8 +22,12 @@ window.SpeakAlongInterop = {
                 return;
             }
 
-            // Cancel ongoing TTS
+            // Cancel ongoing TTS & clear any pending karaoke timers
             window.speechSynthesis.cancel();
+            if (window.SpeakAlongInterop._karaokeTimers) {
+                window.SpeakAlongInterop._karaokeTimers.forEach(t => clearTimeout(t));
+            }
+            window.SpeakAlongInterop._karaokeTimers = [];
 
             if (!text || text.trim() === '') {
                 resolve(true);
@@ -35,25 +40,59 @@ window.SpeakAlongInterop = {
             utterance.pitch = 1.0;
 
             const voices = window.speechSynthesis.getVoices();
-            const englishVoice = voices.find(v => v.lang.startsWith('en') && 
+            const englishVoice = voices.find(v => v.lang.startsWith('en') &&
                 (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha') || v.name.includes('US') || v.name.includes('Jenny') || v.name.includes('Guy')));
             if (englishVoice) {
                 utterance.voice = englishVoice;
             }
 
-            // Word Boundary for Karaoke sync
+            // --- Fallback timer-based karaoke ---
+            // Chrome/Cốc Cốc thường không fire 'word' boundary.
+            // Tính tốc độ đọc: ~150 wpm ở rate=1.0, mỗi từ ~160ms/ký tự trung bình 5 ký tự.
+            let boundaryFired = false;
+            const setupFallbackKaraoke = () => {
+                if (boundaryFired || !dotNetRef) return;
+                const words = text.trim().split(/\s+/);
+                const AVG_CHARS_PER_SEC = 14 * (rate || 1.0); // ~14 chars/sec at 1x
+                let charOffset = 0;
+                let timeMs = 100; // small initial delay for TTS to start
+                words.forEach((word, idx) => {
+                    const wordDuration = (word.length / AVG_CHARS_PER_SEC) * 1000;
+                    const t = setTimeout(() => {
+                        try { dotNetRef.invokeMethodAsync('OnKaraokeWordBoundary', charOffset, word.length); } catch (e) { }
+                    }, timeMs);
+                    window.SpeakAlongInterop._karaokeTimers.push(t);
+                    charOffset += word.length + 1; // +1 for space
+                    timeMs += wordDuration;
+                });
+            };
+
             if (dotNetRef) {
                 utterance.onboundary = function (event) {
                     if (event.name === 'word') {
+                        boundaryFired = true;
                         try {
                             dotNetRef.invokeMethodAsync('OnKaraokeWordBoundary', event.charIndex, event.charLength || 0);
                         } catch (err) { }
                     }
                 };
+
+                // If no boundary event fires within 600ms → use fallback
+                const fallbackCheckTimer = setTimeout(() => {
+                    if (!boundaryFired) {
+                        console.log('[TTS] onboundary not supported, using timer-based karaoke fallback');
+                        setupFallbackKaraoke();
+                    }
+                }, 600);
+                window.SpeakAlongInterop._karaokeTimers.push(fallbackCheckTimer);
             }
 
             utterance.onend = function () {
                 window.SpeakAlongInterop._activeUtterance = null;
+                if (window.SpeakAlongInterop._karaokeTimers) {
+                    window.SpeakAlongInterop._karaokeTimers.forEach(t => clearTimeout(t));
+                    window.SpeakAlongInterop._karaokeTimers = [];
+                }
                 if (dotNetRef) {
                     try { dotNetRef.invokeMethodAsync('OnKaraokeEnded'); } catch (err) { }
                 }
@@ -63,6 +102,10 @@ window.SpeakAlongInterop = {
             utterance.onerror = function (e) {
                 console.warn('TTS error:', e);
                 window.SpeakAlongInterop._activeUtterance = null;
+                if (window.SpeakAlongInterop._karaokeTimers) {
+                    window.SpeakAlongInterop._karaokeTimers.forEach(t => clearTimeout(t));
+                    window.SpeakAlongInterop._karaokeTimers = [];
+                }
                 if (dotNetRef) {
                     try { dotNetRef.invokeMethodAsync('OnKaraokeEnded'); } catch (err) { }
                 }
@@ -83,6 +126,10 @@ window.SpeakAlongInterop = {
             window.speechSynthesis.cancel();
         }
         this._activeUtterance = null;
+        if (this._karaokeTimers) {
+            this._karaokeTimers.forEach(t => clearTimeout(t));
+            this._karaokeTimers = [];
+        }
     },
 
     // Start recording audio + real-time speech recognition + live wave visualizer

@@ -340,7 +340,15 @@ public static class DependencyInjection
             {
                 dbContext.LearningSections.AddRange(
                     new LearningSection { Name = "Luyện đề HSK", Description = "Luyện đề thi HSK các cấp", Icon = "bi-journal-text", Route = "/hsk/luyen-de", Language = "HSK", OrderIndex = 1 },
-                    new LearningSection { Name = "Từ vựng HSK", Description = "Từ vựng HSK 1-9", Icon = "bi-spellcheck", Route = "/hsk/tu-vung", Language = "HSK", OrderIndex = 2 }
+                    new LearningSection { Name = "Từ vựng HSK", Description = "Từ vựng HSK 1-9", Icon = "bi-spellcheck", Route = "/hsk/tu-vung", Language = "HSK", OrderIndex = 2 },
+                    new LearningSection { Name = "Bắn Từ Vựng", Description = "Gõ pinyin bắn từ vựng rơi", Icon = "bi-crosshair", Route = "/hsk/vocab-shooter", Language = "HSK", OrderIndex = 3 }
+                );
+                await dbContext.SaveChangesAsync();
+            }
+            else if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "HSK" && s.Route == "/hsk/vocab-shooter"))
+            {
+                dbContext.LearningSections.Add(
+                    new LearningSection { Name = "Bắn Từ Vựng", Description = "Gõ pinyin bắn từ vựng rơi", Icon = "bi-crosshair", Route = "/hsk/vocab-shooter", Language = "HSK", OrderIndex = 3 }
                 );
                 await dbContext.SaveChangesAsync();
             }
@@ -355,6 +363,34 @@ public static class DependencyInjection
                     new LearningSection { Name = "Nghe Part 1-4", Description = "Luyện Listening", Icon = "bi-headphones", Route = "/toeic/listening", Language = "TOEIC", OrderIndex = 4 },
                     new LearningSection { Name = "Đọc Part 5-7", Description = "Luyện Reading", Icon = "bi-book", Route = "/toeic/reading", Language = "TOEIC", OrderIndex = 5 }
                 );
+                await dbContext.SaveChangesAsync();
+            }
+
+            // Ensure Trò chơi (/games) exists for IELTS, HSK, TOEIC
+            bool hasNewGames = false;
+            if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "IELTS" && s.Route == "/games"))
+            {
+                dbContext.LearningSections.Add(
+                    new LearningSection { Name = "Trò chơi", Description = "Game học từ & phản xạ", Icon = "bi-controller", Route = "/games", Language = "IELTS", OrderIndex = 10 }
+                );
+                hasNewGames = true;
+            }
+            if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "HSK" && s.Route == "/games"))
+            {
+                dbContext.LearningSections.Add(
+                    new LearningSection { Name = "Trò chơi", Description = "Game học từ & phản xạ", Icon = "bi-controller", Route = "/games", Language = "HSK", OrderIndex = 10 }
+                );
+                hasNewGames = true;
+            }
+            if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "TOEIC" && s.Route == "/games"))
+            {
+                dbContext.LearningSections.Add(
+                    new LearningSection { Name = "Trò chơi", Description = "Game học từ & phản xạ", Icon = "bi-controller", Route = "/games", Language = "TOEIC", OrderIndex = 10 }
+                );
+                hasNewGames = true;
+            }
+            if (hasNewGames)
+            {
                 await dbContext.SaveChangesAsync();
             }
         }
