@@ -295,235 +295,339 @@ else if (selectedGameForInfo == "hsk-shooter")
      ===================================================================== -->
 @if (isPlayingWordle)
 {
-    <div class="fullscreen-game-overlay" @ref="wordleOverlayRef" @onkeydown="HandleKeyDown" tabindex="0" @onclick="FocusWordle">
+    <div class="fullscreen-game-overlay quantum-game-overlay" @ref="wordleOverlayRef" @onkeydown="HandleKeyDown" tabindex="0" @onclick="FocusWordle">
         <!-- Topbar -->
-        <header class="fullscreen-topbar">
+        <header class="fullscreen-topbar quantum-topbar">
             <div class="topbar-left">
-                <div class="fs-game-badge">
-                    <i class="bi bi-puzzle-fill text-success"></i> IELTS WORDLE
+                <div class="fs-game-badge quantum-badge">
+                    <i class="bi bi-shield-lock-fill"></i> BẺ KHÓA BOM LƯỢNG TỬ
                 </div>
-                <span class="fs-game-title">Mật Thư Ngữ Cảnh</span>
+                <span class="mode-tag">DEFUSAL ACTIVE</span>
+            </div>
+
+            <!-- Length Mode Selector (4, 5, 6, 7, 8 ký tự) -->
+            <div class="quantum-mode-selector">
+                <span class="mode-lbl">CHẾ ĐỘ:</span>
+                @foreach (var len in new[] { "4", "5", "6", "7", "8" })
+                {
+                    <button type="button" class="btn-mode @(selectedWordLength == len ? "active" : "")" @onclick="() => SetWordLengthMode(len)">
+                        @(len) KÝ TỰ
+                    </button>
+                }
             </div>
 
             <div class="topbar-center">
                 <span class="fs-stat-pill text-warning"><i class="bi bi-star-fill"></i> Điểm: <b>@wordleScore</b></span>
                 <span class="fs-stat-pill text-danger"><i class="bi bi-fire"></i> Chuỗi: <b>@wordleStreak</b> 🔥</span>
-                <span class="fs-stat-pill text-info"><i class="bi bi-bullseye"></i> Lượt: <b>@(currentGuessIndex + 1)/@MaxGuesses</b></span>
+                <span class="fs-stat-pill text-info"><i class="bi bi-battery-charging"></i> Pin: <b>@(MaxGuesses - guesses.Count)/@MaxGuesses</b></span>
             </div>
 
             <div class="topbar-right">
-                <button class="btn-fs-tool" @onclick="NextWord" title="Đổi từ vựng khác">
+                <button type="button" class="btn-fs-tool btn-fs-tut" @onclick="OpenQuantumTutorial" title="Hướng dẫn từng phần">
+                    <i class="bi bi-question-circle"></i> Hướng dẫn
+                </button>
+                <button type="button" class="btn-fs-tool" @onclick="NextWord" title="Đổi từ vựng khác">
                     <i class="bi bi-arrow-clockwise"></i> Đổi từ
                 </button>
-                <button class="btn-fs-exit" @onclick="CloseWordleGame" title="Thoát trò chơi">
+                <button type="button" class="btn-fs-exit" @onclick="CloseWordleGame" title="Thoát trò chơi">
                     <i class="bi bi-x-lg me-1"></i> Thoát
                 </button>
             </div>
         </header>
 
-        <!-- Main Body -->
-        <main class="fullscreen-game-body">
+        <!-- Main Body: Quantum Briefcase Stage -->
+        <main class="fullscreen-game-body quantum-body">
             @if (currentWord == null)
             {
                 <div class="fs-loading-box">
                     <div class="spinner"></div>
-                    <p>Đang chuẩn bị từ vựng...</p>
+                    <p>Đang chuẩn bị mật thư...</p>
                 </div>
             }
             else
             {
-                <div class="wordle-desktop-layout">
-                    <!-- Left column: Clues & Context -->
-                    <div class="wordle-clue-column">
-                        <div class="clue-panel">
-                            <div class="clue-tags-row">
-                                <span class="badge-pos">@(string.IsNullOrWhiteSpace(currentWord.PartOfSpeech) ? "TỪ VỰNG" : currentWord.PartOfSpeech.ToUpperInvariant())</span>
-                                @if (!string.IsNullOrWhiteSpace(currentWord.CefrLevel))
-                                {
-                                    <span class="badge-cefr">CEFR @currentWord.CefrLevel.ToUpperInvariant()</span>
-                                }
-                                @if (!string.IsNullOrWhiteSpace(currentWord.Topic))
-                                {
-                                    <span class="badge-topic"><i class="bi bi-tag-fill"></i> @currentWord.Topic</span>
-                                }
-                                <span class="badge-len"><i class="bi bi-fonts"></i> @WordLength chữ cái</span>
-                            </div>
+                <div class="stage-box" id="quantumStageBox">
+                    <!-- 1. Background Image -->
+                    <img class="briefcase-bg" src="images/games/quantum-cipher/kipbom_base.png" alt="Quantum Briefcase">
 
-                            <div class="clue-meaning-card">
-                                <div class="meaning-lbl"><i class="bi bi-translate text-success me-2"></i>Nghĩa tiếng Việt:</div>
-                                <div class="meaning-txt">@currentWord.Meaning</div>
-                            </div>
+                    <!-- 2. Interactive Layer -->
+                    <div class="interactive-layer">
 
-                            @if (hintLetterIndices.Count > 0)
-                            {
-                                <div class="hints-active-box">
-                                    <i class="bi bi-lightbulb-fill text-warning me-2"></i>
-                                    <span>Manh mối đã mở:</span>
-                                    @foreach (var kvp in hintLetterIndices.OrderBy(k => k.Key))
-                                    {
-                                        <span class="hint-char-chip">Ô @(kvp.Key + 1): <b>@kvp.Value</b></span>
-                                    }
-                                </div>
-                            }
-
-                            @if (!string.IsNullOrWhiteSpace(ContextSentence))
-                            {
-                                <div class="clue-sentence-card">
-                                    <div class="sent-lbl"><i class="bi bi-chat-quote-fill text-info me-2"></i>Câu ngữ cảnh:</div>
-                                    <div class="sent-en-txt">
-                                        @((MarkupString)FormattedSentenceHtml)
+                        <!-- LEFT DOOR: TACTICAL PHONE HUD -->
+                        <div class="phone-dock-left">
+                            <div class="phone-casing">
+                                <div class="phone-screen">
+                                    <div class="screen-topbar">
+                                        <div class="screen-title">
+                                            <span class="dot"></span>
+                                            <span>DOSSIER // @(string.IsNullOrWhiteSpace(currentWord.CefrLevel) ? "IELTS" : $"CEFR {currentWord.CefrLevel}")</span>
+                                        </div>
+                                        <div class="screen-stat">📶 99%</div>
                                     </div>
-                                    @if (showSentenceTranslation && !string.IsNullOrWhiteSpace(currentWord.ExampleMeaning))
+
+                                    <!-- Tags Row -->
+                                    <div class="clue-tags-row">
+                                        <span class="badge-pos">@(string.IsNullOrWhiteSpace(currentWord.PartOfSpeech) ? "NOUN" : currentWord.PartOfSpeech.ToUpperInvariant())</span>
+                                        @if (!string.IsNullOrWhiteSpace(currentWord.Topic))
+                                        {
+                                            <span class="badge-topic"><i class="bi bi-tag-fill"></i> @currentWord.Topic</span>
+                                        }
+                                        <span class="badge-len"><i class="bi bi-fonts"></i> @WordLength chữ</span>
+                                    </div>
+
+                                    <!-- Vietnamese Definition -->
+                                    <div class="clue-viet-box">
+                                        <div class="clue-viet-label">Nghĩa tiếng Việt:</div>
+                                        <div class="clue-viet-text">@currentWord.Meaning</div>
+                                    </div>
+
+                                    <!-- Context Sentence with Blank -->
+                                    @if (!string.IsNullOrWhiteSpace(ContextSentence))
                                     {
-                                        <div class="sent-vi-txt">
-                                            <i class="bi bi-arrow-return-right me-1 text-muted"></i> @currentWord.ExampleMeaning
+                                        <div class="clue-sentence-box">
+                                            <div class="clue-sentence-label">Ngữ cảnh câu ví dụ:</div>
+                                            <div class="clue-sentence-text">
+                                                @((MarkupString)FormattedSentenceHtml)
+                                            </div>
+                                            @if (showSentenceTranslation && !string.IsNullOrWhiteSpace(currentWord.ExampleMeaning))
+                                            {
+                                                <div class="sent-vi-trans">
+                                                    <i class="bi bi-arrow-return-right me-1 text-muted"></i> @currentWord.ExampleMeaning
+                                                </div>
+                                            }
+                                            else if (!string.IsNullOrWhiteSpace(currentWord.ExampleMeaning))
+                                            {
+                                                <button type="button" class="btn-toggle-trans" @onclick="() => showSentenceTranslation = true">
+                                                    <i class="bi bi-eye"></i> Xem bản dịch câu
+                                                </button>
+                                            }
                                         </div>
                                     }
-                                    else if (!string.IsNullOrWhiteSpace(currentWord.ExampleMeaning))
-                                    {
-                                        <button class="btn-toggle-trans" @onclick="() => showSentenceTranslation = true">
-                                            <i class="bi bi-eye"></i> Xem bản dịch câu
-                                        </button>
-                                    }
-                                </div>
-                            }
 
-                            <div class="clue-helper-actions">
-                                <button class="btn-action-hint" @onclick="UseLetterHint" disabled="@isGameOver" title="Gợi ý chữ cái chưa đoán đúng (Phím tắt: 1)">
-                                    <i class="bi bi-lightbulb-fill text-warning"></i> Gợi ý chữ
-                                    <span class="kbd-badge-sm">1</span>
-                                </button>
-                                <button class="btn-action-sound" @onclick="PronounceWord" title="Nghe phát âm (Phím tắt: 2)">
-                                    <i class="bi bi-volume-up-fill text-info"></i> Phát âm
-                                    <span class="kbd-badge-sm">2</span>
-                                </button>
+                                    <!-- Action Buttons -->
+                                    <div class="phone-tools">
+                                        <button type="button" class="btn-screen-act btn-hint-first" @onclick="UseLetterHint" disabled="@(isGameOver || hasUsedHintThisRound)" style="@(hasUsedHintThisRound ? "opacity: 0.45; cursor: not-allowed;" : "")" title="@(hasUsedHintThisRound ? "Đã dùng gợi ý cho từ này" : "Gợi ý chữ cái đầu tiên (Phím 1)")">
+                                            <span>⚡ MỞ CHỮ ĐẦU</span>
+                                            <span style="font-size: 0.65rem;">[GỢI Ý]</span>
+                                        </button>
+                                        <button type="button" class="btn-screen-act" @onclick="PronounceWord" title="Nghe phát âm tiếng Anh">
+                                            <span>🔊 PHÁT ÂM</span>
+                                            <span style="font-size: 0.65rem;">[AUDIO]</span>
+                                        </button>
+                                        <button type="button" class="btn-screen-act" @onclick="NextWord" title="Đổi từ vựng khác">
+                                            <span>🔄 ĐỔI TỪ MỚI</span>
+                                            <span style="font-size: 0.65rem;">[TIẾP]</span>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Right column: Grid & Keyboard -->
-                    <div class="wordle-board-column">
-                        <!-- Wordle Grid -->
-                        <div class="fullscreen-grid-wrapper">
-                            <div class="wordle-grid">
-                                @for (int r = 0; r < MaxGuesses; r++)
+                        <!-- CENTER: DIGITAL TIMER + PLASMA CORE + 2-ROW TILES -->
+                        <div class="center-hud-timer @GetTimerUrgentClass()" id="hudTimer">
+                            <div class="timer-val">@FormatWordleTimer()</div>
+                        </div>
+
+                        <!-- Plasma Core Spark Emitter -->
+                        <div class="plasma-reactor-spark">
+                            <img id="quantumCoreSpark" src="images/games/quantum-cipher/set/set1_trans.png" alt="Plasma Spark">
+                        </div>
+
+                        <!-- Row 1: Locked Green Cipher Slots (Upper Brushed Titanium Plate) -->
+                        <div class="plate-row1-lock" id="rowLockedSlots">
+                            <div class="row-deck-badge badge-lock">
+                                <span class="led-dot"></span> CHỐT
+                            </div>
+                            @for (int i = 0; i < WordLength; i++)
+                            {
+                                var colIndex = i;
+                                var lockedChar = GetLockedLetterAt(colIndex);
+                                <div class="tile-socket">
+                                    <div class="tile-button locked-slot @(lockedChar.HasValue ? "locked-green" : "")" style="@GetDynamicTileStyle()">
+                                        @(lockedChar.HasValue ? lockedChar.Value.ToString() : "·")
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Row 2: Active Input Cipher Slots (Lower Brushed Titanium Plate) -->
+                        <div class="plate-row2-input @(shakeCurrentRow ? "shake-deck" : "")" id="plateRow2">
+                            <div class="row-deck-badge badge-input">
+                                <span class="led-dot"></span> NHẬP
+                            </div>
+                            <div style="display: flex; align-items: center; justify-content: center; gap: inherit; width: 100%;">
+                                @for (int i = 0; i < WordLength; i++)
                                 {
-                                    var rowIndex = r;
-                                    var rowGuess = rowIndex < guesses.Count ? guesses[rowIndex] : (rowIndex == currentGuessIndex ? currentInput : "");
-                                    var rowEvaluations = rowIndex < guessEvaluations.Count ? guessEvaluations[rowIndex] : null;
+                                    var colIndex = i;
+                                    var hasChar = colIndex < currentInput.Length;
+                                    var charVal = hasChar ? currentInput[colIndex].ToString() : "";
+                                    var isCursor = !isGameOver && colIndex == currentInput.Length && currentInput.Length < WordLength;
 
-                                    <div class="wordle-row @(rowIndex == currentGuessIndex && shakeCurrentRow ? "shake" : "")">
-                                        @for (int c = 0; c < WordLength; c++)
-                                        {
-                                            var colIndex = c;
-                                            var letter = colIndex < rowGuess.Length ? rowGuess[colIndex].ToString().ToUpperInvariant() : "";
-                                            var evalStatus = rowEvaluations != null && colIndex < rowEvaluations.Count ? rowEvaluations[colIndex] : "empty";
-
-                                            <div class="wordle-cell @evalStatus @(!string.IsNullOrEmpty(letter) && evalStatus == "empty" ? "pop" : "")">
-                                                @letter
-                                            </div>
-                                        }
+                                    <div class="tile-socket">
+                                        <div class="tile-button input-slot @(hasChar ? "has-char" : "") @(isCursor ? "cursor-active" : "")" style="@GetDynamicTileStyle()">
+                                            @charVal
+                                        </div>
                                     </div>
                                 }
                             </div>
                         </div>
 
-                        <!-- Toast Notification -->
+                        <!-- RIGHT DOOR: 6 SLIM PIN & KEYBOARD -->
+                        <div class="right-door-pin-tray" id="quantumBatteryTray">
+                            @for (int b = 0; b < MaxGuesses; b++)
+                            {
+                                var isBlown = b < guesses.Count;
+                                <div class="power-rod @(isBlown ? "blown" : "")" data-pin="@b">
+                                    <span class="rod-bolt">⚡</span>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Spark burst on blown battery rod -->
+                        <div class="spark-rod-burst" id="quantumSparkBurst">
+                            <img id="quantumSparkBurstImg" src="images/games/quantum-cipher/setgiat/setgiat1_trans.png" alt="Spark">
+                        </div>
+
+                        <!-- Virtual Mechanical Keyboard -->
+                        <div class="right-door-keyboard" id="keyboardContainer">
+                            <div class="kb-row">
+                                @foreach (var key in KeyRow1)
+                                {
+                                    <button type="button" class="kb-key @GetQuantumKeyClass(key)" @onclick="() => OnVirtualKeyPress(key)">@key</button>
+                                }
+                            </div>
+                            <div class="kb-row">
+                                @foreach (var key in KeyRow2)
+                                {
+                                    <button type="button" class="kb-key @GetQuantumKeyClass(key)" @onclick="() => OnVirtualKeyPress(key)">@key</button>
+                                }
+                            </div>
+                            <div class="kb-row">
+                                @foreach (var key in KeyRow3)
+                                {
+                                    <button type="button" class="kb-key @GetQuantumKeyClass(key)" @onclick="() => OnVirtualKeyPress(key)">@key</button>
+                                }
+                            </div>
+                            <div class="kb-row">
+                                <button type="button" class="kb-key action-key del-key" @onclick='() => OnVirtualKeyPress("BACKSPACE")'>⌫ XÓA</button>
+                                <button type="button" class="kb-key action-key enter-key" @onclick='() => OnVirtualKeyPress("ENTER")'>⏎ XÁC NHẬN</button>
+                            </div>
+                        </div>
+
+                        <!-- Toast alert -->
                         @if (!string.IsNullOrEmpty(toastMessage))
                         {
-                            <div class="fs-toast-alert">
+                            <div class="hud-toast">
                                 @toastMessage
                             </div>
                         }
 
-                        <!-- Virtual Keyboard -->
-                        <div class="fullscreen-keyboard">
-                            <div class="keyboard-row">
-                                @foreach (var key in KeyRow1)
-                                {
-                                    <button class="key-btn @GetKeyClass(key)" @onclick="() => OnVirtualKeyPress(key)">@key</button>
-                                }
-                            </div>
-                            <div class="keyboard-row">
-                                @foreach (var key in KeyRow2)
-                                {
-                                    <button class="key-btn @GetKeyClass(key)" @onclick="() => OnVirtualKeyPress(key)">@key</button>
-                                }
-                            </div>
-                            <div class="keyboard-row">
-                                <button class="key-btn key-enter" @onclick='() => OnVirtualKeyPress("ENTER")'>ENTER</button>
-                                @foreach (var key in KeyRow3)
-                                {
-                                    <button class="key-btn @GetKeyClass(key)" @onclick="() => OnVirtualKeyPress(key)">@key</button>
-                                }
-                                <button class="key-btn key-backspace" @onclick='() => OnVirtualKeyPress("BACKSPACE")'>
-                                    <i class="bi bi-backspace"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            }
+                        <!-- ====================================================
+                             INTERACTIVE SPOTLIGHT TUTORIAL & PROMPT MODAL
+                             ==================================================== -->
 
-            <!-- Victory / Loss Modal inside Fullscreen -->
-            @if (showResultModal && currentWord != null)
-            {
-                <div class="fs-modal-backdrop" @onclick="() => showResultModal = false" tabindex="0" @onkeydown="HandleKeyDown">
-                    <div class="fs-result-card @(isGameWon ? "won" : "lost")" @onclick:stopPropagation="true" tabindex="0" @onkeydown="HandleKeyDown">
-                        @if (isGameWon)
+                        <!-- 1. Initial Prompt Modal (Trước khi bắt đầu chơi) -->
+                        @if (showWordleTutorialPrompt)
                         {
-                            <span class="res-trophy">🏆</span>
-                            <h2>XUẤT SẮC! BẠN ĐÃ GIẢI MÃ THÀNH CÔNG</h2>
-                            <p class="res-subtitle">Đoán đúng ở lượt thứ <b>@(guesses.Count)/@MaxGuesses</b> • Nhận <b>+30 XP</b></p>
-                        }
-                        else
-                        {
-                            <span class="res-trophy lost">💡</span>
-                            <h2>HẾT LƯỢT ĐOÁN!</h2>
-                            <p class="res-subtitle">Từ vựng bí ẩn đã được giải mã bên dưới</p>
-                        }
-
-                        <div class="res-summary-box">
-                            <div class="res-word-row">
-                                <span class="rw-word">@currentWord.Word.ToUpperInvariant()</span>
-                                <button class="btn-res-audio" @onclick="PronounceWord" title="Nghe phát âm">
-                                    <i class="bi bi-volume-up-fill"></i>
-                                </button>
-                            </div>
-                            @if (!string.IsNullOrWhiteSpace(currentWord.Phonetic))
-                            {
-                                <div class="rw-phonetic">@currentWord.Phonetic</div>
-                            }
-                            <div class="rw-meaning">
-                                <strong>Nghĩa:</strong> @currentWord.Meaning
-                            </div>
-                            @if (!string.IsNullOrWhiteSpace(currentWord.Example))
-                            {
-                                <div class="rw-example">
-                                    <div class="ex-en">“@currentWord.Example”</div>
-                                    @if (!string.IsNullOrWhiteSpace(currentWord.ExampleMeaning))
-                                    {
-                                        <div class="ex-vi">@currentWord.ExampleMeaning</div>
-                                    }
+                            <div class="tutorial-prompt-modal" id="tutorialPromptModal">
+                                <div class="prompt-card">
+                                    <div class="prompt-title">NHIỆM VỤ BẺ KHÓA BOM</div>
+                                    <div class="prompt-desc">
+                                        Hệ thống điều khiển vũ khí vali lượng tử đã sẵn sàng. Bạn có muốn xem hướng dẫn chi tiết từng bộ phận và chức năng trước khi bắt đầu không?
+                                    </div>
+                                    <div class="prompt-actions">
+                                        <button type="button" class="btn-prompt-guide" @onclick="StartQuantumTutorial">🚀 XEM HƯỚNG DẪN</button>
+                                        <button type="button" class="btn-prompt-play" @onclick="SkipWordleTutorialAndPlay">⚡ VÀO CHƠI LUÔN</button>
+                                    </div>
                                 </div>
-                            }
-                        </div>
+                            </div>
+                        }
 
-                        <div class="res-action-buttons">
-                            <button class="btn-res-next-big" @onclick="NextWord" autofocus>
-                                Từ tiếp theo <span class="kbd-badge">Enter ↵</span> <i class="bi bi-arrow-right"></i>
-                            </button>
-                            <button class="btn-res-exit-sub" @onclick="CloseWordleGame">
-                                Thoát ra danh sách trò chơi
-                            </button>
+                        <!-- 2. Spotlight Tour Overlay -->
+                        @if (isWordleTutorialActive)
+                        {
+                            <div class="tutorial-overlay show" id="tutorialOverlay">
+                            <!-- Glowing Cutout Box -->
+                            <div class="tutorial-spotlight-box" id="tutorialSpotlightBox"></div>
+
+                            <!-- Briefing Dialog Card -->
+                            <div class="tutorial-card" id="tutorialCard">
+                                <div class="tut-header">
+                                    <div class="tut-step-tag">
+                                        <span id="tutStepText">BƯỚC 1/5</span>
+                                    </div>
+                                    <div class="tut-step-dots" id="tutStepDots">
+                                        <span class="tut-dot active"></span>
+                                        <span class="tut-dot"></span>
+                                        <span class="tut-dot"></span>
+                                        <span class="tut-dot"></span>
+                                        <span class="tut-dot"></span>
+                                    </div>
+                                </div>
+
+                                <div class="tut-title" id="tutTitle">1. MẬT THƯ TÌNH BÁO</div>
+                                <div class="tut-body">
+                                    <span id="tutBodyText"></span><span class="tut-cursor" id="tutCursor"></span>
+                                </div>
+
+                                <div class="tut-hint-click">
+                                    <span>💡 Nhấn vào khung để hiện toàn bộ chữ • Phím Space hoặc Enter để tiếp tục</span>
+                                </div>
+
+                                <div class="tut-footer">
+                                    <button type="button" class="btn-tut-skip" id="btnTutSkip">Bỏ qua (Esc)</button>
+                                    <button type="button" class="btn-tut-next" id="btnTutNext">
+                                        <span id="tutNextBtnText">Tiếp theo</span> ➜
+                                    </button>
+                                </div>
+                            </div>
                         </div>
+                        }
+
+                        <!-- Result Modal -->
+                        @if (showResultModal && currentWord != null)
+                        {
+                            <div class="overlay-modal show" @onclick="() => showResultModal = false">
+                                <div class="modal-card @(isGameWon ? "victory" : "defeat")" @onclick:stopPropagation="true">
+                                    <div class="modal-title">@(isGameWon ? "GỠ BOM THÀNH CÔNG!" : "NHIỆM VỤ THẤT BẠI!")</div>
+                                    <div class="modal-word">@currentWord.Word.ToUpperInvariant()</div>
+                                    <div class="modal-desc">
+                                        @if (isGameWon)
+                                        {
+                                            <span>@currentWord.Meaning</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Mã giải mã đúng là: <b>@currentWord.Word.ToUpperInvariant()</b> (@currentWord.Meaning)</span>
+                                        }
+                                    </div>
+                                    <div class="modal-stats">
+                                        <div class="stat-item">
+                                            <div class="stat-val">@FormatWordleTimer()</div>
+                                            <div class="stat-lbl">Thời gian còn lại</div>
+                                        </div>
+                                        <div class="stat-item">
+                                            <div class="stat-val">@(guesses.Count)/@MaxGuesses</div>
+                                            <div class="stat-lbl">Lượt đoán</div>
+                                        </div>
+                                        <div class="stat-item">
+                                            <div class="stat-val">@(isGameWon ? "+30 XP" : "0 XP")</div>
+                                            <div class="stat-lbl">Điểm số</div>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="modal-btn @(isGameWon ? "" : "defeat-btn")" @onclick="NextWord">
+                                        @(isGameWon ? "TỪ VỰNG TIẾP THEO ➜" : "THỬ LẠI NHIỆM VỤ 🔄")
+                                    </button>
+                                </div>
+                            </div>
+                        }
+
                     </div>
                 </div>
             }
         </main>
     </div>
 }
-
 <!-- =====================================================================
      MODAL 3: FULLSCREEN HSK SHOOTER GAME WINDOW (STAGE SYSTEM)
      ===================================================================== -->
@@ -959,7 +1063,11 @@ else if (selectedGameForInfo == "hsk-shooter")
     // === GALLERY & MODAL ROUTING STATE ===
     private string? selectedGameForInfo;
     private bool isPlayingWordle;
+    private bool showWordleTutorialPrompt = false;
+    private bool isWordleTutorialActive = false;
+    private bool hasSeenWordleTutorial = false;
     private bool isPlayingHskShooter;
+    private bool hasUsedHintThisRound = false;
 
     // === WORDLE GAME STATE ===
     private const int MaxGuesses = 6;
@@ -990,6 +1098,110 @@ else if (selectedGameForInfo == "hsk-shooter")
     private readonly HashSet<string> playedIeltsWords = new();
 
     private Dictionary<char, string> keyStatuses = new();
+
+    // === QUANTUM CIPHER STATE & HELPERS ===
+    private int wordleTimerSeconds = 120;
+    private Timer? wordleTimer;
+
+    private void StartWordleTimer()
+    {
+        wordleTimer?.Dispose();
+        wordleTimerSeconds = 120;
+        wordleTimer = new Timer(async _ =>
+        {
+            if (!isPlayingWordle || isGameOver) return;
+            wordleTimerSeconds--;
+            if (wordleTimerSeconds <= 0)
+            {
+                wordleTimerSeconds = 0;
+                isGameOver = true;
+                isGameWon = false;
+                wordleStreak = 0;
+                _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.lose()");
+                _ = Task.Delay(300).ContinueWith(_ => InvokeAsync(PronounceWord));
+                _ = Task.Delay(500).ContinueWith(_ => InvokeAsync(async () =>
+                {
+                    showResultModal = true;
+                    StateHasChanged();
+                    await FocusWordle();
+                }));
+                wordleTimer?.Dispose();
+            }
+            else
+            {
+                _ = JS.InvokeVoidAsync("eval", $"window.WordleSfx?.quantumTick({wordleTimerSeconds})");
+            }
+            await InvokeAsync(StateHasChanged);
+        }, null, 1000, 1000);
+    }
+
+    private void StopWordleTimer()
+    {
+        wordleTimer?.Dispose();
+        wordleTimer = null;
+    }
+
+    private string FormatWordleTimer()
+    {
+        int m = wordleTimerSeconds / 60;
+        int s = wordleTimerSeconds % 60;
+        return $"{m:D2}:{s:D2}";
+    }
+
+    private string GetTimerUrgentClass()
+    {
+        if (wordleTimerSeconds <= 10 && wordleTimerSeconds > 0) return "urgent-10";
+        if (wordleTimerSeconds <= 20 && wordleTimerSeconds > 0) return "urgent-20";
+        if (wordleTimerSeconds <= 30 && wordleTimerSeconds > 0) return "urgent-30";
+        return "";
+    }
+
+    private char? GetLockedLetterAt(int index)
+    {
+        if (hintLetterIndices.TryGetValue(index, out var hintChar))
+            return hintChar;
+        for (int r = 0; r < guessEvaluations.Count; r++)
+        {
+            var evals = guessEvaluations[r];
+            if (index < evals.Count && evals[index] == "correct" && index < guesses[r].Length)
+            {
+                return guesses[r][index];
+            }
+        }
+        return null;
+    }
+
+    private string GetQuantumKeyClass(string key)
+    {
+        if (key.Length == 1 && keyStatuses.TryGetValue(char.ToUpperInvariant(key[0]), out var status))
+        {
+            return status switch
+            {
+                "correct" => "state-green",
+                "present" => "state-yellow",
+                "absent" => "state-dark",
+                _ => ""
+            };
+        }
+        return "";
+    }
+
+    private string GetDynamicTileStyle()
+    {
+        if (WordLength >= 8)
+            return "width: clamp(20px, 2.5vw, 34px); height: clamp(20px, 2.5vw, 34px); font-size: clamp(11px, 1.3vw, 18px);";
+        if (WordLength == 7)
+            return "width: clamp(22px, 2.8vw, 38px); height: clamp(22px, 2.8vw, 38px); font-size: clamp(12px, 1.5vw, 20px);";
+        return "";
+    }
+
+    private void SetWordLengthMode(string len)
+    {
+        selectedWordLength = len;
+        ApplyDifficultyFilter();
+        NextWord();
+    }
+
 
     private static readonly string[] KeyRow1 = { "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P" };
     private static readonly string[] KeyRow2 = { "A", "S", "D", "F", "G", "H", "J", "K", "L" };
@@ -1155,8 +1367,61 @@ else if (selectedGameForInfo == "hsk-shooter")
         ApplyDifficultyFilter();
         StartNewRound();
         isPlayingWordle = true;
+        
+        if (!hasSeenWordleTutorial)
+        {
+            showWordleTutorialPrompt = true;
+            StopWordleTimer();
+        }
+        else
+        {
+            StartWordleTimer();
+        }
+
         await Task.Delay(50);
         await FocusWordle();
+        _ = JS.InvokeVoidAsync("initQuantumBriefcase");
+    }
+
+    private async Task StartQuantumTutorial()
+    {
+        showWordleTutorialPrompt = false;
+        isWordleTutorialActive = true;
+        StopWordleTimer();
+        StateHasChanged();
+        await Task.Delay(100);
+        await JS.InvokeVoidAsync("window.QuantumTutorial?.start", DotNetObjectReference.Create(this));
+    }
+
+    private async Task OpenQuantumTutorial()
+    {
+        showWordleTutorialPrompt = false;
+        isWordleTutorialActive = true;
+        StopWordleTimer();
+        StateHasChanged();
+        await Task.Delay(100);
+        await JS.InvokeVoidAsync("window.QuantumTutorial?.start", DotNetObjectReference.Create(this));
+    }
+
+    private async Task SkipWordleTutorialAndPlay()
+    {
+        showWordleTutorialPrompt = false;
+        hasSeenWordleTutorial = true;
+        StartWordleTimer();
+        await FocusWordle();
+    }
+
+    [JSInvokable]
+    public void OnQuantumTutorialFinished()
+    {
+        isWordleTutorialActive = false;
+        hasSeenWordleTutorial = true;
+        if (!isGameOver && isPlayingWordle)
+        {
+            StartWordleTimer();
+            _ = FocusWordle();
+        }
+        StateHasChanged();
     }
 
     private async Task FocusWordle()
@@ -1168,6 +1433,10 @@ else if (selectedGameForInfo == "hsk-shooter")
     {
         isPlayingWordle = false;
         showResultModal = false;
+        showWordleTutorialPrompt = false;
+        isWordleTutorialActive = false;
+        _ = JS.InvokeVoidAsync("window.QuantumTutorial?.end");
+        StopWordleTimer();
     }
 
     private async Task LoadVocabularyFromApiAsync()
@@ -1273,6 +1542,12 @@ else if (selectedGameForInfo == "hsk-shooter")
         toastMessage = "";
         showSentenceTranslation = false;
         hintLetterIndices.Clear();
+        hasUsedHintThisRound = false;
+        if (!showWordleTutorialPrompt && !isWordleTutorialActive)
+        {
+            StartWordleTimer();
+        }
+        _ = JS.InvokeVoidAsync("initQuantumBriefcase");
     }
 
     private void NextWord()
@@ -1285,6 +1560,12 @@ else if (selectedGameForInfo == "hsk-shooter")
     private void UseLetterHint()
     {
         if (isGameOver || currentWord == null) return;
+
+        if (hasUsedHintThisRound)
+        {
+            ShowToast("Bạn đã dùng gợi ý cho từ vựng này rồi!");
+            return;
+        }
 
         var target = currentWord.Word.Trim().ToUpperInvariant();
 
@@ -1314,14 +1595,16 @@ else if (selectedGameForInfo == "hsk-shooter")
 
         if (candidates.Count == 0)
         {
-            ShowToast("Bạn đã đoán đúng hoặc đã mở gợi ý tất cả các chữ cái rồi!");
+            ShowToast("Tất cả các chữ cái đã được đoán đúng rồi!");
             return;
         }
 
-        // 3. Chọn 1 vị trí chưa đúng để gợi ý
+        // 3. Mở đúng 1 chữ cái đầu tiên chưa giải
         var chosenIndex = candidates[0];
         hintLetterIndices[chosenIndex] = target[chosenIndex];
-        ShowToast($"Gợi ý: Ký tự ở ô số {chosenIndex + 1} là '{target[chosenIndex]}'!");
+        hasUsedHintThisRound = true;
+        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.keyEnterOk()");
+        ShowToast($"ĐÃ MỞ CHỮ ĐẦU: Ô số {chosenIndex + 1} là '{target[chosenIndex]}'!");
         StateHasChanged();
     }
 
@@ -1338,7 +1621,7 @@ else if (selectedGameForInfo == "hsk-shooter")
 
     private void HandleKeyDown(KeyboardEventArgs e)
     {
-        if (!isPlayingWordle) return;
+        if (!isPlayingWordle || isWordleTutorialActive || showWordleTutorialPrompt) return;
 
         var key = e.Key.ToUpperInvariant();
 
@@ -1377,7 +1660,7 @@ else if (selectedGameForInfo == "hsk-shooter")
 
     private void OnVirtualKeyPress(string key)
     {
-        if (!isPlayingWordle) return;
+        if (!isPlayingWordle || isWordleTutorialActive || showWordleTutorialPrompt) return;
 
         if (showResultModal || isGameOver)
         {
@@ -1454,6 +1737,7 @@ else if (selectedGameForInfo == "hsk-shooter")
 
         if (guess == target)
         {
+            StopWordleTimer();
             isGameOver = true;
             isGameWon = true;
             wordleScore += 30;
@@ -1471,6 +1755,7 @@ else if (selectedGameForInfo == "hsk-shooter")
 
         if (guesses.Count >= MaxGuesses)
         {
+            StopWordleTimer();
             isGameOver = true;
             isGameWon = false;
             wordleStreak = 0;
@@ -1484,8 +1769,8 @@ else if (selectedGameForInfo == "hsk-shooter")
             }));
             return;
         }
-        // Nộp hợp lệ nhưng chưa đúng: âm enter nhẹ
-        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.keyEnterOk()");
+        // Nộp hợp lệ nhưng chưa đúng: âm nổ pin điện giật & tia sét
+        _ = JS.InvokeVoidAsync("triggerBatteryZap", guesses.Count - 1);
 
         StateHasChanged();
     }
@@ -2327,6 +2612,7 @@ else if (selectedGameForInfo == "hsk-shooter")
 
     public void Dispose()
     {
+        wordleTimer?.Dispose();
         hskTimer?.Dispose();
         _countdownTimer?.Dispose();
         _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm()");

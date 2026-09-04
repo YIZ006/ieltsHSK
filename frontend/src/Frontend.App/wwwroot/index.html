@@ -10,11 +10,11 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Orbitron:wght@400;600;700;800;900&family=Rajdhani:wght@500;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/app.css?v=20260831b" />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <link href="Frontend.App.styles.css?v=20260831b" rel="stylesheet" />
+    <link rel="stylesheet" href="css/quantum-cipher.css?v=20260905_02" />
+    <link href="Frontend.App.styles.css?v=20260905_02" rel="stylesheet" />
 </head>
 
 <body>
@@ -205,6 +205,330 @@
             }
         };
 
+        // ─── Quantum Briefcase Animation & VFX Helpers ───
+        window.initQuantumBriefcase = function () {
+            const coreImg = document.getElementById('quantumCoreSpark');
+            if (!coreImg || window._quantumCoreInterval) return;
+            let frame = 1;
+            window._quantumCoreInterval = setInterval(function () {
+                const el = document.getElementById('quantumCoreSpark');
+                if (!el) {
+                    clearInterval(window._quantumCoreInterval);
+                    window._quantumCoreInterval = null;
+                    return;
+                }
+                frame = (frame % 6) + 1;
+                el.src = 'images/games/quantum-cipher/set/set' + frame + '_trans.png';
+            }, 85);
+        };
+
+        window.triggerBatteryZap = function (rodIndex) {
+            try { window.WordleSfx && window.WordleSfx.electricZap && window.WordleSfx.electricZap(); } catch(e){}
+            const burst = document.getElementById('quantumSparkBurst');
+            const img = document.getElementById('quantumSparkBurstImg');
+            const tray = document.getElementById('quantumBatteryTray');
+            if (!burst || !img || !tray) return;
+            const rods = tray.querySelectorAll('.power-rod');
+            if (!rods || !rods[rodIndex]) return;
+            const rect = rods[rodIndex].getBoundingClientRect();
+            const stage = document.getElementById('quantumStageBox');
+            if (!stage) return;
+            const stageRect = stage.getBoundingClientRect();
+            const leftPct = ((rect.left + rect.width / 2 - stageRect.left) / stageRect.width) * 100;
+            const topPct = ((rect.top + rect.height / 2 - stageRect.top) / stageRect.height) * 100;
+            burst.style.left = leftPct + '%';
+            burst.style.top = topPct + '%';
+            burst.style.display = 'block';
+            let frame = 1;
+            const iv = setInterval(function () {
+                frame++;
+                if (frame <= 6) {
+                    img.src = 'images/games/quantum-cipher/setgiat/setgiat' + frame + '_trans.png';
+                } else {
+                    clearInterval(iv);
+                    burst.style.display = 'none';
+                }
+            }, 45);
+        };
+
+        // ─── Quantum Briefcase Interactive Spotlight Tutorial & Typewriter System ───
+        window.QuantumTutorial = (function () {
+            let _dotNetRef = null;
+            let currentTutorialStep = 0;
+            let typewriterTimer = null;
+            let isTyping = false;
+            let currentFullText = '';
+            let _keyHandlerBound = false;
+
+            const TUTORIAL_STEPS = [
+                {
+                    targetSelector: '.phone-dock-left',
+                    title: '1. MẬT THƯ TÌNH BÁO // DOSSIER',
+                    text: 'Điện thoại tác chiến cánh trái hiển thị dữ liệu mật: cấp độ từ, nghĩa tiếng Việt và ngữ cảnh câu ví dụ. Dùng các nút bên dưới để [Mở chữ đầu], [Phát âm], hoặc [Đổi từ mới].',
+                    cardPosition: 'right-center',
+                    fallbackBox: { left: '3.5%', top: '12%', width: '25%', height: '80%' }
+                },
+                {
+                    targetSelector: '.plasma-reactor-spark, #hudTimer',
+                    title: '2. ĐẾM NGƯỢC & LÕI PLASMA',
+                    text: 'Lõi phản ứng plasma và đồng hồ đếm ngược 120 giây. Khi còn 30s bom sẽ hú còi báo động to; dưới 20s và 10s nhịp đếm sẽ dồn dập khẩn cấp. Hãy gỡ bom trước khi đồng hồ về 00:00!',
+                    cardPosition: 'bottom-center',
+                    fallbackBox: { left: '29%', top: '18%', width: '42%', height: '36%' }
+                },
+                {
+                    targetSelector: '#rowLockedSlots, #plateRow2',
+                    title: '3. ĐĨA CHỐT & ĐĨA NHẬP MẬT MÃ',
+                    text: 'Hàng 1 [CHỐT]: Cố định màu xanh các chữ cái bạn đã giải mã đúng vị trí. Hàng 2 [NHẬP]: Nơi nhập các ký tự bạn đoán cho lượt hiện tại. Hỗ trợ tự co giãn từ 4 đến 8 chữ!',
+                    cardPosition: 'top-center',
+                    fallbackBox: { left: '28.5%', top: '58%', width: '43%', height: '38%' }
+                },
+                {
+                    targetSelector: '#quantumBatteryTray',
+                    title: '4. 6 THỎI PIN NĂNG LƯỢNG // 6 MẠNG',
+                    text: 'Mỗi viên pin mang biểu tượng tia sét đại diện cho 1 lượt thử. Khi đoán sai 1 từ, 1 viên pin sẽ phát nổ chập điện xè xè và ngắt mạch. Hết 6 pin thì kíp nổ sẽ kích hoạt!',
+                    cardPosition: 'left-bottom',
+                    fallbackBox: { left: '74%', top: '12%', width: '22%', height: '16%' }
+                },
+                {
+                    targetSelector: '#keyboardContainer',
+                    title: '5. BÀN PHÍM CƠ & ĐIỀU KHIỂN',
+                    text: 'Bấm phím ảo trên màn hình hoặc GÕ TRỰC TIẾP TỪ BÀN PHÍM MÁY TÍNH (A-Z, Backspace, Enter). Sau khi nộp, phím đổi màu Xanh (đúng), Vàng (sai vị trí), Đen (không có) chuẩn Wordle.',
+                    cardPosition: 'left-center',
+                    fallbackBox: { left: '73%', top: '48%', width: '24%', height: '48%' }
+                }
+            ];
+
+            function start(dotNetRef) {
+                _dotNetRef = dotNetRef;
+                function tryInit(attempt) {
+                    const overlay = document.getElementById('tutorialOverlay');
+                    const stage = document.getElementById('quantumStageBox');
+                    if (!overlay || !stage) {
+                        if (attempt < 12) {
+                            setTimeout(function () { tryInit(attempt + 1); }, 60);
+                        }
+                        return;
+                    }
+                    overlay.classList.add('show');
+                    currentTutorialStep = 0;
+                    bindControls();
+                    renderStep(currentTutorialStep);
+                }
+                tryInit(0);
+            }
+
+            function end() {
+                try {
+                    clearInterval(typewriterTimer);
+                    const overlay = document.getElementById('tutorialOverlay');
+                    if (overlay) overlay.classList.remove('show');
+                    if (_dotNetRef) {
+                        _dotNetRef.invokeMethodAsync('OnQuantumTutorialFinished');
+                    }
+                } catch (e) { }
+            }
+
+            function renderStep(stepIndex) {
+                try {
+                    clearInterval(typewriterTimer);
+                    const step = TUTORIAL_STEPS[stepIndex];
+                    if (!step) {
+                        end();
+                        return;
+                    }
+
+                    const overlay = document.getElementById('tutorialOverlay');
+                    const box = document.getElementById('tutorialSpotlightBox');
+                    const card = document.getElementById('tutorialCard');
+                    const tutStepText = document.getElementById('tutStepText');
+                    const tutStepDots = document.getElementById('tutStepDots');
+                    const tutTitle = document.getElementById('tutTitle');
+                    const tutBodyText = document.getElementById('tutBodyText');
+                    const tutCursor = document.getElementById('tutCursor');
+                    const tutNextBtnText = document.getElementById('tutNextBtnText');
+
+                    if (!overlay || !box || !card) return;
+
+                    if (tutStepText) tutStepText.textContent = `BƯỚC ${stepIndex + 1}/${TUTORIAL_STEPS.length}`;
+                    if (tutStepDots) {
+                        const dots = tutStepDots.querySelectorAll('.tut-dot');
+                        dots.forEach((d, i) => d.classList.toggle('active', i === stepIndex));
+                    }
+
+                    if (tutTitle) tutTitle.textContent = step.title;
+                    if (tutNextBtnText) tutNextBtnText.textContent = (stepIndex === TUTORIAL_STEPS.length - 1) ? 'VÀO CHƠI' : 'TIẾP THEO';
+
+                    // 1. Calculate Spotlight Box Coordinates
+                    let positioned = false;
+                    const stage = document.getElementById('quantumStageBox');
+                    if (stage) {
+                        const stageRect = stage.getBoundingClientRect();
+                        if (stageRect.width > 0 && stageRect.height > 0) {
+                            let targets = stage.querySelectorAll(step.targetSelector);
+                            if (targets.length > 0) {
+                                let minL = Infinity, minT = Infinity, maxR = -Infinity, maxB = -Infinity;
+                                targets.forEach(t => {
+                                    const r = t.getBoundingClientRect();
+                                    if (r.left < minL) minL = r.left;
+                                    if (r.top < minT) minT = r.top;
+                                    if (r.right > maxR) maxR = r.right;
+                                    if (r.bottom > maxB) maxB = r.bottom;
+                                });
+
+                                if (minL < maxR && minT < maxB) {
+                                    const pad = 6;
+                                    const spotLeft = ((minL - stageRect.left - pad) / stageRect.width) * 100;
+                                    const spotTop = ((minT - stageRect.top - pad) / stageRect.height) * 100;
+                                    const spotWidth = ((maxR - minL + pad * 2) / stageRect.width) * 100;
+                                    const spotHeight = ((maxB - minT + pad * 2) / stageRect.height) * 100;
+
+                                    box.style.left = spotLeft + '%';
+                                    box.style.top = spotTop + '%';
+                                    box.style.width = spotWidth + '%';
+                                    box.style.height = spotHeight + '%';
+                                    positioned = true;
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback to responsive predefined coordinates if DOM rect calculation failed
+                    if (!positioned && step.fallbackBox) {
+                        box.style.left = step.fallbackBox.left;
+                        box.style.top = step.fallbackBox.top;
+                        box.style.width = step.fallbackBox.width;
+                        box.style.height = step.fallbackBox.height;
+                    }
+
+                    // 2. Position Briefing Card to not obstruct the target
+                    if (step.cardPosition === 'right-center') {
+                        card.style.left = '42%';
+                        card.style.top = '25%';
+                    } else if (step.cardPosition === 'bottom-center') {
+                        card.style.left = '32%';
+                        card.style.top = '54%';
+                    } else if (step.cardPosition === 'top-center') {
+                        card.style.left = '32%';
+                        card.style.top = '12%';
+                    } else if (step.cardPosition === 'left-bottom') {
+                        card.style.left = '38%';
+                        card.style.top = '18%';
+                    } else {
+                        card.style.left = '36%';
+                        card.style.top = '35%';
+                    }
+
+                    // 3. Typewriter text animation
+                    currentFullText = step.text;
+                    if (tutBodyText) tutBodyText.textContent = '';
+                    if (tutCursor) tutCursor.style.display = 'inline-block';
+                    isTyping = true;
+                    let charIdx = 0;
+
+                    typewriterTimer = setInterval(function () {
+                        if (charIdx < currentFullText.length) {
+                            if (tutBodyText) tutBodyText.textContent += currentFullText[charIdx];
+                            try {
+                                if (charIdx % 3 === 0 && window.WordleSfx && window.WordleSfx.keyClick) {
+                                    window.WordleSfx.keyClick();
+                                }
+                            } catch (e) { }
+                            charIdx++;
+                        } else {
+                            clearInterval(typewriterTimer);
+                            isTyping = false;
+                            if (tutCursor) tutCursor.style.display = 'none';
+                        }
+                    }, 20);
+                } catch (e) {
+                    console.error('[QuantumTutorial.renderStep error]', e);
+                }
+            }
+
+            function completeTypewriterImmediately() {
+                if (isTyping) {
+                    clearInterval(typewriterTimer);
+                    const tutBodyText = document.getElementById('tutBodyText');
+                    const tutCursor = document.getElementById('tutCursor');
+                    if (tutBodyText) tutBodyText.textContent = currentFullText;
+                    isTyping = false;
+                    if (tutCursor) tutCursor.style.display = 'none';
+                    return true;
+                }
+                return false;
+            }
+
+            function advanceStep() {
+                if (completeTypewriterImmediately()) {
+                    // Instantly revealed full text
+                } else {
+                    if (currentTutorialStep < TUTORIAL_STEPS.length - 1) {
+                        currentTutorialStep++;
+                        renderStep(currentTutorialStep);
+                    } else {
+                        end();
+                    }
+                }
+            }
+
+            function bindControls() {
+                const card = document.getElementById('tutorialCard');
+                const btnTutNext = document.getElementById('btnTutNext');
+                const btnTutSkip = document.getElementById('btnTutSkip');
+
+                if (card && !card.dataset.bound) {
+                    card.dataset.bound = 'true';
+                    card.addEventListener('click', function (e) {
+                        if (e.target.closest('#btnTutSkip')) return;
+                        if (e.target.closest('#btnTutNext')) return;
+                        advanceStep();
+                    });
+                }
+
+                if (btnTutNext && !btnTutNext.dataset.bound) {
+                    btnTutNext.dataset.bound = 'true';
+                    btnTutNext.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        advanceStep();
+                    });
+                }
+
+                if (btnTutSkip && !btnTutSkip.dataset.bound) {
+                    btnTutSkip.dataset.bound = 'true';
+                    btnTutSkip.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        end();
+                    });
+                }
+
+                if (!_keyHandlerBound) {
+                    _keyHandlerBound = true;
+                    window.addEventListener('keydown', function (e) {
+                        const overlay = document.getElementById('tutorialOverlay');
+                        if (overlay && overlay.classList.contains('show')) {
+                            if (e.key === 'Escape') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                end();
+                            } else if (e.key === ' ' || e.key === 'Enter') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                advanceStep();
+                            }
+                        }
+                    }, true);
+                }
+            }
+
+            return {
+                start: start,
+                end: end,
+                renderStep: renderStep,
+                completeTypewriterImmediately: completeTypewriterImmediately,
+                advanceStep: advanceStep
+            };
+        })();
+
         // ─── Keyboard Sound Effects (Web Audio API — không cần file âm thanh) ───
         window.WordleSfx = (function () {
             let _ctx = null;
@@ -262,6 +586,106 @@
                     [440, 370, 294, 220].forEach(function (f, i) {
                         beep(f, 'triangle', 0.1, 0.2, i * 0.12);
                     });
+                },
+
+                // ─── Quantum Cipher (Bẻ Khóa Bom Lượng Tử) ───
+                // Tiếng điện giật xè xè (Real Electric Arc Sizzle & Crackle)
+                electricZap: function () {
+                    try {
+                        const c = ctx();
+                        const now = c.currentTime;
+                        // 1. Dual oscillator buzzing
+                        const osc1 = c.createOscillator();
+                        const osc2 = c.createOscillator();
+                        const zapGain = c.createGain();
+                        osc1.type = 'sawtooth';
+                        osc1.frequency.setValueAtTime(160, now);
+                        osc1.frequency.exponentialRampToValueAtTime(70, now + 0.38);
+                        osc2.type = 'square';
+                        osc2.frequency.setValueAtTime(840, now);
+                        osc2.frequency.exponentialRampToValueAtTime(90, now + 0.38);
+                        zapGain.gain.setValueAtTime(0.38, now);
+                        zapGain.gain.exponentialRampToValueAtTime(0.01, now + 0.38);
+                        osc1.connect(zapGain);
+                        osc2.connect(zapGain);
+                        zapGain.connect(c.destination);
+                        // 2. High-frequency White Noise Crackle Bursts ("xè xè... tạch tạch")
+                        const duration = 0.42;
+                        const bufferSize = Math.floor(c.sampleRate * duration);
+                        const noiseBuffer = c.createBuffer(1, bufferSize, c.sampleRate);
+                        const output = noiseBuffer.getChannelData(0);
+                        for (let i = 0; i < bufferSize; i++) {
+                            const sputter = Math.random() > 0.25 ? 1 : 0.05;
+                            output[i] = (Math.random() * 2 - 1) * sputter;
+                        }
+                        const whiteNoise = c.createBufferSource();
+                        whiteNoise.buffer = noiseBuffer;
+                        const bandpass = c.createBiquadFilter();
+                        bandpass.type = 'bandpass';
+                        bandpass.frequency.setValueAtTime(3200, now);
+                        bandpass.Q.setValueAtTime(2.8, now);
+                        const noiseGain = c.createGain();
+                        noiseGain.gain.setValueAtTime(0.55, now);
+                        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+                        whiteNoise.connect(bandpass);
+                        bandpass.connect(noiseGain);
+                        noiseGain.connect(c.destination);
+                        osc1.start(now);
+                        osc2.start(now);
+                        whiteNoise.start(now);
+                        osc1.stop(now + 0.38);
+                        osc2.stop(now + 0.38);
+                        whiteNoise.stop(now + duration);
+                    } catch (e) { }
+                },
+
+                // Chuông cảnh báo 30s cuối cùng (to 1 cái)
+                alarm30s: function () {
+                    try {
+                        const c = ctx();
+                        const now = c.currentTime;
+                        const osc1 = c.createOscillator();
+                        const osc2 = c.createOscillator();
+                        const gain = c.createGain();
+                        osc1.type = 'sawtooth';
+                        osc1.frequency.setValueAtTime(900, now);
+                        osc1.frequency.linearRampToValueAtTime(1450, now + 0.22);
+                        osc1.frequency.linearRampToValueAtTime(800, now + 0.55);
+                        osc2.type = 'square';
+                        osc2.frequency.setValueAtTime(450, now);
+                        osc2.frequency.linearRampToValueAtTime(725, now + 0.22);
+                        osc2.frequency.linearRampToValueAtTime(400, now + 0.55);
+                        gain.gain.setValueAtTime(0.65, now);
+                        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.58);
+                        osc1.connect(gain);
+                        osc2.connect(gain);
+                        gain.connect(c.destination);
+                        osc1.start(now);
+                        osc2.start(now);
+                        osc1.stop(now + 0.58);
+                        osc2.stop(now + 0.58);
+                    } catch (e) { }
+                },
+
+                // Tiếng đếm giây thông minh (bình thường >30s, nhấn mạnh 30s, nhanh dần 20s, dồn dập 10s)
+                quantumTick: function (sec) {
+                    try {
+                        if (sec > 30) {
+                            beep(620, 'sine', 0.08, 0.035, 0);
+                        } else if (sec === 30) {
+                            this.alarm30s();
+                        } else if (sec > 20) {
+                            beep(850, 'sine', 0.14, 0.04, 0);
+                        } else if (sec > 10) {
+                            beep(980, 'sine', 0.20, 0.035, 0);
+                            setTimeout(() => { beep(1050, 'sine', 0.18, 0.035, 0); }, 500);
+                        } else if (sec > 0) {
+                            beep(1300, 'sine', 0.28, 0.035, 0);
+                            [250, 500, 750].forEach((delay, idx) => {
+                                setTimeout(() => { beep(1350 + idx * 50, 'sine', 0.24, 0.03, 0); }, delay);
+                            });
+                        }
+                    } catch (e) { }
                 },
 
                 // ─── HSK Máy Bay Bắn Từ Vựng ───
