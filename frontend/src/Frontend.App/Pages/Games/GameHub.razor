@@ -42,6 +42,14 @@
                 <div class="stat-num">@vocabPool.Count</div>
                 <div class="stat-lbl"><i class="bi bi-book-half"></i> Kho Từ Vựng</div>
             </div>
+            <div class="quick-stat-item">
+                <div class="stat-num">@_hubHskBestStage</div>
+                <div class="stat-lbl"><i class="bi bi-trophy-fill text-warning"></i> Tầng HSK Cao Nhất</div>
+            </div>
+            <div class="quick-stat-item">
+                <div class="stat-num">@_hubHskTotalCleared</div>
+                <div class="stat-lbl"><i class="bi bi-check-circle-fill text-success"></i> Tầng Đã Phá</div>
+            </div>
         </div>
     </div>
 
@@ -575,8 +583,8 @@ else if (selectedGameForInfo == "hsk-shooter")
                                 </div>
 
                                 <div class="tut-footer">
-                                    <button type="button" class="btn-tut-skip" id="btnTutSkip">Bỏ qua (Esc)</button>
-                                    <button type="button" class="btn-tut-next" id="btnTutNext">
+                                    <button type="button" class="btn-tut-skip" id="btnTutSkip" @onclick="OnTutorialSkipClick" @onclick:stopPropagation>Bỏ qua (Esc)</button>
+                                    <button type="button" class="btn-tut-next" id="btnTutNext" @onclick="OnTutorialNextClick" @onclick:stopPropagation>
                                         <span id="tutNextBtnText">Tiếp theo</span> ➜
                                     </button>
                                 </div>
@@ -957,17 +965,13 @@ else if (selectedGameForInfo == "hsk-shooter")
                             <button type="button" class="btn-close-map" @onclick="CloseStageMap" title="Đóng bản đồ (Esc)"><i class="bi bi-x-lg"></i></button>
                         </div>
                     </header>
-                    <div class="stage-map-scroll" id="hskStageMapScroll">
-                        <!-- Summit Banner at Top (Đỉnh tháp - Trùm cuối) -->
-                        <div class="stage-map-summit">
-                            <div class="summit-crown">👑</div>
-                            <div class="summit-content">
-                                <div class="summit-title">ĐỈNH THÁP - TRẬN CHIẾN TRÙM CUỐI (Tầng @_totalStages)</div>
-                                <div class="summit-sub">Chinh phục toàn bộ @hskVocabPool.Count từ vựng để mở khóa danh hiệu quán quân @hskShooterSelectedLevel!</div>
-                            </div>
+                    <div class="stage-map-scroll candy-crush-map" id="hskStageMapScroll">
+                        <div class="cc-summit">
+                            <div class="cc-summit-crown">👑</div>
+                            <div class="cc-summit-title">TRÙM CUỐI - TẦNG @_totalStages</div>
                         </div>
 
-                        <!-- Reverse list: Summit on top (Tầng N), Base at bottom (Tầng 1) -->
+                        <div class="cc-path-container">
                         @for (int i = _totalStages - 1; i >= 0; i--)
                         {
                             var stageIdx = i;
@@ -977,21 +981,24 @@ else if (selectedGameForInfo == "hsk-shooter")
                             var isDone = stageIdx < _currentStageIndex || stageIdx < _maxUnlockedStageIndex;
                             var isUnlocked = stageIdx <= _maxUnlockedStageIndex;
                             var isLocked = !isUnlocked;
+                            var reverseIdx = _totalStages - 1 - stageIdx;
+                            var isLeft = reverseIdx % 2 == 0;
 
-                            var rowClass = "stage-map-row";
-                            if (isBoss) rowClass += " stage-boss";
-                            if (isDone && !isActive) rowClass += " stage-done";
-                            if (isActive) rowClass += " stage-active";
-                            if (isLocked) rowClass += " stage-locked";
+                            var nodeClass = "cc-node";
+                            if (isBoss) nodeClass += " cc-boss";
+                            if (isDone && !isActive) nodeClass += " cc-done";
+                            if (isActive) nodeClass += " cc-active";
+                            if (isLocked) nodeClass += " cc-locked";
 
-                            var diffClass = isBoss ? "boss" : (stageIdx < 3 ? "easy" : (stageIdx < 6 ? "medium" : "hard"));
-                            var diffText = isBoss ? "Trùm Cuối" : (stageIdx < 3 ? "Dễ" : (stageIdx < 6 ? "Vừa" : "Khó"));
-
-                            <div class="@rowClass" id="@(isCurrent ? "currentActiveStageRow" : null)">
-                                <div class="stage-num-circle @(isCurrent ? "has-player-avatar" : "")">
+                            <div class="@nodeClass" style="align-self: @(isLeft ? "flex-start" : "flex-end")">
+                                @if (stageIdx < _totalStages - 1)
+                                {
+                                    <div class="cc-connector @(isLeft ? "cc-conn-right" : "cc-conn-left")"></div>
+                                }
+                                <div class="cc-node-circle" @onclick="() => { if (isUnlocked) { if (isActive) ResumeAndCloseMap(); else ReplayStage(stageIdx); } }">
                                     @if (isCurrent)
                                     {
-                                        <div class="player-map-avatar-circle" style="background: @_userAvatarColor" title="@_userDisplayName đang ở Tầng @(stageIdx + 1)">
+                                        <div class="player-map-avatar-circle" style="background: @_userAvatarColor">
                                             <span class="avatar-icon">@_userAvatarEmoji</span>
                                             <span class="floor-num-badge">T@(stageIdx + 1)</span>
                                             <div class="sonar-wave"></div>
@@ -1002,55 +1009,18 @@ else if (selectedGameForInfo == "hsk-shooter")
                                         @(isBoss ? "☠️" : (stageIdx + 1).ToString())
                                     }
                                 </div>
-                                <div class="stage-map-info">
-                                    <div class="stage-map-title">
-                                        <span>Tầng @(stageIdx + 1) @(isBoss ? "- Trận chiến cuối cùng" : "")</span>
-                                        @if (isActive)
-                                        {
-                                            <span class="player-location-tag" style="border-color: @_userAvatarColor">
-                                                <span class="tag-avt" style="background: @_userAvatarColor">@_userAvatarEmoji</span>
-                                                <span class="tag-text">VỊ TRÍ CỦA BẠN</span>
-                                                <span class="tag-beacon"></span>
-                                            </span>
-                                        }
-                                        else if (isDone)
-                                        {
-                                            <span class="done-tag">⭐ ĐÃ QUA</span>
-                                        }
-                                        else if (isLocked)
-                                        {
-                                            <span class="locked-tag">🔒 CHƯA MỞ</span>
-                                        }
-                                    </div>
-                                    <div class="stage-map-sub">
-                                        <span class="diff-chip @diffClass">@diffText</span>
-                                        <span class="stage-word-count">Từ @(stageIdx * WordsPerStage + 1) - @(Math.Min((stageIdx + 1) * WordsPerStage, hskVocabPool.Count))</span>
-                                    </div>
-                                </div>
-                                <div class="stage-action">
-                                    @if (isActive)
-                                    {
-                                        <button type="button" class="btn-stage-play" @onclick="ResumeAndCloseMap">ĐANG CHƠI ▶</button>
-                                    }
-                                    else if (isUnlocked)
-                                    {
-                                        <button type="button" class="btn-stage-play replay" @onclick="() => ReplayStage(stageIdx)">Chơi lại ↺</button>
-                                    }
-                                    else
-                                    {
-                                        <button type="button" class="btn-stage-play locked" disabled title="Hãy vượt qua các tầng trước để mở khóa"><i class="bi bi-lock-fill"></i> Đã khóa</button>
-                                    }
+                                <div class="cc-stars">
+                                    @if (isDone) { <span>⭐⭐⭐</span> }
+                                    else if (isLocked) { <span>🔒</span> }
+                                    else { <span>☆☆☆</span> }
                                 </div>
                             </div>
                         }
+                        </div>
 
-                        <!-- Base Banner at Bottom (Chân tháp - Tầng 1) -->
-                        <div class="stage-map-base">
-                            <div class="base-flag">🚩</div>
-                            <div class="base-content">
-                                <div class="base-title">CHÂN THÁP - XUẤT PHÁT (Tầng 1)</div>
-                                <div class="base-sub">Khởi đầu hành trình học từ vựng @hskShooterSelectedLevel</div>
-                            </div>
+                        <div class="cc-base">
+                            <div class="cc-base-flag">🚩</div>
+                            <div class="cc-base-title">XUẤT PHÁT</div>
                         </div>
                     </div>
                 </div>
@@ -1091,6 +1061,9 @@ else if (selectedGameForInfo == "hsk-shooter")
 
     private int wordleScore = 0;
     private int wordleStreak = 0;
+    // ponytail: hub-level HSK stats read from localStorage at init; upgrade to server-side profile when backend supports cross-device sync
+    private int _hubHskBestStage = 0;
+    private int _hubHskTotalCleared = 0;
     private Dictionary<int, char> hintLetterIndices = new();
     private string selectedCefr = "all";
     private string selectedWordLength = "5";
@@ -1338,6 +1311,30 @@ else if (selectedGameForInfo == "hsk-shooter")
         vocabPool = [.. FallbackVocab];
         _ = LoadVocabularyFromApiAsync();
         _ = LoadUserProfileAsync();
+        _ = LoadHubHskStatsAsync();
+    }
+
+    private async Task LoadHubHskStatsAsync()
+    {
+        try
+        {
+            int bestStage = 0;
+            int totalCleared = 0;
+            foreach (var lvl in new[] { "HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6" })
+            {
+                var raw = await JS.InvokeAsync<string?>("localStorage.getItem", $"hsk_max_unlocked_{lvl}");
+                if (int.TryParse(raw, out var unlocked) && unlocked > 0)
+                {
+                    // localStorage stores 0-indexed stage; display as 1-indexed count
+                    totalCleared += unlocked;
+                    if (unlocked + 1 > bestStage) bestStage = unlocked + 1;
+                }
+            }
+            _hubHskBestStage = bestStage;
+            _hubHskTotalCleared = totalCleared;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { }
     }
 
     private async Task LoadUserProfileAsync()
@@ -1390,7 +1387,7 @@ else if (selectedGameForInfo == "hsk-shooter")
         StopWordleTimer();
         StateHasChanged();
         await Task.Delay(100);
-        await JS.InvokeVoidAsync("window.QuantumTutorial?.start", DotNetObjectReference.Create(this));
+        await JS.InvokeVoidAsync("window.QuantumTutorial.start", DotNetObjectReference.Create(this));
     }
 
     private async Task OpenQuantumTutorial()
@@ -1400,7 +1397,7 @@ else if (selectedGameForInfo == "hsk-shooter")
         StopWordleTimer();
         StateHasChanged();
         await Task.Delay(100);
-        await JS.InvokeVoidAsync("window.QuantumTutorial?.start", DotNetObjectReference.Create(this));
+        await JS.InvokeVoidAsync("window.QuantumTutorial.start", DotNetObjectReference.Create(this));
     }
 
     private async Task SkipWordleTutorialAndPlay()
@@ -1409,6 +1406,25 @@ else if (selectedGameForInfo == "hsk-shooter")
         hasSeenWordleTutorial = true;
         StartWordleTimer();
         await FocusWordle();
+    }
+
+    private async Task OnTutorialCardClick()
+    {
+        if (!isWordleTutorialActive) return;
+        await JS.InvokeVoidAsync("window.QuantumTutorial.advanceStep");
+    }
+
+    private async Task OnTutorialNextClick()
+    {
+        Console.WriteLine("[DEBUG] OnTutorialNextClick fired. isWordleTutorialActive=" + isWordleTutorialActive);
+        if (!isWordleTutorialActive) return;
+        await JS.InvokeVoidAsync("window.QuantumTutorial.advanceStep");
+    }
+
+    private async Task OnTutorialSkipClick()
+    {
+        if (!isWordleTutorialActive) return;
+        await JS.InvokeVoidAsync("window.QuantumTutorial.end");
     }
 
     [JSInvokable]
@@ -1435,7 +1451,7 @@ else if (selectedGameForInfo == "hsk-shooter")
         showResultModal = false;
         showWordleTutorialPrompt = false;
         isWordleTutorialActive = false;
-        _ = JS.InvokeVoidAsync("window.QuantumTutorial?.end");
+        _ = JS.InvokeVoidAsync("window.QuantumTutorial.end");
         StopWordleTimer();
     }
 

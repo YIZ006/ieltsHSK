@@ -68,9 +68,10 @@
     background: #090d16;
     border: 1px solid #334155;
     border-radius: 14px;
-    padding: 0.85rem 1.35rem;
+    padding: 0.7rem 1rem;
     text-align: center;
-    min-width: 110px;
+    min-width: 90px;
+    flex: 1 1 90px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
@@ -3943,3 +3944,29 @@
     background: rgba(56, 189, 248, 0.15) !important;
     box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
 }
+
+/* ==========================================================================
+   CANDY CRUSH STYLE WINDING PATH MAP
+   ========================================================================== */
+.candy-crush-map { display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem; gap: 0; }
+.cc-summit { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; margin-bottom: 2rem; animation: crownFloat 1.2s ease-in-out infinite alternate; }
+.cc-summit-crown { font-size: 3rem; filter: drop-shadow(0 0 15px rgba(245, 158, 11, 0.6)); }
+.cc-summit-title { font-size: 1.1rem; font-weight: 900; color: #fbbf24; letter-spacing: 0.05em; text-shadow: 0 0 10px rgba(245, 158, 11, 0.5); text-align: center; }
+.cc-path-container { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 500px; gap: 0; position: relative; }
+.cc-node { position: relative; display: flex; flex-direction: column; align-items: center; margin: 1.5rem 0; width: 100%; z-index: 2; }
+.cc-node-circle { width: 56px; height: 56px; border-radius: 50%; background: #1e293b; border: 3px solid #334155; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: 800; color: #cbd5e1; cursor: pointer; transition: all 0.2s ease; position: relative; z-index: 3; }
+.cc-node.cc-done .cc-node-circle { background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #34d399; }
+.cc-node.cc-active .cc-node-circle { background: rgba(56, 189, 248, 0.25); border-color: #38bdf8; box-shadow: 0 0 25px rgba(56, 189, 248, 0.6); transform: scale(1.15); }
+.cc-node.cc-boss .cc-node-circle { background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #f87171; width: 64px; height: 64px; font-size: 1.5rem; }
+.cc-node.cc-locked .cc-node-circle { background: #0f172a; border-color: #1e293b; color: #475569; opacity: 0.5; cursor: not-allowed; }
+.cc-node:not(.cc-locked):hover .cc-node-circle { transform: scale(1.1); border-color: #38bdf8; box-shadow: 0 0 15px rgba(56, 189, 248, 0.4); }
+.cc-stars { margin-top: 0.35rem; font-size: 0.75rem; letter-spacing: 2px; color: #fbbf24; }
+.cc-connector { position: absolute; width: 60px; height: 60px; border: 3px dashed #334155; border-left: none; border-radius: 0 30px 30px 0; z-index: 1; top: 50%; }
+.cc-connector.cc-conn-right { left: calc(50% + 28px); transform: translateY(-50%); }
+.cc-connector.cc-conn-left { right: calc(50% + 28px); transform: translateY(-50%) scaleX(-1); }
+.cc-node.cc-done .cc-connector { border-color: #10b981; }
+.cc-base { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; margin-top: 2rem; }
+.cc-base-flag { font-size: 2rem; }
+.cc-base-title { font-size: 0.85rem; font-weight: 800; color: #64748b; letter-spacing: 0.05em; }
+
+</parameter>
