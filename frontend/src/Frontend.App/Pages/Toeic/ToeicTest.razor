@@ -213,6 +213,42 @@ else
     var pageGroup = CurrentPageGroup;
     int totalAnswered = exam.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count(q => q.SelectedOptionId.HasValue)));
 
+    @* ── TOP HEADER (thanh thời gian và nút nộp bài) ── *@
+    <header class="toeic-header">
+        <div class="header-left">
+            <a href="/toeic" class="header-logo" title="Về TOEIC Dashboard">
+                <span class="logo-icon">🎓</span>
+                <span class="header-title">@((!string.IsNullOrWhiteSpace(exam.CollectionName) ? $"{exam.CollectionName} - " : "") + exam.Title)</span>
+            </a>
+        </div>
+        <div class="header-right">
+            @if (!showAnswers)
+            {
+                <button type="button" class="btn-save-exit" @onclick="SaveAndExit" title="Lưu bài làm và thoát">
+                    <i class="bi bi-floppy"></i> <span>Lưu và thoát</span>
+                </button>
+                <button type="button" class="btn-nopbai" @onclick="SubmitExam" title="Nộp bài làm">
+                    <span class="btn-nopbai-text">NỘP BÀI</span>
+                </button>
+                <div class="timer-display @(secondsLeft < 600 ? "timer-urgent" : secondsLeft < 1800 ? "timer-warning" : "")" title="Thời gian làm bài còn lại">
+                    <span class="timer-val">@TimerDisplay</span>
+                </div>
+            }
+            else
+            {
+                <div class="toeic-review-tag">
+                    <i class="bi bi-eye"></i> <span>ĐANG XEM ĐÁP ÁN</span>
+                </div>
+                <button type="button" class="btn-save-exit" @onclick='() => NavManager.NavigateTo("/toeic/test")' title="Về danh sách đề">
+                    <i class="bi bi-arrow-left"></i> <span>Danh sách đề</span>
+                </button>
+                <button type="button" class="btn-nopbai" @onclick='() => showResult = true' title="Xem bảng điểm">
+                    <i class="bi bi-trophy"></i> <span class="btn-nopbai-text">Xem điểm</span>
+                </button>
+            }
+        </div>
+    </header>
+
     @* ── PART TABS (ẩn khi đang làm bài nghe, chỉ mở lại ở chế độ xem đáp án) ── *@
     <nav class="part-nav-bar">
         @if (ShowPartTabs)

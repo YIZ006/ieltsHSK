@@ -112,16 +112,21 @@
     flex: 1;
     display: flex;
     align-items: center;
+    min-width: 0;
 }
 
 .header-logo {
     display: flex;
     align-items: center;
     gap: 10px;
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
 }
 
 .logo-icon {
     font-size: 1.4rem;
+    flex-shrink: 0;
 }
 
 .header-title {
@@ -130,6 +135,9 @@
     color: #0d1b2a;
     letter-spacing: 0.5px;
     text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .header-center {
@@ -143,7 +151,7 @@
     color: #ffffff;
     border: none;
     border-radius: 8px;
-    padding: 10px 28px;
+    padding: 10px 26px;
     font-size: 0.95rem;
     font-weight: 700;
     font-family: 'Inter', sans-serif;
@@ -152,6 +160,8 @@
     transition: var(--transition);
     box-shadow: 0 4px 16px rgba(255,107,53,0.4);
     text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .btn-nopbai:hover {
@@ -164,12 +174,53 @@
     transform: translateY(0);
 }
 
+.btn-save-exit {
+    background: #ffffff;
+    color: #57606a;
+    border: 1.5px solid #d0d7de;
+    border-radius: 8px;
+    padding: 9px 18px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.btn-save-exit:hover {
+    color: #dc2626;
+    border-color: #dc2626;
+    background: #fef2f2;
+    transform: translateY(-1px);
+}
+
+.toeic-review-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1.5px solid #f59e0b;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-weight: 700;
+    font-size: 0.88rem;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 .header-right {
-    flex: 1;
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 16px;
+    gap: 12px;
+    flex-shrink: 0;
 }
 
 /* â”€â”€ TIMER â”€â”€ */
@@ -1890,4 +1941,33 @@
 
 .setup-back-btn:hover {
     text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+    .toeic-header {
+        padding: 0 12px;
+        height: 56px;
+        gap: 8px;
+    }
+    .header-title {
+        font-size: 0.82rem;
+        max-width: 130px;
+    }
+    .btn-save-exit {
+        padding: 6px 10px;
+        font-size: 0.78rem;
+    }
+    .btn-save-exit span {
+        display: none;
+    }
+    .btn-nopbai {
+        padding: 8px 14px;
+        font-size: 0.8rem;
+    }
+    .timer-display {
+        font-size: 1.05rem;
+        padding: 5px 10px;
+        min-width: 85px;
+        letter-spacing: 1px;
+    }
 }
