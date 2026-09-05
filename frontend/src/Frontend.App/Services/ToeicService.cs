@@ -14,7 +14,12 @@ public class ToeicService
     public const string ToeicDataBaseUrl = "https://pub-91655bd1442d498b9788d1f8f8575587.r2.dev/Cuongkeng/Toeic%20Data/";
 
     private readonly HttpClient _http;
-    private readonly Dictionary<string, ToeicExamData> _cache = new();
+    private readonly Dictionary<string, string> _rawJsonCache = new();
+    private static readonly System.Text.Json.JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+    };
 
     public ToeicService(HttpClient http)
     {
@@ -22,55 +27,66 @@ public class ToeicService
     }
 
     /// <summary>
+    /// Xoá cache JSON trong bộ nhớ để buộc tải lại dữ liệu mới nhất
+    /// </summary>
+    public void ClearCache()
+    {
+        _rawJsonCache.Clear();
+    }
+
+    /// <summary>
     /// Load đề thi TOEIC từ URL (Cloudflare R2 hoặc sample-data)
     /// Ví dụ: "sample-data/toeic-test-1.json"
     /// Hoặc tên file trên R2: "TOEIC ETS 2026-Test 1.json"
+    /// Luôn trả về đối tượng ToeicExamData mới tinh để tránh lỗi mutate trạng thái khi chọn từng part.
     /// </summary>
-    public async Task<ToeicExamData?> LoadExamAsync(string dataUrl)
+    public async Task<ToeicExamData?> LoadExamAsync(string dataUrl, bool forceReload = false)
     {
         if (string.IsNullOrWhiteSpace(dataUrl)) return null;
 
         var requestUrl = ResolveUrl(dataUrl);
-        if (_cache.TryGetValue(requestUrl, out var cached)) return cached;
+        string json;
 
-        try
+        if (!forceReload && _rawJsonCache.TryGetValue(requestUrl, out var cachedJson))
         {
-            using var response = await _http.GetAsync(requestUrl);
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new Exception($"HTTP {(int)response.StatusCode} ({response.StatusCode}) khi tải: {requestUrl}");
-            }
-
-            var json = await response.Content.ReadAsStringAsync();
-
-            ToeicExamData? exam;
+            json = cachedJson;
+        }
+        else
+        {
             try
             {
-                var options = new System.Text.Json.JsonSerializerOptions
+                using var response = await _http.GetAsync(requestUrl);
+                if (!response.IsSuccessStatusCode)
                 {
-                    PropertyNameCaseInsensitive = true,
-                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
-                };
-                exam = System.Text.Json.JsonSerializer.Deserialize<ToeicExamData>(json, options);
-            }
-            catch (Exception dex)
-            {
-                throw new Exception($"Lỗi parse JSON ({json.Length:N0} ký tự): {dex.Message}");
-            }
+                    throw new Exception($"HTTP {(int)response.StatusCode} ({response.StatusCode}) khi tải: {requestUrl}");
+                }
 
-            if (exam == null || exam.Parts.Count == 0)
-            {
-                throw new Exception($"JSON hợp lệ nhưng không có phần thi (parts={(exam?.Parts.Count ?? 0)}).");
+                json = await response.Content.ReadAsStringAsync();
+                _rawJsonCache[requestUrl] = json;
             }
-
-            _cache[requestUrl] = exam;
-            return exam;
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ToeicService] Lỗi load đề từ '{requestUrl}': {ex.Message}");
+                throw;
+            }
         }
-        catch (Exception ex)
+
+        ToeicExamData? exam;
+        try
         {
-            Console.WriteLine($"[ToeicService] Lỗi load đề từ '{requestUrl}': {ex.Message}");
-            throw;
+            exam = System.Text.Json.JsonSerializer.Deserialize<ToeicExamData>(json, _jsonOptions);
         }
+        catch (Exception dex)
+        {
+            throw new Exception($"Lỗi parse JSON ({json.Length:N0} ký tự): {dex.Message}");
+        }
+
+        if (exam == null || exam.Parts.Count == 0)
+        {
+            throw new Exception($"JSON hợp lệ nhưng không có phần thi (parts={(exam?.Parts.Count ?? 0)}).");
+        }
+
+        return exam;
     }
 
     /// <summary>
