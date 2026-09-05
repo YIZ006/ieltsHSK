@@ -154,7 +154,7 @@
             </div>
 
             @* Weekly Study Activity Bar Chart *@
-            <div class="td-card td-anim-up td-delay-3">
+            <div id="progress" class="td-card td-anim-up td-delay-3">
                 <div class="td-section-header td-section-header-tight">
                     <div class="td-section-title td-section-title-sm"><i class="bi bi-bar-chart-fill td-accent"></i> Hoạt động tuần này</div>
                     <span class="td-weekly-total-badge"><i class="bi bi-clock-history"></i> @weeklyTotalMinutes phút</span>
@@ -208,7 +208,7 @@
     @* ===== QUICK TOPIC QUIZZES & RECENT EXAMS ===== *@
     <div class="td-grid-2 td-mb">
         @* Quick Quizzes *@
-        <div class="td-card td-anim-up td-delay-2">
+        <div id="quizzes" class="td-card td-anim-up td-delay-2">
             <div class="td-section-header">
                 <div>
                     <div class="td-section-title"><i class="bi bi-lightning-charge-fill" style="color:#f59e0b;"></i> Quiz nhanh theo chủ đề</div>
@@ -277,7 +277,7 @@
     </div>
 
     @* ===== LEADERBOARD ===== *@
-    <div class="td-card td-mb td-anim-up td-delay-2">
+    <div id="leaderboard" class="td-card td-mb td-anim-up td-delay-2">
         <div class="td-section-header">
             <div>
                 <div class="td-section-title">🏆 Bảng Xếp Hạng Học Viên TOEIC</div>
@@ -1033,4 +1033,28 @@
         >= 500 => "td-score-mid",
         _ => "td-score-low"
     };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("eval", @"
+                    function scrollToTarget() {
+                        var hash = window.location.hash;
+                        if (hash) {
+                            var el = document.querySelector(hash);
+                            if (el) {
+                                setTimeout(function() { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+                            }
+                        }
+                    }
+                    scrollToTarget();
+                    window.addEventListener('hashchange', scrollToTarget);
+                ");
+            }
+            catch { }
+        }
+    }
 }

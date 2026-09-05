@@ -50,14 +50,7 @@
     @* ── Navigation ── *@
     <nav class="sb-nav" aria-label="Main navigation">
         <div class="sb-nav-anim-wrapper" @key="@($"{selectedProgram}_{hskLevel}")">
-            @* ── Dynamic menu items ── *@
-            @if (!isCollapsed)
-            {
-                <div class="sb-section-label">
-                    <span>HỌC TẬP (@selectedProgram)</span>
-                </div>
-            }
-
+            @* ── Categorized menu items ── *@
             @if (menuItems.Count == 0)
             {
                 <div class="sb-empty">
@@ -67,26 +60,44 @@
             }
             else
             {
-                @foreach (var item in menuItems)
-                {
-                    var isRootDashboard = item.Route == "/toeic" || item.Route == "/ielts" || item.Route == "/hsk" || item.Route == "/ielts/dashboard";
-                    var matchMode = isRootDashboard ? NavLinkMatch.All : NavLinkMatch.Prefix;
+                var groups = menuItems
+                    .GroupBy(m => string.IsNullOrWhiteSpace(m.Category) ? $"HỌC TẬP ({selectedProgram})" : m.Category.ToUpper())
+                    .ToList();
 
-                    <NavLink href="@item.Route" class="sb-item" Match="@matchMode" data-tooltip="@item.Name" title="@(isCollapsed ? item.Name : "")">
-                        <span class="sb-item-icon">
-                            <i class="bi @item.Icon"></i>
-                        </span>
-                        @if (!isCollapsed)
-                        {
-                            <span class="sb-item-body">
-                                <span class="sb-item-name">@item.Name</span>
-                                @if (!string.IsNullOrWhiteSpace(item.Description))
-                                {
-                                    <span class="sb-item-desc">@item.Description</span>
-                                }
+                @foreach (var g in groups)
+                {
+                    @if (!isCollapsed)
+                    {
+                        <div class="sb-section-label @(g != groups[0] ? "sb-section-gap" : "")">
+                            <span>@g.Key</span>
+                        </div>
+                    }
+
+                    @foreach (var item in g)
+                    {
+                        var isRootDashboard = item.Route == "/toeic" || item.Route == "/ielts" || item.Route == "/hsk" || item.Route == "/ielts/dashboard";
+                        var matchMode = isRootDashboard ? NavLinkMatch.All : NavLinkMatch.Prefix;
+
+                        <NavLink href="@item.Route" class="sb-item" Match="@matchMode" data-tooltip="@item.Name" title="@(isCollapsed ? item.Name : "")">
+                            <span class="sb-item-icon">
+                                <i class="bi @item.Icon"></i>
                             </span>
-                        }
-                    </NavLink>
+                            @if (!isCollapsed)
+                            {
+                                <span class="sb-item-body">
+                                    <span class="sb-item-name">@item.Name</span>
+                                    @if (!string.IsNullOrWhiteSpace(item.Description))
+                                    {
+                                        <span class="sb-item-desc">@item.Description</span>
+                                    }
+                                </span>
+                                @if (!string.IsNullOrWhiteSpace(item.Badge))
+                                {
+                                    <span class="sb-nav-badge @(item.Badge.Equals("hot", StringComparison.OrdinalIgnoreCase) ? "badge-hot" : "badge-new")">@item.Badge</span>
+                                }
+                            }
+                        </NavLink>
+                    }
                 }
             }
         </div>
@@ -96,6 +107,14 @@
     <div class="sb-bottom">
         @if (!isCollapsed)
         {
+            @if (selectedProgram == "TOEIC")
+            {
+                <div class="sb-user-mini-badge">
+                    <span class="sb-mini-stat"><i class="bi bi-fire" style="color:#f59e0b;"></i> Chuỗi học tập</span>
+                    <span class="sb-mini-stat"><i class="bi bi-lightning-charge-fill" style="color:#a78bfa;"></i> Đua Top XP</span>
+                </div>
+            }
+
             <div class="sb-switcher-card">
                 <div class="sb-switcher-label">
                     <i class="bi bi-mortarboard-fill"></i>
@@ -159,24 +178,35 @@
     {
         ["TOEIC"] = new()
         {
-            new LearningSectionDto{ Name="Dashboard", Route="/toeic", Icon="bi-speedometer2", Language="TOEIC", OrderIndex=1, Description="Tổng quan TOEIC" },
-            new LearningSectionDto{ Name="Luyện đề", Route="/toeic/test", Icon="bi-journal-text", Language="TOEIC", OrderIndex=2, Description="Đề thi chuẩn ETS" },
-            new LearningSectionDto{ Name="Từ vựng", Route="/toeic/flashcards", Icon="bi-layers", Language="TOEIC", OrderIndex=3, Description="Flashcard 3D & Bảng từ" },
-            new LearningSectionDto{ Name="Trò chơi", Route="/toeic/games", Icon="bi-controller", Language="TOEIC", OrderIndex=4, Description="Game học từ & phản xạ" },
+            // ── Tổng quan ──
+            new LearningSectionDto{ Name="Trang chủ", Route="/toeic", Icon="bi-house-door-fill", Language="TOEIC", Category="Tổng quan", OrderIndex=1, Description="Dashboard tổng quan" },
+            new LearningSectionDto{ Name="Tiến độ", Route="/toeic#progress", Icon="bi-bar-chart-line-fill", Language="TOEIC", Category="Tổng quan", Badge="Mới", OrderIndex=2, Description="Biểu đồ tuần & Streak" },
+
+            // ── Học tập ──
+            new LearningSectionDto{ Name="Từ vựng", Route="/toeic/flashcards", Icon="bi-book-half", Language="TOEIC", Category="Học tập", OrderIndex=3, Description="Bảng từ tra cứu chi tiết" },
+            new LearningSectionDto{ Name="Flashcard 3D", Route="/toeic/flashcards", Icon="bi-layers-fill", Language="TOEIC", Category="Học tập", OrderIndex=4, Description="Thẻ lật 3D thông minh" },
+            new LearningSectionDto{ Name="Luyện nghe", Route="/toeic/test", Icon="bi-headphones", Language="TOEIC", Category="Học tập", OrderIndex=5, Description="Part 1–4 Listening" },
+            new LearningSectionDto{ Name="Luyện đọc", Route="/toeic/test", Icon="bi-file-earmark-text-fill", Language="TOEIC", Category="Học tập", OrderIndex=6, Description="Part 5–7 Reading" },
+
+            // ── Luyện tập & Thi thử ──
+            new LearningSectionDto{ Name="Đề thi ETS", Route="/toeic/test", Icon="bi-journal-check", Language="TOEIC", Category="Luyện tập", OrderIndex=7, Description="ETS 2024 & ETS 2026" },
+            new LearningSectionDto{ Name="Quiz nhanh", Route="/toeic#quizzes", Icon="bi-lightning-charge-fill", Language="TOEIC", Category="Luyện tập", Badge="Hot", OrderIndex=8, Description="5 chủ đề thực chiến +XP" },
+            new LearningSectionDto{ Name="Bảng xếp hạng", Route="/toeic#leaderboard", Icon="bi-trophy-fill", Language="TOEIC", Category="Luyện tập", OrderIndex=9, Description="Top 3 Podium & BXH" },
+            new LearningSectionDto{ Name="Trò chơi", Route="/toeic/games", Icon="bi-controller", Language="TOEIC", Category="Luyện tập", OrderIndex=10, Description="Game từ vựng & phản xạ" },
         },
         ["IELTS"] = new()
         {
-            new LearningSectionDto{ Name="Hôm nay", Route="/ielts/dashboard", Icon="bi-house-door-fill", Language="IELTS", OrderIndex=1, Description="Tổng quan IELTS" },
-            new LearningSectionDto{ Name="Truyện đệm", Route="/ielts/stories", Icon="bi-book", Language="IELTS", OrderIndex=2, Description="Luyện đọc qua truyện" },
-            new LearningSectionDto{ Name="Nghe điền từ", Route="/ielts/listen-fill", Icon="bi-headphones", Language="IELTS", OrderIndex=3, Description="Luyện nghe gõ từ" },
-            new LearningSectionDto{ Name="Phòng thi thử", Route="/ielts/mock-tests", Icon="bi-journal-check", Language="IELTS", OrderIndex=4, Description="Phòng thi thử" },
-            new LearningSectionDto{ Name="Trò chơi", Route="/ielts/games", Icon="bi-controller", Language="IELTS", OrderIndex=5, Description="Game học từ & phản xạ" },
+            new LearningSectionDto{ Name="Hôm nay", Route="/ielts/dashboard", Icon="bi-house-door-fill", Language="IELTS", Category="Tổng quan", OrderIndex=1, Description="Tổng quan IELTS" },
+            new LearningSectionDto{ Name="Truyện đệm", Route="/ielts/stories", Icon="bi-book", Language="IELTS", Category="Học tập", OrderIndex=2, Description="Luyện đọc qua truyện" },
+            new LearningSectionDto{ Name="Nghe điền từ", Route="/ielts/listen-fill", Icon="bi-headphones", Language="IELTS", Category="Học tập", OrderIndex=3, Description="Luyện nghe gõ từ" },
+            new LearningSectionDto{ Name="Phòng thi thử", Route="/ielts/mock-tests", Icon="bi-journal-check", Language="IELTS", Category="Luyện tập", OrderIndex=4, Description="Phòng thi thử" },
+            new LearningSectionDto{ Name="Trò chơi", Route="/ielts/games", Icon="bi-controller", Language="IELTS", Category="Luyện tập", OrderIndex=5, Description="Game học từ & phản xạ" },
         },
         ["HSK"] = new()
         {
-            new LearningSectionDto{ Name="Luyện đề HSK", Route="/hsk/luyen-de", Icon="bi-journal-text", Language="HSK", OrderIndex=1, Description="Luyện đề thi HSK các cấp" },
-            new LearningSectionDto{ Name="Từ vựng HSK", Route="/hsk/tu-vung", Icon="bi-spellcheck", Language="HSK", OrderIndex=2, Description="Từ vựng HSK 1-9" },
-            new LearningSectionDto{ Name="Trò chơi", Route="/hsk/games", Icon="bi-controller", Language="HSK", OrderIndex=3, Description="Game học từ & phản xạ" },
+            new LearningSectionDto{ Name="Luyện đề HSK", Route="/hsk/luyen-de", Icon="bi-journal-text", Language="HSK", Category="Luyện tập", OrderIndex=1, Description="Luyện đề thi HSK các cấp" },
+            new LearningSectionDto{ Name="Từ vựng HSK", Route="/hsk/tu-vung", Icon="bi-spellcheck", Language="HSK", Category="Học tập", OrderIndex=2, Description="Từ vựng HSK 1-9" },
+            new LearningSectionDto{ Name="Trò chơi", Route="/hsk/games", Icon="bi-controller", Language="HSK", Category="Luyện tập", OrderIndex=3, Description="Game học từ & phản xạ" },
         }
     };
 
