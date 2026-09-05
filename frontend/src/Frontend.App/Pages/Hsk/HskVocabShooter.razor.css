@@ -1,0 +1,254 @@
+/* Game container */
+.shooter-game {
+    position: relative;
+    width: 100%;
+    height: 70vh;
+    min-height: 400px;
+    background: linear-gradient(180deg, #0a1628 0%, #1a2a4a 60%, #2a3a5a 100%);
+    border-radius: 12px;
+    overflow: hidden;
+    user-select: none;
+}
+
+/* Stars background */
+.shooter-game::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.6) 50%, transparent 50%),
+        radial-gradient(1px 1px at 30% 60%, rgba(255,255,255,0.4) 50%, transparent 50%),
+        radial-gradient(1.5px 1.5px at 50% 10%, rgba(255,255,255,0.7) 50%, transparent 50%),
+        radial-gradient(1px 1px at 70% 40%, rgba(255,255,255,0.5) 50%, transparent 50%),
+        radial-gradient(1px 1px at 90% 80%, rgba(255,255,255,0.3) 50%, transparent 50%),
+        radial-gradient(1.5px 1.5px at 15% 85%, rgba(255,255,255,0.5) 50%, transparent 50%),
+        radial-gradient(1px 1px at 85% 15%, rgba(255,255,255,0.6) 50%, transparent 50%);
+    pointer-events: none;
+}
+
+/* HUD */
+.game-hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    z-index: 10;
+    color: #fff;
+    font-weight: 600;
+    font-size: 1.1rem;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+.hud-lives {
+    color: #ff6b6b;
+}
+
+.hud-score {
+    color: #ffd93d;
+}
+
+.hud-level {
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+/* Falling word */
+.falling-word {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: #fff;
+    white-space: nowrap;
+    /* translateX(-50%) căn giữa phần tử tại điểm X thay vì căn trái */
+    animation: fall var(--fall-duration) linear forwards;
+    left: var(--x-pos);
+    transform: translateX(-50%);
+    will-change: transform;
+}
+
+.falling-word .word-hanzi {
+    font-size: 1.4rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.falling-word .word-pinyin {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    letter-spacing: 0.5px;
+}
+
+/* Targeted word highlight */
+.falling-word.targeted {
+    border-color: #ffd93d;
+    background: rgba(255, 217, 61, 0.2);
+    box-shadow: 0 0 12px rgba(255, 217, 61, 0.4);
+}
+
+/* Destroyed explosion
+   Dùng outline-offset + filter thay vì scale để không xung đột
+   với animation fall đang chạy trên cùng transform property. */
+.falling-word.destroyed {
+    animation: fall var(--fall-duration) linear forwards, explode 0.35s ease-out forwards !important;
+    pointer-events: none;
+}
+
+@keyframes fall {
+    from { transform: translateX(-50%) translateY(-60px); }
+    to   { transform: translateX(-50%) translateY(calc(70vh + 60px)); }
+}
+
+@keyframes explode {
+    0%   { opacity: 1;   filter: brightness(1)   drop-shadow(0 0 0px  #ffd93d); }
+    40%  { opacity: 0.9; filter: brightness(2.5) drop-shadow(0 0 16px #ff6b6b); }
+    100% { opacity: 0;   filter: brightness(3)   drop-shadow(0 0 32px #ffd93d); }
+}
+
+/* Airplane */
+.airplane {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 2.5rem;
+    color: #4fc3f7;
+    filter: drop-shadow(0 0 8px rgba(79, 195, 247, 0.6));
+    z-index: 5;
+    transition: left 0.15s ease-out;
+}
+
+/* Input area */
+.game-input-area {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+    z-index: 10;
+    background: linear-gradient(transparent, rgba(10, 22, 40, 0.9));
+}
+
+.game-input-area input {
+    width: 320px;
+    max-width: 80%;
+    padding: 10px 16px;
+    font-size: 1.1rem;
+    border: 2px solid rgba(79, 195, 247, 0.5);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    text-align: center;
+    outline: none;
+    backdrop-filter: blur(8px);
+    transition: border-color 0.2s;
+}
+
+.game-input-area input:focus {
+    border-color: #4fc3f7;
+    box-shadow: 0 0 12px rgba(79, 195, 247, 0.3);
+}
+
+.game-input-area input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+/* Menu / Game Over overlay */
+.game-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: rgba(10, 22, 40, 0.92);
+    z-index: 20;
+    color: #fff;
+    text-align: center;
+}
+
+.game-overlay h2 {
+    font-size: 2rem;
+    margin: 0;
+    color: #ffd93d;
+}
+
+.game-overlay p {
+    margin: 0;
+    opacity: 0.8;
+    max-width: 400px;
+}
+
+.game-overlay .btn {
+    min-width: 160px;
+    font-weight: 600;
+}
+
+.level-select {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 8px;
+}
+
+.level-select .btn {
+    min-width: auto;
+    padding: 6px 14px;
+    font-size: 0.9rem;
+}
+
+/* Summary stats */
+.summary-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 12px 0;
+}
+
+.stat-box {
+    text-align: center;
+}
+
+.stat-box .stat-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #ffd93d;
+}
+
+.stat-box .stat-label {
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+
+/* Pause button */
+.pause-btn {
+    position: absolute;
+    top: 12px;
+    right: 60px;
+    z-index: 15;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.pause-btn:hover {
+    background: rgba(255,255,255,0.25);
+}

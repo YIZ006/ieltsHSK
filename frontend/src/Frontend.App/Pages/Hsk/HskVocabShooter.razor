@@ -1,0 +1,342 @@
+@page "/hsk/vocab-shooter"
+@layout HskLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject HskService HskSvc
+@inject IJSRuntime JS
+@implements IDisposable
+
+<h3 class="mb-3"><i class="bi bi-crosshair me-2"></i>Bắn Từ Vựng</h3>
+
+<div class="shooter-game" @onclick="FocusInput">
+    @* HUD *@
+    @if (_state == GameState.Playing || _state == GameState.Paused)
+    {
+        <div class="game-hud">
+            <span class="hud-level">@_selectedLevel</span>
+            <span class="hud-score">Điểm: @_score</span>
+            <span class="hud-lives">❤ @_lives</span>
+        </div>
+        <button class="pause-btn" @onclick="TogglePause" @onclick:stopPropagation>
+            <i class="bi @(_state == GameState.Paused ? "bi-play-fill" : "bi-pause-fill")"></i>
+        </button>
+    }
+
+    @* Falling words *@
+    @foreach (var word in _activeWords)
+    {
+        <div class="falling-word @(word.IsDestroyed ? "destroyed" : "") @(IsTargeted(word) ? "targeted" : "")"
+             style="--fall-duration: @(word.FallDurationSec)s; --x-pos: @(word.XPercent)%;">
+            <span class="word-hanzi">@word.Vocab.Hanzi</span>
+            <span class="word-pinyin">@word.Vocab.Pinyin</span>
+        </div>
+    }
+
+    @* Airplane *@
+    @if (_state == GameState.Playing || _state == GameState.Paused)
+    {
+        <div class="airplane"><i class="bi bi-airplane-fill"></i></div>
+    }
+
+    @* Input *@
+    @if (_state == GameState.Playing)
+    {
+        <div class="game-input-area" @onclick:stopPropagation>
+            <input @ref="_inputRef" type="text" @bind="_inputValue" @bind:event="oninput"
+                   placeholder="Gõ pinyin..." autocomplete="off" spellcheck="false" />
+        </div>
+    }
+
+    @* Menu overlay *@
+    @if (_state == GameState.Menu)
+    {
+        <div class="game-overlay">
+            <h2>Máy Bay Bắn Từ Vựng</h2>
+            <p>Từ vựng rơi xuống. Gõ pinyin đúng để bắn! Sai thì từ chạm đáy mất mạng.</p>
+            <div class="level-select">
+                @foreach (var lvl in _levels)
+                {
+                    <button class="btn btn-outline-light" @onclick="() => StartGame(lvl)">@lvl</button>
+                }
+            </div>
+        </div>
+    }
+
+    @* Paused overlay *@
+    @if (_state == GameState.Paused)
+    {
+        <div class="game-overlay">
+            <h2>Tạm dừng</h2>
+            <button class="btn btn-primary" @onclick="TogglePause">Tiếp tục</button>
+            <button class="btn btn-outline-light" @onclick="BackToMenu">Về menu</button>
+        </div>
+    }
+
+    @* Game Over overlay *@
+    @if (_state == GameState.GameOver)
+    {
+        <div class="game-overlay">
+            <h2>Hết trò chơi!</h2>
+            <div class="summary-stats">
+                <div class="stat-box">
+                    <div class="stat-value">@_score</div>
+                    <div class="stat-label">Điểm</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">@_wordsShot</div>
+                    <div class="stat-label">Từ bắn được</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">@_newLearned</div>
+                    <div class="stat-label">Từ mới học</div>
+                </div>
+            </div>
+            <button class="btn btn-primary" @onclick="() => StartGame(_selectedLevel)">Chơi lại</button>
+            <button class="btn btn-outline-light" @onclick="BackToMenu">Chọn cấp khác</button>
+        </div>
+    }
+</div>
+
+@code {
+    private enum GameState { Menu, Playing, Paused, GameOver }
+
+    private static readonly string[] _levels = { "HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6" };
+    private const int MaxConcurrent = 8;
+    private const int InitialLives = 5;
+    private const double MinFallSec = 4.0;
+    private const double MaxFallSec = 8.0;
+    private const int TickMs = 500;
+
+    private GameState _state = GameState.Menu;
+    private string _selectedLevel = "HSK1";
+    private List<HskVocabularyItem> _vocabPool = new();
+    private List<FallingWord> _activeWords = new();
+    private int _spawnIndex;
+    private int _score;
+    private int _lives = InitialLives;
+    private int _wordsShot;
+    private int _newLearned;
+    private string _inputValue = "";
+    private ElementReference _inputRef;
+    private Timer? _timer;
+    private readonly Random _rng = new();
+    private bool _needsInputFocus = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Preload vocab for default level
+        await HskSvc.GetVocabularyAsync("HSK1");
+    }
+
+    private async Task StartGame(string level)
+    {
+        _selectedLevel = level;
+        var all = await HskSvc.GetVocabularyAsync(level);
+        _vocabPool = all?.Where(v => v.IsActive && !string.IsNullOrWhiteSpace(v.Pinyin)).ToList() ?? new();
+        if (_vocabPool.Count == 0) return;
+
+        Shuffle(_vocabPool);
+        _spawnIndex = 0;
+        _activeWords.Clear();
+        _score = 0;
+        _lives = InitialLives;
+        _wordsShot = 0;
+        _newLearned = 0;
+        _inputValue = "";
+        _state = GameState.Playing;
+
+        _timer?.Dispose();
+        _timer = new Timer(OnTick, null, TickMs, TickMs);
+
+        // Đánh dấu cần focus — OnAfterRenderAsync sẽ focus sau khi <input> render xong
+        _needsInputFocus = true;
+    }
+
+    private void OnTick(object? state)
+    {
+        if (_state != GameState.Playing) return;
+
+        InvokeAsync(() =>
+        {
+            var now = DateTime.UtcNow;
+
+            // Remove expired words (missed)
+            for (int i = _activeWords.Count - 1; i >= 0; i--)
+            {
+                var w = _activeWords[i];
+                if (w.IsDestroyed) continue;
+                if ((now - w.SpawnTime).TotalSeconds >= w.FallDurationSec)
+                {
+                    _activeWords.RemoveAt(i);
+                    _lives--;
+                    if (_lives <= 0)
+                    {
+                        EndGame();
+                        return;
+                    }
+                }
+            }
+
+            // Spawn new word
+            if (_activeWords.Count(w => !w.IsDestroyed) < MaxConcurrent && _vocabPool.Count > 0)
+            {
+                var vocab = _vocabPool[_spawnIndex % _vocabPool.Count];
+                _spawnIndex++;
+                var fallSec = MinFallSec + _rng.NextDouble() * (MaxFallSec - MinFallSec);
+                // Higher levels fall faster
+                var levelNum = int.TryParse(_selectedLevel.Replace("HSK", ""), out var n) ? n : 1;
+                fallSec = Math.Max(2.5, fallSec - (levelNum - 1) * 0.3);
+
+                _activeWords.Add(new FallingWord
+                {
+                    Vocab = vocab,
+                    SpawnTime = now,
+                    FallDurationSec = fallSec,
+                    XPercent = 5 + _rng.NextDouble() * 80
+                });
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    private void OnInputChanged(ChangeEventArgs e)
+    {
+        _inputValue = e.Value?.ToString() ?? "";
+        TryMatch();
+    }
+
+    private void TryMatch()
+    {
+        if (string.IsNullOrWhiteSpace(_inputValue) || _state != GameState.Playing) return;
+
+        var normalized = NormalizePinyin(_inputValue);
+        var match = _activeWords.FirstOrDefault(w =>
+            !w.IsDestroyed && NormalizePinyin(w.Vocab.Pinyin) == normalized);
+
+        if (match != null)
+        {
+            match.IsDestroyed = true;
+            _score += 10;
+            _wordsShot++;
+            _inputValue = "";
+
+            // Fire-and-forget progress update
+            _ = HskSvc.UpdateVocabProgressAsync(match.Vocab.Id, true).ContinueWith(t =>
+            {
+                if (t.Result) _newLearned++;
+            });
+
+            // Remove destroyed word after explosion animation
+            _ = Task.Delay(350).ContinueWith(_ =>
+            {
+                InvokeAsync(() =>
+                {
+                    _activeWords.Remove(match);
+                    StateHasChanged();
+                });
+            });
+        }
+    }
+
+    private bool IsTargeted(FallingWord word)
+    {
+        if (string.IsNullOrWhiteSpace(_inputValue)) return false;
+        var normalized = NormalizePinyin(_inputValue);
+        return NormalizePinyin(word.Vocab.Pinyin).StartsWith(normalized, StringComparison.Ordinal);
+    }
+
+    private static string NormalizePinyin(string pinyin)
+    {
+        if (string.IsNullOrEmpty(pinyin)) return "";
+        // Lowercase + strip tone marks (Unicode FormD decomposition)
+        var decomposed = pinyin.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(decomposed.Length);
+        foreach (var c in decomposed)
+        {
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
+                != System.Globalization.UnicodeCategory.NonSpacingMark)
+            {
+                sb.Append(c);
+            }
+        }
+        return sb.ToString().Trim();
+    }
+
+    private void TogglePause()
+    {
+        if (_state == GameState.Playing)
+        {
+            _state = GameState.Paused;
+            _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+        }
+        else if (_state == GameState.Paused)
+        {
+            _state = GameState.Playing;
+            _timer?.Change(TickMs, TickMs);
+            _needsInputFocus = true;
+        }
+    }
+
+    private void EndGame()
+    {
+        _state = GameState.GameOver;
+        _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+    }
+
+    private void BackToMenu()
+    {
+        _state = GameState.Menu;
+        _timer?.Dispose();
+        _timer = null;
+        _activeWords.Clear();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_needsInputFocus)
+        {
+            _needsInputFocus = false;
+            // Dùng JS focus thay vì FocusAsync() của Blazor để đảm bảo
+            // hoạt động trong popup và kích hoạt bàn phím ảo trên mobile
+            try
+            {
+                await Task.Delay(80); // Chờ animation popup/overlay xong
+                await JS.InvokeVoidAsync("focusGameInput", _inputRef);
+            }
+            catch { }
+        }
+    }
+
+    private async Task FocusInputAsync()
+    {
+        _needsInputFocus = true;
+        StateHasChanged();
+    }
+
+    private void FocusInput() => _ = FocusInputAsync();
+
+    private void Shuffle<T>(List<T> list)
+    {
+        for (int i = list.Count - 1; i > 0; i--)
+        {
+            int j = _rng.Next(i + 1);
+            (list[i], list[j]) = (list[j], list[i]);
+        }
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _timer = null;
+    }
+
+    private class FallingWord
+    {
+        public required HskVocabularyItem Vocab { get; init; }
+        public DateTime SpawnTime { get; init; }
+        public double FallDurationSec { get; init; }
+        public double XPercent { get; init; }
+        public bool IsDestroyed { get; set; }
+    }
+}

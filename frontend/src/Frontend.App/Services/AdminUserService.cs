@@ -11,6 +11,90 @@ public class AdminUserService
         _httpClient = httpClient;
     }
 
+    public async Task<Frontend.App.Models.DashboardStatsDto?> GetDashboardStatsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var response = await _httpClient.GetAsync($"api/admin/dashboard/stats?_t={ts}", cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<Frontend.App.Models.DashboardStatsDto>(cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminUserService] Error fetching dashboard stats: {ex.Message}");
+            return null;
+        }
+    }
+
+    public async Task<Frontend.App.Models.ChartAnalyticsDto?> GetChartAnalyticsAsync(string range = "30d", string granularity = "day", string model = "all", CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var response = await _httpClient.GetAsync($"api/admin/dashboard/chart-analytics?range={range}&granularity={granularity}&model={model}&_t={ts}", cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<Frontend.App.Models.ChartAnalyticsDto>(cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminUserService] Error fetching chart analytics: {ex.Message}");
+            return null;
+        }
+    }
+
+    public async Task<Frontend.App.Models.SystemAiSettingsDto?> GetAiSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await _httpClient.GetFromJsonAsync<Frontend.App.Models.SystemAiSettingsDto>("api/admin/ai/config", cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminUserService] Error fetching AI settings: {ex.Message}");
+            return null;
+        }
+    }
+
+    public async Task<bool> SaveAiSettingsAsync(Frontend.App.Models.SystemAiSettingsDto settings, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("api/admin/ai/config", settings, cancellationToken);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminUserService] Error saving AI settings: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<Frontend.App.Models.TestAiConnectionResponseDto?> TestAiConnectionAsync(Frontend.App.Models.TestAiConnectionRequestDto request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("api/admin/ai/test-connection", request, cancellationToken);
+            return await response.Content.ReadFromJsonAsync<Frontend.App.Models.TestAiConnectionResponseDto>(cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return new Frontend.App.Models.TestAiConnectionResponseDto
+            {
+                Success = false,
+                Message = "Lỗi kết nối máy chủ: " + ex.Message
+            };
+        }
+    }
+
     public async Task<GetUsersResult> GetUsersAsync(CancellationToken cancellationToken = default)
     {
         try
