@@ -131,43 +131,49 @@ else if (showSetup && exam != null)
             }
 
             @* LISTENING *@
-            <div class="setup-section-label">LISTENING</div>
-            @foreach (var part in SetupListeningParts)
+            @if (SetupListeningParts.Any())
             {
-                <label class="setup-part-row">
-                    @if (selectByPart)
-                    {
-                        <input type="checkbox"
-                               checked="@selectedPartNumbers.Contains(part.PartNumber)"
-                               @onchange="e => TogglePart(part.PartNumber, (bool)e.Value!)" />
-                    }
-                    else
-                    {
-                        <span class="part-check-spacer"></span>
-                    }
-                    <span class="part-label">PART @part.PartNumber</span>
-                    <span class="part-count">@CountQuestions(part) câu</span>
-                </label>
+                <div class="setup-section-label">LISTENING</div>
+                @foreach (var part in SetupListeningParts)
+                {
+                    <label class="setup-part-row">
+                        @if (selectByPart)
+                        {
+                            <input type="checkbox"
+                                   checked="@selectedPartNumbers.Contains(part.PartNumber)"
+                                   @onchange="e => TogglePart(part.PartNumber, (bool)e.Value!)" />
+                        }
+                        else
+                        {
+                            <span class="part-check-spacer"></span>
+                        }
+                        <span class="part-label">PART @part.PartNumber</span>
+                        <span class="part-count">@CountQuestions(part) câu</span>
+                    </label>
+                }
             }
 
             @* READING *@
-            <div class="setup-section-label">READING</div>
-            @foreach (var part in SetupReadingParts)
+            @if (SetupReadingParts.Any())
             {
-                <label class="setup-part-row">
-                    @if (selectByPart)
-                    {
-                        <input type="checkbox"
-                               checked="@selectedPartNumbers.Contains(part.PartNumber)"
-                               @onchange="e => TogglePart(part.PartNumber, (bool)e.Value!)" />
-                    }
-                    else
-                    {
-                        <span class="part-check-spacer"></span>
-                    }
-                    <span class="part-label">PART @part.PartNumber</span>
-                    <span class="part-count">@CountQuestions(part) câu</span>
-                </label>
+                <div class="setup-section-label">READING</div>
+                @foreach (var part in SetupReadingParts)
+                {
+                    <label class="setup-part-row">
+                        @if (selectByPart)
+                        {
+                            <input type="checkbox"
+                                   checked="@selectedPartNumbers.Contains(part.PartNumber)"
+                                   @onchange="e => TogglePart(part.PartNumber, (bool)e.Value!)" />
+                        }
+                        else
+                        {
+                            <span class="part-check-spacer"></span>
+                        }
+                        <span class="part-label">PART @part.PartNumber</span>
+                        <span class="part-count">@CountQuestions(part) câu</span>
+                    </label>
+                }
             }
 
             @if (selectByPart && selectedPartNumbers.Count == 0)
@@ -853,6 +859,9 @@ else
     private HashSet<int> selectedPartNumbers = new();
     private int selectedTimeSeconds;
     private int standardTimeSeconds;
+    private List<ToeicPart> _masterParts = new();
+    private int _masterTotalQuestions;
+    private int _masterTotalTimeSeconds;
 
     private string? _lastLoadKey;
     private bool _isReloadingRoute;
@@ -977,6 +986,9 @@ else
                     if (loaded?.Parts?.Count > 0)
                     {
                         exam = loaded;
+                        _masterParts = loaded.Parts.ToList();
+                        _masterTotalQuestions = loaded.TotalQuestions > 0 ? loaded.TotalQuestions : loaded.Parts.Sum(CountQuestions);
+                        _masterTotalTimeSeconds = loaded.TotalTimeSeconds > 0 ? loaded.TotalTimeSeconds : 7200;
                         EnterSetupState();
                         _progressKey = BuildProgressKey(url);
                         await TryShowResumePromptAsync();
@@ -1027,14 +1039,20 @@ else
         if (exam == null || saved == null) { showResumePrompt = false; return; }
 
         // Áp lại bộ part đã chọn khi bắt đầu lần trước
+        var source = _masterParts.Count > 0 ? _masterParts : exam.Parts;
         if (saved.PartNumbers.Count > 0)
         {
-            var chosen = exam.Parts.Where(p => saved.PartNumbers.Contains(p.PartNumber)).ToList();
+            var chosen = source.Where(p => saved.PartNumbers.Contains(p.PartNumber)).ToList();
             if (chosen.Count > 0)
             {
                 exam.Parts = chosen;
                 exam.TotalQuestions = chosen.Sum(CountQuestions);
             }
+        }
+        else if (_masterParts.Count > 0)
+        {
+            exam.Parts = _masterParts.ToList();
+            exam.TotalQuestions = _masterTotalQuestions;
         }
         if (saved.TotalTimeSeconds > 0) exam.TotalTimeSeconds = saved.TotalTimeSeconds;
 
@@ -1144,11 +1162,30 @@ else
         _ = JS.InvokeVoidAsync("toeicAudio.stop");
         _ = ExamSession.SetUnloadWarningAsync(false);
 
+        // Khôi phục đầy đủ toàn bộ parts gốc
+        if (_masterParts.Count > 0 && exam != null)
+        {
+            exam.Parts = _masterParts.ToList();
+            exam.TotalQuestions = _masterTotalQuestions > 0 ? _masterTotalQuestions : _masterParts.Sum(CountQuestions);
+            exam.TotalTimeSeconds = _masterTotalTimeSeconds > 0 ? _masterTotalTimeSeconds : 7200;
+        }
+
+        // Reset đáp án và cờ
+        if (exam?.Parts != null)
+        {
+            foreach (var q in exam.Parts.SelectMany(p => p.QuestionGroups).SelectMany(g => g.Questions))
+            {
+                q.SelectedOptionId = null;
+                q.IsFlagged = false;
+            }
+        }
+
         showSetup = true;
         selectByPart = false;
-        selectedPartNumbers = new HashSet<int>(exam!.Parts.Select(p => p.PartNumber));
-        standardTimeSeconds = exam.TotalTimeSeconds;
-        selectedTimeSeconds = exam.TotalTimeSeconds;
+        var partsSource = _masterParts.Count > 0 ? _masterParts : exam!.Parts;
+        selectedPartNumbers = new HashSet<int>(partsSource.Select(p => p.PartNumber));
+        standardTimeSeconds = exam!.TotalTimeSeconds;
+        selectedTimeSeconds = exam!.TotalTimeSeconds;
     }
 
     /// <summary>Kiểm tra localStorage: có bài thi đang làm dở của đề này không.</summary>
@@ -1168,10 +1205,12 @@ else
     }
 
     private IEnumerable<ToeicPart> SetupListeningParts =>
-        exam!.Parts.Where(p => p.HasListening || p.PartNumber <= 4);
+        (_masterParts.Count > 0 ? _masterParts : exam!.Parts)
+            .Where(p => p.HasListening || p.PartNumber <= 4);
 
     private IEnumerable<ToeicPart> SetupReadingParts =>
-        exam!.Parts.Where(p => !p.HasListening && p.PartNumber > 4);
+        (_masterParts.Count > 0 ? _masterParts : exam!.Parts)
+            .Where(p => !p.HasListening && p.PartNumber > 4);
 
     private int SelectedTimeSeconds => selectedTimeSeconds;
 
@@ -1215,12 +1254,21 @@ else
     {
         if (exam == null) return;
 
+        var source = _masterParts.Count > 0 ? _masterParts : exam.Parts;
         if (selectByPart)
         {
-            var chosen = exam.Parts.Where(p => selectedPartNumbers.Contains(p.PartNumber)).ToList();
+            var chosen = source.Where(p => selectedPartNumbers.Contains(p.PartNumber)).ToList();
             if (chosen.Count == 0) return;
             exam.Parts = chosen;
             exam.TotalQuestions = chosen.Sum(CountQuestions);
+        }
+        else
+        {
+            if (_masterParts.Count > 0)
+            {
+                exam.Parts = _masterParts.ToList();
+                exam.TotalQuestions = _masterTotalQuestions;
+            }
         }
         exam.TotalTimeSeconds = selectedTimeSeconds;
 
