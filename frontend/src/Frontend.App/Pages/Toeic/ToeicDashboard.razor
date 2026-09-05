@@ -831,11 +831,7 @@
     {
         try
         {
-            var tests = await MockTestService.GetMockTestsAsync();
-            toeicTests = tests
-                .Where(t => !string.IsNullOrEmpty(t.ToeicUrl)
-                            && t.CollectionName.Contains("TOEIC", StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            toeicTests = await MockTestService.GetToeicMockTestsAsync();
         }
         catch
         {

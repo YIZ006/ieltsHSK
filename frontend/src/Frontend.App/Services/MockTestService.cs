@@ -9,13 +9,80 @@ public class MockTestService
 {
     private readonly HttpClient _http;
     private List<MockTestDto>? _cache;
+    private List<MockTestDto>? _toeicCache;
 
     public MockTestService(HttpClient http)
     {
         _http = http;
     }
 
-    public void InvalidateCache() => _cache = null;
+    public void InvalidateCache()
+    {
+        _cache = null;
+        _toeicCache = null;
+    }
+
+    public async Task<List<MockTestDto>> GetToeicMockTestsAsync(bool forceRefresh = false)
+    {
+        if (!forceRefresh && _toeicCache != null) return _toeicCache;
+
+        try
+        {
+            var result = await _http.GetFromJsonAsync<List<MockTestDto>>("api/toeic/r2-tests");
+            if (result != null && result.Count > 0)
+            {
+                _toeicCache = result;
+                return _toeicCache;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MockTestService] Error fetching TOEIC R2 tests from API: {ex.Message}");
+        }
+
+        // Fallback: Check general mock tests if available
+        try
+        {
+            var all = await GetMockTestsAsync(forceRefresh);
+            var filtered = all.Where(t => !string.IsNullOrEmpty(t.ToeicUrl)
+                && (t.CollectionName.Contains("TOEIC", StringComparison.OrdinalIgnoreCase)
+                    || t.Title.Contains("TOEIC", StringComparison.OrdinalIgnoreCase)
+                    || t.ToeicUrl.Contains("toeic", StringComparison.OrdinalIgnoreCase))).ToList();
+            if (filtered.Count > 0)
+            {
+                _toeicCache = filtered;
+                return _toeicCache;
+            }
+        }
+        catch { }
+
+        // Fallback: Direct known tests in Cuongkeng/Toeic Data
+        _toeicCache = new List<MockTestDto>
+        {
+            new()
+            {
+                Id = 1008,
+                CollectionName = "TOEIC ETS 2026",
+                Title = "Test 8",
+                ToeicUrl = "https://pub-91655bd1442d498b9788d1f8f8575587.r2.dev/Cuongkeng/Toeic%20Data/TOEIC%20ETS%202026-Test%208.json"
+            },
+            new()
+            {
+                Id = 1009,
+                CollectionName = "TOEIC ETS 2026",
+                Title = "Test 9",
+                ToeicUrl = "https://pub-91655bd1442d498b9788d1f8f8575587.r2.dev/Cuongkeng/Toeic%20Data/TOEIC%20ETS%202026-Test%209.json"
+            },
+            new()
+            {
+                Id = 1010,
+                CollectionName = "TOEIC ETS 2026",
+                Title = "Test 10",
+                ToeicUrl = "https://pub-91655bd1442d498b9788d1f8f8575587.r2.dev/Cuongkeng/Toeic%20Data/TOEIC%20ETS%202026-Test%2010.json"
+            }
+        };
+        return _toeicCache;
+    }
 
     public async Task<List<MockTestDto>> GetMockTestsAsync(bool forceRefresh = false)
     {

@@ -8,4 +8,5 @@ public interface IR2StorageService
     Task<string> UploadPrivateFileAsync(Stream fileStream, string key, string contentType = "application/json", CancellationToken cancellationToken = default);
     Task<Stream?> GetPrivateFileStreamAsync(string key, CancellationToken cancellationToken = default);
     Task<bool> DeletePrivateFileAsync(string key, CancellationToken cancellationToken = default);
+    Task<List<string>> ListFilesAsync(string prefix, CancellationToken cancellationToken = default);
 }

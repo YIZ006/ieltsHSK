@@ -1055,6 +1055,58 @@ app.MapGet("/api/mock-tests", async (Backend.Infrastructure.Persistence.AppDbCon
     return Results.Ok(dtos);
 });
 
+// TOEIC R2 TESTS API: Quét động toàn bộ đề thi (.json) trong folder R2 Cuongkeng/Toeic Data/
+app.MapGet("/api/toeic/r2-tests", async (Backend.Application.Abstractions.IR2StorageService r2Service, IConfiguration config, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var publicUrlBase = (config["CloudflareR2:PublicUrlBase"] ?? "https://pub-91655bd1442d498b9788d1f8f8575587.r2.dev").TrimEnd('/');
+        var allKeys = await r2Service.ListFilesAsync("Cuongkeng/Toeic Data/", cancellationToken);
+        var jsonKeys = allKeys
+            .Where(k => k.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(k =>
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(k, @"Test\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                return match.Success && int.TryParse(match.Groups[1].Value, out var n) ? n : int.MaxValue;
+            })
+            .ThenBy(k => k)
+            .ToList();
+
+        var tests = new List<Backend.Application.DTOs.MockTestDto>();
+        int autoId = 1000;
+        foreach (var key in jsonKeys)
+        {
+            var rawFileName = Path.GetFileNameWithoutExtension(key); // e.g. "TOEIC ETS 2026-Test 8"
+            string collection = "TOEIC ETS 2026";
+            string title = rawFileName;
+            if (rawFileName.Contains("-"))
+            {
+                var parts = rawFileName.Split('-', 2);
+                collection = parts[0].Trim();
+                title = parts[1].Trim();
+            }
+
+            var encodedKey = Uri.EscapeDataString(key).Replace("%2F", "/");
+            var publicUrl = $"{publicUrlBase}/{encodedKey}";
+
+            tests.Add(new Backend.Application.DTOs.MockTestDto
+            {
+                Id = autoId++,
+                CollectionName = collection,
+                Title = title,
+                ToeicUrl = publicUrl
+            });
+        }
+
+        return Results.Ok(tests);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[R2-TOEIC] Error scanning tests from R2: {ex.Message}");
+        return Results.Problem(ex.Message);
+    }
+});
+
 app.MapPost("/api/mock-tests",
         [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Backend.Application.DTOs.CreateMockTestRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {

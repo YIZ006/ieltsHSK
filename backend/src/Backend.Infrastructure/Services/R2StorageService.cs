@@ -216,4 +216,43 @@ public class R2StorageService : IR2StorageService
             return false;
         }
     }
+
+    public async Task<List<string>> ListFilesAsync(string prefix, CancellationToken cancellationToken = default)
+    {
+        var accessKey = _config["CloudflareR2:AccessKey"];
+        var secretKey = _config["CloudflareR2:SecretKey"];
+        var endpoint = _config["CloudflareR2:Endpoint"];
+        var bucketName = _config["CloudflareR2:BucketName"];
+
+        var config = new AmazonS3Config
+        {
+            ServiceURL = endpoint,
+            AuthenticationRegion = "auto",
+            ForcePathStyle = true
+        };
+
+        using var client = new AmazonS3Client(accessKey, secretKey, config);
+        var request = new ListObjectsV2Request
+        {
+            BucketName = bucketName,
+            Prefix = prefix
+        };
+
+        var result = new List<string>();
+        ListObjectsV2Response response;
+        do
+        {
+            response = await client.ListObjectsV2Async(request, cancellationToken);
+            foreach (var obj in response.S3Objects)
+            {
+                if (obj.Size > 0)
+                {
+                    result.Add(obj.Key);
+                }
+            }
+            request.ContinuationToken = response.NextContinuationToken;
+        } while (response.IsTruncated == true);
+
+        return result;
+    }
 }

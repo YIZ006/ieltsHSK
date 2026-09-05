@@ -1,5 +1,6 @@
 @page "/toeic/test"
 @page "/toeic/test/{*ExamUrl}"
+@layout ExamLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
 @inject ToeicService ToeicService
@@ -27,15 +28,34 @@
 else if (showTestList)
 {
     <div class="toeic-test-list-container">
-        <div class="header-logo" style="justify-content: center; margin-top: 2rem; margin-bottom: 2rem;">
+        <div class="toeic-test-topbar">
+            <a href="/toeic" class="btn-back-dashboard">
+                <i class="bi bi-arrow-left"></i> Về TOEIC Dashboard
+            </a>
+            <div class="toeic-r2-pill">
+                <span class="r2-pulse-dot"></span>
+                <span><i class="bi bi-cloud-check-fill"></i> Cloudflare R2</span>
+            </div>
+            <button class="btn-refresh-r2" @onclick="RefreshTestsAsync" title="Quét lại folder R2 để tìm đề mới">
+                <i class="bi bi-arrow-clockwise @(isLoading ? "spin" : "")"></i> Làm mới đề
+            </button>
+        </div>
+
+        <div class="header-logo" style="justify-content: center; margin-top: 1.5rem; margin-bottom: 0.5rem;">
             <span class="logo-icon">🎓</span>
             <span class="header-title" style="font-size: 2rem;">HỆ THỐNG THI TRỰC TUYẾN</span>
         </div>
-        <h2 style="text-align: center; color: #0d1b2a; margin-bottom: 2rem;">Danh sách đề thi TOEIC (@availableTests?.Count đề)</h2>
+        <h2 style="text-align: center; color: #0d1b2a; margin-bottom: 1.75rem;">
+            Danh sách đề thi TOEIC (@(availableTests?.Count ?? 0) đề)
+        </h2>
         
         @if (availableTests == null || !availableTests.Any())
         {
-            <p style="text-align:center; color: #aaa;">Chưa có đề thi nào.</p>
+            <div class="toeic-empty-r2">
+                <i class="bi bi-folder-x" style="font-size: 3rem; color: #9ca3af;"></i>
+                <p>Không tìm thấy file đề thi nào trong folder R2.</p>
+                <button class="btn-start" @onclick="RefreshTestsAsync">Thử tải lại</button>
+            </div>
         }
         else
         {
@@ -45,6 +65,11 @@ else if (showTestList)
                     <div class="test-card" @onclick="() => GoToTest(t.ToeicUrl)">
                         <div class="test-collection">@t.CollectionName</div>
                         <div class="test-title">@t.Title</div>
+                        <div class="test-meta-pills">
+                            <span><i class="bi bi-clock"></i> 120 phút</span>
+                            <span><i class="bi bi-ui-checks"></i> 200 câu</span>
+                            <span><i class="bi bi-layers"></i> 7 Parts</span>
+                        </div>
                         <button class="btn-start">Làm bài →</button>
                     </div>
                 }
@@ -861,6 +886,25 @@ else
     /// Blazor chỉ đổi Parameter chứ không tạo lại component.
     /// Toàn bộ việc tải dữ liệu phải đặt ở đây để phản ứng theo tham số mới.
     /// </summary>
+    private async Task RefreshTestsAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+        try
+        {
+            availableTests = await MockTestService.GetToeicMockTestsAsync(forceRefresh: true);
+        }
+        catch (Exception ex)
+        {
+            loadError = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         await LoadForCurrentRouteAsync();
@@ -890,18 +934,7 @@ else
                     ExamHeader.Hide();
                     showSetup = false;
                     exam = null;
-                    _lastLoadKey = null;
-                    if (availableTests == null || !availableTests.Any())
-                    {
-                        var tests = await MockTestService.GetMockTestsAsync();
-                        availableTests = tests.Where(t =>
-                            !string.IsNullOrEmpty(t.ToeicUrl) &&
-                            (string.IsNullOrEmpty(t.CollectionName) ||
-                             t.CollectionName.Contains("TOEIC", StringComparison.OrdinalIgnoreCase) ||
-                             t.Title.Contains("TOEIC", StringComparison.OrdinalIgnoreCase) ||
-                             t.ToeicUrl.Contains("toeic", StringComparison.OrdinalIgnoreCase))
-                        ).ToList();
-                    }
+                    availableTests = await MockTestService.GetToeicMockTestsAsync(forceRefresh: true);
                 }
                 else
                 {
