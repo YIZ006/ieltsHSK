@@ -459,15 +459,16 @@
             }
 
             function advanceStep() {
-                if (completeTypewriterImmediately()) {
-                    // Instantly revealed full text
+                var wasTyping = isTyping;
+                if (wasTyping) {
+                    completeTypewriterImmediately();
+                    return;
+                }
+                if (currentTutorialStep < TUTORIAL_STEPS.length - 1) {
+                    currentTutorialStep++;
+                    renderStep(currentTutorialStep);
                 } else {
-                    if (currentTutorialStep < TUTORIAL_STEPS.length - 1) {
-                        currentTutorialStep++;
-                        renderStep(currentTutorialStep);
-                    } else {
-                        end();
-                    }
+                    end();
                 }
             }
 
