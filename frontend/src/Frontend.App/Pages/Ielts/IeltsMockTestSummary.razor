@@ -6,6 +6,8 @@
 @inject ExamSubmissionService SubmissionService
 @inject MockTestService MockTestService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>Tổng hợp kết quả - @(summary?.TestTitle ?? "IELTS Mock Test")</PageTitle>
 
@@ -602,9 +604,63 @@
         return $"M 120,{ly:0.0} C 210,{ly:0.0} 210,{ry:0.0} 300,{ry:0.0} C 390,{ry:0.0} 390,{wy:0.0} 480,{wy:0.0} C 570,{wy:0.0} 570,{sy:0.0} 660,{sy:0.0} L 660,220 L 120,220 Z";
     }
 
+    private int? _visibilityHookId;
+    private DotNetObjectReference<IeltsMockTestSummary>? _dotNetRef;
+    private DateTimeOffset _lastLoad = DateTimeOffset.MinValue;
+
     protected override async Task OnInitializedAsync()
     {
-        isLoading = true;
+        await LoadDataAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                _dotNetRef = DotNetObjectReference.Create(this);
+                _visibilityHookId = await JS.InvokeAsync<int>("TabVisibility.register", _dotNetRef, nameof(OnTabVisibleAsync));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[IeltsMockTestSummary] Tab visibility hook: {ex.Message}");
+            }
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnTabVisibleAsync()
+    {
+        if (DateTimeOffset.UtcNow - _lastLoad < TimeSpan.FromSeconds(2)) return;
+        _lastLoad = DateTimeOffset.UtcNow;
+        try
+        {
+            await LoadDataAsync(silent: true);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[IeltsMockTestSummary] Refresh on visible: {ex.Message}");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_visibilityHookId.HasValue)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("TabVisibility.unregister", _visibilityHookId.Value);
+            }
+            catch (JSDisconnectedException) { }
+        }
+        _dotNetRef?.Dispose();
+    }
+
+    private async Task LoadDataAsync(bool silent = false)
+    {
+        if (!silent) isLoading = true;
         try
         {
             var allTests = await MockTestService.GetMockTestsAsync();
@@ -621,7 +677,7 @@
         }
         finally
         {
-            isLoading = false;
+            if (!silent) isLoading = false;
         }
     }
 

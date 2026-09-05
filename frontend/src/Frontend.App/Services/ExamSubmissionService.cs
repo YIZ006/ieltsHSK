@@ -14,8 +14,10 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
         submission.Id = string.IsNullOrWhiteSpace(submission.Id) ? Guid.NewGuid().ToString("N") : submission.Id;
         submission.SubmittedAt = submission.SubmittedAt == default ? DateTimeOffset.UtcNow : submission.SubmittedAt;
 
-        var submissions = await GetAllAsync();
-        var index = submissions.FindIndex(item => item.Id == submission.Id);
+        var submissions = await localStorage.GetItemAsync<List<IeltsSubmissionRecord>>(StorageKey) ?? new();
+        var index = submissions.FindIndex(item => 
+            item.Id == submission.Id || 
+            (!string.IsNullOrEmpty(submission.SessionId) && item.SessionId == submission.SessionId && string.Equals(item.Skill, submission.Skill, StringComparison.OrdinalIgnoreCase)));
         if (index >= 0) submissions[index] = submission;
         else submissions.Insert(0, submission);
 
@@ -77,44 +79,157 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
         var local = await localStorage.GetItemAsync<List<IeltsSubmissionRecord>>(StorageKey) ?? new();
         try
         {
-            var serverItems = await httpClient.GetFromJsonAsync<List<TestSubmissionSyncDto>>("api/test-submissions/sync");
+            var queryParams = new List<string>();
+            var token = await localStorage.GetItemAsync<string>("authToken");
+            int? userId = null;
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                var claims = CustomAuthStateProvider.ParseClaimsFromJwt(token);
+                var sub = claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier || c.Type == "sub" || c.Type == "nameid" || c.Type == "id")?.Value;
+                if (int.TryParse(sub, out var parsedUid) && parsedUid > 0) userId = parsedUid;
+            }
+
+            var profile = await localStorage.GetItemAsync<UserProfile>("user_profile");
+            if (!userId.HasValue && profile?.Id > 0) userId = profile.Id.Value;
+
+            if (userId.HasValue) queryParams.Add($"userId={userId.Value}");
+            if (!string.IsNullOrWhiteSpace(profile?.FullName)) queryParams.Add($"studentName={Uri.EscapeDataString(profile.FullName)}");
+            else if (!string.IsNullOrWhiteSpace(profile?.DisplayName)) queryParams.Add($"studentName={Uri.EscapeDataString(profile.DisplayName)}");
+            queryParams.Add($"_t={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}");
+
+            var url = $"api/test-submissions/sync?{string.Join("&", queryParams)}";
+            var serverItems = await httpClient.GetFromJsonAsync<List<TestSubmissionSyncDto>>(url);
             if (serverItems != null && serverItems.Count > 0)
             {
                 bool hasChanges = false;
                 foreach (var srv in serverItems)
                 {
-                    var match = local.FirstOrDefault(l => 
-                        (!string.IsNullOrEmpty(srv.SessionId) && l.SessionId == srv.SessionId && string.Equals(l.Skill, srv.Skill, StringComparison.OrdinalIgnoreCase)) ||
-                        (string.Equals(l.Skill, srv.Skill, StringComparison.OrdinalIgnoreCase) && NormalizeUrl(l.ExamUrl) == NormalizeUrl(srv.ExamUrl) && Math.Abs((l.SubmittedAt - srv.SubmittedAt).TotalMinutes) < 10));
+                    var match = FindLocalMatch(local, srv);
 
                     if (match != null)
                     {
-                        if (srv.Status == "Graded" && (match.Status != "Graded" || match.BandScore != srv.BandScore || match.TeacherFeedback != srv.TeacherFeedback))
+                        match.Id = srv.Id.ToString();
+                        match.SubmittedAt = srv.SubmittedAt;
+
+                        // Cập nhật trạng thái và điểm từ server
+                        match.Status = srv.Status;
+                        if (srv.BandScore > 0 || srv.Status == "Graded" || srv.Status == "Scored")
                         {
-                            match.Status = "Graded";
                             match.BandScore = srv.BandScore;
-                            match.TeacherFeedback = srv.TeacherFeedback;
-                            hasChanges = true;
+                        }
+                        match.TeacherFeedback = srv.TeacherFeedback ?? match.TeacherFeedback;
+                        match.CorrectCount = srv.CorrectCount > 0 ? srv.CorrectCount : match.CorrectCount;
+                        match.TotalQuestions = srv.TotalCount > 0 ? srv.TotalCount : match.TotalQuestions;
+                        hasChanges = true;
+
+                        // Nếu server có DetailsJson cho Listening/Reading mà local chưa có Grading
+                        if (match.Grading == null && !string.IsNullOrWhiteSpace(srv.DetailsJson)
+                            && (string.Equals(match.Skill, "Listening", StringComparison.OrdinalIgnoreCase) || string.Equals(match.Skill, "Reading", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            try
+                            {
+                                var g = System.Text.Json.JsonSerializer.Deserialize<GradingResultRecord>(srv.DetailsJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                if (g != null)
+                                {
+                                    match.Grading = g;
+                                    hasChanges = true;
+                                }
+                            }
+                            catch { }
+                        }
+
+                        // Kèm theo báo cáo 4 tiêu chí (scoreReport) lưu trong DetailsJson khi giáo viên chấm
+                        if (!string.IsNullOrWhiteSpace(srv.DetailsJson)
+                            && (string.Equals(match.Skill, "Writing", StringComparison.OrdinalIgnoreCase) || string.Equals(match.Skill, "Speaking", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            try
+                            {
+                                using var doc = System.Text.Json.JsonDocument.Parse(srv.DetailsJson);
+                                if (doc.RootElement.TryGetProperty("scoreReport", out var scoreElem) && scoreElem.ValueKind == System.Text.Json.JsonValueKind.Object)
+                                {
+                                    var report = System.Text.Json.JsonSerializer.Deserialize<IeltsScoreReport>(scoreElem.GetRawText(), new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                    if (report != null)
+                                    {
+                                        match.Score = report;
+                                        hasChanges = true;
+                                    }
+                                }
+                            }
+                            catch { }
                         }
                     }
                     else
                     {
-                        local.Add(new IeltsSubmissionRecord
+                        var newRecord = new IeltsSubmissionRecord
                         {
                             Id = srv.Id.ToString(),
                             Skill = srv.Skill,
                             ExamUrl = srv.ExamUrl,
-                            ExamTitle = !string.IsNullOrWhiteSpace(srv.ExamUrl) ? Path.GetFileNameWithoutExtension(srv.ExamUrl) : srv.Skill,
+                            ExamTitle = !string.IsNullOrWhiteSpace(srv.ExamTitle) ? srv.ExamTitle : (!string.IsNullOrWhiteSpace(srv.ExamUrl) ? Path.GetFileNameWithoutExtension(srv.ExamUrl) : srv.Skill),
                             SessionId = srv.SessionId,
-                            BandScore = srv.BandScore,
+                            BandScore = srv.BandScore > 0 || srv.Status == "Graded" || srv.Status == "Scored" ? srv.BandScore : null,
                             CorrectCount = srv.CorrectCount,
                             TotalQuestions = srv.TotalCount,
                             Status = srv.Status,
                             TeacherFeedback = srv.TeacherFeedback,
                             SubmittedAt = srv.SubmittedAt
-                        });
+                        };
+
+                        if (!string.IsNullOrWhiteSpace(srv.DetailsJson))
+                        {
+                            if (string.Equals(newRecord.Skill, "Listening", StringComparison.OrdinalIgnoreCase) || string.Equals(newRecord.Skill, "Reading", StringComparison.OrdinalIgnoreCase))
+                            {
+                                try
+                                {
+                                    var g = System.Text.Json.JsonSerializer.Deserialize<GradingResultRecord>(srv.DetailsJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                    if (g != null) newRecord.Grading = g;
+                                }
+                                catch { }
+                            }
+                            else if (string.Equals(newRecord.Skill, "Writing", StringComparison.OrdinalIgnoreCase))
+                            {
+                                try
+                                {
+                                    var w = System.Text.Json.JsonSerializer.Deserialize<WritingSubmissionData>(srv.DetailsJson, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                    if (w != null && w.Tasks.Count > 0) newRecord.Writing = w;
+                                }
+                                catch { }
+                            }
+
+                            if (string.Equals(newRecord.Skill, "Writing", StringComparison.OrdinalIgnoreCase) || string.Equals(newRecord.Skill, "Speaking", StringComparison.OrdinalIgnoreCase))
+                            {
+                                try
+                                {
+                                    using var doc = System.Text.Json.JsonDocument.Parse(srv.DetailsJson);
+                                    if (doc.RootElement.TryGetProperty("scoreReport", out var scoreElem) && scoreElem.ValueKind == System.Text.Json.JsonValueKind.Object)
+                                    {
+                                        var report = System.Text.Json.JsonSerializer.Deserialize<IeltsScoreReport>(scoreElem.GetRawText(), new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                        if (report != null)
+                                        {
+                                            newRecord.Score = report;
+                                        }
+                                    }
+                                }
+                                catch { }
+                            }
+                        }
+
+                        local.Add(newRecord);
                         hasChanges = true;
                     }
+                }
+
+                // Dọn dẹp bản ghi trùng lặp trong local: ưu tiên bản ghi có điểm/Graded/Scored
+                var deduplicated = local
+                    .GroupBy(x => !string.IsNullOrEmpty(x.Id) && int.TryParse(x.Id, out _) ? x.Id : $"{x.Skill}_{NormalizeUrl(x.ExamUrl)}_{x.SessionId}")
+                    .Select(g => g.OrderByDescending(x => x.Status == "Graded" || x.Status == "Scored" ? 1 : 0).ThenByDescending(x => x.SubmittedAt).First())
+                    .OrderByDescending(x => x.SubmittedAt)
+                    .ToList();
+
+                if (deduplicated.Count != local.Count)
+                {
+                    local = deduplicated;
+                    hasChanges = true;
                 }
 
                 if (hasChanges)
@@ -123,9 +238,9 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Sync failure is non-fatal, fallback to local storage
+            Console.WriteLine($"[ExamSubmissionService] Sync error: {ex.Message}");
         }
         return local;
     }
@@ -133,7 +248,60 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
     public static string NormalizeUrl(string? url)
     {
         if (string.IsNullOrWhiteSpace(url)) return string.Empty;
-        return url.Trim().TrimStart('/').Replace('\\', '/').ToLowerInvariant();
+        try
+        {
+            var unescaped = Uri.UnescapeDataString(url);
+            return unescaped.Trim().TrimStart('/').Replace('\\', '/').ToLowerInvariant();
+        }
+        catch
+        {
+            return url.Trim().TrimStart('/').Replace('\\', '/').ToLowerInvariant();
+        }
+    }
+
+    public static bool IsUrlMatch(string? url1, string? url2)
+    {
+        if (string.IsNullOrWhiteSpace(url1) || string.IsNullOrWhiteSpace(url2)) return false;
+        var norm1 = NormalizeUrl(url1);
+        var norm2 = NormalizeUrl(url2);
+        if (norm1 == norm2) return true;
+        if (norm1.Contains(norm2) || norm2.Contains(norm1)) return true;
+
+        try
+        {
+            var file1 = Path.GetFileName(norm1);
+            var file2 = Path.GetFileName(norm2);
+            if (!string.IsNullOrEmpty(file1) && !string.IsNullOrEmpty(file2) && file1.Equals(file2, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        catch { }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Ghép bản ghi server với bản ghi local: ưu tiên trùng Id server, SessionId,
+    /// cuối cùng là cùng kỹ năng + cùng đề với thời điểm nộp gần nhất (nới 24h để chịu lệch giờ máy).
+    /// </summary>
+    private static IeltsSubmissionRecord? FindLocalMatch(List<IeltsSubmissionRecord> local, TestSubmissionSyncDto srv)
+    {
+        if (srv.Id > 0)
+        {
+            var byId = local.FirstOrDefault(l => l.Id == srv.Id.ToString());
+            if (byId != null) return byId;
+        }
+
+        if (!string.IsNullOrEmpty(srv.SessionId))
+        {
+            var bySession = local.FirstOrDefault(l =>
+                l.SessionId == srv.SessionId &&
+                string.Equals(l.Skill, srv.Skill, StringComparison.OrdinalIgnoreCase));
+            if (bySession != null) return bySession;
+        }
+
+        return local
+            .Where(l => string.Equals(l.Skill, srv.Skill, StringComparison.OrdinalIgnoreCase) && IsUrlMatch(l.ExamUrl, srv.ExamUrl))
+            .OrderBy(l => Math.Abs((l.SubmittedAt - srv.SubmittedAt).TotalMinutes))
+            .FirstOrDefault(l => Math.Abs((l.SubmittedAt - srv.SubmittedAt).TotalMinutes) < 24 * 60);
     }
 
     /// <summary>Lấy N bài làm gần nhất (có điểm) để phân tích trên trang Ưu tiên ôn tập.</summary>
@@ -141,7 +309,7 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
     {
         var all = await GetAllAsync();
         return all
-            .Where(s => !string.IsNullOrEmpty(s.Skill) && (s.BandScore.HasValue || s.Score?.Overall > 0))
+            .Where(s => !string.IsNullOrEmpty(s.Skill) && (s.BandScore.HasValue || s.Score?.Overall > 0 || s.Status == "Graded" || s.Status == "Scored"))
             .OrderByDescending(s => s.SubmittedAt)
             .Take(take)
             .Select(s => new SubmissionSummaryDto
@@ -193,7 +361,12 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
 
         var details = submission.Grading != null ? System.Text.Json.JsonSerializer.Serialize(submission.Grading) : null;
         var res = await SaveToDbAsync("Reading", submission.ExamUrl, submission.SessionId ?? "", grading.BandScore, grading.CorrectCount, grading.TotalCount, details, "Scored", submission.ExamTitle, studentName, submission.AttemptNumber);
-        if (res != null) submission.R2StorageKey = res.R2StorageKey;
+        if (res != null)
+        {
+            submission.Id = res.Id.ToString();
+            submission.R2StorageKey = res.R2StorageKey;
+            if (res.SubmittedAt > DateTime.MinValue) submission.SubmittedAt = res.SubmittedAt;
+        }
 
         var saved = await SaveAsync(submission);
         return saved;
@@ -234,7 +407,12 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
 
         var details = submission.Grading != null ? System.Text.Json.JsonSerializer.Serialize(submission.Grading) : null;
         var res = await SaveToDbAsync("Listening", submission.ExamUrl, submission.SessionId ?? "", grading.BandScore, grading.CorrectCount, grading.TotalCount, details, "Scored", submission.ExamTitle, studentName, submission.AttemptNumber);
-        if (res != null) submission.R2StorageKey = res.R2StorageKey;
+        if (res != null)
+        {
+            submission.Id = res.Id.ToString();
+            submission.R2StorageKey = res.R2StorageKey;
+            if (res.SubmittedAt > DateTime.MinValue) submission.SubmittedAt = res.SubmittedAt;
+        }
 
         var saved = await SaveAsync(submission);
         return saved;
@@ -247,7 +425,8 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
         return all
             .Where(s => string.Equals(s.Skill, skill, StringComparison.OrdinalIgnoreCase))
             .Where(s => string.IsNullOrEmpty(normUrl) || NormalizeUrl(s.ExamUrl) == normUrl)
-            .OrderByDescending(s => s.SubmittedAt)
+            .OrderByDescending(s => s.Status == "Graded" || s.Status == "Scored" ? 1 : 0)
+            .ThenByDescending(s => s.SubmittedAt)
             .FirstOrDefault();
     }
 
@@ -265,25 +444,58 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
         var relevant = all.Where(s => 
             (!string.IsNullOrEmpty(sessionId) && s.SessionId == sessionId) ||
             (!string.IsNullOrEmpty(testTitle) && s.ExamTitle != null && s.ExamTitle.Contains(testTitle, StringComparison.OrdinalIgnoreCase)) ||
+            (!string.IsNullOrEmpty(testTitle) && !string.IsNullOrEmpty(s.TestTitle) && s.TestTitle.Contains(testTitle, StringComparison.OrdinalIgnoreCase)) ||
             (mockTest != null && (
-                s.MockTestId == mockTest.Id ||
-                NormalizeUrl(s.ExamUrl) == NormalizeUrl(mockTest.ListeningUrl) ||
-                NormalizeUrl(s.ExamUrl) == NormalizeUrl(mockTest.ReadingUrl) ||
-                NormalizeUrl(s.ExamUrl) == NormalizeUrl(mockTest.WritingUrl) ||
-                NormalizeUrl(s.ExamUrl) == NormalizeUrl(mockTest.SpeakingUrl)))
+                (s.MockTestId.HasValue && s.MockTestId == mockTest.Id) ||
+                IsUrlMatch(s.ExamUrl, mockTest.ListeningUrl) ||
+                IsUrlMatch(s.ExamUrl, mockTest.ReadingUrl) ||
+                IsUrlMatch(s.ExamUrl, mockTest.WritingUrl) ||
+                IsUrlMatch(s.ExamUrl, mockTest.SpeakingUrl)))
         ).ToList();
 
-        var listeningSub = relevant.FirstOrDefault(s => string.Equals(s.Skill, "listening", StringComparison.OrdinalIgnoreCase))
-            ?? all.FirstOrDefault(s => mockTest != null && !string.IsNullOrEmpty(mockTest.ListeningUrl) && NormalizeUrl(s.ExamUrl) == NormalizeUrl(mockTest.ListeningUrl));
+        var listeningSub = relevant
+            .Where(s => string.Equals(s.Skill, "listening", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(s => s.Status == "Graded" || s.Status == "Scored" ? 1 : 0)
+            .ThenByDescending(s => s.SubmittedAt)
+            .FirstOrDefault()
+            ?? all
+            .Where(s => mockTest != null && !string.IsNullOrEmpty(mockTest.ListeningUrl) && IsUrlMatch(s.ExamUrl, mockTest.ListeningUrl))
+            .OrderByDescending(s => s.Status == "Graded" || s.Status == "Scored" ? 1 : 0)
+            .ThenByDescending(s => s.SubmittedAt)
+            .FirstOrDefault();
 
-        var readingSub = relevant.FirstOrDefault(s => string.Equals(s.Skill, "reading", StringComparison.OrdinalIgnoreCase))
-            ?? all.FirstOrDefault(s => mockTest != null && !string.IsNullOrEmpty(mockTest.ReadingUrl) && NormalizeUrl(s.ExamUrl) == NormalizeUrl(mockTest.ReadingUrl));
+        var readingSub = relevant
+            .Where(s => string.Equals(s.Skill, "reading", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(s => s.Status == "Graded" || s.Status == "Scored" ? 1 : 0)
+            .ThenByDescending(s => s.SubmittedAt)
+            .FirstOrDefault()
+            ?? all
+            .Where(s => mockTest != null && !string.IsNullOrEmpty(mockTest.ReadingUrl) && IsUrlMatch(s.ExamUrl, mockTest.ReadingUrl))
+            .OrderByDescending(s => s.Status == "Graded" || s.Status == "Scored" ? 1 : 0)
+            .ThenByDescending(s => s.SubmittedAt)
+            .FirstOrDefault();
 
-        var writingSub = relevant.FirstOrDefault(s => string.Equals(s.Skill, "writing", StringComparison.OrdinalIgnoreCase))
-            ?? all.FirstOrDefault(s => mockTest != null && !string.IsNullOrEmpty(mockTest.WritingUrl) && NormalizeUrl(s.ExamUrl) == NormalizeUrl(mockTest.WritingUrl));
+        var writingSub = relevant
+            .Where(s => string.Equals(s.Skill, "writing", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(s => s.Status == "Graded" || s.Status == "Scored" ? 1 : 0)
+            .ThenByDescending(s => s.SubmittedAt)
+            .FirstOrDefault()
+            ?? all
+            .Where(s => mockTest != null && !string.IsNullOrEmpty(mockTest.WritingUrl) && IsUrlMatch(s.ExamUrl, mockTest.WritingUrl))
+            .OrderByDescending(s => s.Status == "Graded" || s.Status == "Scored" ? 1 : 0)
+            .ThenByDescending(s => s.SubmittedAt)
+            .FirstOrDefault();
 
-        var speakingSub = relevant.FirstOrDefault(s => string.Equals(s.Skill, "speaking", StringComparison.OrdinalIgnoreCase))
-            ?? all.FirstOrDefault(s => mockTest != null && !string.IsNullOrEmpty(mockTest.SpeakingUrl) && NormalizeUrl(s.ExamUrl) == NormalizeUrl(mockTest.SpeakingUrl));
+        var speakingSub = relevant
+            .Where(s => string.Equals(s.Skill, "speaking", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(s => s.Status == "Graded" || s.Status == "Scored" ? 1 : 0)
+            .ThenByDescending(s => s.SubmittedAt)
+            .FirstOrDefault()
+            ?? all
+            .Where(s => mockTest != null && !string.IsNullOrEmpty(mockTest.SpeakingUrl) && IsUrlMatch(s.ExamUrl, mockTest.SpeakingUrl))
+            .OrderByDescending(s => s.Status == "Graded" || s.Status == "Scored" ? 1 : 0)
+            .ThenByDescending(s => s.SubmittedAt)
+            .FirstOrDefault();
 
         if (listeningSub != null)
         {
@@ -325,7 +537,7 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
 
         if (writingSub != null)
         {
-            bool isGraded = writingSub.Status == "Graded" && writingSub.BandScore.HasValue && writingSub.BandScore.Value > 0;
+            bool isGraded = (writingSub.Status == "Graded" || writingSub.Status == "Scored") && (writingSub.BandScore.HasValue || writingSub.Score?.Overall > 0);
             summary.Writing = new SkillSummaryItem
             {
                 Skill = "Writing",
@@ -333,7 +545,7 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
                 IsGraded = isGraded,
                 Status = writingSub.Status ?? "Pending",
                 TeacherFeedback = writingSub.TeacherFeedback,
-                BandScore = isGraded ? (writingSub.BandScore ?? 0) : 0,
+                BandScore = isGraded ? (writingSub.BandScore ?? writingSub.Score?.Overall ?? 0) : 0,
                 DurationSeconds = writingSub.DurationSeconds,
                 SubmittedAt = writingSub.SubmittedAt,
                 ExamUrl = writingSub.ExamUrl,
@@ -344,7 +556,7 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
 
         if (speakingSub != null)
         {
-            bool isGraded = speakingSub.Status == "Graded" && speakingSub.BandScore.HasValue && speakingSub.BandScore.Value > 0;
+            bool isGraded = (speakingSub.Status == "Graded" || speakingSub.Status == "Scored") && (speakingSub.BandScore.HasValue || speakingSub.Score?.Overall > 0);
             summary.Speaking = new SkillSummaryItem
             {
                 Skill = "Speaking",
@@ -352,7 +564,7 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
                 IsGraded = isGraded,
                 Status = speakingSub.Status ?? "Pending",
                 TeacherFeedback = speakingSub.TeacherFeedback,
-                BandScore = isGraded ? (speakingSub.BandScore ?? 0) : 0,
+                BandScore = isGraded ? (speakingSub.BandScore ?? speakingSub.Score?.Overall ?? 0) : 0,
                 DurationSeconds = speakingSub.DurationSeconds,
                 SubmittedAt = speakingSub.SubmittedAt,
                 ExamUrl = speakingSub.ExamUrl,
@@ -362,10 +574,10 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
         }
 
         var gradedScores = new List<double>();
-        if (summary.Listening?.IsCompleted == true && summary.Listening.IsGraded && summary.Listening.BandScore > 0) gradedScores.Add(summary.Listening.BandScore);
-        if (summary.Reading?.IsCompleted == true && summary.Reading.IsGraded && summary.Reading.BandScore > 0) gradedScores.Add(summary.Reading.BandScore);
-        if (summary.Writing?.IsCompleted == true && summary.Writing.IsGraded && summary.Writing.BandScore > 0) gradedScores.Add(summary.Writing.BandScore);
-        if (summary.Speaking?.IsCompleted == true && summary.Speaking.IsGraded && summary.Speaking.BandScore > 0) gradedScores.Add(summary.Speaking.BandScore);
+        if (summary.Listening?.IsCompleted == true && summary.Listening.IsGraded && summary.Listening.BandScore >= 0) gradedScores.Add(summary.Listening.BandScore);
+        if (summary.Reading?.IsCompleted == true && summary.Reading.IsGraded && summary.Reading.BandScore >= 0) gradedScores.Add(summary.Reading.BandScore);
+        if (summary.Writing?.IsCompleted == true && summary.Writing.IsGraded && summary.Writing.BandScore >= 0) gradedScores.Add(summary.Writing.BandScore);
+        if (summary.Speaking?.IsCompleted == true && summary.Speaking.IsGraded && summary.Speaking.BandScore >= 0) gradedScores.Add(summary.Speaking.BandScore);
 
         summary.CompletedSkillsCount = (summary.Listening?.IsCompleted == true ? 1 : 0) +
                                       (summary.Reading?.IsCompleted == true ? 1 : 0) +
@@ -384,7 +596,7 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
 
     public static double CalculateOverallBand(IEnumerable<double> scores)
     {
-        var valid = scores.Where(s => s > 0).ToList();
+        var valid = scores.Where(s => s >= 0).ToList();
         if (valid.Count == 0) return 0;
         double avg = valid.Average();
         double floor = Math.Floor(avg);
@@ -411,7 +623,12 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
 
         var details = submission.Writing != null ? System.Text.Json.JsonSerializer.Serialize(submission.Writing) : null;
         var res = await SaveToDbAsync("Writing", submission.ExamUrl, submission.SessionId ?? "", 0, 0, 0, details, "Pending", submission.ExamTitle, studentName, submission.AttemptNumber);
-        if (res != null) submission.R2StorageKey = res.R2StorageKey;
+        if (res != null)
+        {
+            submission.Id = res.Id.ToString();
+            submission.R2StorageKey = res.R2StorageKey;
+            if (res.SubmittedAt > DateTime.MinValue) submission.SubmittedAt = res.SubmittedAt;
+        }
 
         var saved = await SaveAsync(submission);
         return saved;
@@ -434,7 +651,12 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
 
         var details = submission.Speaking != null ? System.Text.Json.JsonSerializer.Serialize(submission.Speaking) : null;
         var res = await SaveToDbAsync("Speaking", submission.ExamUrl, submission.SessionId ?? "", 0, 0, 0, details, "Pending", submission.ExamTitle, studentName, submission.AttemptNumber);
-        if (res != null) submission.R2StorageKey = res.R2StorageKey;
+        if (res != null)
+        {
+            submission.Id = res.Id.ToString();
+            submission.R2StorageKey = res.R2StorageKey;
+            if (res.SubmittedAt > DateTime.MinValue) submission.SubmittedAt = res.SubmittedAt;
+        }
 
         var saved = await SaveAsync(submission);
         return saved;
@@ -555,10 +777,22 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
 public sealed class TestSubmissionDbResponseDto
 {
     public int Id { get; set; }
+    public int? UserId { get; set; }
     public string? StudentName { get; set; }
-    public string? Skill { get; set; }
+    public string? UserEmail { get; set; }
+    public string Skill { get; set; } = "";
+    public string ExamUrl { get; set; } = "";
     public string? ExamTitle { get; set; }
-    public int AttemptNumber { get; set; }
-    public string? Status { get; set; }
+    public string? SessionId { get; set; }
+    public int AttemptNumber { get; set; } = 1;
+    public double BandScore { get; set; }
+    public int CorrectCount { get; set; }
+    public int TotalCount { get; set; }
+    public string Status { get; set; } = "Pending";
+    public string? TeacherFeedback { get; set; }
+    public string? DetailsJson { get; set; }
+    public string? AudioKey { get; set; }
     public string? R2StorageKey { get; set; }
+    public DateTime SubmittedAt { get; set; }
+    public DateTime? GradedAt { get; set; }
 }

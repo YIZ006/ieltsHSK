@@ -1,0 +1,683 @@
+@page "/portal-hub/api-keys"
+@page "/portal-hub/ai-settings"
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject AdminUserService AdminUserService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Quản lý API Key & Cấu hình AI - Admin Hub</PageTitle>
+
+<div class="api-keys-container">
+    <!-- Header -->
+    <div class="api-header-row">
+        <div>
+            <div class="api-badge">
+                <i class="bi bi-key-fill"></i> AI Providers & Dynamic Models
+            </div>
+            <h1 class="api-title">Cấu Hình & Quản Lý API Key</h1>
+            <p class="api-subtitle">
+                Gắn API Key của xKiro, Google Gemini, OpenAI ChatGPT, DeepSeek, Whisper. Hệ thống sẽ tự động quét và cập nhật toàn bộ danh sách Model từ Endpoint của bạn.
+            </p>
+        </div>
+        <div class="api-actions">
+            <button class="btn-save-config" @onclick="HandleSaveConfig" disabled="@isSaving">
+                @if (isSaving)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    <span>Đang lưu...</span>
+                }
+                else
+                {
+                    <i class="bi bi-check2-circle me-1"></i>
+                    <span>Lưu Cấu Hình</span>
+                }
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(notificationMessage))
+    {
+        <div class="alert @(isNotificationSuccess ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+            <i class="bi @(isNotificationSuccess ? "bi-check-circle-fill text-success" : "bi-exclamation-triangle-fill text-danger") me-2"></i>
+            <span>@notificationMessage</span>
+            <button type="button" class="btn-close" @onclick="() => notificationMessage = null"></button>
+        </div>
+    }
+
+    <!-- Primary Provider Routing Card -->
+    <div class="routing-card">
+        <h3 class="routing-title">
+            <i class="bi bi-diagram-3-fill text-primary me-2"></i> Thiết Lập Điều Phối AI Cho Từng Kỹ Năng
+        </h3>
+        <p class="routing-sub">
+            Chọn mô hình AI sẽ trực tiếp xử lý các tác vụ chấm bài và chuyển đổi giọng nói thành văn bản.
+        </p>
+
+        <div class="routing-grid">
+            <div class="routing-item">
+                <label class="routing-label"><i class="bi bi-pencil-square text-info me-1"></i> Chấm bài IELTS Writing</label>
+                <select class="form-select custom-select" @bind="settings.PrimaryWritingProvider">
+                    <option value="gemini">Google Gemini (Khuyên dùng - Nhanh & Chi tiết)</option>
+                    <option value="xkiro">xKiro API (@(string.IsNullOrWhiteSpace(settings.Xkiro.DefaultModel) ? "DeepSeek V3" : settings.Xkiro.DefaultModel))</option>
+                    <option value="openai">OpenAI ChatGPT (@(string.IsNullOrWhiteSpace(settings.OpenAi.DefaultModel) ? "GPT-4o" : settings.OpenAi.DefaultModel))</option>
+                    <option value="deepseek">DeepSeek Direct API</option>
+                </select>
+            </div>
+
+            <div class="routing-item">
+                <label class="routing-label"><i class="bi bi-mic-fill text-purple me-1"></i> Chấm bài IELTS Speaking (Đánh giá)</label>
+                <select class="form-select custom-select" @bind="settings.PrimarySpeakingProvider">
+                    <option value="gemini">Google Gemini (@(string.IsNullOrWhiteSpace(settings.Gemini.DefaultModel) ? "Gemini 2.0 Flash" : settings.Gemini.DefaultModel))</option>
+                    <option value="xkiro">xKiro API</option>
+                    <option value="openai">OpenAI ChatGPT</option>
+                    <option value="deepseek">DeepSeek V3</option>
+                </select>
+            </div>
+
+            <div class="routing-item">
+                <label class="routing-label"><i class="bi bi-soundwave text-warning me-1"></i> Bộ Chuyển Âm Thanh (Speech-to-Text)</label>
+                <select class="form-select custom-select" @bind="settings.PrimarySttProvider">
+                    <option value="browser">🌐 Browser Web Speech API (Miễn phí 0đ - Khuyên dùng)</option>
+                    <option value="whisper">🤖 OpenAI Whisper API (@(string.IsNullOrWhiteSpace(settings.Whisper.DefaultModel) ? "whisper-1" : settings.Whisper.DefaultModel))</option>
+                    <option value="groq">🚀 Groq Cloud Whisper (Siêu tốc 0.3s)</option>
+                    <option value="gemini">⚡ Google Gemini Multimodal STT</option>
+                </select>
+            </div>
+
+            <div class="routing-item">
+                <label class="routing-label"><i class="bi bi-translate text-success me-1"></i> Tra cứu từ vựng & Dịch nghĩa</label>
+                <select class="form-select custom-select" @bind="settings.PrimaryDictionaryProvider">
+                    <option value="gemini">Google Gemini 2.0 Flash</option>
+                    <option value="xkiro">xKiro API</option>
+                    <option value="openai">OpenAI GPT-4o-mini</option>
+                    <option value="deepseek">DeepSeek Chat</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Provider Cards Grid -->
+    <div class="providers-grid">
+        <!-- 1. xKiro API Card -->
+        <div class="provider-card @(settings.PrimaryWritingProvider == "xkiro" || settings.PrimarySpeakingProvider == "xkiro" ? "active-provider" : "")">
+            <div class="provider-header">
+                <div class="provider-brand">
+                    <div class="provider-logo bg-xkiro">
+                        <i class="bi bi-lightning-charge-fill"></i>
+                    </div>
+                    <div>
+                        <h4 class="provider-name">xKiro API</h4>
+                        <span class="provider-type">Multi-Model AI Gateway</span>
+                    </div>
+                </div>
+                <div class="provider-status">
+                    @if (testingProvider == "xkiro")
+                    {
+                        <span class="badge-status bg-testing"><i class="bi bi-arrow-repeat spin-icon me-1"></i> Đang tải models...</span>
+                    }
+                    else if (testResults.ContainsKey("xkiro"))
+                    {
+                        var res = testResults["xkiro"];
+                        <span class="badge-status @(res.Success ? "bg-online" : "bg-error")">
+                            <i class="bi @(res.Success ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>
+                            @(res.Success ? $"Online ({res.LatencyMs}ms)" : "Lỗi kết nối")
+                        </span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(settings.Xkiro.ApiKey))
+                    {
+                        <span class="badge-status bg-configured">Đã cấu hình</span>
+                    }
+                    else
+                    {
+                        <span class="badge-status bg-unconfigured">Chưa gắn Key</span>
+                    }
+                </div>
+            </div>
+
+            <div class="provider-body">
+                <div class="form-group mb-3">
+                    <label class="field-label">API Key xKiro</label>
+                    <div class="input-password-wrapper">
+                        <input type="@(showKey["xkiro"] ? "text" : "password")" class="form-control"
+                               placeholder="sk-xk..." @bind="settings.Xkiro.ApiKey" />
+                        <button type="button" class="btn-toggle-eye" @onclick='() => ToggleKeyVisibility("xkiro")'>
+                            <i class="bi @(showKey["xkiro"] ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label class="field-label">Base URL (Endpoint)</label>
+                    <input type="text" class="form-control" placeholder="https://api.xkiro.com/v1" @bind="settings.Xkiro.BaseUrl" />
+                </div>
+
+                <div class="form-group mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="field-label m-0">Default Model</label>
+                        @if (settings.Xkiro.AvailableModels.Any())
+                        {
+                            <span class="badge-model-count">@settings.Xkiro.AvailableModels.Count models</span>
+                        }
+                    </div>
+                    
+                    @if (settings.Xkiro.AvailableModels.Any())
+                    {
+                        <select class="form-select custom-select" @bind="settings.Xkiro.DefaultModel">
+                            @foreach (var m in settings.Xkiro.AvailableModels)
+                            {
+                                <option value="@m">@m</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <div class="input-group">
+                            <input type="text" class="form-control" placeholder="deepseek-v3 / qwen-2.5-72b..." @bind="settings.Xkiro.DefaultModel" />
+                        </div>
+                        <small class="field-hint">Bấm "Test Kết Nối" để hệ thống tự động tải toàn bộ danh sách models từ xKiro.</small>
+                    }
+                </div>
+
+                @if (testResults.ContainsKey("xkiro") && !string.IsNullOrWhiteSpace(testResults["xkiro"].Message))
+                {
+                    <div class="test-result-box @(testResults["xkiro"].Success ? "test-success" : "test-fail")">
+                        @testResults["xkiro"].Message
+                    </div>
+                }
+            </div>
+
+            <div class="provider-footer">
+                <button class="btn-test-conn" @onclick='() => TestConnection("xkiro", settings.Xkiro.ApiKey, settings.Xkiro.BaseUrl, settings.Xkiro.DefaultModel)' disabled="@(testingProvider == "xkiro")">
+                    <i class="bi bi-arrow-repeat @(testingProvider == "xkiro" ? "spin-icon" : "") me-1"></i> Test & Cập Nhật Models
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. Google Gemini API Card -->
+        <div class="provider-card @(settings.PrimaryWritingProvider == "gemini" || settings.PrimarySpeakingProvider == "gemini" || settings.PrimarySttProvider == "gemini" ? "active-provider" : "")">
+            <div class="provider-header">
+                <div class="provider-brand">
+                    <div class="provider-logo bg-gemini">
+                        <i class="bi bi-stars"></i>
+                    </div>
+                    <div>
+                        <h4 class="provider-name">Google Gemini</h4>
+                        <span class="provider-type">Google AI Studio</span>
+                    </div>
+                </div>
+                <div class="provider-status">
+                    @if (testingProvider == "gemini")
+                    {
+                        <span class="badge-status bg-testing"><i class="bi bi-arrow-repeat spin-icon me-1"></i> Đang tải models...</span>
+                    }
+                    else if (testResults.ContainsKey("gemini"))
+                    {
+                        var res = testResults["gemini"];
+                        <span class="badge-status @(res.Success ? "bg-online" : "bg-error")">
+                            <i class="bi @(res.Success ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>
+                            @(res.Success ? $"Online ({res.LatencyMs}ms)" : "Lỗi kết nối")
+                        </span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(settings.Gemini.ApiKey))
+                    {
+                        <span class="badge-status bg-configured">Đã cấu hình</span>
+                    }
+                    else
+                    {
+                        <span class="badge-status bg-unconfigured">Chưa gắn Key</span>
+                    }
+                </div>
+            </div>
+
+            <div class="provider-body">
+                <div class="form-group mb-3">
+                    <label class="field-label">Google AI API Key</label>
+                    <div class="input-password-wrapper">
+                        <input type="@(showKey["gemini"] ? "text" : "password")" class="form-control"
+                               placeholder="AIzaSy..." @bind="settings.Gemini.ApiKey" />
+                        <button type="button" class="btn-toggle-eye" @onclick='() => ToggleKeyVisibility("gemini")'>
+                            <i class="bi @(showKey["gemini"] ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                        </button>
+                    </div>
+                    <small class="field-hint">Lấy key miễn phí tại <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a></small>
+                </div>
+
+                <div class="form-group mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="field-label m-0">Default Model</label>
+                        @if (settings.Gemini.AvailableModels.Any())
+                        {
+                            <span class="badge-model-count">@settings.Gemini.AvailableModels.Count models</span>
+                        }
+                    </div>
+
+                    @if (settings.Gemini.AvailableModels.Any())
+                    {
+                        <select class="form-select custom-select" @bind="settings.Gemini.DefaultModel">
+                            @foreach (var m in settings.Gemini.AvailableModels)
+                            {
+                                <option value="@m">@m</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <select class="form-select custom-select" @bind="settings.Gemini.DefaultModel">
+                            <option value="gemini-2.0-flash">Gemini 2.0 Flash (Khuyên dùng - Siêu nhanh)</option>
+                            <option value="gemini-1.5-pro">Gemini 1.5 Pro (Chuyên sâu IELTS Writing)</option>
+                            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                        </select>
+                    }
+                </div>
+
+                @if (testResults.ContainsKey("gemini") && !string.IsNullOrWhiteSpace(testResults["gemini"].Message))
+                {
+                    <div class="test-result-box @(testResults["gemini"].Success ? "test-success" : "test-fail")">
+                        @testResults["gemini"].Message
+                    </div>
+                }
+            </div>
+
+            <div class="provider-footer">
+                <button class="btn-test-conn" @onclick='() => TestConnection("gemini", settings.Gemini.ApiKey, settings.Gemini.BaseUrl, settings.Gemini.DefaultModel)' disabled="@(testingProvider == "gemini")">
+                    <i class="bi bi-arrow-repeat @(testingProvider == "gemini" ? "spin-icon" : "") me-1"></i> Test & Cập Nhật Models
+                </button>
+            </div>
+        </div>
+
+        <!-- 3. OpenAI Whisper & Groq Card -->
+        <div class="provider-card @(settings.PrimarySttProvider == "whisper" || settings.PrimarySttProvider == "groq" ? "active-provider" : "")">
+            <div class="provider-header">
+                <div class="provider-brand">
+                    <div class="provider-logo bg-whisper">
+                        <i class="bi bi-soundwave"></i>
+                    </div>
+                    <div>
+                        <h4 class="provider-name">Whisper STT (OpenAI / Groq)</h4>
+                        <span class="provider-type">Speech-to-Text Engine</span>
+                    </div>
+                </div>
+                <div class="provider-status">
+                    @if (testingProvider == "whisper" || testingProvider == "groq")
+                    {
+                        <span class="badge-status bg-testing"><i class="bi bi-arrow-repeat spin-icon me-1"></i> Đang test...</span>
+                    }
+                    else if (testResults.ContainsKey("whisper"))
+                    {
+                        var res = testResults["whisper"];
+                        <span class="badge-status @(res.Success ? "bg-online" : "bg-error")">
+                            <i class="bi @(res.Success ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>
+                            @(res.Success ? $"Online ({res.LatencyMs}ms)" : "Lỗi kết nối")
+                        </span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(settings.Whisper.ApiKey) || !string.IsNullOrWhiteSpace(settings.GroqWhisper.ApiKey))
+                    {
+                        <span class="badge-status bg-configured">Đã cấu hình</span>
+                    }
+                    else
+                    {
+                        <span class="badge-status bg-unconfigured">Chưa gắn Key</span>
+                    }
+                </div>
+            </div>
+
+            <div class="provider-body">
+                <div class="form-group mb-3">
+                    <label class="field-label">OpenAI / Groq API Key</label>
+                    <div class="input-password-wrapper">
+                        <input type="@(showKey["whisper"] ? "text" : "password")" class="form-control"
+                               placeholder="sk-..." @bind="settings.Whisper.ApiKey" />
+                        <button type="button" class="btn-toggle-eye" @onclick='() => ToggleKeyVisibility("whisper")'>
+                            <i class="bi @(showKey["whisper"] ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                        </button>
+                    </div>
+                    <small class="field-hint">Dùng key OpenAI hoặc Groq Cloud để bóc băng bài nói siêu tốc.</small>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label class="field-label">Base URL (Endpoint)</label>
+                    <input type="text" class="form-control" placeholder="https://api.openai.com/v1 (hoặc https://api.groq.com/openai/v1)" @bind="settings.Whisper.BaseUrl" />
+                </div>
+
+                <div class="form-group mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="field-label m-0">Default Model</label>
+                        @if (settings.Whisper.AvailableModels.Any())
+                        {
+                            <span class="badge-model-count">@settings.Whisper.AvailableModels.Count models</span>
+                        }
+                    </div>
+
+                    @if (settings.Whisper.AvailableModels.Any())
+                    {
+                        <select class="form-select custom-select" @bind="settings.Whisper.DefaultModel">
+                            @foreach (var m in settings.Whisper.AvailableModels)
+                            {
+                                <option value="@m">@m</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <select class="form-select custom-select" @bind="settings.Whisper.DefaultModel">
+                            <option value="whisper-1">OpenAI whisper-1 (Chuẩn quốc tế)</option>
+                            <option value="whisper-large-v3-turbo">Groq whisper-large-v3-turbo (Siêu tốc)</option>
+                            <option value="whisper-large-v3">Groq whisper-large-v3</option>
+                        </select>
+                    }
+                </div>
+
+                @if (testResults.ContainsKey("whisper") && !string.IsNullOrWhiteSpace(testResults["whisper"].Message))
+                {
+                    <div class="test-result-box @(testResults["whisper"].Success ? "test-success" : "test-fail")">
+                        @testResults["whisper"].Message
+                    </div>
+                }
+            </div>
+
+            <div class="provider-footer">
+                <button class="btn-test-conn" @onclick='() => TestConnection("whisper", settings.Whisper.ApiKey, settings.Whisper.BaseUrl, settings.Whisper.DefaultModel)' disabled="@(testingProvider == "whisper")">
+                    <i class="bi bi-arrow-repeat @(testingProvider == "whisper" ? "spin-icon" : "") me-1"></i> Test & Cập Nhật Models
+                </button>
+            </div>
+        </div>
+
+        <!-- 4. OpenAI (ChatGPT) Card -->
+        <div class="provider-card @(settings.PrimaryWritingProvider == "openai" || settings.PrimarySpeakingProvider == "openai" ? "active-provider" : "")">
+            <div class="provider-header">
+                <div class="provider-brand">
+                    <div class="provider-logo bg-openai">
+                        <i class="bi bi-robot"></i>
+                    </div>
+                    <div>
+                        <h4 class="provider-name">OpenAI (ChatGPT)</h4>
+                        <span class="provider-type">Official OpenAI API</span>
+                    </div>
+                </div>
+                <div class="provider-status">
+                    @if (testingProvider == "openai")
+                    {
+                        <span class="badge-status bg-testing"><i class="bi bi-arrow-repeat spin-icon me-1"></i> Đang tải models...</span>
+                    }
+                    else if (testResults.ContainsKey("openai"))
+                    {
+                        var res = testResults["openai"];
+                        <span class="badge-status @(res.Success ? "bg-online" : "bg-error")">
+                            <i class="bi @(res.Success ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>
+                            @(res.Success ? $"Online ({res.LatencyMs}ms)" : "Lỗi kết nối")
+                        </span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(settings.OpenAi.ApiKey))
+                    {
+                        <span class="badge-status bg-configured">Đã cấu hình</span>
+                    }
+                    else
+                    {
+                        <span class="badge-status bg-unconfigured">Chưa gắn Key</span>
+                    }
+                </div>
+            </div>
+
+            <div class="provider-body">
+                <div class="form-group mb-3">
+                    <label class="field-label">OpenAI API Key</label>
+                    <div class="input-password-wrapper">
+                        <input type="@(showKey["openai"] ? "text" : "password")" class="form-control"
+                               placeholder="sk-proj-..." @bind="settings.OpenAi.ApiKey" />
+                        <button type="button" class="btn-toggle-eye" @onclick='() => ToggleKeyVisibility("openai")'>
+                            <i class="bi @(showKey["openai"] ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label class="field-label">Base URL</label>
+                    <input type="text" class="form-control" placeholder="https://api.openai.com/v1" @bind="settings.OpenAi.BaseUrl" />
+                </div>
+
+                <div class="form-group mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="field-label m-0">Default Model</label>
+                        @if (settings.OpenAi.AvailableModels.Any())
+                        {
+                            <span class="badge-model-count">@settings.OpenAi.AvailableModels.Count models</span>
+                        }
+                    </div>
+
+                    @if (settings.OpenAi.AvailableModels.Any())
+                    {
+                        <select class="form-select custom-select" @bind="settings.OpenAi.DefaultModel">
+                            @foreach (var m in settings.OpenAi.AvailableModels)
+                            {
+                                <option value="@m">@m</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <select class="form-select custom-select" @bind="settings.OpenAi.DefaultModel">
+                            <option value="gpt-4o-mini">GPT-4o Mini (Tiết kiệm chi phí)</option>
+                            <option value="gpt-4o">GPT-4o (Độ chính xác cao nhất)</option>
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        </select>
+                    }
+                </div>
+
+                @if (testResults.ContainsKey("openai") && !string.IsNullOrWhiteSpace(testResults["openai"].Message))
+                {
+                    <div class="test-result-box @(testResults["openai"].Success ? "test-success" : "test-fail")">
+                        @testResults["openai"].Message
+                    </div>
+                }
+            </div>
+
+            <div class="provider-footer">
+                <button class="btn-test-conn" @onclick='() => TestConnection("openai", settings.OpenAi.ApiKey, settings.OpenAi.BaseUrl, settings.OpenAi.DefaultModel)' disabled="@(testingProvider == "openai")">
+                    <i class="bi bi-arrow-repeat @(testingProvider == "openai" ? "spin-icon" : "") me-1"></i> Test & Cập Nhật Models
+                </button>
+            </div>
+        </div>
+
+        <!-- 5. DeepSeek API Card -->
+        <div class="provider-card @(settings.PrimaryWritingProvider == "deepseek" || settings.PrimarySpeakingProvider == "deepseek" ? "active-provider" : "")">
+            <div class="provider-header">
+                <div class="provider-brand">
+                    <div class="provider-logo bg-deepseek">
+                        <i class="bi bi-cpu-fill"></i>
+                    </div>
+                    <div>
+                        <h4 class="provider-name">DeepSeek API</h4>
+                        <span class="provider-type">DeepSeek AI Platform</span>
+                    </div>
+                </div>
+                <div class="provider-status">
+                    @if (testingProvider == "deepseek")
+                    {
+                        <span class="badge-status bg-testing"><i class="bi bi-arrow-repeat spin-icon me-1"></i> Đang tải models...</span>
+                    }
+                    else if (testResults.ContainsKey("deepseek"))
+                    {
+                        var res = testResults["deepseek"];
+                        <span class="badge-status @(res.Success ? "bg-online" : "bg-error")">
+                            <i class="bi @(res.Success ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>
+                            @(res.Success ? $"Online ({res.LatencyMs}ms)" : "Lỗi kết nối")
+                        </span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(settings.DeepSeek.ApiKey))
+                    {
+                        <span class="badge-status bg-configured">Đã cấu hình</span>
+                    }
+                    else
+                    {
+                        <span class="badge-status bg-unconfigured">Chưa gắn Key</span>
+                    }
+                </div>
+            </div>
+
+            <div class="provider-body">
+                <div class="form-group mb-3">
+                    <label class="field-label">DeepSeek API Key</label>
+                    <div class="input-password-wrapper">
+                        <input type="@(showKey["deepseek"] ? "text" : "password")" class="form-control"
+                               placeholder="sk-..." @bind="settings.DeepSeek.ApiKey" />
+                        <button type="button" class="btn-toggle-eye" @onclick='() => ToggleKeyVisibility("deepseek")'>
+                            <i class="bi @(showKey["deepseek"] ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label class="field-label">Base URL</label>
+                    <input type="text" class="form-control" placeholder="https://api.deepseek.com/v1" @bind="settings.DeepSeek.BaseUrl" />
+                </div>
+
+                <div class="form-group mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="field-label m-0">Default Model</label>
+                        @if (settings.DeepSeek.AvailableModels.Any())
+                        {
+                            <span class="badge-model-count">@settings.DeepSeek.AvailableModels.Count models</span>
+                        }
+                    </div>
+
+                    @if (settings.DeepSeek.AvailableModels.Any())
+                    {
+                        <select class="form-select custom-select" @bind="settings.DeepSeek.DefaultModel">
+                            @foreach (var m in settings.DeepSeek.AvailableModels)
+                            {
+                                <option value="@m">@m</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <select class="form-select custom-select" @bind="settings.DeepSeek.DefaultModel">
+                            <option value="deepseek-chat">DeepSeek Chat (V3)</option>
+                            <option value="deepseek-reasoner">DeepSeek Reasoner (R1)</option>
+                        </select>
+                    }
+                </div>
+
+                @if (testResults.ContainsKey("deepseek") && !string.IsNullOrWhiteSpace(testResults["deepseek"].Message))
+                {
+                    <div class="test-result-box @(testResults["deepseek"].Success ? "test-success" : "test-fail")">
+                        @testResults["deepseek"].Message
+                    </div>
+                }
+            </div>
+
+            <div class="provider-footer">
+                <button class="btn-test-conn" @onclick='() => TestConnection("deepseek", settings.DeepSeek.ApiKey, settings.DeepSeek.BaseUrl, settings.DeepSeek.DefaultModel)' disabled="@(testingProvider == "deepseek")">
+                    <i class="bi bi-arrow-repeat @(testingProvider == "deepseek" ? "spin-icon" : "") me-1"></i> Test & Cập Nhật Models
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private SystemAiSettingsDto settings = new();
+    private Dictionary<string, bool> showKey = new()
+    {
+        { "xkiro", false },
+        { "gemini", false },
+        { "whisper", false },
+        { "openai", false },
+        { "deepseek", false }
+    };
+
+    private Dictionary<string, TestAiConnectionResponseDto> testResults = new();
+    private string? testingProvider = null;
+    private bool isSaving = false;
+    private string? notificationMessage;
+    private bool isNotificationSuccess = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var loaded = await AdminUserService.GetAiSettingsAsync();
+        if (loaded != null)
+        {
+            settings = loaded;
+        }
+    }
+
+    private void ToggleKeyVisibility(string provider)
+    {
+        if (showKey.ContainsKey(provider))
+        {
+            showKey[provider] = !showKey[provider];
+        }
+    }
+
+    private async Task TestConnection(string provider, string apiKey, string? baseUrl, string? model)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            notificationMessage = $"Vui lòng nhập API Key cho {provider.ToUpper()} trước khi kiểm tra.";
+            isNotificationSuccess = false;
+            return;
+        }
+
+        testingProvider = provider;
+        notificationMessage = null;
+
+        var req = new TestAiConnectionRequestDto
+        {
+            Provider = provider,
+            ApiKey = apiKey,
+            BaseUrl = baseUrl,
+            Model = model
+        };
+
+        var res = await AdminUserService.TestAiConnectionAsync(req);
+        if (res != null)
+        {
+            testResults[provider] = res;
+
+            if (res.Success && res.AvailableModels != null && res.AvailableModels.Any())
+            {
+                var targetConfig = provider switch
+                {
+                    "xkiro" => settings.Xkiro,
+                    "gemini" => settings.Gemini,
+                    "openai" => settings.OpenAi,
+                    "deepseek" => settings.DeepSeek,
+                    "whisper" => settings.Whisper,
+                    _ => null
+                };
+
+                if (targetConfig != null)
+                {
+                    targetConfig.AvailableModels = res.AvailableModels;
+                    if (string.IsNullOrWhiteSpace(targetConfig.DefaultModel) || !res.AvailableModels.Contains(targetConfig.DefaultModel))
+                    {
+                        targetConfig.DefaultModel = res.AvailableModels.First();
+                    }
+                }
+            }
+        }
+
+        testingProvider = null;
+    }
+
+    private async Task HandleSaveConfig()
+    {
+        isSaving = true;
+        notificationMessage = null;
+
+        var success = await AdminUserService.SaveAiSettingsAsync(settings);
+        if (success)
+        {
+            notificationMessage = "✅ Đã lưu cấu hình API Keys và danh sách Models thành công!";
+            isNotificationSuccess = true;
+        }
+        else
+        {
+            notificationMessage = "❌ Không thể lưu cấu hình. Vui lòng kiểm tra lại.";
+            isNotificationSuccess = false;
+        }
+
+        isSaving = false;
+    }
+}

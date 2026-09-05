@@ -62,7 +62,7 @@ else
         <div class="writing-result-top-banner">
             <div class="result-banner-header">
                 <div class="banner-badge-box">
-                    @if (savedSubmission?.Status == "Graded" && savedSubmission?.BandScore.HasValue == true && savedSubmission.BandScore.Value > 0)
+                    @if (savedSubmission?.Status == "Graded" && savedSubmission?.BandScore.HasValue == true)
                     {
                         <span class="status-badge-pill">🎉 ĐÃ CÓ KẾT QUẢ CHẤM ĐIỂM</span>
                         <span class="status-sub-note">Bài viết đã được giáo viên có trình độ chuyên môn hoàn tất chấm điểm và nhận xét chi tiết.</span>
@@ -90,7 +90,7 @@ else
             </div>
 
             <div class="result-banner-grid">
-                @if (savedSubmission?.Status == "Graded" && savedSubmission?.BandScore.HasValue == true && savedSubmission.BandScore.Value > 0)
+                @if (savedSubmission?.Status == "Graded" && savedSubmission?.BandScore.HasValue == true)
                 {
                     <div class="score-card-band">
                         <span class="band-label">OFFICIAL BAND</span>
@@ -233,18 +233,22 @@ else
             else
             {
                 <textarea class="essay-textarea"
-                          placeholder="Type your essay here..."
+                          placeholder="Type your essay here (English only)..."
                           disabled="@isFinished"
-                          @bind="activeTask.Answer"
-                          @bind:event="oninput"
+                          value="@activeTask.Answer"
+                          @oninput="HandleInput"
                           spellcheck="false"></textarea>
                 <div class="editor-footer">
                     <span class="word-count @(activeTask.WordCount >= activeTask.MinWords ? "count-ok" : "count-low")">
                         Words: <strong>@activeTask.WordCount</strong> / @activeTask.MinWords required
                     </span>
-                    @if (activeTask.WordCount >= activeTask.MinWords)
+                    @if (showInvalidCharWarning)
                     {
-                        <span class="count-check">✓ Minimum reached</span>
+                        <span class="invalid-char-warning" style="color: #ef4444; margin-left: 12px; font-size: 0.85rem;"><i class="bi bi-exclamation-triangle-fill"></i> Chỉ hỗ trợ tiếng Anh và dấu (! , . ?)</span>
+                    }
+                    @if (activeTask.WordCount >= activeTask.MinWords && !showInvalidCharWarning)
+                    {
+                        <span class="count-check" style="margin-left: 12px;">✓ Minimum reached</span>
                     }
                 </div>
             }
@@ -275,6 +279,30 @@ else
     [Parameter]
     [SupplyParameterFromQuery(Name = "MockTestId")]
     public int? QueryMockTestId { get; set; }
+
+    private bool showInvalidCharWarning = false;
+
+    private void HandleInput(ChangeEventArgs e)
+    {
+        if (exam == null || exam.Tasks == null || activeTaskIndex >= exam.Tasks.Count) return;
+        var task = exam.Tasks[activeTaskIndex];
+
+        var val = e.Value?.ToString() ?? "";
+        
+        // Cho phép: chữ cái (a-z), số (0-9), khoảng trắng, xuống dòng và các dấu câu cơ bản.
+        var regex = new System.Text.RegularExpressions.Regex(@"[^a-zA-Z0-9\s\.,!\?'""\-\(\)]");
+        
+        if (regex.IsMatch(val))
+        {
+            showInvalidCharWarning = true;
+            task.Answer = regex.Replace(val, "");
+        }
+        else
+        {
+            showInvalidCharWarning = false;
+            task.Answer = val;
+        }
+    }
 
     private WritingExamData? exam;
     private bool isLoading = true;
@@ -396,7 +424,7 @@ else
 
     private async Task AutoSaveCheckpointAsync()
     {
-        if (isFinished || exam == null || string.IsNullOrEmpty(currentExamUrl)) return;
+        if (isFinished || isSubmitting || exam == null || string.IsNullOrEmpty(currentExamUrl)) return;
 
         var cp = new ExamCheckpointDto
         {
@@ -471,31 +499,54 @@ else
     {
         if (isFinished || isSubmitting) return;
         isSubmitting = true;
-        await InvokeAsync(StateHasChanged);
-
-        await CheckpointService.ClearCheckpointAsync("Writing", currentExamUrl, QueryMockTestId);
-
-        savedSubmission = BuildSubmission(timeExpired);
-        savedSubmission = await Submissions.SaveWritingSubmissionAsync(savedSubmission);
-        scoreReport = savedSubmission.Score;
-
         isFinished = true;
-        timedOut = timeExpired;
-        isSubmitting = false;
-        viewSampleMode = true;
         _timer?.Dispose();
-        if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
-        await ExamSession.LockTestContentAsync(".writing-split");
-        await ExamSession.SetUnloadWarningAsync(false);
         await InvokeAsync(StateHasChanged);
 
-        if (!timeExpired)
+        try
         {
+            try { await CheckpointService.ClearCheckpointAsync("Writing", currentExamUrl, QueryMockTestId); } catch { }
+
+            savedSubmission = BuildSubmission(timeExpired);
             try
             {
-                await JS.InvokeVoidAsync("alert", "🎉 Bài thi Writing đã được nộp thành công!\nKết quả chấm điểm và nhận xét chi tiết sẽ sớm được thông báo cho bạn.");
+                savedSubmission = await Submissions.SaveWritingSubmissionAsync(savedSubmission);
+                scoreReport = savedSubmission.Score;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Writing] Lỗi khi lưu bài nộp: {ex.Message}");
+            }
+
+            timedOut = timeExpired;
+            viewSampleMode = true;
+            
+            try { if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired); } catch { }
+            try { await ExamSession.LockTestContentAsync(".writing-split"); } catch { }
+            try { await ExamSession.SetUnloadWarningAsync(false); } catch { }
+
+            if (!timeExpired)
+            {
+                try
+                {
+                    await JS.InvokeVoidAsync("alert", "🎉 Bài thi Writing đã được nộp thành công!\nKết quả chấm điểm và nhận xét chi tiết sẽ sớm được thông báo cho bạn.");
+                }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Writing] Lỗi khi nộp bài: {ex.Message}");
+            try
+            {
+                await JS.InvokeVoidAsync("alert", $"Đã xảy ra lỗi khi nộp bài: {ex.Message}");
             }
             catch { }
+        }
+        finally
+        {
+            isSubmitting = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 

@@ -19,13 +19,23 @@ public class GradeWritingResponse
     public List<string> Strengths { get; set; } = new();
     public List<string> Improvements { get; set; } = new();
     public List<WritingGrammarError> GrammarErrors { get; set; } = new();
+    public List<VocabularyUpgradeDto> VocabularyUpgrades { get; set; } = new();
     public int WordCount { get; set; }
+    public string GradedBy { get; set; } = "AI Engine";
 }
 
 public class WritingGrammarError
 {
     public string Original { get; set; } = string.Empty;
     public string Suggestion { get; set; } = string.Empty;
+    public string Explanation { get; set; } = string.Empty;
+}
+
+public class VocabularyUpgradeDto
+{
+    public string OriginalWord { get; set; } = string.Empty;
+    public string UpgradedWord { get; set; } = string.Empty;
+    public string ContextExample { get; set; } = string.Empty;
     public string Explanation { get; set; } = string.Empty;
 }
 
@@ -49,6 +59,7 @@ public class GradeSpeakingResponse
     public int Wpm { get; set; }
     public List<string> Strengths { get; set; } = new();
     public List<string> Improvements { get; set; } = new();
+    public string GradedBy { get; set; } = "AI Engine";
 }
 
 public class UpdateSubmissionGradeRequest
