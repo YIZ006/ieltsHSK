@@ -2,20 +2,24 @@
 @page "/toeic/dashboard"
 @using Frontend.App.Models
 @using Frontend.App.Services
+@using Blazored.LocalStorage
 @inject MockTestService MockTestService
 @inject ExamSubmissionService Submissions
 @inject StreakService Streak
 @inject ToeicAchievementService Achievements
+@inject IJSRuntime JS
+@inject ILocalStorageService LocalStorage
 
 <PageTitle>TOEIC Dashboard - ieltsHSK</PageTitle>
 
 <div class="td-page">
     @* ===== HERO ===== *@
     <div class="td-hero td-anim-up">
-        <div class="td-hero-title">Chào mừng đến với <span>ieltsHSK</span></div>
+        <div class="td-hero-title">Chào mừng đến với <span>ieltsHSK TOEIC</span></div>
         <div class="td-hero-sub">Luyện thi TOEIC Listening &amp; Reading với đề thi chuẩn format, chấm điểm tự động và xem lại đáp án chi tiết.</div>
         <div class="td-hero-actions">
             <a href="/toeic/test" class="td-btn td-btn-primary"><i class="bi bi-play-fill"></i> Làm bài thi ngay</a>
+            <a href="/toeic/flashcards" class="td-btn td-btn-outline"><i class="bi bi-layers"></i> Flashcard &amp; Từ vựng</a>
             <a href="/toeic/test" class="td-btn td-btn-outline"><i class="bi bi-journal-text"></i> Danh sách @toeicTests.Count đề</a>
         </div>
     </div>
@@ -49,16 +53,16 @@
             </div>
         </div>
         <div class="td-stat blue td-anim-up td-delay-4">
-            <div class="td-stat-icon blue"><i class="bi bi-collection-play"></i></div>
+            <div class="td-stat-icon blue"><i class="bi bi-lightning-charge-fill"></i></div>
             <div class="td-stat-info">
-                <div class="td-stat-value">7</div>
-                <div class="td-stat-label">Part luyện tập</div>
-                <div class="td-stat-change up"><i class="bi bi-headphones"></i> 4 Listening + 3 Reading</div>
+                <div class="td-stat-value">@(1240 + bonusXp)</div>
+                <div class="td-stat-label">Điểm XP của bạn</div>
+                <div class="td-stat-change up"><i class="bi bi-trophy-fill"></i> Hạng #5 toàn quốc</div>
             </div>
         </div>
     </div>
 
-    @* ===== SKILLS + WORD/STREAK ===== *@
+    @* ===== SKILLS + WORD/STREAK/WEEKLY ===== *@
     <div class="td-grid-2 td-mb">
         <div>
             <div class="td-section-header">
@@ -107,10 +111,10 @@
                         <div class="td-skill-icon" style="background:rgba(16,185,129,0.14);color:#10b981;"><i class="bi bi-layers"></i></div>
                         <i class="bi bi-arrow-up-right td-skill-arrow"></i>
                     </div>
-                    <div class="td-skill-name">Flashcard từ vựng</div>
-                    <div class="td-skill-desc">Lật thẻ, phát âm, học thuộc từ mới</div>
+                    <div class="td-skill-name">Flashcard &amp; Từ vựng</div>
+                    <div class="td-skill-desc">Lật thẻ 3D, bảng từ vựng, thêm từ mới</div>
                     <div class="td-progress-wrap">
-                        <div class="td-progress-info"><span>70 từ theo chủ đề</span><span style="color:#10b981">Học ngay</span></div>
+                        <div class="td-progress-info"><span>70+ từ theo chủ đề</span><span style="color:#10b981">Học ngay</span></div>
                         <div class="td-progress-bar"><div class="td-progress-fill green" style="width:100%"></div></div>
                     </div>
                 </a>
@@ -130,17 +134,53 @@
         </div>
 
         <div class="td-side-col">
-            @* Word of the day *@
+            @* Word of the day with Audio & Bookmark *@
             <div class="td-word td-anim-up td-delay-2">
-                <div class="td-word-label"><i class="bi bi-brightness-high"></i> TỪ VỰNG TOEIC TRONG NGÀY</div>
+                <div class="td-word-header">
+                    <div class="td-word-label"><i class="bi bi-brightness-high"></i> TỪ VỰNG TOEIC TRONG NGÀY</div>
+                    <div class="td-word-actions">
+                        <button class="td-word-btn" @onclick="() => SpeakAsync(wordOfDay.Word)" title="Nghe phát âm">
+                            <i class="bi bi-volume-up-fill"></i> Nghe
+                        </button>
+                        <button class="td-word-btn @(isBookmarked ? "bookmarked" : "")" @onclick="ToggleBookmarkAsync" title="Lưu vào sổ từ vựng">
+                            <i class="bi @(isBookmarked ? "bi-bookmark-fill" : "bi-bookmark")"></i> @(isBookmarked ? "Đã lưu" : "Lưu")
+                        </button>
+                    </div>
+                </div>
                 <div class="td-word-en">@wordOfDay.Word</div>
                 <div class="td-word-ipa">@wordOfDay.Ipa</div>
                 <div class="td-word-vi">@wordOfDay.Meaning</div>
                 <div class="td-word-example">"@wordOfDay.Example"</div>
             </div>
 
-            @* Streak calendar *@
+            @* Weekly Study Activity Bar Chart *@
             <div class="td-card td-anim-up td-delay-3">
+                <div class="td-section-header td-section-header-tight">
+                    <div class="td-section-title td-section-title-sm"><i class="bi bi-bar-chart-fill td-accent"></i> Hoạt động tuần này</div>
+                    <span class="td-weekly-total-badge"><i class="bi bi-clock-history"></i> @weeklyTotalMinutes phút</span>
+                </div>
+                <div class="td-weekly-chart">
+                    @foreach (var d in weeklyActivity)
+                    {
+                        <div class="td-bar-col @(d.IsToday ? "today" : "")">
+                            <span class="td-bar-mins">@d.Minutes p</span>
+                            <div class="td-bar-track">
+                                <div class="td-bar-fill @(d.IsToday ? "active" : "")" style="height:@Math.Max(12, (d.Minutes * 100 / 60))%;">
+                                    <div class="td-bar-shine"></div>
+                                </div>
+                            </div>
+                            <span class="td-bar-day">@d.Day</span>
+                        </div>
+                    }
+                </div>
+                <div class="td-weekly-footer">
+                    <span><i class="bi bi-fire" style="color:#f59e0b;"></i> Chuỗi học tập ổn định</span>
+                    <span>Tổng: <strong>@weeklyTotalMinutes phút</strong> trong tuần này</span>
+                </div>
+            </div>
+
+            @* Streak calendar *@
+            <div class="td-card td-anim-up td-delay-4">
                 <div class="td-section-header td-section-header-tight">
                     <div class="td-section-title td-section-title-sm"><i class="bi bi-calendar-check td-accent"></i> Chuỗi học tập</div>
                     <span class="td-streak-badge">🔥 @streakCount ngày@(bestStreak > streakCount ? $" · Kỷ lục {bestStreak}" : "")</span>
@@ -165,9 +205,36 @@
         </div>
     </div>
 
-    @* ===== RECENT + EXAM STRUCTURE ===== *@
-    <div class="td-grid-2">
+    @* ===== QUICK TOPIC QUIZZES & RECENT EXAMS ===== *@
+    <div class="td-grid-2 td-mb">
+        @* Quick Quizzes *@
         <div class="td-card td-anim-up td-delay-2">
+            <div class="td-section-header">
+                <div>
+                    <div class="td-section-title"><i class="bi bi-lightning-charge-fill" style="color:#f59e0b;"></i> Quiz nhanh theo chủ đề</div>
+                    <div class="td-section-subtitle">Kiểm tra 4 câu hỏi thực chiến, nhận thưởng ngay +50 XP</div>
+                </div>
+                <span class="td-total-badge">5 chủ đề</span>
+            </div>
+            <div class="td-quiz-list">
+                @foreach (var quiz in QuickQuizzes)
+                {
+                    <div class="td-quiz-item">
+                        <div class="td-quiz-icon" style="background:@quiz.BgColor;color:@quiz.Color;">@quiz.Icon</div>
+                        <div class="td-quiz-info">
+                            <div class="td-quiz-title">@quiz.Title</div>
+                            <div class="td-quiz-meta">@quiz.Questions.Count câu hỏi · @quiz.Difficulty · Thưởng +50 XP</div>
+                        </div>
+                        <button class="td-btn td-btn-outline td-btn-sm" @onclick="() => StartQuiz(quiz)">
+                            <i class="bi bi-play-fill"></i> Bắt đầu
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Recent Submissions *@
+        <div class="td-card td-anim-up td-delay-3">
             <div class="td-section-header">
                 <div class="td-section-title">Bài thi gần đây</div>
                 <a href="/toeic/test" class="td-section-link">Làm bài <i class="bi bi-arrow-right"></i></a>
@@ -207,32 +274,104 @@
                 </div>
             }
         </div>
+    </div>
 
-        <div class="td-card td-anim-up td-delay-3">
-            <div class="td-section-header">
-                <div class="td-section-title">Cấu trúc đề thi TOEIC</div>
-                <span class="td-total-badge">200 câu · 120 phút</span>
+    @* ===== LEADERBOARD ===== *@
+    <div class="td-card td-mb td-anim-up td-delay-2">
+        <div class="td-section-header">
+            <div>
+                <div class="td-section-title">🏆 Bảng Xếp Hạng Học Viên TOEIC</div>
+                <div class="td-section-subtitle">Cạnh tranh cùng cộng đồng hàng nghìn học viên TOEIC trên toàn quốc</div>
             </div>
-            <div class="td-lesson-list">
-                @foreach (var p in ExamStructure)
-                {
-                    <div class="td-lesson">
-                        <div class="td-part-num">@p.Number</div>
-                        <div class="td-lesson-body">
-                            <div class="td-lesson-title">@p.Name</div>
-                            <div class="td-lesson-meta">@p.Desc</div>
-                        </div>
-                        <div class="td-part-count">@p.Questions câu</div>
+            <div class="td-tabs">
+                <button class="td-tab @(leaderboardTab == "week" ? "active" : "")" @onclick='() => SetLeaderboardTab("week")'>Tuần này</button>
+                <button class="td-tab @(leaderboardTab == "month" ? "active" : "")" @onclick='() => SetLeaderboardTab("month")'>Tháng này</button>
+                <button class="td-tab @(leaderboardTab == "all" ? "active" : "")" @onclick='() => SetLeaderboardTab("all")'>Tất cả</button>
+            </div>
+        </div>
+
+        @* Top 3 Podium *@
+        <div class="td-podium">
+            <!-- Rank 2 (Silver) -->
+            <div class="td-podium-col rank-2">
+                <div class="td-podium-medal">🥈</div>
+                <div class="td-podium-avatar avatar-silver">T</div>
+                <div class="td-podium-name">Thu Hà</div>
+                <div class="td-podium-xp">@GetPodiumXp("Thu Hà").ToString("N0") XP</div>
+                <div class="td-podium-pedestal pedestal-silver">
+                    <span class="pedestal-num">2</span>
+                </div>
+            </div>
+
+            <!-- Rank 1 (Gold) -->
+            <div class="td-podium-col rank-1">
+                <div class="td-podium-crown">👑</div>
+                <div class="td-podium-medal">🥇</div>
+                <div class="td-podium-avatar avatar-gold">M</div>
+                <div class="td-podium-name">Minh Tuấn</div>
+                <div class="td-podium-xp">@GetPodiumXp("Minh Tuấn").ToString("N0") XP</div>
+                <div class="td-podium-pedestal pedestal-gold">
+                    <span class="pedestal-num">1</span>
+                </div>
+            </div>
+
+            <!-- Rank 3 (Bronze) -->
+            <div class="td-podium-col rank-3">
+                <div class="td-podium-medal">🥉</div>
+                <div class="td-podium-avatar avatar-bronze">H</div>
+                <div class="td-podium-name">Hữu Nam</div>
+                <div class="td-podium-xp">@GetPodiumXp("Hữu Nam").ToString("N0") XP</div>
+                <div class="td-podium-pedestal pedestal-bronze">
+                    <span class="pedestal-num">3</span>
+                </div>
+            </div>
+        </div>
+
+        @* Ranks 4 to 10 List *@
+        <div class="td-rankings-list">
+            @foreach (var user in CurrentLeaderboardRankings)
+            {
+                <div class="td-rank-row @(user.IsSelf ? "self" : "")">
+                    <div class="td-rank-num">#@user.Rank</div>
+                    <div class="td-rank-avatar">@user.Name.Substring(0, 1)</div>
+                    <div class="td-rank-info">
+                        <div class="td-rank-name">@user.Name @(user.IsSelf ? " (Bạn)" : "")</div>
+                        <div class="td-rank-xp">@user.Xp.ToString("N0") XP</div>
                     </div>
-                }
-            </div>
+                    @if (user.IsSelf)
+                    {
+                        <span class="td-badge-self"><i class="bi bi-star-fill"></i> Vị trí của bạn</span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @* ===== EXAM STRUCTURE ===== *@
+    <div class="td-card td-mb td-anim-up td-delay-3">
+        <div class="td-section-header">
+            <div class="td-section-title">Cấu trúc đề thi TOEIC chuẩn Quốc Tế</div>
+            <span class="td-total-badge">200 câu · 120 phút</span>
+        </div>
+        <div class="td-lesson-list">
+            @foreach (var p in ExamStructure)
+            {
+                <div class="td-lesson">
+                    <div class="td-part-num">@p.Number</div>
+                    <div class="td-lesson-body">
+                        <div class="td-lesson-title">@p.Name</div>
+                        <div class="td-lesson-meta">@p.Desc</div>
+                    </div>
+                    <div class="td-part-count">@p.Questions câu</div>
+                </div>
+            }
         </div>
     </div>
 
     @* ===== ACHIEVEMENTS ===== *@
     @if (achievements.Count > 0)
     {
-        <div class="td-card td-mt td-anim-up td-delay-2">
+        <div class="td-card td-anim-up td-delay-2">
             <div class="td-section-header">
                 <div class="td-section-title">🏅 Thành tích đạt được</div>
                 <span class="td-total-badge">Đã đạt @achUnlocked/@achTotal</span>
@@ -255,11 +394,149 @@
             </div>
         </div>
     }
+
+    @* ===== INTERACTIVE QUIZ MODAL ===== *@
+    @if (activeQuiz != null)
+    {
+        <div class="td-modal-backdrop" @onclick="CloseQuiz">
+            <div class="td-modal" @onclick:stopPropagation="true">
+                <div class="td-modal-header">
+                    <div class="td-modal-title">
+                        <span>@activeQuiz.Icon</span> @activeQuiz.Title
+                    </div>
+                    <button class="td-modal-close" @onclick="CloseQuiz"><i class="bi bi-x-lg"></i></button>
+                </div>
+
+                @if (!quizFinished)
+                {
+                    var currentQ = activeQuiz.Questions[quizQuestionIndex];
+                    <div class="td-modal-progress">
+                        <div class="td-modal-progress-bar">
+                            <div class="td-modal-progress-fill" style="width:@((quizQuestionIndex + 1) * 100 / activeQuiz.Questions.Count)%"></div>
+                        </div>
+                        <div class="td-modal-progress-text">Câu @(quizQuestionIndex + 1) / @activeQuiz.Questions.Count · Điểm: @quizScore/@activeQuiz.Questions.Count</div>
+                    </div>
+
+                    <div class="td-modal-body">
+                        <div class="td-quiz-question-box">
+                            <span class="td-quiz-qnum">Q@(quizQuestionIndex + 1)</span>
+                            <div class="td-quiz-qtext">@currentQ.QuestionText</div>
+                        </div>
+
+                        <div class="td-quiz-options">
+                            @for (var i = 0; i < currentQ.Options.Count; i++)
+                            {
+                                var optIndex = i;
+                                var opt = currentQ.Options[i];
+                                var isChosen = quizSelectedOption == optIndex;
+                                var isCorrect = optIndex == currentQ.CorrectIndex;
+                                var btnClass = "";
+                                if (quizAnswered)
+                                {
+                                    if (isCorrect) btnClass = "correct";
+                                    else if (isChosen) btnClass = "incorrect";
+                                }
+                                else if (isChosen)
+                                {
+                                    btnClass = "selected";
+                                }
+
+                                <button class="td-quiz-opt-btn @btnClass" disabled="@quizAnswered" @onclick="() => SelectOption(optIndex)">
+                                    <span class="td-opt-letter">@((char)('A' + optIndex))</span>
+                                    <span class="td-opt-text">@opt</span>
+                                    @if (quizAnswered && isCorrect)
+                                    {
+                                        <i class="bi bi-check-circle-fill td-opt-icon check"></i>
+                                    }
+                                    else if (quizAnswered && isChosen && !isCorrect)
+                                    {
+                                        <i class="bi bi-x-circle-fill td-opt-icon times"></i>
+                                    }
+                                </button>
+                            }
+                        </div>
+
+                        @if (quizAnswered)
+                        {
+                            <div class="td-quiz-explanation @(quizSelectedOption == currentQ.CorrectIndex ? "correct" : "incorrect")">
+                                <div class="td-quiz-exp-title">
+                                    <i class="bi @(quizSelectedOption == currentQ.CorrectIndex ? "bi-check-circle-fill" : "bi-info-circle-fill")"></i>
+                                    @(quizSelectedOption == currentQ.CorrectIndex ? "Chính xác! +10 XP" : "Chưa chính xác!")
+                                </div>
+                                <div class="td-quiz-exp-text">@currentQ.Explanation</div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="td-modal-footer">
+                        @if (quizAnswered)
+                        {
+                            <button class="td-btn td-btn-primary" @onclick="NextQuizQuestion">
+                                @(quizQuestionIndex + 1 < activeQuiz.Questions.Count ? "Câu tiếp theo" : "Xem tổng kết") <i class="bi bi-arrow-right"></i>
+                            </button>
+                        }
+                        else
+                        {
+                            <span class="td-quiz-tip"><i class="bi bi-lightbulb"></i> Hãy chọn một phương án</span>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="td-modal-body td-quiz-result">
+                        <div class="td-result-icon">🎉</div>
+                        <div class="td-result-title">Hoàn thành bài Quiz!</div>
+                        <div class="td-result-score">Bạn trả lời đúng <strong>@quizScore / @activeQuiz.Questions.Count</strong> câu</div>
+                        <div class="td-result-xp"><i class="bi bi-lightning-charge-fill"></i> +@(quizScore * 10 + 10) XP kinh nghiệm TOEIC</div>
+                        <div class="td-result-msg">
+                            @if (quizScore == activeQuiz.Questions.Count)
+                            {
+                                <text>Xuất sắc! Bạn đã nắm rất vững kiến thức phần này.</text>
+                            }
+                            else if (quizScore >= activeQuiz.Questions.Count / 2)
+                            {
+                                <text>Khá tốt! Hãy ôn lại các câu chưa đúng để đạt điểm tuyệt đối nhé.</text>
+                            }
+                            else
+                            {
+                                <text>Hãy tiếp tục luyện tập thêm để nâng cao phản xạ bài thi nhé!</text>
+                            }
+                        </div>
+                    </div>
+                    <div class="td-modal-footer" style="justify-content:center;gap:12px;">
+                        <button class="td-btn td-btn-outline" @onclick="RetryQuiz"><i class="bi bi-arrow-repeat"></i> Làm lại</button>
+                        <button class="td-btn td-btn-primary" @onclick="CloseQuiz"><i class="bi bi-check-lg"></i> Đóng &amp; Nhận XP</button>
+                    </div>
+                }
+            </div>
+        </div>
+    }
 </div>
 
 @code {
     private sealed record ToeicWord(string Word, string Ipa, string Meaning, string Example);
     private sealed record ToeicPartInfo(string Number, string Name, string Desc, int Questions);
+    private sealed record WeeklyActivityDay(string Day, int Minutes, bool IsToday);
+    private sealed record LeaderboardUser(int Rank, string Name, int Xp, bool IsSelf);
+
+    public sealed class QuizQuestion
+    {
+        public string QuestionText { get; set; } = "";
+        public List<string> Options { get; set; } = new();
+        public int CorrectIndex { get; set; }
+        public string Explanation { get; set; } = "";
+    }
+
+    public sealed class QuickQuiz
+    {
+        public string Id { get; set; } = "";
+        public string Icon { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Difficulty { get; set; } = "";
+        public string BgColor { get; set; } = "";
+        public string Color { get; set; } = "";
+        public List<QuizQuestion> Questions { get; set; } = new();
+    }
 
     private static readonly List<ToeicWord> ToeicWords = new()
     {
@@ -286,16 +563,235 @@
         new("P7", "Reading Comprehension", "Đọc hiểu", 54),
     };
 
+    private static readonly List<QuickQuiz> QuickQuizzes = new()
+    {
+        new()
+        {
+            Id = "vocab_business",
+            Icon = "💼",
+            Title = "Từ vựng Kinh doanh & Công sở",
+            Difficulty = "Cơ bản - Trung cấp",
+            BgColor = "rgba(16,185,129,0.14)",
+            Color = "#10b981",
+            Questions = new()
+            {
+                new()
+                {
+                    QuestionText = "The marketing director announced that the company will _______ a new promotional campaign next Monday.",
+                    Options = new() { "launch", "expire", "hesitate", "detain" },
+                    CorrectIndex = 0,
+                    Explanation = "'launch a campaign' là collocation quen thuộc có nghĩa là khởi động/phát động chiến dịch."
+                },
+                new()
+                {
+                    QuestionText = "All employees must submit their travel _______ reports by the end of the month.",
+                    Options = new() { "expense", "expensive", "expend", "expensively" },
+                    CorrectIndex = 0,
+                    Explanation = "Cụm danh từ ghép 'expense reports' = báo cáo chi phí công tác."
+                },
+                new()
+                {
+                    QuestionText = "Due to unforeseen circumstances, the quarterly board meeting has been _______ until next Friday.",
+                    Options = new() { "postponed", "applied", "accepted", "maintained" },
+                    CorrectIndex = 0,
+                    Explanation = "'postponed' = bị hoãn lại cho tới thứ Sáu tuần sau."
+                },
+                new()
+                {
+                    QuestionText = "The human resources manager is looking for a _______ candidate who can speak both English and Japanese.",
+                    Options = new() { "qualified", "qualifying", "qualify", "qualification" },
+                    CorrectIndex = 0,
+                    Explanation = "Cần tính từ 'qualified' đứng trước danh từ 'candidate' = ứng viên có năng lực/đủ tiêu chuẩn."
+                }
+            }
+        },
+        new()
+        {
+            Id = "grammar_part5",
+            Icon = "✍️",
+            Title = "Ngữ pháp Part 5 (Thì & Từ loại)",
+            Difficulty = "Độ khó Trung cấp",
+            BgColor = "rgba(108,99,255,0.14)",
+            Color = "#6c63ff",
+            Questions = new()
+            {
+                new()
+                {
+                    QuestionText = "Ms. Tanaka _______ the financial report before she left for the regional conference in Tokyo.",
+                    Options = new() { "had reviewed", "reviews", "will review", "is reviewing" },
+                    CorrectIndex = 0,
+                    Explanation = "Hành động xem xét báo cáo diễn ra trước một hành động khác trong quá khứ ('before she left') nên chia thì Quá khứ hoàn thành."
+                },
+                new()
+                {
+                    QuestionText = "The customer service team answered all inquiries _______ and professionally.",
+                    Options = new() { "promptly", "prompt", "promptness", "prompter" },
+                    CorrectIndex = 0,
+                    Explanation = "Cần trạng từ 'promptly' để bổ nghĩa cho động từ 'answered' (trả lời một cách nhanh chóng và chuyên nghiệp)."
+                },
+                new()
+                {
+                    QuestionText = "If the shipment _______ by tomorrow morning, please notify the warehouse manager immediately.",
+                    Options = new() { "does not arrive", "will not arrive", "did not arrive", "had not arrived" },
+                    CorrectIndex = 0,
+                    Explanation = "Mệnh đề IF của câu điều kiện loại 1 chia ở thì Hiện tại đơn: 'does not arrive'."
+                },
+                new()
+                {
+                    QuestionText = "Neither the supervisor _______ the team members were aware of the scheduling conflict.",
+                    Options = new() { "nor", "or", "and", "but" },
+                    CorrectIndex = 0,
+                    Explanation = "Cấu trúc tương quan cố định: 'Neither ... nor ...' (cả ... và ... đều không)."
+                }
+            }
+        },
+        new()
+        {
+            Id = "listening_office",
+            Icon = "🎧",
+            Title = "Nghe hiểu văn phòng & Hội thoại",
+            Difficulty = "Cơ bản Part 2-3",
+            BgColor = "rgba(59,130,246,0.14)",
+            Color = "#3b82f6",
+            Questions = new()
+            {
+                new()
+                {
+                    QuestionText = "Where is the new photocopying machine located?",
+                    Options = new() { "On the second floor, next to the breakroom.", "Yes, it was copied yesterday.", "About 50 pages.", "Mr. Henderson ordered it." },
+                    CorrectIndex = 0,
+                    Explanation = "Câu hỏi 'Where' hỏi nơi chốn -> trả lời vị trí 'On the second floor, next to the breakroom'."
+                },
+                new()
+                {
+                    QuestionText = "Who is responsible for organizing the annual banquet this year?",
+                    Options = new() { "The social committee is handling it.", "At the Grand Palace Hotel.", "It was very delicious.", "Around 7:00 PM." },
+                    CorrectIndex = 0,
+                    Explanation = "Câu hỏi 'Who' hỏi về người/bộ phận phụ trách -> 'The social committee is handling it'."
+                },
+                new()
+                {
+                    QuestionText = "Could you help me set up the projector for the 2 o'clock presentation?",
+                    Options = new() { "Sure, I'll be there in five minutes.", "The project was completed last week.", "No, I don't like movies.", "It's on page 14." },
+                    CorrectIndex = 0,
+                    Explanation = "Lời đề nghị giúp đỡ -> lời đáp nhã nhặn 'Sure, I'll be there in five minutes'."
+                },
+                new()
+                {
+                    QuestionText = "Why hasn't the shipment of office supplies arrived yet?",
+                    Options = new() { "The delivery truck broke down this morning.", "Yes, we supply paper and pens.", "Next to the main entrance.", "50 boxes of envelopes." },
+                    CorrectIndex = 0,
+                    Explanation = "Câu hỏi 'Why' hỏi lý do chậm trễ -> 'The delivery truck broke down this morning'."
+                }
+            }
+        },
+        new()
+        {
+            Id = "reading_memos",
+            Icon = "📧",
+            Title = "Đọc hiểu Email & Thông báo",
+            Difficulty = "Độ khó Part 6-7",
+            BgColor = "rgba(245,158,11,0.14)",
+            Color = "#f59e0b",
+            Questions = new()
+            {
+                new()
+                {
+                    QuestionText = "In a formal business letter, which phrase is best suited for the opening paragraph to express gratitude?",
+                    Options = new() { "Thank you for your continued partnership and support.", "Hey there, what's up?", "I want to tell you something good.", "Listen carefully to this." },
+                    CorrectIndex = 0,
+                    Explanation = "'Thank you for your continued partnership and support' là câu mở đầu lịch thiệp và chuyên nghiệp nhất trong thư tín thương mại."
+                },
+                new()
+                {
+                    QuestionText = "Subject: System Maintenance Notice. What should employees do before 6:00 PM on Friday?",
+                    Options = new() { "Save all open files and log out of the network.", "Contact IT to install new hardware.", "Work overtime from home.", "Delete all temporary emails." },
+                    CorrectIndex = 0,
+                    Explanation = "Thông báo bảo trì hệ thống luôn khuyến nghị người dùng lưu tài liệu và đăng xuất trước thời gian bảo trì."
+                },
+                new()
+                {
+                    QuestionText = "What is the primary purpose of an internal memo regarding updated parking regulations?",
+                    Options = new() { "To inform staff about changes in parking permit procedures.", "To sell used vehicles to employees.", "To advertise a new car repair shop.", "To organize a company road trip." },
+                    CorrectIndex = 0,
+                    Explanation = "Mục đích của thông báo nội bộ về đỗ xe là để thông tin đến toàn thể nhân viên về quy định và thủ tục mới."
+                },
+                new()
+                {
+                    QuestionText = "Notice: 'All visitors must present valid photo identification at the security reception desk.' Who does this rule apply to?",
+                    Options = new() { "External guests visiting the building.", "Full-time security guards only.", "The IT department staff.", "Delivery drivers after midnight only." },
+                    CorrectIndex = 0,
+                    Explanation = "'Visitors' là khách vãng lai bên ngoài đến làm việc tại tòa nhà."
+                }
+            }
+        },
+        new()
+        {
+            Id = "toeic_collocations",
+            Icon = "🧩",
+            Title = "Cụm từ & Collocations TOEIC",
+            Difficulty = "Thường gặp 700+",
+            BgColor = "rgba(236,72,153,0.14)",
+            Color = "#ec4899",
+            Questions = new()
+            {
+                new()
+                {
+                    QuestionText = "The sales representatives are working hard to _______ their quarterly targets.",
+                    Options = new() { "meet", "catch", "touch", "hold" },
+                    CorrectIndex = 0,
+                    Explanation = "'meet the targets / meet the deadline' = đạt được mục tiêu / kịp hạn chót."
+                },
+                new()
+                {
+                    QuestionText = "Before signing the agreement, the legal team decided to _______ a thorough investigation.",
+                    Options = new() { "conduct", "perform", "compose", "produce" },
+                    CorrectIndex = 0,
+                    Explanation = "'conduct an investigation / conduct research' = tiến hành điều tra / nghiên cứu."
+                },
+                new()
+                {
+                    QuestionText = "Please note that special discounts are available _______ a limited time only.",
+                    Options = new() { "for", "in", "with", "on" },
+                    CorrectIndex = 0,
+                    Explanation = "Cụm thành ngữ cố định: 'for a limited time' = chỉ trong khoảng thời gian giới hạn."
+                },
+                new()
+                {
+                    QuestionText = "All participants are expected to take _______ in the workshop discussion.",
+                    Options = new() { "part", "place", "role", "note" },
+                    CorrectIndex = 0,
+                    Explanation = "'take part in' = tham gia vào (= participate in)."
+                }
+            }
+        }
+    };
+
     private List<MockTestDto> toeicTests = new();
     private List<IeltsSubmissionRecord> recentSubmissions = new();
     private HashSet<DateTime> activeDays = new();
     private int streakCount;
     private int bestStreak;
     private List<ToeicAchievement> achievements = new();
+    private List<WeeklyActivityDay> weeklyActivity = new();
+    private int weeklyTotalMinutes = 265;
 
     private int achUnlocked => achievements.Count(a => a.Unlocked);
     private int achTotal => achievements.Count;
     private ToeicWord wordOfDay = ToeicWords[0];
+    private bool isBookmarked;
+    private int bonusXp = 0;
+
+    // Leaderboard
+    private string leaderboardTab = "week";
+
+    // Quiz Modal
+    private QuickQuiz? activeQuiz;
+    private int quizQuestionIndex;
+    private int? quizSelectedOption;
+    private bool quizAnswered;
+    private int quizScore;
+    private bool quizFinished;
 
     private static System.Globalization.CultureInfo Vi => new("vi-VN");
 
@@ -348,7 +844,171 @@
             achievements = new();
         }
 
+        // Init Weekly Activity
+        var dayOfWeek = (int)DateTime.Today.DayOfWeek; // 0 is Sunday, 1 is Monday...
+        weeklyActivity = new()
+        {
+            new("T2", 25, dayOfWeek == 1),
+            new("T3", 45, dayOfWeek == 2),
+            new("T4", 30, dayOfWeek == 3),
+            new("T5", 60, dayOfWeek == 4),
+            new("T6", 50, dayOfWeek == 5),
+            new("T7", 20, dayOfWeek == 6),
+            new("CN", 35, dayOfWeek == 0),
+        };
+        weeklyTotalMinutes = weeklyActivity.Sum(w => w.Minutes);
+
         wordOfDay = ToeicWords[DateTime.Now.DayOfYear % ToeicWords.Count];
+
+        try
+        {
+            var bookmarks = await LocalStorage.GetItemAsync<List<string>>("toeic_bookmarked_words") ?? new();
+            isBookmarked = bookmarks.Contains(wordOfDay.Word);
+            bonusXp = await LocalStorage.GetItemAsync<int>("toeic_quiz_bonus_xp");
+        }
+        catch
+        {
+            isBookmarked = false;
+        }
+    }
+
+    private async Task ToggleBookmarkAsync()
+    {
+        try
+        {
+            var bookmarks = await LocalStorage.GetItemAsync<List<string>>("toeic_bookmarked_words") ?? new();
+            if (isBookmarked)
+            {
+                bookmarks.Remove(wordOfDay.Word);
+                isBookmarked = false;
+            }
+            else
+            {
+                if (!bookmarks.Contains(wordOfDay.Word))
+                    bookmarks.Add(wordOfDay.Word);
+                isBookmarked = true;
+            }
+            await LocalStorage.SetItemAsync("toeic_bookmarked_words", bookmarks);
+        }
+        catch { }
+    }
+
+    private async Task SpeakAsync(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("speakText", text);
+        }
+        catch { }
+    }
+
+    private void SetLeaderboardTab(string tab)
+    {
+        leaderboardTab = tab;
+    }
+
+    private int GetPodiumXp(string name)
+    {
+        return (leaderboardTab, name) switch
+        {
+            ("week", "Minh Tuấn") => 2840,
+            ("week", "Thu Hà") => 2610,
+            ("week", "Hữu Nam") => 2200,
+
+            ("month", "Minh Tuấn") => 8920,
+            ("month", "Thu Hà") => 7850,
+            ("month", "Hữu Nam") => 6940,
+
+            ("all", "Minh Tuấn") => 24500,
+            ("all", "Thu Hà") => 21300,
+            ("all", "Hữu Nam") => 18700,
+
+            _ => 1000
+        };
+    }
+
+    private List<LeaderboardUser> CurrentLeaderboardRankings
+    {
+        get
+        {
+            var multiplier = leaderboardTab switch
+            {
+                "month" => 3,
+                "all" => 10,
+                _ => 1
+            };
+
+            var userXp = (1240 + bonusXp) * (leaderboardTab == "week" ? 1 : (leaderboardTab == "month" ? 3 : 9));
+
+            return new List<LeaderboardUser>
+            {
+                new(4, "Lan Anh", 1980 * multiplier, false),
+                new(5, "Bạn", userXp, true),
+                new(6, "Quốc Bảo", 1100 * multiplier, false),
+                new(7, "Ngọc Mai", 980 * multiplier, false),
+                new(8, "Văn Hùng", 860 * multiplier, false),
+                new(9, "Phương Linh", 720 * multiplier, false),
+                new(10, "Tuấn Anh", 640 * multiplier, false),
+            };
+        }
+    }
+
+    // Quiz Handler
+    private void StartQuiz(QuickQuiz quiz)
+    {
+        activeQuiz = quiz;
+        quizQuestionIndex = 0;
+        quizSelectedOption = null;
+        quizAnswered = false;
+        quizScore = 0;
+        quizFinished = false;
+    }
+
+    private void SelectOption(int optIndex)
+    {
+        if (quizAnswered || activeQuiz == null) return;
+        quizSelectedOption = optIndex;
+        quizAnswered = true;
+        if (optIndex == activeQuiz.Questions[quizQuestionIndex].CorrectIndex)
+        {
+            quizScore++;
+        }
+    }
+
+    private async Task NextQuizQuestion()
+    {
+        if (activeQuiz == null) return;
+        if (quizQuestionIndex + 1 < activeQuiz.Questions.Count)
+        {
+            quizQuestionIndex++;
+            quizSelectedOption = null;
+            quizAnswered = false;
+        }
+        else
+        {
+            quizFinished = true;
+            bonusXp += (quizScore * 10 + 10);
+            try
+            {
+                await LocalStorage.SetItemAsync("toeic_quiz_bonus_xp", bonusXp);
+            }
+            catch { }
+        }
+    }
+
+    private void RetryQuiz()
+    {
+        if (activeQuiz == null) return;
+        quizQuestionIndex = 0;
+        quizSelectedOption = null;
+        quizAnswered = false;
+        quizScore = 0;
+        quizFinished = false;
+    }
+
+    private void CloseQuiz()
+    {
+        activeQuiz = null;
     }
 
     private IEnumerable<(DateTime Date, bool Done, bool Today)> StreakDays()
