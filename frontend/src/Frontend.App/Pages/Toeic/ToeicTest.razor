@@ -633,14 +633,6 @@ else
             <div class="bottom-qnav-inner">
                 <span class="bottom-qnav-label">Part @activePart.PartNumber:</span>
                 <div class="bottom-qnav-nums">
-                    @if (showAnswers)
-                    {
-                        <button class="qnav-num qnav-intro @(ShowIntroPage ? "qnav-active" : "")"
-                                title="Trang giới thiệu"
-                                @onclick="GoToIntroPage">
-                            GT
-                        </button>
-                    }
                     @foreach (var group in activePart.QuestionGroups)
                     {
                         @foreach (var q in group.Questions)
@@ -765,8 +757,8 @@ else
     /// <summary>Thanh chọn câu dưới cùng: ẩn với part nghe khi đang làm bài, chỉ hiện khi xem đáp án.</summary>
     private bool ShowBottomQnav => showAnswers || !IsListeningPart(ActivePart);
 
-    /// <summary>Trang giới thiệu riêng ở đầu mỗi part.</summary>
-    private bool ActivePartHasIntro => true;
+    /// <summary>Trang giới thiệu riêng ở đầu mỗi part (chỉ hiện khi đang làm bài, ẩn khi xem đáp án).</summary>
+    private bool ActivePartHasIntro => !showAnswers;
     private bool ShowIntroPage => ActivePartHasIntro && activePageIndex == 0;
 
     /// <summary>Chỉ số trang tính theo nhóm/câu hỏi (âm = đang ở trang giới thiệu).</summary>
@@ -1714,6 +1706,8 @@ else
         showResult = false;
         // Chế độ xem đáp án: ẩn nút Nộp bài và đồng hồ
         ExamHeader.Hide();
+        activePageIndex = 0;
+        SetCurrentQuestion();
     }
 
     private string FormatTranslation(string? input)
