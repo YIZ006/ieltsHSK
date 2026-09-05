@@ -9,6 +9,7 @@
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
 @inject ExamHeaderService ExamHeader
+@inject ToeicStudyTrackerService Tracker
 @implements IDisposable
 
 <PageTitle>@((!string.IsNullOrWhiteSpace(exam?.CollectionName) ? $"{exam.CollectionName} - {exam.Title}" : exam?.Title) ?? "TOEIC Test") - HỆ THỐNG THI TRỰC TUYẾN</PageTitle>
@@ -1169,6 +1170,7 @@ else
     private void StartTimer()
     {
         StopTimer();
+        Tracker.StartTracking();
         _timer = new System.Threading.Timer(_ =>
         {
             if (secondsLeft > 0)
@@ -1190,6 +1192,7 @@ else
 
     private void StopTimer()
     {
+        Tracker.StopTracking();
         _timer?.Dispose();
         _timer = null;
     }
@@ -1663,6 +1666,7 @@ else
     public void Dispose()
     {
         _isDisposing = true;
+        Tracker.StopTracking();
         ExamHeader.SubmitRequested -= OnHeaderSubmitRequested;
         ExamHeader.SecondaryActionRequested -= OnHeaderSaveExitRequested;
         ExamHeader.Hide();
