@@ -87,6 +87,7 @@ public class ToeicVocabItem
     public string Meaning { get; set; } = "";
     public string Example { get; set; } = "";
     public string Topic { get; set; } = "";
+    public bool IsCustom { get; set; } = false;
 }
 
 /// <summary>
