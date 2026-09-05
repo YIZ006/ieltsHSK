@@ -886,6 +886,27 @@ app.MapPost("/api/auth/google-register", async (GoogleLoginRequest request, IAut
     }
 });
 
+// Gia hạn phiên đăng nhập: đổi refresh token lấy access token + refresh token mới (rotation)
+app.MapPost("/api/auth/refresh", async (RefreshRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await authService.RefreshAsync(request, cancellationToken);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
+// Đăng xuất: thu hồi refresh token phía server
+app.MapPost("/api/auth/logout", async (RefreshRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+{
+    await authService.RevokeRefreshTokenAsync(request.RefreshToken, cancellationToken);
+    return Results.Ok(new { Message = "Logged out" });
+});
+
 app.MapGet("/api/user/me", [Microsoft.AspNetCore.Authorization.Authorize] async (System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
     var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value

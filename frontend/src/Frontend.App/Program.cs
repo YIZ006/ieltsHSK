@@ -69,13 +69,27 @@ builder.Services.AddScoped(sp =>
 });
 
 builder.Services.AddAuthorizationCore();
-builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
+
+// TokenRefreshService: quản lý access token + refresh token, tự gia hạn phiên đăng nhập.
+// Dùng HttpClient "trần" (không qua AuthHeaderHandler) để tránh vòng lặp refresh.
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) };
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
-    var authStateProvider = sp.GetRequiredService<AuthenticationStateProvider>();
-    return new AuthService(httpClient, localStorage, authStateProvider);
+    return new TokenRefreshService(httpClient, localStorage);
+});
+
+// Đăng ký 1 instance duy nhất cho cả kiểu cụ thể và kiểu AuthenticationStateProvider
+builder.Services.AddScoped<CustomAuthStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<CustomAuthStateProvider>());
+
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    var authStateProvider = sp.GetRequiredService<CustomAuthStateProvider>();
+    var tokenRefreshService = sp.GetRequiredService<TokenRefreshService>();
+    return new AuthService(httpClient, localStorage, authStateProvider, tokenRefreshService);
 });
 
 builder.Services.AddScoped(sp =>

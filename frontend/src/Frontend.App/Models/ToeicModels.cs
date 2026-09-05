@@ -5,6 +5,7 @@ namespace Frontend.App.Models;
 /// </summary>
 public class ToeicExamData
 {
+    public string CollectionName { get; set; } = "";
     public string Title { get; set; } = "";
     public string Description { get; set; } = "";
     public int TotalTimeSeconds { get; set; } = 7200; // 120 phút

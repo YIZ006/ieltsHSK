@@ -8,6 +8,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<LearningResource> LearningResources { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<UserActivityLog> UserActivityLogs { get; set; }
+    public DbSet<RefreshToken> RefreshTokens { get; set; }
     
     // Directory Block
     public DbSet<Language> Languages { get; set; }
@@ -47,6 +48,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(l => l.User)
                 .WithMany()
                 .HasForeignKey(l => l.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // RefreshToken: tra cứu nhanh theo giá trị token, xoá Cascade khi user bị xoá
+        modelBuilder.Entity<RefreshToken>(entity =>
+        {
+            entity.HasIndex(t => t.Token).IsUnique();
+            entity.HasIndex(t => new { t.UserId, t.ExpiresAt });
+            entity.HasOne(t => t.User)
+                .WithMany()
+                .HasForeignKey(t => t.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

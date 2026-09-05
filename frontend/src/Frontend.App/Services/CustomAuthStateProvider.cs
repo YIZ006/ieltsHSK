@@ -5,36 +5,71 @@ using Microsoft.AspNetCore.Components.Authorization;
 
 namespace Frontend.App.Services;
 
-public class CustomAuthStateProvider(ILocalStorageService localStorage) : AuthenticationStateProvider
+public class CustomAuthStateProvider : AuthenticationStateProvider
 {
+    private readonly ILocalStorageService _localStorage;
+    private readonly TokenRefreshService _tokenRefreshService;
+
     private static readonly AuthenticationState AnonymousState = new(new ClaimsPrincipal(new ClaimsIdentity()));
+
+    public CustomAuthStateProvider(ILocalStorageService localStorage, TokenRefreshService tokenRefreshService)
+    {
+        _localStorage = localStorage;
+        _tokenRefreshService = tokenRefreshService;
+        // Token được gia hạn ngầm / phiên chết ở bất kỳ đâu -> cập nhật trạng thái đăng nhập ngay lập tức
+        _tokenRefreshService.TokensRefreshed += NotifyUserAuthentication;
+        _tokenRefreshService.SessionExpired += NotifyUserLogout;
+    }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
         try
         {
-            var token = await localStorage.GetItemAsync<string>("authToken");
+            var token = await _localStorage.GetItemAsync<string>(TokenRefreshService.AccessTokenKey);
 
             if (string.IsNullOrWhiteSpace(token))
             {
                 return AnonymousState;
             }
 
-            var claims = ParseClaimsFromJwt(token);
+            var claims = ParseClaimsFromJwt(token).ToList();
             if (!claims.Any())
             {
                 return AnonymousState;
             }
 
-            var identity = new ClaimsIdentity(claims, "jwt");
-            var user = new ClaimsPrincipal(identity);
-            return new AuthenticationState(user);
+            if (!TokenRefreshService.IsTokenExpired(token))
+            {
+                return CreateState(claims);
+            }
+
+            // Token hết hạn nhưng còn refresh token -> tự gia hạn để "ghi nhớ" phiên đăng nhập
+            if (!await _tokenRefreshService.RefreshAsync())
+            {
+                return AnonymousState;
+            }
+
+            var newToken = await _localStorage.GetItemAsync<string>(TokenRefreshService.AccessTokenKey);
+            if (string.IsNullOrWhiteSpace(newToken))
+            {
+                return AnonymousState;
+            }
+
+            claims = ParseClaimsFromJwt(newToken).ToList();
+            return claims.Any() ? CreateState(claims) : AnonymousState;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error resolving auth state: {ex.Message}");
             return AnonymousState;
         }
+    }
+
+    private static AuthenticationState CreateState(List<Claim> claims)
+    {
+        var identity = new ClaimsIdentity(claims, "jwt");
+        var user = new ClaimsPrincipal(identity);
+        return new AuthenticationState(user);
     }
 
     public void NotifyUserAuthentication(string token)

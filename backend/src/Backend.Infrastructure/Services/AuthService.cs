@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Cryptography;
 using System.Security.Claims;
 using System.Text;
 using Google.Apis.Auth;
@@ -14,6 +15,14 @@ namespace Backend.Infrastructure.Services;
 
 public class AuthService(AppDbContext dbContext, IConfiguration configuration) : IAuthService
 {
+    // Access token (JWT) sống ngắn, phiên dài hạn được bảo đảm bởi refresh token
+    private const double AccessTokenDays = 1;
+    private const int RefreshTokenDays = 30;
+
+    // Cho phép tái sử dụng refresh token đã xoay vòng trong khoảng thời gian ngắn
+    // để các tab/cấu hình trình duyệt refresh gần như đồng thời không bị văng phiên
+    private const double ReuseGraceSeconds = 90;
+
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
@@ -61,8 +70,7 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
         dbContext.Users.Add(user);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var token = GenerateJwtToken(user);
-        return new AuthResponse(token, user.FullName, user.Email);
+        return await CreateAuthResponseAsync(user, cancellationToken);
     }
 
     public async Task<bool> IsUsernameTakenAsync(string username, CancellationToken cancellationToken = default)
@@ -108,8 +116,7 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var token = GenerateJwtToken(user, 30);
-        return new AuthResponse(token, user.FullName, user.Email, tempPassword);
+        return await CreateAuthResponseAsync(user, cancellationToken, tempPassword);
     }
 
     public async Task<AuthResponse> LoginWithGoogleAsync(GoogleLoginRequest request, CancellationToken cancellationToken = default)
@@ -153,8 +160,7 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var token = GenerateJwtToken(user, 1.0 / 24.0); // 1 hour for Google login
-        return new AuthResponse(token, user.FullName, user.Email);
+        return await CreateAuthResponseAsync(user, cancellationToken);
     }
 
     public async Task<AuthResponse> RegisterWithGoogleAsync(GoogleLoginRequest request, CancellationToken cancellationToken = default)
@@ -213,8 +219,101 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var token = GenerateJwtToken(user, 1.0 / 24.0); // 1 hour cho Google session
-        return new AuthResponse(token, user.FullName, user.Email);
+        return await CreateAuthResponseAsync(user, cancellationToken);
+    }
+
+    public async Task<AuthResponse> RefreshAsync(RefreshRequest request, CancellationToken cancellationToken = default)
+    {
+        var raw = request.RefreshToken?.Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            throw new Exception("Invalid refresh token.");
+        }
+
+        var stored = await dbContext.RefreshTokens
+            .Include(t => t.User)
+            .SingleOrDefaultAsync(t => t.Token == raw, cancellationToken);
+
+        if (stored == null || stored.ExpiresAt <= DateTime.UtcNow)
+        {
+            throw new Exception("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+        }
+
+        // Token đã bị xoay vòng: chỉ chấp nhận trong khoảng grace (trường hợp nhiều tab refresh song song),
+        // tái sử dụng sau khoảng grace là dấu hiệu bất thường -> từ chối
+        if (stored.RevokedAt.HasValue &&
+            (DateTime.UtcNow - stored.RevokedAt.Value).TotalSeconds > ReuseGraceSeconds)
+        {
+            throw new Exception("Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.");
+        }
+
+        var user = stored.User;
+        if (user == null || !user.IsActive)
+        {
+            throw new Exception("Tài khoản bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.");
+        }
+
+        stored.RevokedAt ??= DateTime.UtcNow;
+
+        var newRefresh = IssueRefreshToken(user.Id);
+
+        // Dọn dẹp token cũ đã hết hạn/thu hồi quá lâu của user này
+        // (token hiện tại vừa được thu hồi nên không bao giờ rơi vào mốc 7 ngày)
+        var staleCutoff = DateTime.UtcNow.AddDays(-7);
+        var staleTokens = await dbContext.RefreshTokens
+            .Where(t => t.UserId == user.Id &&
+                        (t.ExpiresAt <= staleCutoff || (t.RevokedAt != null && t.RevokedAt <= staleCutoff)))
+            .ToListAsync(cancellationToken);
+        dbContext.RefreshTokens.RemoveRange(staleTokens);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var token = GenerateJwtToken(user, AccessTokenDays);
+        return new AuthResponse(token, user.FullName, user.Email, null, newRefresh.Token, newRefresh.ExpiresAt);
+    }
+
+    public async Task RevokeRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
+    {
+        var raw = refreshToken?.Trim();
+        if (string.IsNullOrWhiteSpace(raw)) return;
+
+        var stored = await dbContext.RefreshTokens
+            .SingleOrDefaultAsync(t => t.Token == raw && t.RevokedAt == null, cancellationToken);
+        if (stored == null) return;
+
+        stored.RevokedAt = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private RefreshToken IssueRefreshToken(int userId)
+    {
+        var token = new RefreshToken
+        {
+            UserId = userId,
+            Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddDays(RefreshTokenDays)
+        };
+        dbContext.RefreshTokens.Add(token);
+        return token;
+    }
+
+    private async Task<AuthResponse> CreateAuthResponseAsync(
+        User user,
+        CancellationToken cancellationToken,
+        string? tempPassword = null)
+    {
+        var token = GenerateJwtToken(user, AccessTokenDays);
+        var refresh = IssueRefreshToken(user.Id);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new AuthResponse(
+            token,
+            user.FullName,
+            user.Email,
+            tempPassword,
+            refresh.Token,
+            refresh.ExpiresAt);
     }
 
     private string GenerateJwtToken(User user, double expireDays = 30)
