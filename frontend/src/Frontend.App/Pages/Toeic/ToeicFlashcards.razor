@@ -6,6 +6,7 @@
 @inject HttpClient Http
 @inject IJSRuntime JS
 @inject ILocalStorageService LocalStorage
+@inject ToeicStudyTrackerService Tracker
 @implements IDisposable
 
 <PageTitle>Flashcard &amp; Từ vựng TOEIC - ieltsHSK</PageTitle>
@@ -421,6 +422,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Tracker.StartTracking();
         try
         {
             var baseWords = await Http.GetFromJsonAsync<List<ToeicVocabItem>>("sample-data/toeic-vocabulary.json") ?? new List<ToeicVocabItem>();
@@ -670,6 +672,7 @@
 
     public void Dispose()
     {
+        Tracker.StopTracking();
         _ = JS.InvokeVoidAsync("stopSpeakText");
     }
 }

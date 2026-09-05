@@ -58,6 +58,7 @@ builder.Services.AddScoped(sp =>
     return new ProfileService(localStorage, httpClient);
 });
 builder.Services.AddScoped<ToeicAchievementService>();
+builder.Services.AddScoped<ToeicStudyTrackerService>();
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())

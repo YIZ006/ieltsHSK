@@ -9,6 +9,8 @@
 @inject ToeicAchievementService Achievements
 @inject IJSRuntime JS
 @inject ILocalStorageService LocalStorage
+@inject ToeicStudyTrackerService Tracker
+@implements IDisposable
 
 <PageTitle>TOEIC Dashboard - ieltsHSK</PageTitle>
 
@@ -156,25 +158,55 @@
             @* Weekly Study Activity Bar Chart *@
             <div id="progress" class="td-card td-anim-up td-delay-3">
                 <div class="td-section-header td-section-header-tight">
-                    <div class="td-section-title td-section-title-sm"><i class="bi bi-bar-chart-fill td-accent"></i> Hoạt động tuần này</div>
+                    <div class="td-section-title td-section-title-sm">
+                        <i class="bi bi-bar-chart-fill td-accent"></i> Hoạt động tuần này
+                        <span class="td-live-tag" title="Thời gian học được tính và cập nhật trực tiếp theo thời gian thực">
+                            <span class="td-live-pulse-dot"></span> Trực tiếp
+                        </span>
+                    </div>
                     <span class="td-weekly-total-badge"><i class="bi bi-clock-history"></i> @weeklyTotalMinutes phút</span>
                 </div>
                 <div class="td-weekly-chart">
+                    @{
+                        var maxMins = Math.Max(60, weeklyActivity.Count > 0 ? weeklyActivity.Max(w => w.Minutes) : 60);
+                    }
                     @foreach (var d in weeklyActivity)
                     {
-                        <div class="td-bar-col @(d.IsToday ? "today" : "")">
-                            <span class="td-bar-mins">@d.Minutes p</span>
+                        var heightPct = d.IsFuture ? 0 : (d.Minutes == 0 && d.Seconds == 0 ? 0 : Math.Min(100, Math.Max(12, d.Minutes * 100 / maxMins)));
+                        <div class="td-bar-col @(d.IsToday ? "today" : "") @(d.IsFuture ? "future" : "")"
+                             title="@(d.IsFuture ? $"{d.DayLabel} ({d.Date:dd/MM}): Chưa bắt đầu" : $"{d.DayLabel} ({d.Date:dd/MM}): {d.Minutes} phút {d.Seconds % 60}s")">
+                            <span class="td-bar-mins @(d.IsToday ? "td-bar-today" : "")">
+                                @if (d.IsFuture)
+                                {
+                                    <text>—</text>
+                                }
+                                else if (d.IsToday && d.Minutes == 0)
+                                {
+                                    <text>@(d.Seconds)s</text>
+                                }
+                                else
+                                {
+                                    <text>@d.Minutes p</text>
+                                }
+                                @if (d.IsToday)
+                                {
+                                    <span class="td-today-dot"></span>
+                                }
+                            </span>
                             <div class="td-bar-track">
-                                <div class="td-bar-fill @(d.IsToday ? "active" : "")" style="height:@Math.Max(12, (d.Minutes * 100 / 60))%;">
+                                <div class="td-bar-fill @(d.IsToday ? "active" : "")" style="height:@heightPct%;">
                                     <div class="td-bar-shine"></div>
                                 </div>
                             </div>
-                            <span class="td-bar-day">@d.Day</span>
+                            <span class="td-bar-day @(d.IsToday ? "td-bar-day-today" : "")">@d.DayLabel</span>
                         </div>
                     }
                 </div>
                 <div class="td-weekly-footer">
-                    <span><i class="bi bi-fire" style="color:#f59e0b;"></i> Chuỗi học tập ổn định</span>
+                    <span class="td-today-live-status">
+                        <i class="bi bi-lightning-charge-fill" style="color:#10b981;"></i>
+                        Hôm nay: <strong class="td-accent-green">@FormatTodayStudyTime()</strong>
+                    </span>
                     <span>Tổng: <strong>@weeklyTotalMinutes phút</strong> trong tuần này</span>
                 </div>
             </div>
@@ -773,8 +805,8 @@
     private int streakCount;
     private int bestStreak;
     private List<ToeicAchievement> achievements = new();
-    private List<WeeklyActivityDay> weeklyActivity = new();
-    private int weeklyTotalMinutes = 265;
+    private List<DailyStudyActivity> weeklyActivity = new();
+    private int weeklyTotalMinutes => weeklyActivity.Sum(w => w.Minutes);
 
     private int achUnlocked => achievements.Count(a => a.Unlocked);
     private int achTotal => achievements.Count;
@@ -844,19 +876,10 @@
             achievements = new();
         }
 
-        // Init Weekly Activity
-        var dayOfWeek = (int)DateTime.Today.DayOfWeek; // 0 is Sunday, 1 is Monday...
-        weeklyActivity = new()
-        {
-            new("T2", 25, dayOfWeek == 1),
-            new("T3", 45, dayOfWeek == 2),
-            new("T4", 30, dayOfWeek == 3),
-            new("T5", 60, dayOfWeek == 4),
-            new("T6", 50, dayOfWeek == 5),
-            new("T7", 20, dayOfWeek == 6),
-            new("CN", 35, dayOfWeek == 0),
-        };
-        weeklyTotalMinutes = weeklyActivity.Sum(w => w.Minutes);
+        // Real-time Weekly Activity & Study Tracker
+        Tracker.StartTracking();
+        Tracker.OnStudyTimeChanged += HandleStudyTimeChanged;
+        await LoadWeeklyActivityAsync();
 
         wordOfDay = ToeicWords[DateTime.Now.DayOfYear % ToeicWords.Count];
 
@@ -991,6 +1014,7 @@
             try
             {
                 await LocalStorage.SetItemAsync("toeic_quiz_bonus_xp", bonusXp);
+                await Tracker.AddSecondsTodayAsync(180); // +3 phút hoạt động học tập
             }
             catch { }
         }
@@ -1033,6 +1057,40 @@
         >= 500 => "td-score-mid",
         _ => "td-score-low"
     };
+
+    private async void HandleStudyTimeChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            await LoadWeeklyActivityAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadWeeklyActivityAsync()
+    {
+        try
+        {
+            weeklyActivity = await Tracker.GetCurrentWeekActivityAsync(recentSubmissions);
+        }
+        catch { }
+    }
+
+    private string FormatTodayStudyTime()
+    {
+        var todayAct = weeklyActivity.FirstOrDefault(a => a.IsToday);
+        if (todayAct == null || todayAct.Seconds <= 0) return "0 phút";
+        var m = todayAct.Seconds / 60;
+        var s = todayAct.Seconds % 60;
+        if (m == 0) return $"{s} giây";
+        return s > 0 ? $"{m} phút {s}s" : $"{m} phút";
+    }
+
+    public void Dispose()
+    {
+        Tracker.OnStudyTimeChanged -= HandleStudyTimeChanged;
+        Tracker.StopTracking();
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
