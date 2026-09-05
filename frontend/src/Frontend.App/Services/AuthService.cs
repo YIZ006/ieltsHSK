@@ -49,6 +49,7 @@ public class AuthResponse
     public string Token { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+    public string? RefreshToken { get; set; }
 }
 
 public class CheckUsernameResult
@@ -56,13 +57,14 @@ public class CheckUsernameResult
     public bool IsTaken { get; set; }
 }
 
-public class AuthService(HttpClient httpClient, ILocalStorageService localStorage, AuthenticationStateProvider authStateProvider)
+public class AuthService(HttpClient httpClient, ILocalStorageService localStorage, CustomAuthStateProvider authStateProvider, TokenRefreshService tokenRefreshService)
 {
     // Tất cả các key localStorage liên quan đến user – phải xóa khi đổi tài khoản
     private static readonly string[] UserStorageKeys =
     [
         // Auth
-        "authToken",
+        TokenRefreshService.AccessTokenKey,
+        TokenRefreshService.RefreshTokenKey,
         // IELTS
         "ielts_level",
         "ielts-exam-submissions",
@@ -89,6 +91,13 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
     {
         foreach (var key in UserStorageKeys)
             await localStorage.RemoveItemAsync(key);
+    }
+
+    private async Task SaveTokensAsync(AuthResponse result)
+    {
+        await localStorage.SetItemAsync(TokenRefreshService.AccessTokenKey, result.Token);
+        if (!string.IsNullOrWhiteSpace(result.RefreshToken))
+            await localStorage.SetItemAsync(TokenRefreshService.RefreshTokenKey, result.RefreshToken);
     }
 
     public async Task<(bool Success, string ErrorMessage)> RegisterAsync(RegisterRequest request)
@@ -143,8 +152,8 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
 
             // Xóa dữ liệu user cũ trước khi lưu token mới
             await ClearUserDataAsync();
-            await localStorage.SetItemAsync("authToken", result.Token);
-            ((CustomAuthStateProvider)authStateProvider).NotifyUserAuthentication(result.Token);
+            await SaveTokensAsync(result);
+            authStateProvider.NotifyUserAuthentication(result.Token);
             return true;
         }
         catch
@@ -181,8 +190,8 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
 
             // Xóa dữ liệu user cũ trước khi lưu token mới
             await ClearUserDataAsync();
-            await localStorage.SetItemAsync("authToken", result.Token);
-            ((CustomAuthStateProvider)authStateProvider).NotifyUserAuthentication(result.Token);
+            await SaveTokensAsync(result);
+            authStateProvider.NotifyUserAuthentication(result.Token);
             return (true, true, string.Empty);
         }
         catch (Exception ex)
@@ -207,8 +216,8 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
 
             // Xóa dữ liệu user cũ trước khi lưu token mới
             await ClearUserDataAsync();
-            await localStorage.SetItemAsync("authToken", result.Token);
-            ((CustomAuthStateProvider)authStateProvider).NotifyUserAuthentication(result.Token);
+            await SaveTokensAsync(result);
+            authStateProvider.NotifyUserAuthentication(result.Token);
             return (true, string.Empty);
         }
         catch (Exception ex)
@@ -233,8 +242,8 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
 
             // Xóa dữ liệu user cũ trước khi lưu token mới
             await ClearUserDataAsync();
-            await localStorage.SetItemAsync("authToken", result.Token);
-            ((CustomAuthStateProvider)authStateProvider).NotifyUserAuthentication(result.Token);
+            await SaveTokensAsync(result);
+            authStateProvider.NotifyUserAuthentication(result.Token);
             return (true, string.Empty);
         }
         catch (Exception ex)
@@ -245,7 +254,9 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
 
     public async Task LogoutAsync()
     {
+        // Thu hồi refresh token phía server trước để phiên không còn dùng được nữa
+        await tokenRefreshService.RevokeOnServerAsync();
         await ClearUserDataAsync();
-        ((CustomAuthStateProvider)authStateProvider).NotifyUserLogout();
+        authStateProvider.NotifyUserLogout();
     }
 }

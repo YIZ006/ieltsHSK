@@ -144,19 +144,11 @@
                 <div class="form-grid">
                     <div class="form-group full">
                         <label>Tên bộ đề <span class="req">*</span></label>
-                        <input @bind="collectionName" class="form-input" placeholder="VD: TOEIC ETS 2024 Volume 1" />
+                        <input @bind="collectionName" class="form-input" placeholder="VD: TOEIC ETS 2026" />
                     </div>
                     <div class="form-group full">
                         <label>Tên bài thi <span class="req">*</span></label>
                         <input @bind="examTitle" class="form-input" placeholder="VD: Test 1" />
-                    </div>
-                    <div class="form-group full">
-                        <label>Mô tả</label>
-                        <textarea @bind="examDescription" class="form-input" rows="3" placeholder="Mô tả ngắn gọn về đề thi..."></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Thời gian thi (phút)</label>
-                        <input type="number" @bind="examTimeMins" class="form-input" min="30" max="180" />
                     </div>
                 </div>
                 
@@ -753,6 +745,9 @@
 
                 <div class="submit-actions">
                     <button class="btn-prev" @onclick="() => GoStep(7)">← Quay lại</button>
+                    <button class="btn-secondary-action" @onclick="ExportJsonFile" style="background: #2a2254; color: #a78bfa; border: 1px solid #7c3aed; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                        💾 Xuất file JSON (Tải về máy)
+                    </button>
                     <button class="btn-submit" @onclick="SubmitExam" disabled="@isSaving">
                         @if (isSaving)
                         {
@@ -761,7 +756,7 @@
                         }
                         else
                         {
-                            <span>🚀 Upload & Lưu đề thi</span>
+                            <span>🚀 Upload & Lưu đề thi lên Cloud</span>
                         }
                     </button>
                 </div>
@@ -1085,6 +1080,25 @@
         isSaving = false;
     }
 
+    private async Task ExportJsonFile()
+    {
+        try
+        {
+            var examData = BuildExamJson();
+            var json = System.Text.Json.JsonSerializer.Serialize(examData, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json));
+            var safeColl = string.IsNullOrWhiteSpace(collectionName) ? "TOEIC" : collectionName;
+            var safeTitle = string.IsNullOrWhiteSpace(examTitle) ? "Test" : examTitle;
+            var fileName = $"{safeColl}-{safeTitle}.json";
+            await JS.InvokeVoidAsync("eval", $"const a = document.createElement('a'); a.href = 'data:application/json;base64,{base64}'; a.download = '{fileName}'; a.click();");
+            saveSuccess = $"Đã xuất file '{fileName}' thành công về máy của bạn!";
+        }
+        catch (Exception ex)
+        {
+            saveError = $"Lỗi khi xuất file: {ex.Message}";
+        }
+    }
+
     private async Task OpenExamList()
     {
         showExamList = true;
@@ -1125,9 +1139,9 @@
         {
             using var http = new HttpClient();
             var json = await http.GetStringAsync(exam.ToeicUrl);
-            var doc = JsonDocument.Parse(json).RootElement;
-            if (doc.TryGetProperty("TotalTimeSeconds", out var t)) examTimeMins = t.GetInt32() / 60;
-            if (doc.TryGetProperty("Description", out var desc)) examDescription = desc.GetString() ?? "";
+            PopulateFormFromJson(json);
+            if (!string.IsNullOrWhiteSpace(exam.CollectionName)) collectionName = exam.CollectionName;
+            if (!string.IsNullOrWhiteSpace(exam.Title)) examTitle = exam.Title;
             saveSuccess = "Đã tải đề thi lên. Hãy chỉnh sửa và bấm 'Upload & Lưu' để cập nhật.";
         }
         catch (Exception ex) { saveError = $"Không thể tải đề: {ex.Message}"; }
@@ -1168,14 +1182,114 @@
 
     private string IdToLabel(int id) => id switch { 1=>"A", 2=>"B", 3=>"C", 4=>"D", _=>"A" };
 
+    private void ParseToeicTitle(string rawColl, string rawTitle, out string collName, out string titleName)
+    {
+        rawColl = (rawColl ?? "").Trim();
+        rawTitle = (rawTitle ?? "").Trim();
+
+        // 1. Nếu đã có CollectionName trong JSON
+        if (!string.IsNullOrEmpty(rawColl))
+        {
+            collName = FormatCollectionName(rawColl);
+            titleName = !string.IsNullOrEmpty(rawTitle) ? CleanTestTitle(rawTitle) : "Test 1";
+            return;
+        }
+
+        // 2. Nếu rawTitle rỗng
+        if (string.IsNullOrEmpty(rawTitle))
+        {
+            collName = "TOEIC ETS 2026";
+            titleName = "Test 1";
+            return;
+        }
+
+        // 3. Tách chuỗi theo mẫu (VD: "ETS 2026 Test 2", "TOEIC ETS 2026 - Test 2", "ETS 2024 Vol 1 Test 3", "Practice Test 1", "Đề 1")
+        var match = System.Text.RegularExpressions.Regex.Match(
+            rawTitle,
+            @"^(.*?)(?:[\s\-_–—]+|\b)(Test\s*\d+|Practice\s*Test\s*\d+|Đề\s*thi\s*thử\s*\d+|Đề\s*\d+|Mini\s*Test\s*\d+)(.*)$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
+
+        if (match.Success)
+        {
+            var collPart = match.Groups[1].Value.Trim().Trim('-', '_', '–', '—', ':');
+            var testPart = (match.Groups[2].Value + match.Groups[3].Value).Trim().Trim('-', '_', '–', '—', ':');
+
+            if (string.IsNullOrEmpty(collPart))
+            {
+                collName = "TOEIC ETS 2026";
+            }
+            else
+            {
+                collName = FormatCollectionName(collPart);
+            }
+
+            titleName = CleanTestTitle(testPart);
+            return;
+        }
+
+        // Nếu không có chữ Test mà có ETS / TOEIC (VD: "ETS 2026")
+        if (System.Text.RegularExpressions.Regex.IsMatch(rawTitle, @"(ETS|TOEIC|YBM|Hacker)", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            collName = FormatCollectionName(rawTitle);
+            titleName = "Test 1";
+            return;
+        }
+
+        collName = "TOEIC ETS 2026";
+        titleName = rawTitle;
+    }
+
+    private string FormatCollectionName(string name)
+    {
+        name = name.Trim();
+        if (string.IsNullOrEmpty(name)) return "TOEIC ETS 2026";
+
+        if (System.Text.RegularExpressions.Regex.IsMatch(name, @"^ETS\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            name = "TOEIC " + name.ToUpperInvariant();
+        }
+        else if (System.Text.RegularExpressions.Regex.IsMatch(name, @"^TOEIC\s+ETS", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            name = System.Text.RegularExpressions.Regex.Replace(name, @"^toeic\s+ets", "TOEIC ETS", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        }
+        return name;
+    }
+
+    private string CleanTestTitle(string testTitle)
+    {
+        testTitle = testTitle.Trim();
+        if (string.IsNullOrEmpty(testTitle)) return "Test 1";
+
+        var m = System.Text.RegularExpressions.Regex.Match(testTitle, @"^Test\s*0*(\d+)(.*)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (m.Success)
+        {
+            var num = m.Groups[1].Value;
+            var rest = m.Groups[2].Value.Trim();
+            return string.IsNullOrEmpty(rest) ? $"Test {num}" : $"Test {num} {rest}";
+        }
+        return testTitle;
+    }
+
     private void PopulateFormFromJson(string json)
     {
         var doc = System.Text.Json.JsonDocument.Parse(json);
         var root = doc.RootElement;
 
-        examTitle = root.TryGetProperty("Title", out var titleProp) ? titleProp.GetString() ?? "" : "";
+        var rawTitle = root.TryGetProperty("Title", out var titleProp) ? titleProp.GetString() ?? "" : "";
+        var rawCollection = root.TryGetProperty("CollectionName", out var collProp)
+            ? collProp.GetString() ?? ""
+            : (root.TryGetProperty("Collection", out var cProp2) ? cProp2.GetString() ?? "" : "");
+
+        ParseToeicTitle(rawCollection, rawTitle, out collectionName, out examTitle);
+
         examDescription = root.TryGetProperty("Description", out var descProp) ? descProp.GetString() ?? "" : "";
         if (root.TryGetProperty("TotalTimeSeconds", out var timeProp)) examTimeMins = timeProp.GetInt32() / 60;
+
+        if (string.IsNullOrWhiteSpace(examDescription))
+        {
+            examDescription = $"Bài thi {collectionName} {examTitle} tiêu chuẩn gồm 7 Part, 200 câu, thời gian {examTimeMins} phút.";
+        }
 
         if (root.TryGetProperty("Parts", out var parts))
         {
@@ -1344,6 +1458,28 @@
             }
         }
         NormalizePart7Groups();
+
+        // Tự động nhận diện thư mục base URL media nếu chưa có
+        if (string.IsNullOrWhiteSpace(autofillBaseImageUrl))
+        {
+            var sampleImg = part1Groups.FirstOrDefault(g => !string.IsNullOrEmpty(g.ImageUrl))?.ImageUrl
+                         ?? part7Groups.FirstOrDefault(g => !string.IsNullOrEmpty(g.ImageUrl))?.ImageUrl;
+            if (!string.IsNullOrEmpty(sampleImg) && sampleImg.Contains('/'))
+            {
+                autofillBaseImageUrl = sampleImg.Substring(0, sampleImg.LastIndexOf('/'));
+            }
+        }
+        if (string.IsNullOrWhiteSpace(autofillBaseAudioUrl))
+        {
+            var sampleAud = part1Groups.FirstOrDefault(g => !string.IsNullOrEmpty(g.AudioUrl))?.AudioUrl
+                         ?? part2Groups.FirstOrDefault(g => !string.IsNullOrEmpty(g.AudioUrl))?.AudioUrl
+                         ?? part3Groups.FirstOrDefault(g => !string.IsNullOrEmpty(g.AudioUrl))?.AudioUrl
+                         ?? part4Groups.FirstOrDefault(g => !string.IsNullOrEmpty(g.AudioUrl))?.AudioUrl;
+            if (!string.IsNullOrEmpty(sampleAud) && sampleAud.Contains('/'))
+            {
+                autofillBaseAudioUrl = sampleAud.Substring(0, sampleAud.LastIndexOf('/'));
+            }
+        }
     }
     private object BuildExamJson()
     {
@@ -1457,8 +1593,12 @@
             }).ToList()
         });
 
+        var finalDescription = string.IsNullOrWhiteSpace(examDescription)
+            ? $"Bài thi {collectionName} {examTitle} tiêu chuẩn gồm 7 Part, 200 câu, thời gian {examTimeMins} phút."
+            : examDescription;
+
         return new {
-            Title=examTitle, Description=examDescription,
+            CollectionName=collectionName, Title=examTitle, Description=finalDescription,
             TotalTimeSeconds=examTimeMins*60, TotalQuestions=200, Parts=parts
         };
     }

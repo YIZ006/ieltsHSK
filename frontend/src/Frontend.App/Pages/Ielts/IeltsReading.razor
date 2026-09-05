@@ -378,7 +378,6 @@ else
     private IDisposable? _navigationRegistration;
     private string? _sessionKey;
     private bool isFinished;
-    private bool showReview = true;
     private bool isSubmitting;
     private GradingResult? gradingResult;
     private string? _examUrlLoaded;
@@ -642,7 +641,7 @@ else
             if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
             await ExamSession.LockTestContentAsync(".reading-split");
             await ExamSession.SetUnloadWarningAsync(false);
-            await CheckpointService.ClearCheckpointAsync("Reading", _examUrlLoaded, QueryMockTestId);
+            await CheckpointService.ClearCheckpointAsync("Reading", _examUrlLoaded ?? "", QueryMockTestId);
 
             try
             {

@@ -11,7 +11,7 @@
 @inject ExamHeaderService ExamHeader
 @implements IDisposable
 
-<PageTitle>@(exam?.Title ?? "TOEIC Test 1 - 2026") - HỆ THỐNG THI TRỰC TUYẾN</PageTitle>
+<PageTitle>@((!string.IsNullOrWhiteSpace(exam?.CollectionName) ? $"{exam.CollectionName} - {exam.Title}" : exam?.Title) ?? "TOEIC Test") - HỆ THỐNG THI TRỰC TUYẾN</PageTitle>
 
 <div class="toeic-exam-root">
 @if (isLoading)
@@ -74,6 +74,10 @@ else if (showSetup && exam != null)
     @* ── SETUP: MÀN HÌNH CHỌN PART ── *@
     <div class="toeic-setup-container">
         <div class="setup-header">
+            @if (!string.IsNullOrWhiteSpace(exam.CollectionName))
+            {
+                <div class="setup-collection">@exam.CollectionName</div>
+            }
             <h1 class="setup-title">@exam.Title</h1>
             <div class="setup-meta">
                 <span><i class="bi bi-clock-history"></i> Thời gian làm bài: <b>@FormatDuration(SelectedTimeSeconds)</b></span>
@@ -891,7 +895,10 @@ else
                         var tests = await MockTestService.GetMockTestsAsync();
                         availableTests = tests.Where(t =>
                             !string.IsNullOrEmpty(t.ToeicUrl) &&
-                            t.CollectionName.Contains("TOEIC", StringComparison.OrdinalIgnoreCase)
+                            (string.IsNullOrEmpty(t.CollectionName) ||
+                             t.CollectionName.Contains("TOEIC", StringComparison.OrdinalIgnoreCase) ||
+                             t.Title.Contains("TOEIC", StringComparison.OrdinalIgnoreCase) ||
+                             t.ToeicUrl.Contains("toeic", StringComparison.OrdinalIgnoreCase))
                         ).ToList();
                     }
                 }

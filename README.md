@@ -67,6 +67,18 @@ Build outputs are written to each project `bin/Release/net9.0/` directory.
 
 ## Run
 
+### Using Scripts (Recommended)
+
+- **Windows (Command Prompt / Explorer):**
+  - Double click or run `run-all.bat` to launch both Backend and Frontend in separate windows.
+  - Or run `run-backend.bat` / `run-frontend.bat` individually.
+- **PowerShell:**
+  - `./run-all.ps1` (or `./run-backend.ps1` / `./run-frontend.ps1`)
+- **Linux / macOS / Bash:**
+  - `./run-all.sh` (or `./run-backend.sh` / `./run-frontend.sh`)
+
+### Manual dotnet CLI
+
 Backend:
 
 ```bash
@@ -81,7 +93,7 @@ dotnet run --project frontend/src/Frontend.App/Frontend.App.csproj --launch-prof
 
 Default local URLs:
 
-- Backend: `https://localhost:7101` and `http://localhost:5101`
+- Backend: `https://localhost:7101` (Swagger: `https://localhost:7101/swagger`) and `http://localhost:5101`
 - Frontend: `https://localhost:7102` and `http://localhost:5102`
 
 ## Sample Data

@@ -368,19 +368,12 @@ namespace Backend.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("user_id");
 
-                    b.Property<int?>("UserId1")
-                        .HasColumnType("integer")
-                        .HasColumnName("user_id1");
-
                     b.Property<int>("VocabularyId")
                         .HasColumnType("integer")
                         .HasColumnName("vocabulary_id");
 
                     b.HasKey("Id")
                         .HasName("pk_hsk_vocabulary_progresses");
-
-                    b.HasIndex("UserId1")
-                        .HasDatabaseName("ix_hsk_vocabulary_progresses_user_id1");
 
                     b.HasIndex("UserId", "VocabularyId")
                         .IsUnique()
@@ -886,6 +879,49 @@ namespace Backend.Infrastructure.Migrations
                     b.ToTable("mock_tests", (string)null);
                 });
 
+            modelBuilder.Entity("Backend.Domain.Entities.RefreshToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("token");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_refresh_tokens");
+
+                    b.HasIndex("Token")
+                        .IsUnique()
+                        .HasDatabaseName("ix_refresh_tokens_token");
+
+                    b.HasIndex("UserId", "ExpiresAt")
+                        .HasDatabaseName("ix_refresh_tokens_user_id_expires_at");
+
+                    b.ToTable("refresh_tokens", (string)null);
+                });
+
             modelBuilder.Entity("Backend.Domain.Entities.Story", b =>
                 {
                     b.Property<int>("Id")
@@ -1283,16 +1319,11 @@ namespace Backend.Infrastructure.Migrations
             modelBuilder.Entity("Backend.Domain.Entities.HskVocabularyProgress", b =>
                 {
                     b.HasOne("Backend.Domain.Entities.User", "User")
-                        .WithMany()
+                        .WithMany("HskVocabularyProgresses")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_hsk_vocabulary_progresses_users_user_id");
-
-                    b.HasOne("Backend.Domain.Entities.User", null)
-                        .WithMany("HskVocabularyProgresses")
-                        .HasForeignKey("UserId1")
-                        .HasConstraintName("fk_hsk_vocabulary_progresses_users_user_id1");
 
                     b.Navigation("User");
                 });
@@ -1337,6 +1368,18 @@ namespace Backend.Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_listen_videos_users_user_id");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Backend.Domain.Entities.RefreshToken", b =>
+                {
+                    b.HasOne("Backend.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_refresh_tokens_users_user_id");
 
                     b.Navigation("User");
                 });
