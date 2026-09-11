@@ -1,4 +1,10 @@
-# HƯỚNG DẪN TRIỂN KHAI VÀ VẬN HÀNH REDIS CACHE (DEPLOYMENT GUIDE)
+# HƯỚNG DẪN KỸ THUẬT
+
+- **Ngày thực hiện**: 02/09/2026
+- **Tên báo cáo**: HƯỚNG DẪN TRIỂN KHAI VÀ VẬN HÀNH REDIS CACHE (DEPLOYMENT GUIDE)
+- **Người viết**: YIZ006 (https://github.com/YIZ006)
+
+---
 
 Tài liệu này hướng dẫn chi tiết cách cài đặt, cấu hình, triển khai và giám sát hệ thống Caching phân tán sử dụng **Redis Server** kết hợp cơ chế **Resilience Fallback** (tự động chuyển sang `IMemoryCache` nếu Redis offline) cho hệ thống backend `ieltsHSK`.
 

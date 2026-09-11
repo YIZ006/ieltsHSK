@@ -82,10 +82,10 @@
 
         <!-- Quick Test Account Helper -->
         <div class="quick-accounts-section">
-            <span class="quick-title"><i class="bi bi-lightning-charge-fill"></i> Tài khoản Admin có sẵn:</span>
+            <span class="quick-title"><i class="bi bi-lightning-charge-fill"></i> Tài khoản Quản trị mẫu:</span>
             <div class="account-chips">
-                <button type="button" class="chip-btn" @onclick='() => FillCredentials("cuong20067@gmail.com", "Aa@cuongnane")'>
-                    <b>cuongnane</b> (cuong20067@gmail.com)
+                <button type="button" class="chip-btn" @onclick='() => FillCredentials("admin@ieltshsk.com", "Aa@cuongnane")'>
+                    <b>admin</b> (admin@ieltshsk.com)
                 </button>
             </div>
         </div>
@@ -110,12 +110,18 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Nếu đã đăng nhập với role admin sẵn thì redirect ngay vào Admin Hub
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        if (authState.User.Identity?.IsAuthenticated == true && authState.User.IsInRole("admin"))
+        // Nếu đã có token Quản trị viên hợp lệ thì redirect ngay vào Admin Hub
+        var adminToken = await AuthService.GetAdminTokenAsync();
+        if (!string.IsNullOrWhiteSpace(adminToken))
         {
-            var target = string.IsNullOrWhiteSpace(ReturnUrl) ? "/portal-hub" : ReturnUrl;
-            NavigationManager.NavigateTo(target);
+            var claims = CustomAuthStateProvider.ParseClaimsFromJwt(adminToken);
+            var roleClaim = claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role")?.Value;
+            if (string.Equals(roleClaim, "admin", StringComparison.OrdinalIgnoreCase))
+            {
+                var target = string.IsNullOrWhiteSpace(ReturnUrl) ? "/portal-hub" : ReturnUrl;
+                NavigationManager.NavigateTo(target);
+                return;
+            }
         }
     }
 

@@ -13,6 +13,28 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 var backendApiBaseUrl = builder.Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101/";
 
+// Luôn tự động đồng bộ theo IP hoặc localhost của trình duyệt:
+// - Nếu truy cập bằng IP LAN (ví dụ http://192.168.1.203:5102) -> Backend API tự đổi sang http://192.168.1.203:5101/
+// - Nếu truy cập bằng localhost -> Backend API tự trỏ về http://localhost:5101/
+if (Uri.TryCreate(builder.HostEnvironment.BaseAddress, UriKind.Absolute, out var hostUri))
+{
+    if (hostUri.Host != "localhost" && hostUri.Host != "127.0.0.1")
+    {
+        backendApiBaseUrl = $"{hostUri.Scheme}://{hostUri.Host}:5101/";
+    }
+    else
+    {
+        backendApiBaseUrl = "http://localhost:5101/";
+    }
+    builder.Configuration["BackendApi:BaseUrl"] = backendApiBaseUrl;
+}
+
+if (!backendApiBaseUrl.EndsWith('/'))
+{
+    backendApiBaseUrl += "/";
+    builder.Configuration["BackendApi:BaseUrl"] = backendApiBaseUrl;
+}
+
 builder.Services.AddScoped(_ =>
 {
     return new BackendApiClient(new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) });

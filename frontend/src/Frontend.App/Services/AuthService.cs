@@ -9,15 +9,17 @@ public class RegisterRequest
 {
     [Required(ErrorMessage = "Vui lòng nhập họ và tên.")]
     [StringLength(50, MinimumLength = 2, ErrorMessage = "Họ và tên phải từ 2 đến 50 ký tự.")]
+    [RegularExpression(@"^[^<>{}()\[\]\\\/;`$]+$", ErrorMessage = "Họ và tên không được chứa ký tự đặc biệt hoặc mã lệnh.")]
     public string FullName { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập tên đăng nhập.")]
     [StringLength(30, MinimumLength = 3, ErrorMessage = "Tên đăng nhập từ 3 đến 30 ký tự.")]
-    [RegularExpression(@"^[a-zA-Z0-9]+$", ErrorMessage = "Tên đăng nhập chỉ được bao gồm chữ cái và chữ số (không chứa ký tự đặc biệt hay khoảng trắng).")]
+    [RegularExpression(@"^[a-zA-Z0-9_-]+$", ErrorMessage = "Tên đăng nhập chỉ được bao gồm chữ cái, chữ số, dấu gạch dưới và gạch nối.")]
     public string Username { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập email.")]
     [EmailAddress(ErrorMessage = "Email không đúng định dạng.")]
+    [RegularExpression(@"^[^<>\s]+@[^<>\s]+\.[^<>\s]+$", ErrorMessage = "Email không được chứa ký tự đặc biệt hay mã lệnh.")]
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập mật khẩu.")]
@@ -32,6 +34,7 @@ public class RegisterRequest
 public class LoginRequest
 {
     [Required(ErrorMessage = "Vui lòng nhập Tên đăng nhập hoặc Email.")]
+    [RegularExpression(@"^[^<>{}`]+$", ErrorMessage = "Tên đăng nhập / Email không được chứa ký tự mã lệnh.")]
     public string UsernameOrEmail { get; set; } = string.Empty;
 
     public string Email
@@ -164,7 +167,7 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
     {
         try
         {
-            var response = await httpClient.PostAsJsonAsync("api/auth/login", request);
+            var response = await httpClient.PostAsJsonAsync("api/admin/auth/login", request);
             if (!response.IsSuccessStatusCode)
             {
                 var errContent = await response.Content.ReadAsStringAsync();
@@ -186,15 +189,44 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
                 return (false, false, "Tài khoản của bạn không có quyền Quản trị viên (Admin). Vui lòng sử dụng tài khoản được cấp phép.");
             }
 
-            // Xóa dữ liệu user cũ trước khi lưu token mới
-            await ClearUserDataAsync();
-            await localStorage.SetItemAsync("authToken", result.Token);
-            ((CustomAuthStateProvider)authStateProvider).NotifyUserAuthentication(result.Token);
+            // Lưu token riêng cho Admin, KHÔNG xóa dữ liệu học tập của học viên
+            await localStorage.SetItemAsync("admin_authToken", result.Token);
+            if (!string.IsNullOrWhiteSpace(result.FullName) || !string.IsNullOrWhiteSpace(result.Email))
+            {
+                var adminProfile = new { FullName = result.FullName ?? "", Email = result.Email ?? "" };
+                await localStorage.SetItemAsync("admin_profile", adminProfile);
+            }
+
             return (true, true, string.Empty);
         }
         catch (Exception ex)
         {
             return (false, false, "Lỗi kết nối máy chủ: " + ex.Message);
+        }
+    }
+
+    public async Task AdminLogoutAsync()
+    {
+        try
+        {
+            await localStorage.RemoveItemAsync("admin_authToken");
+            await localStorage.RemoveItemAsync("admin_profile");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AuthService] AdminLogout error: {ex.Message}");
+        }
+    }
+
+    public async Task<string?> GetAdminTokenAsync()
+    {
+        try
+        {
+            return await localStorage.GetItemAsync<string>("admin_authToken");
+        }
+        catch
+        {
+            return null;
         }
     }
 

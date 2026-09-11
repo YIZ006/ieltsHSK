@@ -1,9 +1,10 @@
-# BÁO CÁO TOÀN DIỆN: KHẮC PHỤC SỰ CỐ ĐỒNG BỘ TRẠNG THÁI LÀM BÀI VÀ ĐIỂM THI IELTS PHÍA USER
+# BÁO CÁO KỸ THUẬT
 
-> **Dự án**: Nền tảng luyện thi IELTS & HSK (ieltsHSK)  
-> **Thời gian thực hiện**: 03/09/2026  
-> **Tài liệu lưu trữ**: `docs/bao_cao_khac_phuc_dong_bo_trang_thai_va_diem_ielts.md`  
-> **Trạng thái**: Đã giải quyết triệt để & kiểm chứng thành công
+- **Ngày thực hiện**: 03/09/2026
+- **Tên báo cáo**: BÁO CÁO TOÀN DIỆN KHẮC PHỤC SỰ CỐ ĐỒNG BỘ TRẠNG THÁI LÀM BÀI VÀ ĐIỂM THI IELTS PHÍA USER
+- **Người viết**: YIZ006 (https://github.com/YIZ006)
+- **Tài liệu lưu trữ**: `docs/bao_cao_khac_phuc_dong_bo_trang_thai_va_diem_ielts.md`
+- **Trạng thái**: Đã giải quyết triệt để & kiểm chứng thành công
 
 ---
 

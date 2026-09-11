@@ -55,6 +55,28 @@ public class IeltsService
 
             return items ?? new List<IeltsVocabularyItem>();
         }
+        catch (HttpRequestException)
+        {
+            try
+            {
+                await Task.Delay(500);
+                var url = "api/ielts/vocab";
+                var qs = new List<string>();
+                if (!string.IsNullOrEmpty(topic)) qs.Add($"topic={Uri.EscapeDataString(topic)}");
+                if (!string.IsNullOrEmpty(search)) qs.Add($"search={Uri.EscapeDataString(search)}");
+                if (qs.Count > 0) url += "?" + string.Join("&", qs);
+                var items = await _httpClient.GetFromJsonAsync<List<IeltsVocabularyItem>>(url);
+                if (string.IsNullOrEmpty(topic) && string.IsNullOrEmpty(search) && items != null)
+                {
+                    _vocabCache = items;
+                }
+                return items ?? new List<IeltsVocabularyItem>();
+            }
+            catch
+            {
+                return _vocabCache ?? null;
+            }
+        }
         catch
         {
             return _vocabCache ?? null;
@@ -194,6 +216,21 @@ public class IeltsService
             _coursesCache = response ?? new List<CourseDto>();
             return _coursesCache;
         }
+        catch (HttpRequestException)
+        {
+            try
+            {
+                await Task.Delay(500);
+                var response = await _httpClient.GetFromJsonAsync<List<CourseDto>>("api/ielts/courses");
+                _coursesCache = response ?? new List<CourseDto>();
+                return _coursesCache;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching courses: {ex.Message}");
+                return _coursesCache ?? new List<CourseDto>();
+            }
+        }
         catch (Exception ex)
         {
             Console.WriteLine($"Error fetching courses: {ex.Message}");
@@ -209,6 +246,21 @@ public class IeltsService
             var response = await _httpClient.GetFromJsonAsync<List<WebsiteDto>>("api/ielts/websites");
             _websitesCache = response ?? new List<WebsiteDto>();
             return _websitesCache;
+        }
+        catch (HttpRequestException)
+        {
+            try
+            {
+                await Task.Delay(500);
+                var response = await _httpClient.GetFromJsonAsync<List<WebsiteDto>>("api/ielts/websites");
+                _websitesCache = response ?? new List<WebsiteDto>();
+                return _websitesCache;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching websites: {ex.Message}");
+                return _websitesCache ?? new List<WebsiteDto>();
+            }
         }
         catch (Exception ex)
         {
@@ -227,6 +279,23 @@ public class IeltsService
             {
                 _sectionsCache = response;
                 return _sectionsCache;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            try
+            {
+                await Task.Delay(500);
+                var response = await _httpClient.GetFromJsonAsync<List<LearningSectionDto>>("api/ielts/sections");
+                if (response != null && response.Count > 0)
+                {
+                    _sectionsCache = response;
+                    return _sectionsCache;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching sections on retry: {ex.Message}");
             }
         }
         catch (Exception ex)

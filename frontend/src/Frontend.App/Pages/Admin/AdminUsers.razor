@@ -36,7 +36,7 @@
                 <i class="bi bi-shield-lock-fill alert-banner-icon"></i>
                 <div>
                     <strong>Cần quyền Quản trị viên:</strong> @errorMessage
-                    <div class="alert-subtext">Vui lòng đăng nhập tài khoản có quyền <b>Admin</b> (Ví dụ: <code>cuong20067@gmail.com</code> / Mật khẩu: <code>Aa@cuongnane</code>).</div>
+                    <div class="alert-subtext">Vui lòng đăng nhập tài khoản Quản trị viên (Ví dụ: <code>admin@ieltshsk.com</code> / Mật khẩu: <code>Aa@cuongnane</code>).</div>
                 </div>
             </div>
             <button class="btn-login-admin" @onclick="() => isAuthModalOpen = true">
@@ -78,10 +78,10 @@
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon admin"><i class="bi bi-shield-lock-fill"></i></div>
+            <div class="stat-icon total"><i class="bi bi-mortarboard-fill"></i></div>
             <div class="stat-content">
-                <span class="stat-label">Quản trị viên</span>
-                <h3 class="stat-number">@(users?.Count(u => u.Role == "admin") ?? 0)</h3>
+                <span class="stat-label">Trung - Cao cấp (B1-C2)</span>
+                <h3 class="stat-number">@(users?.Count(u => u.Level == "B1" || u.Level == "B2" || u.Level == "C1" || u.Level == "C2") ?? 0)</h3>
             </div>
         </div>
         <div class="stat-card">
@@ -97,13 +97,7 @@
     <div class="toolbar-card">
         <div class="filter-tabs">
             <button class="filter-tab-btn @(currentFilter == "all" ? "active" : "")" @onclick='() => SetFilter("all")'>
-                Tất cả vai trò <span class="tab-badge">@(FilteredDomainUsers?.Count() ?? 0)</span>
-            </button>
-            <button class="filter-tab-btn @(currentFilter == "user" ? "active" : "")" @onclick='() => SetFilter("user")'>
-                Học viên <span class="tab-badge">@(FilteredDomainUsers?.Count(u => u.Role == "user") ?? 0)</span>
-            </button>
-            <button class="filter-tab-btn @(currentFilter == "admin" ? "active" : "")" @onclick='() => SetFilter("admin")'>
-                Admin <span class="tab-badge">@(FilteredDomainUsers?.Count(u => u.Role == "admin") ?? 0)</span>
+                Tất cả học viên <span class="tab-badge">@(FilteredDomainUsers?.Count() ?? 0)</span>
             </button>
             <button class="filter-tab-btn @(currentFilter == "active" ? "active" : "")" @onclick='() => SetFilter("active")'>
                 Đang hoạt động <span class="tab-badge">@(FilteredDomainUsers?.Count(u => u.IsActive) ?? 0)</span>
@@ -296,11 +290,8 @@
                 <div class="row g-3">
                     <div class="col-6">
                         <div class="form-group">
-                            <label>Phân quyền</label>
-                            <select class="form-input" @bind="editingUser.Role">
-                                <option value="user">Học viên (User)</option>
-                                <option value="admin">Quản trị viên (Admin)</option>
-                            </select>
+                            <label>Vai trò</label>
+                            <input type="text" class="form-input" value="Học viên (User)" disabled style="background: #f1f5f9; color: #64748b; cursor: not-allowed;" />
                         </div>
                     </div>
                     <div class="col-6">
@@ -533,11 +524,9 @@
             if (users == null) return null;
             var list = FilteredDomainUsers ?? users.AsEnumerable();
 
-            // Filter by role/state tab
+            // Filter by state tab
             list = currentFilter switch
             {
-                "user" => list.Where(u => u.Role == "user"),
-                "admin" => list.Where(u => u.Role == "admin"),
                 "active" => list.Where(u => u.IsActive),
                 "disabled" => list.Where(u => !u.IsActive),
                 _ => list
@@ -586,7 +575,7 @@
             var updateReq = new {
                 Username = editingUser.Username,
                 Email = editingUser.Email,
-                Role = editingUser.Role,
+                Role = "user",
                 Level = editingUser.Level
             };
 

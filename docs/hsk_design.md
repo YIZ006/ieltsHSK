@@ -1,4 +1,10 @@
-# HSK Module Design Specification
+# TÀI LIỆU THIẾT KẾ KỸ THUẬT
+
+- **Ngày thực hiện**: 25/08/2026
+- **Tên báo cáo**: ĐẶC TẢ THIẾT KẾ MODULE HSK 3.0 (HSK MODULE DESIGN SPECIFICATION)
+- **Người viết**: YIZ006 (https://github.com/YIZ006)
+
+---
 
 ## Overview
 

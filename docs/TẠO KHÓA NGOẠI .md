@@ -1,6 +1,12 @@
-# Báo cáo hoàn thành: Thiết lập Khóa Ngoại (Foreign Keys) & Liên kết dữ liệu Người dùng
+# BÁO CÁO KỸ THUẬT
 
-Chúng tôi đã hoàn thành việc rà soát, thiết lập toàn bộ các quan hệ khóa ngoại (Foreign Keys) và đồng bộ hóa các luồng dữ liệu gắn liền với tài khoản người dùng (`User`) trong cơ sở dữ liệu PostgreSQL.
+- **Ngày thực hiện**: 28/08/2026
+- **Tên báo cáo**: THIẾT LẬP KHÓA NGOẠI (FOREIGN KEYS) VÀ LIÊN KẾT DỮ LIỆU NGƯỜI DÙNG TRONG POSTGRESQL
+- **Người viết**: YIZ006 (https://github.com/YIZ006)
+
+---
+
+Rà soát, thiết lập toàn bộ các quan hệ khóa ngoại (Foreign Keys) và đồng bộ hóa các luồng dữ liệu gắn liền với tài khoản người dùng (`User`) trong cơ sở dữ liệu PostgreSQL.
 
 ---
 
