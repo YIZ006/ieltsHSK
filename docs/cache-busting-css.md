@@ -1,6 +1,12 @@
-# Cache Busting CSS va tai nguyen tinh
+# TÀI LIỆU KỸ THUẬT
 
-Tai lieu nay giai thich cach tranh tinh trang nguoi dung da deploy ban CSS moi nhung trinh duyet van hien giao dien cu. No ap dung cho frontend Blazor WebAssembly trong repository nay va co the giao truc tiep cho mot AI khac thuc hien.
+- **Ngày thực hiện**: 28/08/2026
+- **Tên báo cáo**: CACHE BUSTING CSS VÀ TÀI NGUYÊN TĨNH CHO BLAZOR WEB ASSEMBLY
+- **Người viết**: YIZ006 (https://github.com/YIZ006)
+
+---
+
+Tài liệu này giải thích cách tránh tình trạng người dùng đã deploy bản CSS mới nhưng trình duyệt vẫn hiển thị giao diện cũ (cache trình duyệt/CDN). Áp dụng cho Frontend Blazor WebAssembly trong dự án.
 
 ## Ket luan nhanh
 

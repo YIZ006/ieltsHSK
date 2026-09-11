@@ -283,6 +283,20 @@ else if (selectedGameForInfo == "hsk-shooter")
                             </button>
                         }
                     </div>
+
+                    <!-- Dev/Test Full Stage Unlock Switch -->
+                    <div class="test-mode-toggle-card @(_isAllStagesUnlocked ? "active" : "")" @onclick="ToggleUnlockAllStages">
+                        <div class="test-mode-left">
+                            <i class="bi @(_isAllStagesUnlocked ? "bi-unlock-fill text-warning" : "bi-lock-fill text-secondary")"></i>
+                            <div>
+                                <div class="test-mode-title">Mở khóa Full Bàn (Chế độ Test)</div>
+                                <div class="test-mode-desc">Chơi ngay bất kỳ bàn nào từ Tầng 1 đến Tầng Trùm Cuối mà không cần đợi vượt ải</div>
+                            </div>
+                        </div>
+                        <div class="test-mode-badge @(_isAllStagesUnlocked ? "badge-on" : "badge-off")">
+                            @(_isAllStagesUnlocked ? "ĐANG BẬT" : "ĐANG TẮT")
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -655,6 +669,22 @@ else if (selectedGameForInfo == "hsk-shooter")
                         <span class="topbar-user-avt" style="background: @_userAvatarColor" title="@_userDisplayName">@_userAvatarEmoji</span>
                         <span>Tầng @(_currentStageIndex + 1)/@_totalStages</span>
                     </button>
+
+                    @if (_isAllStagesUnlocked)
+                    {
+                        <div class="hsk-stage-quick-nav" title="Nhảy nhanh đến tầng bất kỳ (Chế độ Test)">
+                            <i class="bi bi-compass-fill text-warning"></i>
+                            <select class="hsk-stage-select-dropdown" value="@_currentStageIndex" @onchange="OnQuickStageSelectChanged">
+                                @for (int s = 0; s < _totalStages; s++)
+                                {
+                                    var sIdx = s;
+                                    <option value="@sIdx">
+                                        @(sIdx == _totalStages - 1 ? $"👑 Tầng {sIdx + 1} (BOSS CUỐI)" : $"Tầng {sIdx + 1}")
+                                    </option>
+                                }
+                            </select>
+                        </div>
+                    }
                 }
             </div>
 
@@ -669,6 +699,10 @@ else if (selectedGameForInfo == "hsk-shooter")
             </div>
 
             <div class="topbar-right">
+                <button type="button" class="btn-unlock-toggle @(_isAllStagesUnlocked ? "active" : "")" @onclick="ToggleUnlockAllStages" title="Bật/Tắt chế độ mở khóa full bàn để test">
+                    <i class="bi @(_isAllStagesUnlocked ? "bi-unlock-fill text-warning" : "bi-lock-fill")"></i>
+                    @(_isAllStagesUnlocked ? "Full Bàn: BẬT" : "Full Bàn: TẮT")
+                </button>
                 <button class="btn-bgm @(_isBgmOn ? "active" : "")" @onclick="ToggleBgm" title="Bật/Tắt Nhạc Nền (Phím 1)">
                     <i class="bi @(_isBgmOn ? "bi-music-note-beamed" : "bi-volume-mute-fill")"></i>
                     @(_isBgmOn ? "Nhạc: BẬT" : "Nhạc: TẮT")
@@ -724,23 +758,232 @@ else if (selectedGameForInfo == "hsk-shooter")
                 </div>
             }
 
-            <!-- Stage Progress Bar -->
+            <!-- Stage Progress Bar (Standard or PvZ Boss Battle Style) -->
             @if (hskShooterState == HskGameState.Playing || hskShooterState == HskGameState.Paused)
             {
-                <div class="hsk-stage-progress-bar">
-                    <div class="hsk-stage-progress-fill" style="width: @((double)hskWordsShotInStage / Math.Max(1, _currentStageTotalWords) * 100)%"></div>
+                @if (_isBossStage && _bossPhase != BossPhase.None && _bossPhase != BossPhase.Warning && _bossPhase != BossPhase.Dialogue)
+                {
+                    <div class="boss-pvz-progress-bar-wrap">
+                        <div class="boss-pvz-track">
+                            <div class="boss-pvz-fill" style="width: @(BossProgressPercent.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture))%"></div>
+
+                            <!-- Flag 1: Đợt 1 (Triệu hồi tiểu quái) -->
+                            <div class="pvz-flag @(BossProgressPercent >= 26.8 ? "flag-reached" : "")" style="left: 26.9%;" title="Đợt 1: Tiểu Quái">
+                                <span class="flag-icon">🚩</span>
+                                <span class="flag-label">Đợt 1</span>
+                            </div>
+
+                            <!-- Flag 2: Đợt 2 (Tụ lực quả cầu) -->
+                            <div class="pvz-flag @(BossProgressPercent >= 64.1 ? "flag-reached" : "")" style="left: 64.2%;" title="Đợt 2: Tụ Lực">
+                                <span class="flag-icon">⚡</span>
+                                <span class="flag-label">Đợt 2</span>
+                            </div>
+
+                            <!-- Flag 3: Đợt 3 (Tổng Lực Tối Thượng - Cột mốc cuối cùng) -->
+                            <div class="pvz-flag pvz-final-flag @(BossProgressPercent >= 98.0 ? "flag-reached" : "")" style="left: 98.5%;" title="Đợt 3: Tổng Lực Cuối">
+                                <span class="flag-icon">👑</span>
+                                <span class="flag-label">Tổng Lực</span>
+                            </div>
+
+                            <!-- Runner indicator (moving sword along track) -->
+                            <div class="pvz-runner" style="left: @(BossProgressPercent.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture))%">
+                                <span class="runner-icon">⚔️</span>
+                            </div>
+                        </div>
+
+                        <div class="boss-pvz-meta">
+                            <span class="pvz-phase-title"><i class="bi bi-shield-shaded text-warning"></i> @GetBossPhaseName()</span>
+                            <span class="pvz-percent-text">@((int)BossProgressPercent)% TIẾN ĐỘ TRẬN ĐẤU</span>
+                        </div>
+                    </div>
+                }
+                else if (!_isBossStage)
+                {
+                    <div class="hsk-stage-progress-bar">
+                        <div class="hsk-stage-progress-fill" style="width: @((double)hskWordsShotInStage / Math.Max(1, _currentStageTotalWords) * 100)%"></div>
+                    </div>
+                }
+            }
+
+            <!-- Boss Warning Ribbon Overlay -->
+            @if (_showBossWarning)
+            {
+                <div class="boss-warning-overlay">
+                    <div class="hazard-ribbon hazard-top"></div>
+                    <div class="boss-warning-card">
+                        <div class="warning-alert-tag"><i class="bi bi-exclamation-triangle-fill"></i> CẢNH BÁO KHẨN CẤP <i class="bi bi-exclamation-triangle-fill"></i></div>
+                        <h2 class="warning-boss-name">MA VƯƠNG HÁN TỰ GIÁNG LÂM</h2>
+                        <div class="warning-stage-info">TRÙM CUỐI • TẦNG @_totalStages • @hskShooterSelectedLevel</div>
+                    </div>
+                    <div class="hazard-ribbon hazard-bottom"></div>
                 </div>
             }
 
-            <!-- Falling Words (Only Hanzi by default) -->
+            <!-- Boss Dialogue Cutscene Modal -->
+            @if (_showBossDialogue)
+            {
+                <div class="boss-dialogue-overlay" @onclick="AdvanceBossDialogue">
+                    <div class="boss-dialogue-modal" @onclick:stopPropagation="true">
+                        <div class="boss-dialogue-portrait-box">
+                            <img src="images/games/hsk-boss-emperor.png" alt="Ma Vương Hán Tự" class="boss-dialogue-avatar" />
+                            <div class="boss-dialogue-aura"></div>
+                        </div>
+                        <div class="boss-dialogue-content">
+                            <div class="boss-dialogue-header">
+                                <span class="boss-dialogue-crown">👑</span>
+                                <span class="boss-dialogue-title">MA VƯƠNG HÁN TỰ (汉字魔王)</span>
+                                <span class="boss-dialogue-badge">@hskShooterSelectedLevel</span>
+                            </div>
+                            <div class="boss-dialogue-speech">
+                                @if (!string.IsNullOrEmpty(_displayedBossDialogueZh))
+                                {
+                                    <div class="boss-dialogue-chinese">@_displayedBossDialogueZh</div>
+                                }
+                                <p class="boss-speech-text">@_displayedBossDialogue<span class="typewriter-blink">|</span></p>
+                            </div>
+                            <div class="boss-dialogue-actions">
+                                <span class="dialogue-shortcut-hint"><kbd>Space</kbd> hoặc <kbd>Enter</kbd></span>
+                                <button type="button" class="btn-boss-dialogue-advance" @onclick="AdvanceBossDialogue">
+                                    @(_bossDialogueFinished ? "BẮT ĐẦU CHIẾN ĐẤU ⚔️" : "Tiếp tục ⏭")
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- In-game Boss Arena HUD & Floating Boss (During fight) -->
+            @if (_isBossStage && _bossPhase != BossPhase.None && _bossPhase != BossPhase.Warning && _bossPhase != BossPhase.Dialogue)
+            {
+                <div class="boss-arena-hud @(_bossHitFlash ? "boss-damaged" : "")">
+                    <div class="boss-floating-actor">
+                        <div class="boss-actor-shadow-portal"></div>
+                        <img src="images/games/hsk-boss-emperor.png" alt="Ma Vương Hán Tự" class="boss-actor-sprite" />
+                        @if (_bossPhase == BossPhase.Wave2_Charging || _bossPhase == BossPhase.Wave3_FinalSurge)
+                        {
+                            <div class="boss-charging-energy-orb">
+                                <img src="images/games/hsk-boss-orb-aura.png" alt="Aura" class="boss-orb-aura-bg" />
+                                <img src="images/games/hsk-boss-orb.png" alt="Energy Core" class="boss-orb-core-img" />
+                                <div class="energy-orb-sparks"></div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="boss-top-hud-bar">
+                        <div class="boss-hud-header-row">
+                            <span class="boss-hud-name">👑 MA VƯƠNG HÁN TỰ</span>
+                            <span class="boss-hud-phase-tag">@GetBossPhaseName()</span>
+                        </div>
+                        @if (_bossPhase == BossPhase.Wave2_Charging || _bossPhase == BossPhase.Wave3_FinalSurge)
+                        {
+                            <div class="boss-charge-timer-container">
+                                <div class="boss-charge-track">
+                                    <div class="boss-charge-fill" style="width: @((BossChargeMaxTime - _bossChargeTimer) / BossChargeMaxTime * 100)%"></div>
+                                </div>
+                                <span class="boss-charge-timer-text"><i class="bi bi-lightning-charge-fill"></i> TỤ LỰC: @(_bossChargeTimer.ToString("0.0"))s (-2❤️ nếu nổ)</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Orbiting Words around Energy Orb (Wave 2 & Wave 3) -->
+                @if ((_bossPhase == BossPhase.Wave2_Charging || _bossPhase == BossPhase.Wave3_FinalSurge) && _orbitingWords.Any())
+                {
+                    <div class="boss-orbit-track-area">
+                        @foreach (var ow in _orbitingWords.Where(w => !w.IsDestroyed))
+                        {
+                            <div class="boss-orbit-word @(IsHskTargeted(ow) ? "targeted" : "") @(ow.HitFlash ? "hit-flash" : "")"
+                                 style="left: calc(50% + @((Math.Cos(ow.AngleDeg * Math.PI / 180.0) * ow.RadiusPx).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))px); top: calc(23% + @((Math.Sin(ow.AngleDeg * Math.PI / 180.0) * (ow.RadiusPx * 0.55)).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))px);">
+                                <div class="orbit-shield-ring"></div>
+                                <span class="orbit-hanzi">@ow.Vocab.Hanzi</span>
+                                @if (_showPinyin)
+                                {
+                                    <span class="orbit-pinyin">@ow.Vocab.Pinyin</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Giant Laser Blast when charge explodes -->
+                @if (_showBossLaserBlast)
+                {
+                    <div class="boss-giant-laser-blast">
+                        <div class="laser-screen-flash"></div>
+                        <div class="laser-beam-wrapper">
+                            <img src="images/games/hsk-boss-laser.png" alt="Laser Blast" class="boss-laser-sprite" />
+                        </div>
+                        <div class="laser-impact-crater"></div>
+                    </div>
+                }
+
+                <!-- Boss Wave Announcement Toast -->
+                @if (!string.IsNullOrEmpty(_bossWaveAnnouncement))
+                {
+                    <div class="boss-wave-announcement-banner">
+                        <span>@_bossWaveAnnouncement</span>
+                    </div>
+                }
+
+                <!-- Boss Skill Chant Shout Banner (Tung chiêu đọc tên tiếng Trung) -->
+                @if (_showBossSkillBanner)
+                {
+                    <div class="boss-skill-chant-banner">
+                        <div class="skill-chant-tag"><i class="bi bi-lightning-charge-fill"></i> TUYỆT KỸ MA VƯƠNG <i class="bi bi-lightning-charge-fill"></i></div>
+                        <div class="skill-chant-chinese">@_bossSkillChinese</div>
+                        <div class="skill-chant-vn">@_bossSkillVietnamese</div>
+                    </div>
+                }
+
+                <!-- Boss Taunt / Reaction Speech Bubble (Nói sau khi vượt qua đợt) -->
+                @if (_showBossTaunt)
+                {
+                    <div class="boss-taunt-speech-bubble">
+                        <div class="taunt-avatar-thumb">
+                            <img src="images/games/hsk-boss-emperor.png" alt="Boss" />
+                        </div>
+                        <div class="taunt-speech-body">
+                            <div class="taunt-boss-title">👑 MA VƯƠNG HÁN TỰ</div>
+                            <div class="taunt-chinese">@_bossTauntChinese</div>
+                            <div class="taunt-vn">"@_bossTauntVietnamese"</div>
+                        </div>
+                    </div>
+                }
+            }
+
+            <!-- Falling Words (Minions & standard words) -->
             @foreach (var word in hskActiveWords)
             {
-                <div @key="word.Key" class="falling-word @(word.IsDestroyed ? "destroyed" : "") @(IsHskTargeted(word) ? "targeted" : "") @(IsHskGamePaused ? "paused-anim" : "")"
+                <div @key="word.Key" class="falling-word @(word.IsMinion ? "is-minion" : "") @(word.HitFlash ? "hit-flash" : "") @(word.IsDestroyed ? "destroyed" : "") @(IsHskTargeted(word) ? "targeted" : "") @(IsHskGamePaused ? "paused-anim" : "")"
                      style="--fall-duration: @(word.FallDurationCss)s; --x-pos: @(word.XPercentCss)%; @(IsHskGamePaused ? "animation-play-state: paused;" : "")">
-                    <span class="word-hanzi">@word.Vocab.Hanzi</span>
-                    @if (_showPinyin)
+                    @if (word.IsMinion)
                     {
-                        <span class="word-pinyin">@word.Vocab.Pinyin</span>
+                        <!-- Chữ hiện TRÊN ĐẦU LÍNH -->
+                        <div class="minion-overhead-bubble">
+                            <div class="minion-mini-badge">
+                                <span>😈 TIỂU QUÁI</span>
+                            </div>
+                            <span class="word-hanzi">@word.Vocab.Hanzi</span>
+                            @if (_showPinyin)
+                            {
+                                <span class="word-pinyin">@word.Vocab.Pinyin</span>
+                            }
+                            <div class="minion-bubble-pointer"></div>
+                        </div>
+
+                        <!-- Thân lính (Tiểu quái) ở DƯỚI CHỮ -->
+                        <div class="minion-actor-unit">
+                            <img src="images/games/hsk-minion.png" alt="Tiểu Quái" class="minion-sprite-img" />
+                            <div class="minion-flight-aura"></div>
+                        </div>
+                    }
+                    else
+                    {
+                        <span class="word-hanzi">@word.Vocab.Hanzi</span>
+                        @if (_showPinyin)
+                        {
+                            <span class="word-pinyin">@word.Vocab.Pinyin</span>
+                        }
                     }
                 </div>
             }
@@ -959,6 +1202,10 @@ else if (selectedGameForInfo == "hsk-shooter")
                             </div>
                         </div>
                         <div class="header-right">
+                            <button type="button" class="btn-map-unlock-all @(_isAllStagesUnlocked ? "active" : "")" @onclick="ToggleUnlockAllStages" title="Bật/Tắt mở khóa toàn bộ các tầng trên bản đồ">
+                                <i class="bi @(_isAllStagesUnlocked ? "bi-unlock-fill text-warning" : "bi-lock-fill")"></i>
+                                @(_isAllStagesUnlocked ? "Đã Mở Khóa Full Bàn" : "Mở Khóa Full Bàn")
+                            </button>
                             <button type="button" class="btn-resume-from-map" @onclick="ResumeAndCloseMap" title="Tiếp tục chơi">
                                 <i class="bi bi-play-fill"></i> Tiếp tục chơi
                             </button>
@@ -979,7 +1226,7 @@ else if (selectedGameForInfo == "hsk-shooter")
                             var isCurrent = stageIdx == _currentStageIndex;
                             var isActive = isCurrent && !_showStageComplete;
                             var isDone = stageIdx < _currentStageIndex || stageIdx < _maxUnlockedStageIndex;
-                            var isUnlocked = stageIdx <= _maxUnlockedStageIndex;
+                            var isUnlocked = _isAllStagesUnlocked || stageIdx <= _maxUnlockedStageIndex;
                             var isLocked = !isUnlocked;
                             var reverseIdx = _totalStages - 1 - stageIdx;
                             var isLeft = reverseIdx % 2 == 0;
@@ -1223,9 +1470,35 @@ else if (selectedGameForInfo == "hsk-shooter")
         public double FallDurationSec { get; init; }
         public double XPercent { get; init; }
         public bool IsDestroyed { get; set; }
+        public bool IsMinion { get; set; }
+        public bool HitFlash { get; set; }
 
         public string FallDurationCss => FallDurationSec.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
         public string XPercentCss => XPercent.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private enum BossPhase
+    {
+        None,
+        Warning,
+        Dialogue,
+        Warmup1,
+        Wave1_Minions,
+        Warmup2,
+        Wave2_Charging,
+        Warmup3,
+        Wave3_FinalSurge,
+        Defeated
+    }
+
+    private sealed class OrbitingWord
+    {
+        public int Id { get; set; }
+        public required HskVocabularyItem Vocab { get; set; }
+        public double AngleDeg { get; set; }
+        public double RadiusPx { get; set; } = 130.0;
+        public bool IsDestroyed { get; set; }
+        public bool HitFlash { get; set; }
     }
 
     private sealed class ActiveBullet
@@ -1863,6 +2136,58 @@ else if (selectedGameForInfo == "hsk-shooter")
     private bool _showStageMap = false;
     private bool _showResumeDialog = false;
     private bool _showStageComplete = false;
+    private bool _isAllStagesUnlocked = true; // Mặc định mở khóa full bàn để test mọi bàn chơi theo yêu cầu
+
+    // Boss Stage Variables (Tầng 25 / Tầng cuối)
+    private bool _isBossStage => _totalStages > 0 && _currentStageIndex == _totalStages - 1;
+    private bool _showBossWarning = false;
+    private bool _showBossDialogue = false;
+    private bool _bossDialogueFinished = false;
+    private string _fullBossDialogue = "";
+    private string _displayedBossDialogue = "";
+    private CancellationTokenSource? _typewriterCts;
+
+    private BossPhase _bossPhase = BossPhase.None;
+    private bool _bossHitFlash = false;
+    private const double BossChargeMaxTime = 8.0;
+    private double _bossChargeTimer = 8.0;
+    private int _bossChargeCycle = 1;
+    private List<OrbitingWord> _orbitingWords = new();
+    private bool _showBossLaserBlast = false;
+    private string _bossWaveAnnouncement = "";
+    private CancellationTokenSource? _announcementCts;
+
+    // Boss Skills & Voice Taunts
+    private string _bossSkillChinese = "";
+    private string _bossSkillVietnamese = "";
+    private bool _showBossSkillBanner = false;
+    private CancellationTokenSource? _skillBannerCts;
+
+    private string _bossTauntChinese = "";
+    private string _bossTauntVietnamese = "";
+    private bool _showBossTaunt = false;
+    private CancellationTokenSource? _tauntCts;
+
+    private string _displayedBossDialogueZh = "";
+
+    // PvZ-style Boss Battle Progress Bar & Targets
+    private const int BossWarmup1Target = 12; // Dạo đầu: 10-15 từ
+    private const int BossWave1MinionsCount = 6; // Đợt 1: 6 quái
+    private const int BossWarmup2Target = 16; // Dạo giữa 1: 15-20 từ
+    private const int BossWave2Target = 9;   // Đợt 2: 3 chu kỳ x 3 từ = 9 từ
+    private const int BossWarmup3Target = 16; // Dạo giữa 2: 15-20 từ
+    private const int BossWave3Target = 8;   // Đợt 3: 5 quái + 3 từ tụ lực = 8 mục tiêu
+    private const int BossTotalUnits = BossWarmup1Target + BossWave1MinionsCount + BossWarmup2Target + BossWave2Target + BossWarmup3Target + BossWave3Target; // 67 units
+    
+    private int _bossProgressUnits = 0;
+    private double BossProgressPercent => Math.Clamp((double)_bossProgressUnits / Math.Max(1, BossTotalUnits) * 100.0, 0.0, 100.0);
+    private int _bossWarmupWordsShotInPhase = 0;
+
+    private void AdvanceStageProgressUnits()
+    {
+        _bossProgressUnits = Math.Min(BossTotalUnits, _bossProgressUnits + 1);
+        StateHasChanged();
+    }
     
     private List<HskVocabularyItem> _currentStageWords = new();
     private int _currentStageTotalWords = 0;
@@ -1878,27 +2203,16 @@ else if (selectedGameForInfo == "hsk-shooter")
 
     private void TogglePinyin() => _showPinyin = !_showPinyin;
 
-    private async Task OpenStageMap()
+    private void OpenStageMap()
     {
-        _ = LoadUserProfileAsync();
-        if (hskShooterState == HskGameState.Playing && !_showStageComplete)
+        if (hskShooterState == HskGameState.Playing)
         {
             _wasPausedByMap = true;
             ToggleHskPause();
         }
-        else if (hskShooterState == HskGameState.Paused && !_hskPauseStartTime.HasValue)
-        {
-            _hskPauseStartTime = DateTime.UtcNow;
-        }
-
         _showStageMap = true;
         StateHasChanged();
-        try
-        {
-            await Task.Delay(50);
-            await JS.InvokeVoidAsync("window.initStageMapDrag");
-        }
-        catch { }
+        _ = ScrollStageMapToCurrentNode();
     }
 
     private void CloseStageMap()
@@ -1919,32 +2233,43 @@ else if (selectedGameForInfo == "hsk-shooter")
 
     private void ResumeAndCloseMap()
     {
-        _showStageMap = false;
-        _wasPausedByMap = false;
-        if (hskShooterState == HskGameState.Paused)
+        CloseStageMap();
+    }
+
+    private async Task ScrollStageMapToCurrentNode()
+    {
+        try
         {
-            ToggleHskPause();
+            await Task.Delay(100);
+            await JS.InvokeVoidAsync("eval", @"
+                (function() {
+                    const scroll = document.getElementById('hskStageMapScroll');
+                    const active = scroll?.querySelector('.cc-active, .player-map-avatar-circle');
+                    if (scroll && active) {
+                        const target = active.offsetTop - scroll.clientHeight / 2 + active.clientHeight / 2;
+                        scroll.scrollTo({ top: target, behavior: 'smooth' });
+                    }
+                })();
+            ");
         }
-        else
-        {
-            StateHasChanged();
-            _ = FocusHskInput();
-        }
+        catch { }
     }
 
     private async Task StartHskShooterGame()
     {
-        selectedGameForInfo = null;
-        isPlayingHskShooter = true;
-        await LoadLevelAndCheckProgress(hskShooterSelectedLevel);
-    }
-
-    private async Task LoadLevelAndCheckProgress(string level)
-    {
-        hskShooterSelectedLevel = level;
-        var all = await HskSvc.GetVocabularyAsync(level);
+        _isBgmOn = true;
+        var all = await HskSvc.GetVocabularyAsync(hskShooterSelectedLevel);
         hskVocabPool = all?.Where(v => v.IsActive && !string.IsNullOrWhiteSpace(v.Pinyin)).ToList() ?? new();
-        if (hskVocabPool.Count == 0) return;
+        if (hskVocabPool.Count == 0)
+        {
+            ShowToast($"Chưa có từ vựng cho cấp độ {hskShooterSelectedLevel}!");
+            return;
+        }
+
+        CloseGameInfo();
+        isPlayingHskShooter = true;
+        hskShooterState = HskGameState.Playing;
+        StateHasChanged();
 
         // Shuffle the entire pool once per level load
         for (int i = hskVocabPool.Count - 1; i > 0; i--)
@@ -1956,13 +2281,27 @@ else if (selectedGameForInfo == "hsk-shooter")
         _totalStages = (int)Math.Ceiling(hskVocabPool.Count / (double)WordsPerStage);
         if (_totalStages == 0) _totalStages = 1;
 
-        // Check LocalStorage for saved progress and max unlocked stage
+        // Check LocalStorage for saved progress, max unlocked stage and unlock all setting
         try
         {
-            var savedStageStr = await JS.InvokeAsync<string>("localStorage.getItem", $"hsk_progress_{level}");
-            var maxUnlockedStr = await JS.InvokeAsync<string>("localStorage.getItem", $"hsk_max_unlocked_{level}");
+            var unlockAllPref = await JS.InvokeAsync<string>("localStorage.getItem", "hsk_unlock_all_stages");
+            if (unlockAllPref == "false")
+            {
+                _isAllStagesUnlocked = false;
+            }
+            else
+            {
+                _isAllStagesUnlocked = true;
+            }
 
-            if (int.TryParse(maxUnlockedStr, out var maxUnlocked) && maxUnlocked >= 0)
+            var savedStageStr = await JS.InvokeAsync<string>("localStorage.getItem", $"hsk_progress_{hskShooterSelectedLevel}");
+            var maxUnlockedStr = await JS.InvokeAsync<string>("localStorage.getItem", $"hsk_max_unlocked_{hskShooterSelectedLevel}");
+
+            if (_isAllStagesUnlocked)
+            {
+                _maxUnlockedStageIndex = Math.Max(0, _totalStages - 1);
+            }
+            else if (int.TryParse(maxUnlockedStr, out var maxUnlocked) && maxUnlocked >= 0)
             {
                 _maxUnlockedStageIndex = Math.Min(maxUnlocked, _totalStages - 1);
             }
@@ -1984,7 +2323,7 @@ else if (selectedGameForInfo == "hsk-shooter")
                 return;
             }
         }
-        catch { /* Ignore JS interop errors during prerendering/initialization */ }
+        catch { }
 
         await StartFreshFromStage0();
     }
@@ -2021,6 +2360,38 @@ else if (selectedGameForInfo == "hsk-shooter")
         await LoadStage(stageIdx);
     }
 
+    private async Task OnQuickStageSelectChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var targetIdx) && targetIdx >= 0 && targetIdx < _totalStages)
+        {
+            await ReplayStage(targetIdx);
+        }
+    }
+
+    private async Task ToggleUnlockAllStages()
+    {
+        _isAllStagesUnlocked = !_isAllStagesUnlocked;
+        if (_isAllStagesUnlocked)
+        {
+            _maxUnlockedStageIndex = Math.Max(_maxUnlockedStageIndex, Math.Max(0, _totalStages - 1));
+            try
+            {
+                await JS.InvokeVoidAsync("localStorage.setItem", "hsk_unlock_all_stages", "true");
+                await JS.InvokeVoidAsync("localStorage.setItem", $"hsk_max_unlocked_{hskShooterSelectedLevel}", (_totalStages - 1).ToString());
+            }
+            catch { }
+        }
+        else
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("localStorage.setItem", "hsk_unlock_all_stages", "false");
+            }
+            catch { }
+        }
+        StateHasChanged();
+    }
+
     private async Task NextStage()
     {
         if (_currentStageIndex < _totalStages - 1)
@@ -2040,6 +2411,20 @@ else if (selectedGameForInfo == "hsk-shooter")
         _lastHskSpawnTime = DateTime.MinValue;
         hskBullets.Clear();
         hskImpacts.Clear();
+
+        // Reset Boss State
+        _showBossWarning = false;
+        _showBossDialogue = false;
+        _bossDialogueFinished = false;
+        _typewriterCts?.Cancel();
+        _announcementCts?.Cancel();
+        _bossPhase = BossPhase.None;
+        _bossHitFlash = false;
+        _showBossLaserBlast = false;
+        _bossWaveAnnouncement = "";
+        _orbitingWords.Clear();
+        _bossProgressUnits = 0;
+        _bossWarmupWordsShotInPhase = 0;
         
         // Save progress & max unlocked
         try
@@ -2069,13 +2454,448 @@ else if (selectedGameForInfo == "hsk-shooter")
         hskTimer?.Dispose();
         hskTimer = new Timer(OnHskTick, null, 100, 100);
 
+        if (_isBossStage)
+        {
+            _isBgmOn = true;
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.startBossBgm?.()");
+            _ = StartBossIntro();
+        }
+        else
+        {
+            if (_isBgmOn)
+            {
+                _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.startBgm()");
+            }
+            _ = FocusHskInput();
+        }
+        StateHasChanged();
+    }
+
+    private string GetBossPhaseName()
+    {
+        return _bossPhase switch
+        {
+            BossPhase.Warmup1 => $"DẠO ĐẦU ({_bossWarmupWordsShotInPhase}/{BossWarmup1Target} TỪ)",
+            BossPhase.Wave1_Minions => "ĐỢT 1: TRIỆU HỒI TIỂU QUÁI",
+            BossPhase.Warmup2 => $"DẠO GIỮA 1 ({_bossWarmupWordsShotInPhase}/{BossWarmup2Target} TỪ)",
+            BossPhase.Wave2_Charging => $"ĐỢT 2: TỤ LỰC QUẢ CẦU HẮC ÁM ({_bossChargeCycle}/3)",
+            BossPhase.Warmup3 => $"DẠO GIỮA 2 ({_bossWarmupWordsShotInPhase}/{BossWarmup3Target} TỪ)",
+            BossPhase.Wave3_FinalSurge => "ĐỢT 3: TỔNG LỰC HẮC ÁM (CUỐI CÙNG)",
+            BossPhase.Defeated => "MA VƯƠNG ĐÃ BỊ TIÊU DIỆT!",
+            _ => "CHIẾN ĐẤU TRÙM CUỐI"
+        };
+    }
+
+    private (string Zh, string Vn) GetBossDialoguePair(string level)
+    {
+        var norm = level?.Replace(" ", "").ToUpperInvariant() ?? "HSK1";
+        return norm switch
+        {
+            "HSK1" => ("凡人，凭你这点微末道行，也敢挑战本座？受死吧！", 
+                       "Ha ha ha! Ngươi nghĩ chỉ thuộc vài từ chào hỏi cơ bản là đủ sức khiêu chiến Ma Vương ta sao? Đỉnh Tháp HSK 1 này sẽ là nơi chôn vùi sự ngây thơ của ngươi!"),
+            "HSK2" => ("很好，就让本座看看，你能撑过几招！", 
+                       "Khá khen cho ngươi đã vượt qua bao chông gai! Nhưng vốn từ HSK 2 ít ỏi của ngươi liệu có phá vỡ được Ma Pháp Trận Hán Tự của bản vương không?! Hãy đỡ lấy!"),
+            "HSK3" => ("汉字魔域，绝非凡人可以踏足之地！", 
+                       "Ngươi tiến bộ nhanh hơn ta tưởng! Nhưng ở lãnh địa HSK 3 này, ngữ pháp và hàng trăm từ vựng phức tạp sẽ hóa thành xiềng xích nghiền nát ý chí của ngươi!"),
+            "HSK4" => ("狂妄的蝼蚁，在真正的力量面前颤抖吧！", 
+                       "Dám đặt chân đến tầng HSK 4 khiêu chiến Ma Vương ta? Ngươi có đủ tự tin và phản xạ trước cơn cuồng phong bão táp chữ Hán chuẩn bị trút xuống đầu ngươi không?!"),
+            "HSK5" => ("天地玄黄，唯我独尊！受死！", 
+                       "Thực lực của ngươi quả nhiên kinh thế hãi tục! Nhưng đây là cảnh giới HSK 5 - ranh giới giữa cao thủ uyên bác và kẻ chiến bại chỉ cách nhau nửa nhịp thở!"),
+            "HSK6" => ("绝顶之上，神鬼皆惊！出招吧！", 
+                       "Tuyệt đỉnh vô song! Ngươi là học giả đầu tiên bước lên đỉnh HSK 6 diện kiến Ma Vương. Hãy dốc toàn bộ tinh hoa học vấn để chứng minh ngươi xứng đáng là Bậc Thầy Hán Ngữ!"),
+            _ => ("凡人，在汉字魔王面前颤抖吧！", 
+                  "Ha ha ha! Lũ phàm nhân dám bước vào cấm địa Hán Tự của ta sao? Hãy chuẩn bị đón nhận cơn thịnh nộ hủy diệt của Ma Vương!")
+        };
+    }
+
+    private void CastBossSkill(string chineseName, string vietnameseName, bool isUltimate = false)
+    {
+        _bossSkillChinese = chineseName;
+        _bossSkillVietnamese = vietnameseName;
+        _showBossSkillBanner = true;
+        _skillBannerCts?.Cancel();
+        _skillBannerCts = new CancellationTokenSource();
+        var token = _skillBannerCts.Token;
+
+        try
+        {
+            double pitch = isUltimate ? 0.92 : 0.95;
+            double rate = isUltimate ? 0.94 : 0.96;
+            _ = JS.InvokeVoidAsync("eval", $"window.WordleSfx?.bossSpeak?.('{chineseName.Replace("'", "\\'")}', {{ isSkill: true, pitch: {pitch.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)}, rate: {rate.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)} }})");
+        }
+        catch { }
+
+        _ = Task.Delay(3800, token).ContinueWith(t =>
+        {
+            if (!t.IsCanceled)
+            {
+                _showBossSkillBanner = false;
+                InvokeAsync(StateHasChanged);
+            }
+        });
+        StateHasChanged();
+    }
+
+    private void BossTaunt(string chineseText, string vietnameseText)
+    {
+        _bossTauntChinese = chineseText;
+        _bossTauntVietnamese = vietnameseText;
+        _showBossTaunt = true;
+        _tauntCts?.Cancel();
+        _tauntCts = new CancellationTokenSource();
+        var token = _tauntCts.Token;
+
+        try
+        {
+            _ = JS.InvokeVoidAsync("eval", $"window.WordleSfx?.bossSpeak?.('{chineseText.Replace("'", "\\'")}', {{ isSkill: false, pitch: 0.95, rate: 0.98 }})");
+        }
+        catch { }
+
+        _ = Task.Delay(4200, token).ContinueWith(t =>
+        {
+            if (!t.IsCanceled)
+            {
+                _showBossTaunt = false;
+                InvokeAsync(StateHasChanged);
+            }
+        });
+        StateHasChanged();
+    }
+
+    private async Task StartBossIntro()
+    {
+        _bossPhase = BossPhase.Warning;
+        _showBossWarning = true;
+        StateHasChanged();
+
         if (_isBgmOn)
         {
-            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.startBgm()");
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm(); window.WordleSfx?.startBossBgm?.();");
         }
 
+        try 
+        { 
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.bossWarningSiren?.()"); 
+        } 
+        catch { }
+
+        await Task.Delay(2600);
+        _showBossWarning = false;
+        StartBossDialogue();
+    }
+
+    private void StartBossDialogue()
+    {
+        _bossPhase = BossPhase.Dialogue;
+        _showBossDialogue = true;
+        _bossDialogueFinished = false;
+        var (zh, vn) = GetBossDialoguePair(hskShooterSelectedLevel);
+        _displayedBossDialogueZh = zh;
+        _fullBossDialogue = vn;
+        _displayedBossDialogue = "";
+        StateHasChanged();
+
+        try 
+        { 
+            _ = JS.InvokeVoidAsync("eval", $"window.WordleSfx?.bossSpeak?.('{zh.Replace("'", "\\'")}', {{ isSkill: false, pitch: 0.95, rate: 0.96 }})"); 
+        } 
+        catch { }
+
+        _typewriterCts?.Cancel();
+        _typewriterCts = new CancellationTokenSource();
+        var token = _typewriterCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            foreach (char c in _fullBossDialogue)
+            {
+                if (token.IsCancellationRequested) break;
+                _displayedBossDialogue += c;
+                await InvokeAsync(StateHasChanged);
+                await Task.Delay(25, token);
+            }
+            _bossDialogueFinished = true;
+            await InvokeAsync(StateHasChanged);
+        }, token);
+    }
+
+    private void AdvanceBossDialogue()
+    {
+        if (!_bossDialogueFinished)
+        {
+            _typewriterCts?.Cancel();
+            _displayedBossDialogue = _fullBossDialogue;
+            _bossDialogueFinished = true;
+            StateHasChanged();
+        }
+        else
+        {
+            _showBossDialogue = false;
+            StartBossWarmup1();
+        }
+    }
+
+    private void ShowBossAnnouncement(string text)
+    {
+        _bossWaveAnnouncement = text;
+        _announcementCts?.Cancel();
+        _announcementCts = new CancellationTokenSource();
+        var token = _announcementCts.Token;
+        StateHasChanged();
+
+        _ = Task.Delay(2800, token).ContinueWith(t =>
+        {
+            if (!t.IsCanceled)
+            {
+                _bossWaveAnnouncement = "";
+                InvokeAsync(StateHasChanged);
+            }
+        });
+    }
+
+    private void StartBossWarmup1()
+    {
+        _bossPhase = BossPhase.Warmup1;
+        _bossWarmupWordsShotInPhase = 0;
+        hskActiveWords.Clear();
+        _lastHskSpawnTime = DateTime.UtcNow.AddSeconds(-2);
+        ShowBossAnnouncement($"DẠO ĐẦU: KHỞI ĐỘNG CHIẾN TRƯỜNG ({BossWarmup1Target} TỪ)!");
         _ = FocusHskInput();
         StateHasChanged();
+    }
+
+    private void StartBossWave1()
+    {
+        _bossPhase = BossPhase.Wave1_Minions;
+        hskActiveWords.Clear();
+        CastBossSkill("暗黑魔灵，全军突击！", "ÁM HẮC MA LINH · TOÀN QUÂN ĐỘT KÍCH!");
+        ShowBossAnnouncement("ĐỢT 1: MA VƯƠNG TRIỆU HỒI TIỂU QUÁI! 😈");
+        try { _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.damageHit?.()"); } catch { }
+
+        int minionCount = BossWave1MinionsCount;
+        var now = DateTime.UtcNow;
+        for (int i = 0; i < minionCount; i++)
+        {
+            var vocab = GetNextOrRandomVocab();
+            double x = 14.0 + (i * (72.0 / Math.Max(1, minionCount - 1))) + (hskRng.NextDouble() * 4.0 - 2.0);
+            x = Math.Clamp(x, 14.0, 86.0);
+
+            hskActiveWords.Add(new FallingWord
+            {
+                Vocab = vocab,
+                SpawnTime = now.AddSeconds(i * 0.9),
+                FallDurationSec = 13.0,
+                XPercent = x,
+                IsMinion = true
+            });
+        }
+        _ = FocusHskInput();
+        StateHasChanged();
+    }
+
+    private void StartBossWarmup2()
+    {
+        _bossPhase = BossPhase.Warmup2;
+        _bossWarmupWordsShotInPhase = 0;
+        hskActiveWords.Clear();
+        _lastHskSpawnTime = DateTime.UtcNow.AddSeconds(-2);
+        ShowBossAnnouncement($"DẠO GIỮA 1: TIẾP CHIẾN ({BossWarmup2Target} TỪ)!");
+        _ = FocusHskInput();
+        StateHasChanged();
+    }
+
+    private void StartBossWave2()
+    {
+        _bossPhase = BossPhase.Wave2_Charging;
+        _bossChargeCycle = 1;
+        StartNextChargeCycle();
+    }
+
+    private void StartNextChargeCycle()
+    {
+        _bossChargeTimer = BossChargeMaxTime;
+        _orbitingWords.Clear();
+        CastBossSkill("九幽魔光，聚气成煞！", $"CỬU U MA QUANG · TỤ KHÍ THÀNH SÁT ({_bossChargeCycle}/3)!");
+        ShowBossAnnouncement($"ĐỢT 2: MA VƯƠNG TỤ LỰC QUẢ CẦU HẮC ÁM ({_bossChargeCycle}/3)! ⚡");
+        try { _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.bossSkillCharge?.(8.0)"); } catch { }
+
+        for (int i = 0; i < 3; i++)
+        {
+            var v = GetNextOrRandomVocab();
+            _orbitingWords.Add(new OrbitingWord
+            {
+                Id = i,
+                Vocab = v,
+                AngleDeg = i * 120.0,
+                RadiusPx = 130.0,
+                IsDestroyed = false
+            });
+        }
+        _ = FocusHskInput();
+        StateHasChanged();
+    }
+
+    private void StartBossWarmup3()
+    {
+        _bossPhase = BossPhase.Warmup3;
+        _bossWarmupWordsShotInPhase = 0;
+        hskActiveWords.Clear();
+        _lastHskSpawnTime = DateTime.UtcNow.AddSeconds(-2);
+        ShowBossAnnouncement($"DẠO GIỮA 2: BÃO TÁP TRƯỚC TỔNG LỰC ({BossWarmup3Target} TỪ)!");
+        _ = FocusHskInput();
+        StateHasChanged();
+    }
+
+    private void StartBossWave3()
+    {
+        _bossPhase = BossPhase.Wave3_FinalSurge;
+        hskActiveWords.Clear();
+        _orbitingWords.Clear();
+        CastBossSkill("终极绝杀·万字天崩！", "CHUNG CỰC TUYỆT SÁT · VẠN TỰ THIÊN BĂNG!", isUltimate: true);
+        ShowBossAnnouncement("ĐỢT 3 (CUỐI CÙNG): TỔNG LỰC HẮC ÁM! 🔥");
+        try { _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.bossSkillCharge?.(8.0)"); } catch { }
+
+        var now = DateTime.UtcNow;
+        double[] xPositions = new[] { 16.0, 33.0, 50.0, 67.0, 84.0 };
+        for (int i = 0; i < 5; i++)
+        {
+            var v = GetNextOrRandomVocab();
+            hskActiveWords.Add(new FallingWord
+            {
+                Vocab = v,
+                SpawnTime = now,
+                FallDurationSec = 14.0,
+                XPercent = xPositions[i],
+                IsMinion = true
+            });
+        }
+
+        _bossChargeTimer = BossChargeMaxTime;
+        for (int i = 0; i < 3; i++)
+        {
+            var v = GetNextOrRandomVocab();
+            _orbitingWords.Add(new OrbitingWord
+            {
+                Id = i,
+                Vocab = v,
+                AngleDeg = i * 120.0,
+                RadiusPx = 130.0,
+                IsDestroyed = false
+            });
+        }
+        _ = FocusHskInput();
+        StateHasChanged();
+    }
+
+    private void HandleBossChargeFailed()
+    {
+        _showBossLaserBlast = true;
+        hskLives = Math.Max(0, hskLives - 2);
+        hskCombo = 0;
+        TriggerDamageFlash();
+        CastBossSkill("极灭魔光炮！受死吧！", "CỰC DIỆT MA QUANG PHÁO! CHẾT ĐI!");
+        try { _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.bossLaserBlast?.()"); } catch { }
+
+        int remainingWords = _orbitingWords.Count(w => !w.IsDestroyed);
+        _bossProgressUnits = Math.Min(BossTotalUnits, _bossProgressUnits + remainingWords);
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(700);
+            await InvokeAsync(() =>
+            {
+                _showBossLaserBlast = false;
+                _orbitingWords.Clear();
+
+                if (hskLives <= 0)
+                {
+                    hskShooterState = HskGameState.GameOver;
+                    hskTimer?.Dispose();
+                    _countdownTimer?.Dispose();
+                    try { _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBossBgm?.(); window.WordleSfx?.stopBgm?.(); window.WordleSfx?.lose?.()"); } catch { }
+                    _ = FocusHskOverlay();
+                }
+                else
+                {
+                    if (_bossPhase == BossPhase.Wave2_Charging)
+                    {
+                        if (_bossChargeCycle < 3)
+                        {
+                            _bossChargeCycle++;
+                            _ = Task.Delay(500).ContinueWith(t => InvokeAsync(StartNextChargeCycle));
+                        }
+                        else
+                        {
+                            // Đã xong 3 lần tụ lực Đợt 2 -> Sang Dạo 3
+                            _ = Task.Delay(500).ContinueWith(t => InvokeAsync(StartBossWarmup3));
+                        }
+                    }
+                    else if (_bossPhase == BossPhase.Wave3_FinalSurge)
+                    {
+                        CheckWave3Completion();
+                    }
+                }
+                StateHasChanged();
+            });
+        });
+    }
+
+    private void CheckWave3Completion()
+    {
+        if (_bossPhase != BossPhase.Wave3_FinalSurge) return;
+
+        bool allMinionsCleared = hskActiveWords.Count(w => !w.IsDestroyed) == 0;
+        bool allOrbitsCleared = _orbitingWords.Count == 0 || _orbitingWords.All(w => w.IsDestroyed);
+
+        if (allMinionsCleared && allOrbitsCleared)
+        {
+            _bossProgressUnits = BossTotalUnits;
+            DefeatBoss();
+        }
+    }
+
+    private void DefeatBoss()
+    {
+        _bossPhase = BossPhase.Defeated;
+        _bossHitFlash = true;
+        _orbitingWords.Clear();
+        try { _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBossBgm?.(); window.WordleSfx?.bossDefeatedExplosion?.()"); } catch { }
+        BossTaunt("不可能... 汉字奥义，竟被你全参透了... 啊啊啊！", "Không thể nào... Áo nghĩa Hán tự... lại bị ngươi lĩnh hội toàn bộ... A a a!");
+        ShowBossAnnouncement("CHIẾN THẮNG! MA VƯƠNG HÁN TỰ ĐÃ BỊ TIÊU DIỆT! 🏆");
+        try { _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.win?.()"); } catch { }
+
+        _ = Task.Delay(2000).ContinueWith(_ =>
+        {
+            InvokeAsync(() =>
+            {
+                _bossHitFlash = false;
+                TriggerStageComplete();
+            });
+        });
+    }
+
+    private HskVocabularyItem GetNextOrRandomVocab()
+    {
+        if (hskSpawnIndex < _currentStageWords.Count)
+        {
+            return _currentStageWords[hskSpawnIndex++];
+        }
+        if (_currentStageWords.Count > 0)
+        {
+            return _currentStageWords[hskRng.Next(_currentStageWords.Count)];
+        }
+        if (hskVocabPool.Count > 0)
+        {
+            return hskVocabPool[hskRng.Next(hskVocabPool.Count)];
+        }
+        return new HskVocabularyItem { Hanzi = "王", Pinyin = "wáng", Meaning = "Vua / Trùm" };
+    }
+
+    private bool IsHskTargeted(OrbitingWord word)
+    {
+        if (string.IsNullOrWhiteSpace(hskInputValue)) return false;
+        var normalized = NormalizePinyin(hskInputValue);
+        return NormalizePinyin(word.Vocab.Pinyin).StartsWith(normalized, StringComparison.Ordinal);
     }
 
     private void TriggerStageComplete()
@@ -2154,6 +2974,13 @@ else if (selectedGameForInfo == "hsk-shooter")
         {
             var now = DateTime.UtcNow;
 
+            // Nếu đang trong hoạt cảnh cảnh báo hoặc hội thoại của Boss, tạm hoãn cập nhật
+            if (_isBossStage && (_bossPhase == BossPhase.Warning || _bossPhase == BossPhase.Dialogue || _bossPhase == BossPhase.None || _bossPhase == BossPhase.Defeated))
+            {
+                return;
+            }
+
+            // 1. Quét các từ/quái đang rơi chạm đáy
             for (int i = hskActiveWords.Count - 1; i >= 0; i--)
             {
                 var w = hskActiveWords[i];
@@ -2173,30 +3000,233 @@ else if (selectedGameForInfo == "hsk-shooter")
                         hskShooterState = HskGameState.GameOver;
                         hskTimer?.Dispose();
                         _countdownTimer?.Dispose();
-                        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.lose()");
+                        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBossBgm?.(); window.WordleSfx?.stopBgm?.(); window.WordleSfx?.lose?.()");
                         StateHasChanged();
                         _ = FocusHskOverlay();
                         return;
                     }
+
+                    if (_isBossStage)
+                    {
+                        if (_bossPhase == BossPhase.Warmup1)
+                        {
+                            _bossWarmupWordsShotInPhase++;
+                            _bossProgressUnits = Math.Min(BossTotalUnits, _bossProgressUnits + 1);
+                            if (_bossWarmupWordsShotInPhase >= BossWarmup1Target && hskActiveWords.Count(aw => !aw.IsDestroyed) == 0)
+                            {
+                                StartBossWave1();
+                                return;
+                            }
+                        }
+                        else if (_bossPhase == BossPhase.Wave1_Minions)
+                        {
+                            _bossProgressUnits = Math.Min(BossTotalUnits, _bossProgressUnits + 1);
+                            if (hskActiveWords.Count(aw => !aw.IsDestroyed) == 0)
+                            {
+                                StartBossWarmup2();
+                                return;
+                            }
+                        }
+                        else if (_bossPhase == BossPhase.Warmup2)
+                        {
+                            _bossWarmupWordsShotInPhase++;
+                            _bossProgressUnits = Math.Min(BossTotalUnits, _bossProgressUnits + 1);
+                            if (_bossWarmupWordsShotInPhase >= BossWarmup2Target && hskActiveWords.Count(aw => !aw.IsDestroyed) == 0)
+                            {
+                                StartBossWave2();
+                                return;
+                            }
+                        }
+                        else if (_bossPhase == BossPhase.Warmup3)
+                        {
+                            _bossWarmupWordsShotInPhase++;
+                            _bossProgressUnits = Math.Min(BossTotalUnits, _bossProgressUnits + 1);
+                            if (_bossWarmupWordsShotInPhase >= BossWarmup3Target && hskActiveWords.Count(aw => !aw.IsDestroyed) == 0)
+                            {
+                                StartBossWave3();
+                                return;
+                            }
+                        }
+                        else if (_bossPhase == BossPhase.Wave3_FinalSurge)
+                        {
+                            _bossProgressUnits = Math.Min(BossTotalUnits, _bossProgressUnits + 1);
+                            CheckWave3Completion();
+                        }
+                    }
                 }
             }
 
-            // Kiểm tra hoàn thành tầng
+            // 2. Logic điều khiển các pha của Boss Tầng Cuối
+            if (_isBossStage)
+            {
+                if (_bossPhase == BossPhase.Warmup1)
+                {
+                    if (_bossWarmupWordsShotInPhase >= BossWarmup1Target && hskActiveWords.Count(w => !w.IsDestroyed) == 0)
+                    {
+                        StartBossWave1();
+                        return;
+                    }
+
+                    int warmupActive = hskActiveWords.Count(w => !w.IsDestroyed);
+                    int remainingToSpawn = BossWarmup1Target - _bossWarmupWordsShotInPhase - warmupActive;
+                    if (warmupActive < 2 && remainingToSpawn > 0)
+                    {
+                        var elapsed = (now - _lastHskSpawnTime).TotalSeconds;
+                        if (elapsed >= 1.6)
+                        {
+                            var vocab = GetNextOrRandomVocab();
+                            _lastHskSpawnTime = now;
+                            hskActiveWords.Add(new FallingWord
+                            {
+                                Vocab = vocab,
+                                SpawnTime = now,
+                                FallDurationSec = 11.0,
+                                XPercent = 20 + hskRng.NextDouble() * 60
+                            });
+                        }
+                    }
+                }
+                else if (_bossPhase == BossPhase.Wave1_Minions)
+                {
+                    if (hskActiveWords.Count(w => !w.IsDestroyed) == 0)
+                    {
+                        try { _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.bossWaveCleared?.()"); } catch { }
+                        BossTaunt("哼，灭了我的小卒？好戏才刚刚开始！", "Hừ, diệt được lũ tiểu tốt của ta sao? Kịch hay mới chỉ bắt đầu!");
+                        StartBossWarmup2();
+                        return;
+                    }
+                }
+                else if (_bossPhase == BossPhase.Warmup2)
+                {
+                    if (_bossWarmupWordsShotInPhase >= BossWarmup2Target && hskActiveWords.Count(w => !w.IsDestroyed) == 0)
+                    {
+                        StartBossWave2();
+                        return;
+                    }
+
+                    int warmupActive = hskActiveWords.Count(w => !w.IsDestroyed);
+                    int remainingToSpawn = BossWarmup2Target - _bossWarmupWordsShotInPhase - warmupActive;
+                    if (warmupActive < 2 && remainingToSpawn > 0)
+                    {
+                        var elapsed = (now - _lastHskSpawnTime).TotalSeconds;
+                        if (elapsed >= 1.5)
+                        {
+                            var vocab = GetNextOrRandomVocab();
+                            _lastHskSpawnTime = now;
+                            hskActiveWords.Add(new FallingWord
+                            {
+                                Vocab = vocab,
+                                SpawnTime = now,
+                                FallDurationSec = 10.5,
+                                XPercent = 20 + hskRng.NextDouble() * 60
+                            });
+                        }
+                    }
+                }
+                else if (_bossPhase == BossPhase.Wave2_Charging)
+                {
+                    _bossChargeTimer = Math.Max(0, _bossChargeTimer - 0.1);
+                    foreach (var ow in _orbitingWords)
+                    {
+                        ow.AngleDeg = (ow.AngleDeg + 1.8) % 360.0;
+                    }
+
+                    if (_orbitingWords.All(w => w.IsDestroyed))
+                    {
+                        _orbitingWords.Clear();
+                        _bossHitFlash = true;
+                        try { _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.bossChargeBroken?.()"); } catch { }
+                        BossTaunt("可恶！竟敢破本座的魔光！", "Đáng ghét! Dám phá ma quang của bản tọa!");
+                        _ = Task.Delay(400).ContinueWith(t =>
+                        {
+                            _bossHitFlash = false;
+                            InvokeAsync(StateHasChanged);
+                        });
+
+                        if (_bossChargeCycle < 3)
+                        {
+                            _bossChargeCycle++;
+                            _ = Task.Delay(700).ContinueWith(t => InvokeAsync(StartNextChargeCycle));
+                        }
+                        else
+                        {
+                            // Đã xong 3 lần tụ lực Đợt 2 -> Sang Dạo 3
+                            try { _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.bossWaveCleared?.()"); } catch { }
+                            BossTaunt("狂妄凡人，休得放肆！", "Phàm nhân ngông cuồng, chớ có càn rỡ!");
+                            _ = Task.Delay(800).ContinueWith(t => InvokeAsync(StartBossWarmup3));
+                        }
+                    }
+                    else if (_bossChargeTimer <= 0)
+                    {
+                        HandleBossChargeFailed();
+                    }
+                }
+                else if (_bossPhase == BossPhase.Warmup3)
+                {
+                    if (_bossWarmupWordsShotInPhase >= BossWarmup3Target && hskActiveWords.Count(w => !w.IsDestroyed) == 0)
+                    {
+                        StartBossWave3();
+                        return;
+                    }
+
+                    int warmupActive = hskActiveWords.Count(w => !w.IsDestroyed);
+                    int remainingToSpawn = BossWarmup3Target - _bossWarmupWordsShotInPhase - warmupActive;
+                    if (warmupActive < 2 && remainingToSpawn > 0)
+                    {
+                        var elapsed = (now - _lastHskSpawnTime).TotalSeconds;
+                        if (elapsed >= 1.4)
+                        {
+                            var vocab = GetNextOrRandomVocab();
+                            _lastHskSpawnTime = now;
+                            hskActiveWords.Add(new FallingWord
+                            {
+                                Vocab = vocab,
+                                SpawnTime = now,
+                                FallDurationSec = 10.0,
+                                XPercent = 18 + hskRng.NextDouble() * 64
+                            });
+                        }
+                    }
+                }
+                else if (_bossPhase == BossPhase.Wave3_FinalSurge)
+                {
+                    if (_orbitingWords.Any(w => !w.IsDestroyed))
+                    {
+                        _bossChargeTimer = Math.Max(0, _bossChargeTimer - 0.1);
+                        foreach (var ow in _orbitingWords)
+                        {
+                            ow.AngleDeg = (ow.AngleDeg + 1.8) % 360.0;
+                        }
+
+                        if (_orbitingWords.All(w => w.IsDestroyed))
+                        {
+                            _orbitingWords.Clear();
+                            _bossHitFlash = true;
+                            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.bulletHit()");
+                            _ = Task.Delay(400).ContinueWith(_ =>
+                            {
+                                _bossHitFlash = false;
+                                InvokeAsync(StateHasChanged);
+                            });
+                            CheckWave3Completion();
+                        }
+                        else if (_bossChargeTimer <= 0)
+                        {
+                            HandleBossChargeFailed();
+                        }
+                    }
+                }
+
+                StateHasChanged();
+                return;
+            }
+
+            // 3. Logic tầng thường (Stage 1 đến _totalStages - 2)
             if (hskSpawnIndex >= _currentStageWords.Count && hskActiveWords.Count(w => !w.IsDestroyed) == 0)
             {
                 TriggerStageComplete();
                 return;
             }
-
-            // =========================================================================
-            // TỐC ĐỘ CỰC DỄ VÀ RA LẦN LƯỢT ĐÚNG ĐỘ KHÓ BÀN:
-            // Tầng 1 - 2 (Cực dễ): Ra đúng 1 từ duy nhất, rơi cực chậm (15s)
-            // Tầng 3 - 4 (Dễ vừa): 1-2 từ (11-13s)
-            // Tầng 5 - 6 (Trung bình): 2 từ (9-10s)
-            // Tầng 7+ (Khó): 2-3 từ (7-8s)
-            // Tầng Boss: 3-4 từ (5.5s)
-            // =========================================================================
-            bool isBoss = _currentStageIndex == _totalStages - 1;
 
             int maxConcurrent = _currentStageIndex switch
             {
@@ -2205,7 +3235,7 @@ else if (selectedGameForInfo == "hsk-shooter")
                 2 => 1,       // Tầng 3: 1 từ
                 3 or 4 => 2,  // Tầng 4 - 5: tối đa 2 từ
                 5 or 6 => 2,  // Tầng 6 - 7: tối đa 2 từ
-                _ => isBoss ? 4 : 3
+                _ => 3
             };
 
             double baseFallSec = _currentStageIndex switch
@@ -2217,7 +3247,7 @@ else if (selectedGameForInfo == "hsk-shooter")
                 4 => 9.5,     // Tầng 5: 9.5 giây
                 5 => 8.5,     // Tầng 6: 8.5 giây
                 6 => 7.5,     // Tầng 7: 7.5 giây
-                _ => isBoss ? 5.5 : 6.5
+                _ => 6.5
             };
 
             double minSpawnIntervalSec = _currentStageIndex switch
@@ -2333,6 +3363,33 @@ else if (selectedGameForInfo == "hsk-shooter")
         if (!isPlayingHskShooter) return;
 
         var key = e.Key.ToUpperInvariant();
+
+        // 0. Hoạt cảnh hội thoại Boss đang hiển thị -> Space / Enter để chạy nhanh hoặc tiếp tục
+        if (_showBossDialogue)
+        {
+            if (key == "ENTER" || key == " " || key == "SPACE")
+            {
+                AdvanceBossDialogue();
+                return;
+            }
+            if (key == "ESCAPE" || e.Code == "Escape")
+            {
+                CloseHskShooterGame();
+                return;
+            }
+            return;
+        }
+
+        // Cảnh báo ruy băng Hazard Boss đang chiếu
+        if (_showBossWarning)
+        {
+            if (key == "ESCAPE" || e.Code == "Escape")
+            {
+                CloseHskShooterGame();
+                return;
+            }
+            return;
+        }
 
         // 0. Bản đồ tầng đang mở -> Esc để đóng, Enter/Space/3 để tiếp tục chơi
         if (_showStageMap)
@@ -2464,7 +3521,14 @@ else if (selectedGameForInfo == "hsk-shooter")
     {
         try
         {
-            _isBgmOn = await JS.InvokeAsync<bool>("eval", "window.WordleSfx?.toggleBgm() ?? false");
+            if (_isBossStage)
+            {
+                _isBgmOn = await JS.InvokeAsync<bool>("eval", "window.WordleSfx?.toggleBossBgm() ?? false");
+            }
+            else
+            {
+                _isBgmOn = await JS.InvokeAsync<bool>("eval", "window.WordleSfx?.toggleBgm() ?? false");
+            }
             StateHasChanged();
         }
         catch { }
@@ -2476,7 +3540,7 @@ else if (selectedGameForInfo == "hsk-shooter")
         {
             hskShooterState = HskGameState.Paused;
             _hskPauseStartTime = DateTime.UtcNow;
-            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm()");
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm(); window.WordleSfx?.pauseBossBgm?.(); window.WordleSfx?.stopBossCharge?.(); if ('speechSynthesis' in window) window.speechSynthesis.cancel();");
         }
         else if (hskShooterState == HskGameState.Paused)
         {
@@ -2494,7 +3558,14 @@ else if (selectedGameForInfo == "hsk-shooter")
 
             if (_isBgmOn)
             {
-                _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.startBgm()");
+                if (_isBossStage)
+                {
+                    _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.resumeBossBgm?.()");
+                }
+                else
+                {
+                    _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.startBgm()");
+                }
             }
             _ = FocusHskInput();
         }
@@ -2507,12 +3578,14 @@ else if (selectedGameForInfo == "hsk-shooter")
         _countdownTimer?.Dispose();
         _hskPauseStartTime = null;
         _wasPausedByMap = false;
-        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm()");
+        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm(); window.WordleSfx?.stopBossBgm?.(); window.WordleSfx?.stopBossCharge?.(); if ('speechSynthesis' in window) window.speechSynthesis.cancel();");
         hskShooterState = HskGameState.Menu;
         isPlayingHskShooter = false;
         _showStageMap = false;
         _showStageComplete = false;
         _showResumeDialog = false;
+        _showBossSkillBanner = false;
+        _showBossTaunt = false;
         hskBullets.Clear();
         hskImpacts.Clear();
     }
@@ -2527,14 +3600,95 @@ else if (selectedGameForInfo == "hsk-shooter")
     private void TryMatchHskWord()
     {
         if (string.IsNullOrWhiteSpace(hskInputValue) || hskShooterState != HskGameState.Playing || _showStageComplete || _showStageMap) return;
+        if (_showBossWarning || _showBossDialogue) return;
 
         var normalized = NormalizePinyin(hskInputValue);
-        var match = hskActiveWords.FirstOrDefault(w => !w.IsDestroyed && NormalizePinyin(w.Vocab.Pinyin) == normalized);
 
+        // 1. Kiểm tra từ xoay quanh quả cầu ma pháp (Wave 2 & Wave 3) trước tiên
+        if ((_bossPhase == BossPhase.Wave2_Charging || _bossPhase == BossPhase.Wave3_FinalSurge) && _orbitingWords.Any())
+        {
+            var orbitMatch = _orbitingWords.FirstOrDefault(w => !w.IsDestroyed && NormalizePinyin(w.Vocab.Pinyin) == normalized);
+            if (orbitMatch != null)
+            {
+                _ = HandleHskOrbitWordHit(orbitMatch);
+                return;
+            }
+        }
+
+        // 2. Kiểm tra từ rơi và tiểu quái
+        var match = hskActiveWords.FirstOrDefault(w => !w.IsDestroyed && NormalizePinyin(w.Vocab.Pinyin) == normalized);
         if (match != null)
         {
             _ = HandleHskWordHit(match);
         }
+    }
+
+    private async Task HandleHskOrbitWordHit(OrbitingWord match)
+    {
+        hskInputValue = "";
+
+        // Tọa độ mục tiêu của từ xoay
+        double rad = match.AngleDeg * Math.PI / 180.0;
+        double offsetX = Math.Cos(rad) * match.RadiusPx;
+        double offsetY = Math.Sin(rad) * (match.RadiusPx * 0.55);
+        double targetX = Math.Clamp(50.0 + (offsetX / 6.0), 18.0, 82.0);
+        double targetY = Math.Clamp(23.0 + (offsetY / 5.0), 12.0, 38.0);
+
+        var bullet = new ActiveBullet
+        {
+            Id = ++_bulletCounter,
+            StartX = 50.0,
+            StartY = 86.0,
+            TargetX = targetX,
+            TargetY = targetY
+        };
+        hskBullets.Add(bullet);
+        try { await JS.InvokeVoidAsync("eval", "window.WordleSfx?.laserShoot()"); } catch { }
+        StateHasChanged();
+
+        await Task.Delay(160);
+        hskBullets.Remove(bullet);
+        try { await JS.InvokeVoidAsync("eval", "window.WordleSfx?.bulletHit()"); } catch { }
+
+        var impact = new ActiveImpact
+        {
+            Id = ++_impactCounter,
+            X = targetX,
+            Y = targetY
+        };
+        hskImpacts.Add(impact);
+
+        match.IsDestroyed = true;
+        match.HitFlash = true;
+        hskCombo++;
+        int comboBonus = hskCombo >= 2 ? (hskCombo * 8) : 0;
+        hskScore += 25 + comboBonus;
+        hskWordsShot++;
+        hskWordsShotInStage++;
+        _bossProgressUnits = Math.Min(BossTotalUnits, _bossProgressUnits + 1);
+
+        if (hskCombo >= 2)
+        {
+            try { await JS.InvokeVoidAsync("eval", $"window.WordleSfx?.comboSound({hskCombo})"); } catch { }
+        }
+
+        _ = HskSvc.UpdateVocabProgressAsync(match.Vocab.Id, true).ContinueWith(t =>
+        {
+            if (t.Result) hskNewLearned++;
+        });
+
+        StateHasChanged();
+
+        await Task.Delay(260);
+        hskImpacts.Remove(impact);
+        match.HitFlash = false;
+
+        if (_bossPhase == BossPhase.Wave3_FinalSurge)
+        {
+            CheckWave3Completion();
+        }
+
+        StateHasChanged();
     }
 
     private async Task HandleHskWordHit(FallingWord match)
@@ -2580,7 +3734,7 @@ else if (selectedGameForInfo == "hsk-shooter")
         match.IsDestroyed = true;
         hskCombo++;
         int comboBonus = hskCombo >= 2 ? (hskCombo * 5) : 0;
-        hskScore += 10 + comboBonus;
+        hskScore += (match.IsMinion ? 20 : 10) + comboBonus;
         hskWordsShot++;
         hskWordsShotInStage++;
 
@@ -2602,9 +3756,54 @@ else if (selectedGameForInfo == "hsk-shooter")
         hskImpacts.Remove(impact);
         hskActiveWords.Remove(match);
 
-        if (hskSpawnIndex >= _currentStageWords.Count && hskActiveWords.Count(w => !w.IsDestroyed) == 0)
+        if (_isBossStage)
         {
-            TriggerStageComplete();
+            _bossProgressUnits = Math.Min(BossTotalUnits, _bossProgressUnits + 1);
+
+            if (_bossPhase == BossPhase.Warmup1)
+            {
+                _bossWarmupWordsShotInPhase++;
+                if (_bossWarmupWordsShotInPhase >= BossWarmup1Target && hskActiveWords.Count(w => !w.IsDestroyed) == 0)
+                {
+                    _ = Task.Delay(400).ContinueWith(_ => InvokeAsync(StartBossWave1));
+                }
+            }
+            else if (_bossPhase == BossPhase.Wave1_Minions)
+            {
+                if (hskActiveWords.Count(w => !w.IsDestroyed) == 0)
+                {
+                    try { _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.bossWaveCleared?.()"); } catch { }
+                    BossTaunt("哼，灭了我的小卒？好戏才刚刚开始！", "Hừ, diệt được lũ tiểu tốt của ta sao? Kịch hay mới chỉ bắt đầu!");
+                    _ = Task.Delay(500).ContinueWith(_ => InvokeAsync(StartBossWarmup2));
+                }
+            }
+            else if (_bossPhase == BossPhase.Warmup2)
+            {
+                _bossWarmupWordsShotInPhase++;
+                if (_bossWarmupWordsShotInPhase >= BossWarmup2Target && hskActiveWords.Count(w => !w.IsDestroyed) == 0)
+                {
+                    _ = Task.Delay(400).ContinueWith(_ => InvokeAsync(StartBossWave2));
+                }
+            }
+            else if (_bossPhase == BossPhase.Warmup3)
+            {
+                _bossWarmupWordsShotInPhase++;
+                if (_bossWarmupWordsShotInPhase >= BossWarmup3Target && hskActiveWords.Count(w => !w.IsDestroyed) == 0)
+                {
+                    _ = Task.Delay(400).ContinueWith(_ => InvokeAsync(StartBossWave3));
+                }
+            }
+            else if (_bossPhase == BossPhase.Wave3_FinalSurge)
+            {
+                CheckWave3Completion();
+            }
+        }
+        else
+        {
+            if (hskSpawnIndex >= _currentStageWords.Count && hskActiveWords.Count(w => !w.IsDestroyed) == 0)
+            {
+                TriggerStageComplete();
+            }
         }
 
         StateHasChanged();
@@ -2631,6 +3830,11 @@ else if (selectedGameForInfo == "hsk-shooter")
         wordleTimer?.Dispose();
         hskTimer?.Dispose();
         _countdownTimer?.Dispose();
-        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm()");
+        _typewriterCts?.Cancel();
+        _announcementCts?.Cancel();
+        _skillBannerCts?.Cancel();
+        _tauntCts?.Cancel();
+        _missedAlertCts?.Cancel();
+        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm(); window.WordleSfx?.stopBossBgm?.(); window.WordleSfx?.stopBossCharge?.(); if ('speechSynthesis' in window) window.speechSynthesis.cancel();");
     }
 }

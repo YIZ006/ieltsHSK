@@ -184,6 +184,11 @@ public class GrammarStructureService
         return GetApiUrl("api/admin/grammar-structures/template");
     }
 
+    public string GetExportUrl()
+    {
+        return GetApiUrl("api/admin/grammar-structures/export");
+    }
+
     public void InvalidateCache()
     {
         _cache = null;

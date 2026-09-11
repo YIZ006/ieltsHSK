@@ -263,20 +263,39 @@ else
 
         try
         {
-            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-            var user = authState.User;
-            isAdminAuthenticated = user.Identity?.IsAuthenticated == true && user.IsInRole("admin");
-            
-            if (isAdminAuthenticated)
+            // Kiểm tra token riêng của Quản trị viên
+            var adminToken = await AuthService.GetAdminTokenAsync();
+            if (!string.IsNullOrWhiteSpace(adminToken))
             {
-                adminName = user.Identity?.Name 
-                    ?? user.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value 
-                    ?? user.FindFirst("name")?.Value 
-                    ?? user.FindFirst("unique_name")?.Value;
-                adminEmail = user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value 
-                    ?? user.FindFirst("email")?.Value;
+                var claims = CustomAuthStateProvider.ParseClaimsFromJwt(adminToken);
+                var roleClaim = claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role")?.Value;
+                isAdminAuthenticated = string.Equals(roleClaim, "admin", StringComparison.OrdinalIgnoreCase);
+
+                if (isAdminAuthenticated)
+                {
+                    adminName = claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Name || c.Type == "unique_name" || c.Type == "name")?.Value ?? "Quản trị viên";
+                    adminEmail = claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Email || c.Type == "email")?.Value;
+                }
             }
             else
+            {
+                // Fallback nếu phiên làm việc cũ còn trong AuthStateProvider
+                var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+                var user = authState.User;
+                isAdminAuthenticated = user.Identity?.IsAuthenticated == true && (user.IsInRole("admin") || user.IsInRole("Admin"));
+                
+                if (isAdminAuthenticated)
+                {
+                    adminName = user.Identity?.Name 
+                        ?? user.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value 
+                        ?? user.FindFirst("name")?.Value 
+                        ?? user.FindFirst("unique_name")?.Value;
+                    adminEmail = user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value 
+                        ?? user.FindFirst("email")?.Value;
+                }
+            }
+
+            if (!isAdminAuthenticated)
             {
                 adminName = null;
                 adminEmail = null;
@@ -368,7 +387,7 @@ else
 
     private async Task HandleLogout()
     {
-        await AuthService.LogoutAsync();
+        await AuthService.AdminLogoutAsync();
         isAdminAuthenticated = false;
         adminName = null;
         adminEmail = null;

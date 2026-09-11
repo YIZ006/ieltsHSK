@@ -21,7 +21,24 @@ public class AuthHeaderHandler : DelegatingHandler
     {
         try
         {
-            var token = await _localStorage.GetItemAsync<string>("authToken");
+            var path = request.RequestUri?.AbsolutePath?.ToLowerInvariant() ?? "";
+            string? token = null;
+
+            if (path.Contains("/api/admin"))
+            {
+                // Ưu tiên token riêng của Admin
+                token = await _localStorage.GetItemAsync<string>("admin_authToken");
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    token = await _localStorage.GetItemAsync<string>("authToken");
+                }
+            }
+            else
+            {
+                // API học viên dùng token riêng của học viên
+                token = await _localStorage.GetItemAsync<string>("authToken");
+            }
+
             if (!string.IsNullOrWhiteSpace(token))
             {
                 request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);

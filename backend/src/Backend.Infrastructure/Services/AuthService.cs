@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using Google.Apis.Auth;
 using Backend.Application.Abstractions;
+using Backend.Application.Common;
 using Backend.Application.DTOs;
 using Backend.Domain.Entities;
 using Backend.Infrastructure.Persistence;
@@ -16,6 +17,12 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
 {
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
+        // Chống tiêm mã độc (XSS / Script Injection) trong các ô nhập
+        SecuritySanitizer.ValidateSafeText(request.FullName, "Họ và tên");
+        SecuritySanitizer.ValidateSafeText(request.Username, "Tên đăng nhập");
+        SecuritySanitizer.ValidateSafeText(request.Email, "Email");
+        SecuritySanitizer.ValidateSafeText(request.Password, "Mật khẩu");
+
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
         if (await dbContext.Users.AnyAsync(u => u.Email == normalizedEmail, cancellationToken))
@@ -74,6 +81,10 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
+        // Chống tiêm mã độc vào ô đăng nhập
+        SecuritySanitizer.ValidateSafeText(request.UsernameOrEmail, "Tên đăng nhập hoặc Email");
+        SecuritySanitizer.ValidateSafeText(request.Email, "Email");
+
         var input = request.ResolvedUsernameOrEmail.Trim().ToLowerInvariant();
         var user = await dbContext.Users.SingleOrDefaultAsync(
             u => u.Email.ToLower() == input || u.Username.ToLower() == input, 
@@ -89,34 +100,60 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             throw new Exception("Tài khoản bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.");
         }
 
-        string? tempPassword = null;
-        if ((DateTime.UtcNow - user.PasswordChangedAt).TotalDays > 30)
-        {
-            tempPassword = GenerateRandomPassword();
-            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(tempPassword);
-            user.PasswordChangedAt = DateTime.UtcNow;
-        }
-
         user.LastLoginAt = DateTime.UtcNow;
         
         dbContext.UserActivityLogs.Add(new UserActivityLog
         {
             UserId = user.Id,
             Action = "login",
-            Detail = tempPassword != null ? "Password auto-reset due to 30 days policy" : "Normal login"
+            Detail = "Normal login"
         });
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var token = GenerateJwtToken(user, 30);
-        return new AuthResponse(token, user.FullName, user.Email, tempPassword);
+        return new AuthResponse(token, user.FullName, user.Email);
+    }
+
+    public async Task<AuthResponse> AdminLoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
+    {
+        // Chống tiêm mã độc vào ô đăng nhập quản trị
+        SecuritySanitizer.ValidateSafeText(request.UsernameOrEmail, "Tên đăng nhập hoặc Email");
+        SecuritySanitizer.ValidateSafeText(request.Email, "Email");
+
+        var input = request.ResolvedUsernameOrEmail.Trim().ToLowerInvariant();
+        var admin = await dbContext.Admins.SingleOrDefaultAsync(
+            a => a.Email.ToLower() == input || a.Username.ToLower() == input, 
+            cancellationToken);
+        
+        if (admin == null || !BCrypt.Net.BCrypt.Verify(request.Password, admin.PasswordHash))
+        {
+            throw new Exception("Tên đăng nhập / Email hoặc mật khẩu Quản trị viên không đúng.");
+        }
+
+        if (!admin.IsActive)
+        {
+            throw new Exception("Tài khoản Quản trị viên đã bị vô hiệu hóa.");
+        }
+
+        admin.LastLoginAt = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var token = GenerateAdminJwtToken(admin, 30);
+        return new AuthResponse(token, admin.FullName, admin.Email);
     }
 
     public async Task<AuthResponse> LoginWithGoogleAsync(GoogleLoginRequest request, CancellationToken cancellationToken = default)
     {
+        var expectedClientId = configuration["Google:ClientId"];
+        if (string.IsNullOrWhiteSpace(expectedClientId) || expectedClientId == "YOUR_GOOGLE_CLIENT_ID")
+        {
+            expectedClientId = "161879464750-2ssdrim1ltgg2nh7nr5agvrbk52bevih.apps.googleusercontent.com";
+        }
+
         var settings = new GoogleJsonWebSignature.ValidationSettings
         {
-            Audience = new[] { configuration["Google:ClientId"] }
+            Audience = new[] { expectedClientId }
         };
 
         GoogleJsonWebSignature.Payload payload;
@@ -264,7 +301,34 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             new Claim(JwtRegisteredClaimNames.UniqueName, user.FullName),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
             new Claim("level", user.Level ?? "A1"),
-            new Claim(ClaimTypes.Role, string.IsNullOrWhiteSpace(user.Role) ? "user" : user.Role)
+            new Claim(ClaimTypes.Role, "user")
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: jwtSettings["Issuer"],
+            audience: jwtSettings["Audience"],
+            claims: claims,
+            expires: DateTime.UtcNow.AddDays(expireDays),
+            signingCredentials: creds
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    private string GenerateAdminJwtToken(Admin admin, double expireDays = 30)
+    {
+        var jwtSettings = configuration.GetSection("Jwt");
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]!));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, admin.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.UniqueName, admin.FullName),
+            new Claim(JwtRegisteredClaimNames.Email, admin.Email),
+            new Claim("role", string.IsNullOrWhiteSpace(admin.Role) ? "admin" : admin.Role),
+            new Claim(ClaimTypes.Role, string.IsNullOrWhiteSpace(admin.Role) ? "admin" : admin.Role),
+            new Claim("admin_id", admin.Id.ToString())
         };
 
         var token = new JwtSecurityToken(

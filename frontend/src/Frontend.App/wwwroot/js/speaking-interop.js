@@ -33,18 +33,43 @@ window.SpeakingInterop = (() => {
         return constraints;
     }
 
+    function isContextSecure() {
+        return window.isSecureContext || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    }
+
     async function openMicrophone(deviceId) {
         try {
             stopVisualizer();
             stopMediaStream();
+            const secure = isContextSecure();
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                return {
+                    success: false,
+                    error: !secure ? 'InsecureContextError' : 'NotSupportedError',
+                    isInsecureContext: !secure,
+                    hostname: window.location.hostname,
+                    port: window.location.port
+                };
+            }
             mediaStream = await navigator.mediaDevices.getUserMedia({
                 audio: microphoneConstraints(deviceId),
                 video: false
             });
             const track = mediaStream.getAudioTracks()[0];
-            return { success: true, deviceId: track?.getSettings().deviceId || deviceId || '' };
+            return {
+                success: true,
+                deviceId: track?.getSettings().deviceId || deviceId || '',
+                isInsecureContext: false
+            };
         } catch (err) {
-            return { success: false, error: err.name || 'NotReadableError' };
+            const secure = isContextSecure();
+            return {
+                success: false,
+                error: err.name || 'NotReadableError',
+                isInsecureContext: !secure,
+                hostname: window.location.hostname,
+                port: window.location.port
+            };
         }
     }
 
@@ -57,55 +82,137 @@ window.SpeakingInterop = (() => {
     }
 
     async function getMicrophones() {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        let index = 0;
-        return devices
-            .filter(device => device.kind === 'audioinput')
-            .map(device => ({
-                deviceId: device.deviceId,
-                label: device.label || `Microphone ${++index}`
-            }));
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+            return [];
+        }
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            let index = 0;
+            return devices
+                .filter(device => device.kind === 'audioinput')
+                .map(device => ({
+                    deviceId: device.deviceId,
+                    label: device.label || `Microphone ${++index}`
+                }));
+        } catch (e) {
+            console.warn('Cannot enumerate audio devices:', e);
+            return [];
+        }
     }
 
-    function startMicVisualizer(canvasId) {
-        if (!mediaStream) return;
+    function drawEmptyWaveform(canvas) {
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, h / 2);
+        ctx.lineTo(w, h / 2);
+        ctx.stroke();
+    }
+
+    async function startMicVisualizer(canvasId, deviceId) {
+        stopVisualizer();
         waveformCanvas = document.getElementById(canvasId);
-        if (!waveformCanvas) return;
+        if (!waveformCanvas) return false;
 
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(mediaStream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-        const ctx = waveformCanvas.getContext('2d');
-
-        function draw() {
-            animFrameId = requestAnimationFrame(draw);
-            analyser.getByteFrequencyData(dataArray);
-
-            const w = waveformCanvas.width;
-            const h = waveformCanvas.height;
-            ctx.clearRect(0, 0, w, h);
-
-            const barWidth = (w / bufferLength) * 2.5;
-            let x = 0;
-            for (let i = 0; i < bufferLength; i++) {
-                const barH = (dataArray[i] / 255) * h;
-                const r = 232, g = 62, b = 140;
-                ctx.fillStyle = `rgba(${r},${g},${b},0.85)`;
-                ctx.fillRect(x, h - barH, barWidth, barH);
-                x += barWidth + 1;
+        // Auto-connect microphone if not already connected
+        if (!mediaStream || mediaStream.getAudioTracks().length === 0 || mediaStream.getAudioTracks().every(t => t.readyState === 'ended')) {
+            const micRes = await openMicrophone(deviceId);
+            if (!micRes || !micRes.success) {
+                drawEmptyWaveform(waveformCanvas);
+                return false;
             }
         }
-        draw();
+
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(mediaStream);
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.75;
+            source.connect(analyser);
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            const ctx = waveformCanvas.getContext('2d');
+            let idlePhase = 0;
+
+            function draw() {
+                animFrameId = requestAnimationFrame(draw);
+                analyser.getByteFrequencyData(dataArray);
+
+                const w = waveformCanvas.width;
+                const h = waveformCanvas.height;
+                ctx.clearRect(0, 0, w, h);
+
+                let sum = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    sum += dataArray[i];
+                }
+                const avg = sum / bufferLength;
+
+                if (avg < 2) {
+                    // Hiệu ứng sóng nhẹ khi chờ giọng nói (đảm bảo khung không bị trống rỗng)
+                    idlePhase += 0.08;
+                    ctx.strokeStyle = 'rgba(2, 132, 199, 0.45)';
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    const mid = h / 2;
+                    for (let x = 0; x <= w; x += 4) {
+                        const y = mid + Math.sin(x * 0.04 + idlePhase) * 3.5;
+                        if (x === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.stroke();
+                } else {
+                    // Cột sóng âm thanh sống động khi người dùng nói
+                    const barCount = 32;
+                    const barWidth = (w / barCount) - 2;
+                    const step = Math.floor(bufferLength / barCount);
+                    let x = 2;
+
+                    for (let i = 0; i < barCount; i++) {
+                        const val = dataArray[i * step] || 0;
+                        const barH = Math.max(3, (val / 255) * (h - 8));
+                        const grad = ctx.createLinearGradient(0, h, 0, 0);
+                        grad.addColorStop(0, '#0284c7');
+                        grad.addColorStop(1, '#38bdf8');
+                        ctx.fillStyle = grad;
+
+                        const y = (h - barH) / 2;
+                        if (ctx.roundRect) {
+                            ctx.beginPath();
+                            ctx.roundRect(x, y, barWidth, barH, 2);
+                            ctx.fill();
+                        } else {
+                            ctx.fillRect(x, y, barWidth, barH);
+                        }
+                        x += barWidth + 2;
+                    }
+                }
+            }
+            draw();
+            return true;
+        } catch (err) {
+            console.error('startMicVisualizer error:', err);
+            drawEmptyWaveform(waveformCanvas);
+            return false;
+        }
     }
 
     function stopVisualizer() {
-        if (animFrameId) cancelAnimationFrame(animFrameId);
-        if (audioContext) { audioContext.close(); audioContext = null; }
+        if (animFrameId) {
+            cancelAnimationFrame(animFrameId);
+            animFrameId = null;
+        }
+        if (audioContext) {
+            try { audioContext.close(); } catch { }
+            audioContext = null;
+        }
         if (waveformCanvas) {
             const ctx = waveformCanvas.getContext('2d');
             ctx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);

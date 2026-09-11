@@ -1,0 +1,701 @@
+@page "/ielts/grammar"
+@page "/ielts/ngu-phap"
+@layout Frontend.App.Layout.IeltsLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject GrammarStructureService GrammarService
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavManager
+
+<PageTitle>Kho Cấu Trúc Ngữ Pháp IELTS theo Band - ieltsHSK</PageTitle>
+
+<div class="ielts-grammar-page">
+    <!-- Header -->
+    <div class="grammar-header-card">
+        <div class="header-left">
+            <div class="header-icon-badge">
+                <i class="bi bi-diagram-3-fill"></i>
+            </div>
+            <div>
+                <h1 class="grammar-title">Kho Cấu Trúc Ngữ Pháp IELTS theo Band</h1>
+                <p class="grammar-subtitle">Hơn 100+ công thức, mẫu câu nâng cao và cấu trúc ăn điểm Band 7.0 – 8.5+ cho Writing & Speaking.</p>
+            </div>
+        </div>
+        <div class="header-right">
+            @if (isAdmin)
+            {
+                <a href="/portal-hub/grammar" class="btn-admin-link" title="Mở trang Quản trị Cấu trúc & Import Excel">
+                    <i class="bi bi-gear-fill me-1"></i> Quản lý & Import Excel
+                </a>
+            }
+            <div class="view-mode-toggle">
+                <button class="toggle-btn @(viewMode == "cards" ? "active" : "")" @onclick='() => viewMode = "cards"' title="Xem dạng Thẻ (Cards)">
+                    <i class="bi bi-grid-fill"></i>
+                    <span>Dạng Thẻ</span>
+                </button>
+                <button class="toggle-btn @(viewMode == "table" ? "active" : "")" @onclick='() => viewMode = "table"' title="Xem dạng Bảng (Table)">
+                    <i class="bi bi-table"></i>
+                    <span>Dạng Bảng</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats Bar -->
+    <div class="stats-overview-bar">
+        <div class="stat-card">
+            <div class="stat-icon bg-blue"><i class="bi bi-collection-fill"></i></div>
+            <div class="stat-content">
+                <div class="stat-num">@structures.Count</div>
+                <div class="stat-lbl">Tổng Cấu Trúc</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon bg-purple"><i class="bi bi-star-fill"></i></div>
+            <div class="stat-content">
+                <div class="stat-num">@structures.Count(s => s.BandLevel.Contains("7.") || s.BandLevel.Contains("8."))</div>
+                <div class="stat-lbl">Band 7.0 – 8.5+</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon bg-emerald"><i class="bi bi-pen-fill"></i></div>
+            <div class="stat-content">
+                <div class="stat-num">@structures.Count(s => s.Category.Contains("Task 2"))</div>
+                <div class="stat-lbl">Writing Task 2</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon bg-amber"><i class="bi bi-bookmarks-fill"></i></div>
+            <div class="stat-content">
+                <div class="stat-num">@availableTopics.Count</div>
+                <div class="stat-lbl">Chủ Điểm Ngữ Pháp</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="filter-panel-card">
+        <div class="filter-top-row">
+            <div class="search-input-group">
+                <i class="bi bi-search search-icon"></i>
+                <input type="text" 
+                       placeholder="Tìm chủ điểm, công thức, ví dụ... (vd: Hiện tại đơn, Bị động, Điều kiện, Inversion...)" 
+                       @bind="searchKeyword" 
+                       @bind:event="oninput" 
+                       @bind:after="OnSearchInputChanged"
+                       @onfocus="() => showSuggestions = true"
+                       @onblur="HandleSearchBlur" />
+                @if (!string.IsNullOrEmpty(searchKeyword) || selectedTopicFilter != "all")
+                {
+                    <button class="btn-clear-search" @onclick="ClearSearch" title="Xóa tìm kiếm">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                }
+
+                @if (showSuggestions && SuggestedTopics.Any())
+                {
+                    <div class="search-suggestions-dropdown" @onmousedown:preventDefault="true">
+                        <div class="suggestions-header">
+                            <i class="bi bi-lightbulb-fill text-warning me-1"></i>
+                            <span>Gợi ý chủ điểm ngữ pháp:</span>
+                        </div>
+                        <div class="suggestions-list">
+                            @foreach (var topic in SuggestedTopics)
+                            {
+                                var isSel = selectedTopicFilter == topic;
+                                <button type="button" class="suggestion-item @(isSel ? "active" : "")" @onclick="() => SelectSuggestedTopic(topic)">
+                                    <i class="bi bi-bookmark-fill me-2 text-primary"></i>
+                                    <span class="suggestion-text">@topic</span>
+                                    <span class="badge-count ms-auto">@structures.Count(s => s.GrammarTopic == topic) cấu trúc</span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="filter-dropdowns">
+                <div class="dropdown-wrapper">
+                    <select @bind="selectedBandFilter" @bind:after="ApplyFilters">
+                        <option value="all">Mọi Band điểm</option>
+                        <option value="4.0 - 5.0">Band 4.0 - 5.0 (Cơ bản / Nền tảng)</option>
+                        <option value="5.0 - 6.0">Band 5.0 - 6.0 (Cơ bản - Trung cấp)</option>
+                        <option value="5.5 - 6.5">Band 5.5 - 6.5 (Trung cấp)</option>
+                        <option value="6.5 - 7.0">Band 6.5 - 7.0 (Khá)</option>
+                        <option value="7.0 - 8.0">Band 7.0 - 8.0 (Nâng cao)</option>
+                        <option value="7.5 - 8.5">Band 7.5 - 8.5+ (Xuất sắc)</option>
+                    </select>
+                </div>
+
+                <div class="dropdown-wrapper">
+                    <select @bind="selectedCategoryFilter" @bind:after="ApplyFilters">
+                        <option value="all">Mọi kỹ năng</option>
+                        <option value="General">Nền tảng chung (General)</option>
+                        <option value="Writing Task 1">Writing Task 1</option>
+                        <option value="Writing Task 2">Writing Task 2</option>
+                        <option value="Writing Task 1 & 2">Writing Task 1 & 2</option>
+                        <option value="Speaking">Speaking</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        @if (selectedTopicFilter != "all")
+        {
+            <div class="active-topic-chip-row">
+                <span class="active-topic-chip">
+                    <i class="bi bi-bookmark-check-fill me-1 text-primary"></i> Đang lọc chủ điểm: <strong>@selectedTopicFilter</strong>
+                    <button type="button" class="btn-clear-topic-chip" @onclick='() => SelectSuggestedTopic("all")' title="Bỏ lọc chủ điểm">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </span>
+            </div>
+        }
+
+        @if (availableTopics.Any())
+        {
+            <div class="quick-topic-pills-bar">
+                <span class="pills-label"><i class="bi bi-compass-fill me-1"></i> Gợi ý chủ điểm:</span>
+                <div class="pills-container">
+                    <button type="button" class="quick-pill @(selectedTopicFilter == "all" ? "active" : "")" 
+                            @onclick='() => SelectSuggestedTopic("all")'>
+                        Tất cả (@structures.Count)
+                    </button>
+                    @foreach (var topic in availableTopics.Take(12))
+                    {
+                        var isAct = selectedTopicFilter == topic;
+                        <button type="button" class="quick-pill @(isAct ? "active" : "")" 
+                                @onclick="() => SelectSuggestedTopic(topic)">
+                            @topic
+                        </button>
+                    }
+                    @if (selectedTopicFilter != "all" && !availableTopics.Take(12).Contains(selectedTopicFilter))
+                    {
+                        <button type="button" class="quick-pill active" 
+                                @onclick='() => SelectSuggestedTopic("all")'>
+                            @selectedTopicFilter <i class="bi bi-x ms-1"></i>
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="filter-bottom-info">
+            <span class="result-count">
+                Hiển thị <b>@filteredStructures.Count</b> / @structures.Count cấu trúc
+            </span>
+            @if (HasActiveFilters)
+            {
+                <button class="btn-reset-filters" @onclick="ResetFilters">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Xóa bộ lọc
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Toast Copy Notification -->
+    @if (!string.IsNullOrEmpty(copyToastMessage))
+    {
+        <div class="copy-toast">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            <span>@copyToastMessage</span>
+        </div>
+    }
+
+    <!-- Content State: Loading / Empty / Data -->
+    @if (isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Đang tải kho cấu trúc ngữ pháp IELTS...</p>
+        </div>
+    }
+    else if (filteredStructures.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-icon"><i class="bi bi-journal-x"></i></div>
+            <h3>Không tìm thấy cấu trúc phù hợp</h3>
+            <p class="text-muted">Hãy thử thay đổi từ khóa tìm kiếm hoặc chọn bộ lọc khác.</p>
+            <button class="btn-reset-filters-large" @onclick="ResetFilters">
+                <i class="bi bi-arrow-clockwise me-1"></i> Đặt lại bộ lọc
+            </button>
+        </div>
+    }
+    else if (viewMode == "cards")
+    {
+        <!-- CARDS VIEW -->
+        <div class="cards-grid">
+            @foreach (var item in pagedStructures)
+            {
+                var isExpanded = expandedIds.Contains(item.Id);
+                <div class="grammar-card @(isExpanded ? "expanded" : "")">
+                    <div class="card-header">
+                        <div class="card-badges">
+                            <span class="band-badge @GetBandBadgeClass(item.BandLevel)">
+                                <i class="bi bi-award-fill me-1"></i> Band @item.BandLevel
+                            </span>
+                            <span class="category-badge">
+                                <i class="bi bi-pen me-1"></i> @item.Category
+                            </span>
+                            <span class="code-badge">@item.StructureCode</span>
+                        </div>
+                        <div class="card-topic">
+                            <i class="bi bi-bookmark-star-fill text-warning me-2"></i>
+                            <span>@item.GrammarTopic</span>
+                        </div>
+                    </div>
+
+                    <div class="formula-card">
+                        <div class="formula-top-bar">
+                            <span class="formula-label">
+                                <i class="bi bi-code-slash text-primary me-1"></i> Cấu trúc / Công thức:
+                            </span>
+                            <button class="btn-copy-formula" @onclick="() => CopyToClipboard(item.Formula)" title="Sao chép công thức">
+                                <i class="bi bi-clipboard me-1"></i>
+                                <span>Sao chép</span>
+                            </button>
+                        </div>
+                        <div class="formula-code-box">
+                            <code>@item.Formula</code>
+                        </div>
+                    </div>
+
+                    <div class="usage-card">
+                        <div class="usage-header">
+                            <i class="bi bi-bullseye text-primary me-1"></i>
+                            <span class="usage-title">Mục đích & Hoàn cảnh sử dụng:</span>
+                        </div>
+                        <p class="usage-text">@item.UsageFunction</p>
+                    </div>
+
+                    @if (isExpanded)
+                    {
+                        <div class="card-expanded-details">
+                            @if (!string.IsNullOrWhiteSpace(item.BasicExample))
+                            {
+                                <div class="detail-card basic-card">
+                                    <div class="detail-card-header">
+                                        <i class="bi bi-chat-left-text me-1"></i>
+                                        <span>Ví dụ minh họa:</span>
+                                    </div>
+                                    <div class="detail-card-content basic-text">
+                                        @item.BasicExample
+                                    </div>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(item.CommonMistakes))
+                            {
+                                <div class="detail-card mistake-card">
+                                    <div class="detail-card-header">
+                                        <i class="bi bi-exclamation-octagon-fill me-1"></i>
+                                        <span>Lỗi sai kinh điển cần tránh:</span>
+                                    </div>
+                                    <div class="detail-card-content mistake-text">
+                                        @item.CommonMistakes
+                                    </div>
+                                </div>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(item.PracticeExercise))
+                            {
+                                <div class="detail-card practice-card">
+                                    <div class="detail-card-header">
+                                        <i class="bi bi-pencil-square me-1"></i>
+                                        <span>Bài tập luyện tập viết lại câu:</span>
+                                    </div>
+                                    <div class="detail-card-content practice-text">
+                                        @item.PracticeExercise
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <div class="card-footer">
+                        <button class="btn-toggle-expand @(isExpanded ? "active" : "")" @onclick="() => ToggleExpand(item.Id)">
+                            <span>@(isExpanded ? "Thu gọn chi tiết" : "Xem ví dụ, lỗi sai & bài tập")</span>
+                            <i class="bi @(isExpanded ? "bi-chevron-up" : "bi-chevron-down") ms-1"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <!-- TABLE VIEW -->
+        <div class="table-card">
+            <div class="table-responsive">
+                <table class="grammar-table">
+                    <thead>
+                        <tr>
+                            <th class="th-band">Band & Kỹ năng</th>
+                            <th class="th-topic">Chủ điểm & Công thức</th>
+                            <th class="th-usage">Chức năng biểu đạt</th>
+                            <th class="th-example">Ví dụ & Dịch nghĩa</th>
+                            <th class="th-action text-end">Chi tiết</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in pagedStructures)
+                        {
+                            var isExpanded = expandedIds.Contains(item.Id);
+                            <tr class="@(isExpanded ? "row-expanded" : "")">
+                                <td class="td-band">
+                                    <span class="structure-code">@item.StructureCode</span>
+                                    <div class="badges-stack">
+                                        <span class="band-badge @GetBandBadgeClass(item.BandLevel)">Band @item.BandLevel</span>
+                                        <span class="category-badge">@item.Category</span>
+                                    </div>
+                                </td>
+                                <td class="td-topic">
+                                    <div class="topic-title">
+                                        <i class="bi bi-bookmark-star-fill text-warning me-1"></i>
+                                        <strong>@item.GrammarTopic</strong>
+                                    </div>
+                                    <div class="table-formula-box">
+                                        <code>@item.Formula</code>
+                                        <button class="btn-copy-mini" @onclick="() => CopyToClipboard(item.Formula)" title="Sao chép công thức">
+                                            <i class="bi bi-clipboard"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                                <td class="td-usage">
+                                    <p class="usage-text">@item.UsageFunction</p>
+                                </td>
+                                <td class="td-example">
+                                    <div class="adv-example-box">
+                                        <span class="adv-text">@item.AdvancedExample</span>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(item.VietnameseMeaning))
+                                    {
+                                        <div class="vn-meaning-box">
+                                            <small class="text-muted">🇻🇳 @item.VietnameseMeaning</small>
+                                        </div>
+                                    }
+                                </td>
+                                <td class="td-action text-end">
+                                    <button class="btn-table-expand @(isExpanded ? "active" : "")" @onclick="() => ToggleExpand(item.Id)" title="Xem chi tiết">
+                                        <i class="bi @(isExpanded ? "bi-chevron-up" : "bi-eye")"></i>
+                                    </button>
+                                </td>
+                            </tr>
+
+                            @if (isExpanded)
+                            {
+                                <tr class="details-row">
+                                    <td colspan="5">
+                                        <div class="details-expanded-pane">
+                                            <div class="details-grid">
+                                                @if (!string.IsNullOrWhiteSpace(item.BasicExample))
+                                                {
+                                                    <div class="detail-box basic-box">
+                                                        <h6><i class="bi bi-chat-left-text text-muted me-1"></i> Ví dụ cơ bản:</h6>
+                                                        <p class="text-muted">@item.BasicExample</p>
+                                                    </div>
+                                                }
+                                                <div class="detail-box adv-box">
+                                                    <h6><i class="bi bi-card-text text-primary me-1"></i> Ví dụ câu học thuật:</h6>
+                                                    <p><b>@item.AdvancedExample</b></p>
+                                                </div>
+                                            </div>
+
+                                            <div class="details-meta-grid mt-2">
+                                                @if (!string.IsNullOrWhiteSpace(item.CommonMistakes))
+                                                {
+                                                    <div class="detail-meta-item mistake">
+                                                        <strong><i class="bi bi-exclamation-octagon-fill text-danger me-1"></i> Lỗi sai kinh điển:</strong>
+                                                        <span>@item.CommonMistakes</span>
+                                                    </div>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(item.PracticeExercise))
+                                                {
+                                                    <div class="detail-meta-item practice">
+                                                        <strong><i class="bi bi-pencil-square text-warning me-1"></i> Bài tập viết lại câu:</strong>
+                                                        <span>@item.PracticeExercise</span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <!-- Pagination Toolbar -->
+    @if (filteredStructures.Count > 0)
+    {
+        <div class="pagination-card">
+            <div class="pagination-info">
+                <span>Trang @currentPage / @totalPages</span>
+                <span class="text-muted">(@filteredStructures.Count kết quả)</span>
+            </div>
+
+            <div class="pagination-controls">
+                <select class="page-size-select" @bind="pageSize" @bind:after="OnPageSizeChanged">
+                    <option value="12">12 mục/trang</option>
+                    <option value="24">24 mục/trang</option>
+                    <option value="48">48 mục/trang</option>
+                </select>
+
+                <div class="page-buttons">
+                    <button class="btn-page" disabled="@(currentPage <= 1)" @onclick="() => ChangePage(1)" title="Trang đầu">
+                        <i class="bi bi-chevron-double-left"></i>
+                    </button>
+                    <button class="btn-page" disabled="@(currentPage <= 1)" @onclick="() => ChangePage(currentPage - 1)" title="Trang trước">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+
+                    @foreach (var pageNum in GetDisplayPageNumbers())
+                    {
+                        var p = pageNum;
+                        <button class="btn-page @(p == currentPage ? "active" : "")" @onclick="() => ChangePage(p)">
+                            @p
+                        </button>
+                    }
+
+                    <button class="btn-page" disabled="@(currentPage >= totalPages)" @onclick="() => ChangePage(currentPage + 1)" title="Trang sau">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <button class="btn-page" disabled="@(currentPage >= totalPages)" @onclick="() => ChangePage(totalPages)" title="Trang cuối">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<GrammarStructureDto> structures = new();
+    private List<GrammarStructureDto> filteredStructures = new();
+    private HashSet<int> expandedIds = new();
+
+    private bool isLoading = true;
+    private bool isAdmin = false;
+    private string viewMode = "cards"; // "cards" or "table"
+    private string? copyToastMessage;
+
+    // Filter properties
+    private string searchKeyword = "";
+    private string selectedBandFilter = "all";
+    private string selectedCategoryFilter = "all";
+    private string selectedTopicFilter = "all";
+    private List<string> availableTopics = new();
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 12;
+    private int totalPages => Math.Max(1, (int)Math.Ceiling(filteredStructures.Count / (double)pageSize));
+    private List<GrammarStructureDto> pagedStructures => filteredStructures.Skip((currentPage - 1) * pageSize).Take(pageSize).ToList();
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(searchKeyword) ||
+        selectedBandFilter != "all" ||
+        selectedCategoryFilter != "all" ||
+        selectedTopicFilter != "all";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckAdminStatus();
+        await LoadStructures();
+    }
+
+    private async Task CheckAdminStatus()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            isAdmin = user.Identity?.IsAuthenticated == true && (user.IsInRole("admin") || user.IsInRole("Admin"));
+        }
+        catch
+        {
+            isAdmin = false;
+        }
+    }
+
+    private async Task LoadStructures()
+    {
+        isLoading = true;
+        try
+        {
+            structures = await GrammarService.GetStructuresAsync();
+            availableTopics = structures
+                .Where(s => !string.IsNullOrWhiteSpace(s.GrammarTopic))
+                .Select(s => s.GrammarTopic)
+                .Distinct()
+                .OrderBy(t => t)
+                .ToList();
+
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[IeltsGrammar] Load error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        var query = structures.AsEnumerable();
+
+        if (selectedBandFilter != "all")
+        {
+            query = query.Where(s => s.BandLevel == selectedBandFilter || s.BandLevel.Contains(selectedBandFilter));
+        }
+
+        if (selectedCategoryFilter != "all")
+        {
+            query = query.Where(s => s.Category == selectedCategoryFilter || s.Category.Contains(selectedCategoryFilter));
+        }
+
+        if (selectedTopicFilter != "all")
+        {
+            query = query.Where(s => s.GrammarTopic == selectedTopicFilter);
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchKeyword))
+        {
+            var k = searchKeyword.Trim().ToLower();
+            query = query.Where(s =>
+                s.StructureCode.ToLower().Contains(k) ||
+                s.GrammarTopic.ToLower().Contains(k) ||
+                s.Formula.ToLower().Contains(k) ||
+                s.UsageFunction.ToLower().Contains(k) ||
+                s.AdvancedExample.ToLower().Contains(k) ||
+                s.VietnameseMeaning.ToLower().Contains(k) ||
+                (!string.IsNullOrEmpty(s.KeyCollocations) && s.KeyCollocations.ToLower().Contains(k)) ||
+                (!string.IsNullOrEmpty(s.Tags) && s.Tags.ToLower().Contains(k))
+            );
+        }
+
+        filteredStructures = query.OrderBy(s => s.DisplayOrder).ThenBy(s => s.Id).ToList();
+        currentPage = 1;
+    }
+
+    private bool showSuggestions = false;
+
+    private IEnumerable<string> SuggestedTopics
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(searchKeyword))
+                return availableTopics.Take(10);
+            var k = searchKeyword.Trim().ToLowerInvariant();
+            return availableTopics.Where(t => t.ToLowerInvariant().Contains(k)).Take(10);
+        }
+    }
+
+    private void SelectSuggestedTopic(string? topic)
+    {
+        selectedTopicFilter = string.IsNullOrWhiteSpace(topic) ? "all" : topic;
+        searchKeyword = "";
+        showSuggestions = false;
+        ApplyFilters();
+    }
+
+    private void OnSearchInputChanged()
+    {
+        showSuggestions = true;
+        ApplyFilters();
+    }
+
+    private async Task HandleSearchBlur()
+    {
+        // Small delay to allow clicking on suggestion item before closing
+        await Task.Delay(200);
+        showSuggestions = false;
+    }
+
+    private void ClearSearch()
+    {
+        searchKeyword = "";
+        selectedTopicFilter = "all";
+        showSuggestions = false;
+        ApplyFilters();
+    }
+
+    private void ResetFilters()
+    {
+        searchKeyword = "";
+        selectedBandFilter = "all";
+        selectedCategoryFilter = "all";
+        selectedTopicFilter = "all";
+        showSuggestions = false;
+        ApplyFilters();
+    }
+
+    private void ToggleExpand(int id)
+    {
+        if (expandedIds.Contains(id))
+            expandedIds.Remove(id);
+        else
+            expandedIds.Add(id);
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            copyToastMessage = "Đã sao chép công thức vào clipboard!";
+            StateHasChanged();
+            _ = Task.Delay(2500).ContinueWith(_ =>
+            {
+                copyToastMessage = null;
+                InvokeAsync(StateHasChanged);
+            });
+        }
+        catch
+        {
+            copyToastMessage = "Không thể tự động sao chép.";
+        }
+    }
+
+    private string GetBandBadgeClass(string band)
+    {
+        if (band.Contains("7.") || band.Contains("8.")) return "band-high";
+        if (band.Contains("6.")) return "band-mid";
+        return "band-standard";
+    }
+
+    private void ChangePage(int page)
+    {
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+    }
+
+    private void OnPageSizeChanged()
+    {
+        currentPage = 1;
+    }
+
+    private List<int> GetDisplayPageNumbers()
+    {
+        var list = new List<int>();
+        int total = totalPages;
+        int cur = currentPage;
+
+        int start = Math.Max(1, cur - 2);
+        int end = Math.Min(total, cur + 2);
+
+        for (int i = start; i <= end; i++)
+        {
+            list.Add(i);
+        }
+        return list;
+    }
+}

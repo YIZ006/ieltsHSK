@@ -1,6 +1,12 @@
-# Kế hoạch Triển Khai Redis Cache Server cho Backend & Tài Liệu Deploy
+# KẾ HOẠCH KỸ THUẬT
 
-Tài liệu này mô tả chi tiết phương án tích hợp **Redis Distributed Cache** vào tầng Backend Web API (.NET 10 & PostgreSQL), thiết lập cơ chế **Cache-Aside**, cơ chế **Resilient Fallback** (tự động fallback về In-Memory / Direct DB nếu Redis offline) và hướng dẫn triển khai thực tế khi deploy.
+- **Ngày thực hiện**: 02/09/2026
+- **Tên báo cáo**: KẾ HOẠCH TRIỂN KHAI REDIS CACHE SERVER CHO BACKEND VÀ TÀI LIỆU DEPLOY
+- **Người viết**: YIZ006 (https://github.com/YIZ006)
+
+---
+
+Tài liệu này mô tả chi tiết phương án tích hợp **Redis Distributed Cache** vào tầng Backend Web API (.NET & PostgreSQL), thiết lập cơ chế **Cache-Aside**, cơ chế **Resilient Fallback** (tự động fallback về In-Memory / Direct DB nếu Redis offline) và hướng dẫn triển khai thực tế khi deploy.
 
 ---
 
