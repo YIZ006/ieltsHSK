@@ -324,6 +324,31 @@ public static class DependencyInjection
                         last_saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     );
                     CREATE INDEX IF NOT EXISTS ix_exam_checkpoints_lookup ON exam_checkpoints (user_identifier, skill, exam_url);
+
+                    -- 10. Bảng notifications & user_notification_reads
+                    CREATE TABLE IF NOT EXISTS notifications (
+                        id SERIAL PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        message TEXT NOT NULL,
+                        type TEXT NOT NULL DEFAULT 'system',
+                        icon TEXT NOT NULL DEFAULT 'bi-bell-fill',
+                        target_url TEXT,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        created_by_admin TEXT,
+                        is_broadcast BOOLEAN NOT NULL DEFAULT TRUE,
+                        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE
+                    );
+                    CREATE INDEX IF NOT EXISTS ix_notifications_created_at ON notifications (created_at DESC);
+
+                    CREATE TABLE IF NOT EXISTS user_notification_reads (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        notification_id INTEGER NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+                        read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        CONSTRAINT uq_user_notif_read UNIQUE (user_id, notification_id)
+                    );
+                    CREATE INDEX IF NOT EXISTS ix_user_notif_reads_user ON user_notification_reads (user_id);
                 END $$;
 
                 -- Tạo bảng admins riêng biệt không chung với users
@@ -382,6 +407,50 @@ public static class DependencyInjection
                 sampleAdmin.IsActive = true;
             }
             await dbContext.SaveChangesAsync();
+
+            // 2. Seed thông báo mẫu nếu bảng notifications chưa có dữ liệu
+            if (!await dbContext.Notifications.AnyAsync())
+            {
+                dbContext.Notifications.AddRange(
+                    new Notification
+                    {
+                        Title = "Chào mừng bạn đến với ieltsHSK!",
+                        Message = "Chúc bạn có những giờ học tập và luyện thi hiệu quả với hệ thống đề thi chuẩn IELTS, TOEIC và HSK.",
+                        Type = "system",
+                        Icon = "bi-stars",
+                        TargetUrl = "/",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedByAdmin = "Hệ thống",
+                        IsBroadcast = true,
+                        IsActive = true
+                    },
+                    new Notification
+                    {
+                        Title = "Bộ đề thi TOEIC ETS mới đã sẵn sàng",
+                        Message = "Luyện thi trọn bộ Listening & Reading chuẩn format quốc tế với đồng hồ bấm giờ và chấm điểm tự động.",
+                        Type = "exam",
+                        Icon = "bi-journal-check",
+                        TargetUrl = "/toeic/test",
+                        CreatedAt = DateTime.UtcNow.AddMinutes(-30),
+                        CreatedByAdmin = "Admin",
+                        IsBroadcast = true,
+                        IsActive = true
+                    },
+                    new Notification
+                    {
+                        Title = "Huy hiệu & Thành tích trong Trang cá nhân",
+                        Message = "Tính năng theo dõi tiến độ và huy hiệu đã được tích hợp trực tiếp vào hồ sơ học viên.",
+                        Type = "update",
+                        Icon = "bi-trophy-fill",
+                        TargetUrl = "",
+                        CreatedAt = DateTime.UtcNow.AddHours(-2),
+                        CreatedByAdmin = "Admin",
+                        IsBroadcast = true,
+                        IsActive = true
+                    }
+                );
+                await dbContext.SaveChangesAsync();
+            }
 
             // Kiểm tra nhanh: Nếu LearningSections đã tồn tại, các bảng khởi tạo ban đầu khác đã đầy đủ
             bool alreadySeeded = await dbContext.LearningSections.AnyAsync();

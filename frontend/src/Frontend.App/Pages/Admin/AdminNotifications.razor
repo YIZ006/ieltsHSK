@@ -1,0 +1,640 @@
+@page "/portal-hub/notifications"
+@page "/admin/notifications"
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject NotificationService NotifSvc
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+
+<PageTitle>Quản lý Thông báo - Admin Hub</PageTitle>
+
+<div class="admin-notif-page">
+    <!-- Top Header -->
+    <div class="page-header">
+        <div class="header-left">
+            <div class="header-icon-badge">
+                <i class="bi bi-bell-fill"></i>
+            </div>
+            <div>
+                <h1 class="page-title">Quản lý Thông báo Người dùng</h1>
+                <p class="page-subtitle">Tạo và điều phối thông báo hệ thống, cập nhật đề thi, sự kiện và nhắc nhở học viên.</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="btn-refresh" @onclick="LoadDataAsync" disabled="@isLoading" title="Tải lại danh sách">
+                <i class="bi bi-arrow-clockwise @(isLoading ? "spin-icon" : "")"></i>
+                <span>Làm mới</span>
+            </button>
+            <button class="btn-primary-action" @onclick="OpenCreateModal">
+                <i class="bi bi-plus-lg"></i>
+                <span>Tạo Thông Báo Mới</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Feedback Alerts -->
+    @if (!string.IsNullOrEmpty(feedbackMessage))
+    {
+        <div class="alert @(isFeedbackSuccess ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+            <i class="bi @(isFeedbackSuccess ? "bi-check-circle-fill text-success" : "bi-exclamation-triangle-fill text-danger") me-2"></i>
+            <span>@feedbackMessage</span>
+            <button type="button" class="btn-close" @onclick="() => feedbackMessage = null"></button>
+        </div>
+    }
+
+    <!-- Quick Stats Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon total"><i class="bi bi-bell-fill"></i></div>
+            <div class="stat-content">
+                <span class="stat-label">Tổng thông báo</span>
+                <h3 class="stat-number">@notifications.Count</h3>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon active"><i class="bi bi-broadcast-pin"></i></div>
+            <div class="stat-content">
+                <span class="stat-label">Đang hiển thị</span>
+                <h3 class="stat-number">@notifications.Count(n => n.IsActive)</h3>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon broadcast"><i class="bi bi-globe2"></i></div>
+            <div class="stat-content">
+                <span class="stat-label">Toàn hệ thống</span>
+                <h3 class="stat-number">@notifications.Count(n => n.IsBroadcast)</h3>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon exam"><i class="bi bi-journal-text"></i></div>
+            <div class="stat-content">
+                <span class="stat-label">Đề thi & Luyện tập</span>
+                <h3 class="stat-number">@notifications.Count(n => n.Type == "exam")</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="toolbar-card">
+        <div class="filter-tabs">
+            <button class="filter-tab-btn @(selectedTypeFilter == "all" ? "active" : "")" @onclick='() => selectedTypeFilter = "all"'>
+                Tất cả <span class="tab-badge">@notifications.Count</span>
+            </button>
+            <button class="filter-tab-btn @(selectedTypeFilter == "system" ? "active" : "")" @onclick='() => selectedTypeFilter = "system"'>
+                Hệ thống <span class="tab-badge">@notifications.Count(n => n.Type == "system")</span>
+            </button>
+            <button class="filter-tab-btn @(selectedTypeFilter == "exam" ? "active" : "")" @onclick='() => selectedTypeFilter = "exam"'>
+                Đề thi <span class="tab-badge">@notifications.Count(n => n.Type == "exam")</span>
+            </button>
+            <button class="filter-tab-btn @(selectedTypeFilter == "update" ? "active" : "")" @onclick='() => selectedTypeFilter = "update"'>
+                Cập nhật <span class="tab-badge">@notifications.Count(n => n.Type == "update")</span>
+            </button>
+            <button class="filter-tab-btn @(selectedTypeFilter == "reminder" ? "active" : "")" @onclick='() => selectedTypeFilter = "reminder"'>
+                Nhắc nhở <span class="tab-badge">@notifications.Count(n => n.Type == "reminder")</span>
+            </button>
+        </div>
+
+        <div class="search-box">
+            <i class="bi bi-search search-icon"></i>
+            <input type="text" class="search-input" placeholder="Tìm kiếm tiêu đề, nội dung, đường dẫn..." 
+                   @bind="searchQuery" @bind:event="oninput" />
+            @if (!string.IsNullOrWhiteSpace(searchQuery))
+            {
+                <button class="search-clear-btn" @onclick='() => searchQuery = ""'>
+                    <i class="bi bi-x-circle-fill"></i>
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Data Table Card -->
+    <div class="table-container">
+        @if (isLoading)
+        {
+            <div class="table-loading">
+                <div class="spinner-border text-primary" role="status"></div>
+                <span>Đang tải dữ liệu thông báo...</span>
+            </div>
+        }
+        else if (FilteredNotifications.Count == 0)
+        {
+            <div class="table-empty">
+                <div class="empty-icon"><i class="bi bi-bell-slash"></i></div>
+                <h4>Không tìm thấy thông báo nào</h4>
+                <p>Thử tìm kiếm với từ khóa khác hoặc tạo thông báo mới.</p>
+                <button class="btn-primary-action" @onclick="OpenCreateModal">
+                    <i class="bi bi-plus-lg"></i> Tạo Thông Báo Đầu Tiên
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;">Icon</th>
+                            <th>Tiêu đề & Nội dung</th>
+                            <th style="width: 130px;">Phân loại</th>
+                            <th style="width: 140px;">Đối tượng</th>
+                            <th style="width: 160px;">Đường dẫn (URL)</th>
+                            <th style="width: 120px;" class="text-center">Kích hoạt</th>
+                            <th style="width: 140px;">Ngày tạo</th>
+                            <th style="width: 110px;" class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var n in FilteredNotifications)
+                        {
+                            <tr class="@(!n.IsActive ? "row-inactive" : "")">
+                                <td>
+                                    <div class="table-icon-wrap icon-@n.Type">
+                                        <i class="bi @(string.IsNullOrWhiteSpace(n.Icon) ? "bi-bell-fill" : n.Icon)"></i>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="table-notif-title">@n.Title</div>
+                                    <div class="table-notif-message">@n.Message</div>
+                                </td>
+                                <td>
+                                    <span class="type-pill type-pill-@n.Type">
+                                        @GetTypeLabel(n.Type)
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (n.IsBroadcast)
+                                    {
+                                        <span class="badge-broadcast"><i class="bi bi-globe me-1"></i> Tất cả học viên</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-targeted"><i class="bi bi-person me-1"></i> Cá nhân</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(n.TargetUrl))
+                                    {
+                                        <a href="@n.TargetUrl" class="table-url-link" target="_blank" title="@n.TargetUrl">
+                                            <i class="bi bi-link-45deg"></i>
+                                            <span>@n.TargetUrl</span>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">—</span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <div class="form-check form-switch d-inline-block">
+                                        <input class="form-check-input switch-toggle" type="checkbox" 
+                                               checked="@n.IsActive" 
+                                               @onchange="() => ToggleActiveAsync(n)" />
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="table-date">@n.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                                </td>
+                                <td class="text-end">
+                                    <div class="actions-group">
+                                        <button class="action-btn edit-btn" @onclick="() => OpenEditModal(n)" title="Chỉnh sửa">
+                                            <i class="bi bi-pencil-fill"></i>
+                                        </button>
+                                        <button class="action-btn delete-btn" @onclick="() => ConfirmDelete(n)" title="Xóa thông báo">
+                                            <i class="bi bi-trash-fill"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modal: Tạo / Chỉnh sửa thông báo -->
+@if (isModalOpen)
+{
+    <div class="modal-backdrop-custom" @onclick="CloseModal"></div>
+    <div class="modal-dialog-custom">
+        <div class="modal-header-custom">
+            <div class="modal-title-wrap">
+                <i class="bi @(isEditMode ? "bi-pencil-square" : "bi-plus-circle-fill") text-primary"></i>
+                <h3 class="modal-title">@(isEditMode ? "Chỉnh sửa thông báo" : "Tạo thông báo mới")</h3>
+            </div>
+            <button type="button" class="btn-close-custom" @onclick="CloseModal">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+
+        <div class="modal-body-custom">
+            <!-- Title -->
+            <div class="form-group mb-3">
+                <label class="form-label required">Tiêu đề thông báo</label>
+                <input type="text" class="form-control" placeholder="Ví dụ: Cập nhật bộ đề thi TOEIC mới..." 
+                       @bind="modalModel.Title" />
+            </div>
+
+            <!-- Message -->
+            <div class="form-group mb-3">
+                <label class="form-label required">Nội dung chi tiết</label>
+                <textarea class="form-control" rows="3" placeholder="Nhập nội dung thông báo gửi đến học viên..."
+                          @bind="modalModel.Message"></textarea>
+            </div>
+
+            <!-- Type & Icon Row -->
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Loại thông báo</label>
+                    <select class="form-select" @bind="modalModel.Type">
+                        <option value="system">Hệ thống (System)</option>
+                        <option value="exam">Đề thi & Khóa học (Exam)</option>
+                        <option value="update">Tính năng mới (Update)</option>
+                        <option value="reminder">Nhắc nhở học tập (Reminder)</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Biểu tượng (Bootstrap Icon)</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi @(string.IsNullOrWhiteSpace(modalModel.Icon) ? "bi-bell-fill" : modalModel.Icon)"></i></span>
+                        <input type="text" class="form-control" placeholder="bi-bell-fill" @bind="modalModel.Icon" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Icon Presets -->
+            <div class="mb-3">
+                <label class="form-label small text-muted">Gợi ý Icon nhanh:</label>
+                <div class="icon-presets-row">
+                    @foreach (var icon in iconPresets)
+                    {
+                        <button type="button" class="icon-preset-btn @(modalModel.Icon == icon ? "selected" : "")" 
+                                @onclick="() => modalModel.Icon = icon" title="@icon">
+                            <i class="bi @icon"></i>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Target URL -->
+            <div class="form-group mb-3">
+                <label class="form-label">Đường dẫn liên kết (Target URL)</label>
+                <input type="text" class="form-control" placeholder="Ví dụ: /toeic, /mock-tests, https://..." 
+                       @bind="modalModel.TargetUrl" />
+                <div class="form-text">Khi người dùng click vào thông báo, hệ thống sẽ tự động chuyển hướng đến link này.</div>
+            </div>
+
+            <!-- Broadcast & Active Toggles -->
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="custom-toggle-card">
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="broadcastSwitch" @bind="modalModel.IsBroadcast" />
+                            <label class="form-check-label fw-bold" for="broadcastSwitch">Gửi toàn hệ thống</label>
+                        </div>
+                        <span class="toggle-card-desc">Tất cả người dùng trên website đều nhận được</span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="custom-toggle-card">
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="activeSwitch" @bind="modalModel.IsActive" />
+                            <label class="form-check-label fw-bold" for="activeSwitch">Kích hoạt ngay</label>
+                        </div>
+                        <span class="toggle-card-desc">Hiển thị trong chuông thông báo của học viên</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer-custom">
+            <button type="button" class="btn btn-secondary" @onclick="CloseModal" disabled="@isSaving">Hủy</button>
+            <button type="button" class="btn btn-primary" @onclick="SaveModalAsync" disabled="@isSaving">
+                @if (isSaving)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    <span>Đang lưu...</span>
+                }
+                else
+                {
+                    <i class="bi bi-check-lg me-1"></i>
+                    <span>@(isEditMode ? "Lưu thay đổi" : "Tạo thông báo")</span>
+                }
+            </button>
+        </div>
+    </div>
+}
+
+<!-- Modal: Xác nhận xóa -->
+@if (deleteTarget != null)
+{
+    <div class="modal-backdrop-custom" @onclick="() => deleteTarget = null"></div>
+    <div class="modal-dialog-custom modal-sm-custom">
+        <div class="modal-header-custom border-0 pb-0">
+            <h4 class="modal-title text-danger"><i class="bi bi-trash-fill me-2"></i> Xác nhận xóa</h4>
+            <button type="button" class="btn-close-custom" @onclick="() => deleteTarget = null">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="modal-body-custom pt-2">
+            <p>Bạn có chắc chắn muốn xóa thông báo: <strong>@deleteTarget.Title</strong>?</p>
+            <p class="text-muted small mb-0">Hành động này không thể hoàn tác.</p>
+        </div>
+        <div class="modal-footer-custom border-0 pt-0">
+            <button type="button" class="btn btn-secondary" @onclick="() => deleteTarget = null" disabled="@isDeleting">Hủy</button>
+            <button type="button" class="btn btn-danger" @onclick="ExecuteDeleteAsync" disabled="@isDeleting">
+                @if (isDeleting)
+                {
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    <span>Đang xóa...</span>
+                }
+                else
+                {
+                    <i class="bi bi-trash-fill me-1"></i>
+                    <span>Xóa Vĩnh Viễn</span>
+                }
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AdminNotificationDto> notifications = new();
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private bool isDeleting = false;
+
+    private string searchQuery = "";
+    private string selectedTypeFilter = "all";
+
+    private string? feedbackMessage;
+    private bool isFeedbackSuccess = true;
+
+    // Modal state
+    private bool isModalOpen = false;
+    private bool isEditMode = false;
+    private int editingId = 0;
+    private AdminNotificationDto? deleteTarget;
+
+    private NotificationFormModel modalModel = new();
+
+    private readonly string[] iconPresets = new[]
+    {
+        "bi-bell-fill",
+        "bi-mortarboard-fill",
+        "bi-trophy-fill",
+        "bi-sparkles",
+        "bi-megaphone-fill",
+        "bi-patch-check-fill",
+        "bi-star-fill",
+        "bi-award-fill",
+        "bi-gift-fill",
+        "bi-journal-check",
+        "bi-lightning-charge-fill",
+        "bi-calendar-event-fill"
+    };
+
+    private class NotificationFormModel
+    {
+        public string Title { get; set; } = "";
+        public string Message { get; set; } = "";
+        public string Type { get; set; } = "system";
+        public string? Icon { get; set; } = "bi-bell-fill";
+        public string? TargetUrl { get; set; }
+        public bool IsBroadcast { get; set; } = true;
+        public bool IsActive { get; set; } = true;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            notifications = await NotifSvc.GetAdminNotificationsAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowFeedback($"Lỗi tải thông báo: {ex.Message}", false);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private List<AdminNotificationDto> FilteredNotifications
+    {
+        get
+        {
+            var query = notifications.AsEnumerable();
+
+            if (selectedTypeFilter != "all")
+            {
+                query = query.Where(n => n.Type.Equals(selectedTypeFilter, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchQuery))
+            {
+                var q = searchQuery.Trim().ToLowerInvariant();
+                query = query.Where(n =>
+                    n.Title.ToLowerInvariant().Contains(q) ||
+                    n.Message.ToLowerInvariant().Contains(q) ||
+                    (n.TargetUrl != null && n.TargetUrl.ToLowerInvariant().Contains(q)));
+            }
+
+            return query.OrderByDescending(n => n.CreatedAt).ToList();
+        }
+    }
+
+    private void OpenCreateModal()
+    {
+        isEditMode = false;
+        editingId = 0;
+        modalModel = new NotificationFormModel
+        {
+            Type = "system",
+            Icon = "bi-bell-fill",
+            IsBroadcast = true,
+            IsActive = true
+        };
+        isModalOpen = true;
+    }
+
+    private void OpenEditModal(AdminNotificationDto n)
+    {
+        isEditMode = true;
+        editingId = n.Id;
+        modalModel = new NotificationFormModel
+        {
+            Title = n.Title,
+            Message = n.Message,
+            Type = n.Type,
+            Icon = n.Icon,
+            TargetUrl = n.TargetUrl,
+            IsBroadcast = n.IsBroadcast,
+            IsActive = n.IsActive
+        };
+        isModalOpen = true;
+    }
+
+    private void CloseModal()
+    {
+        isModalOpen = false;
+    }
+
+    private async Task SaveModalAsync()
+    {
+        if (string.IsNullOrWhiteSpace(modalModel.Title))
+        {
+            ShowFeedback("Vui lòng nhập tiêu đề thông báo!", false);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(modalModel.Message))
+        {
+            ShowFeedback("Vui lòng nhập nội dung thông báo!", false);
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            if (isEditMode)
+            {
+                var req = new UpdateNotificationRequest
+                {
+                    Title = modalModel.Title.Trim(),
+                    Message = modalModel.Message.Trim(),
+                    Type = modalModel.Type,
+                    Icon = string.IsNullOrWhiteSpace(modalModel.Icon) ? "bi-bell-fill" : modalModel.Icon.Trim(),
+                    TargetUrl = modalModel.TargetUrl?.Trim(),
+                    IsBroadcast = modalModel.IsBroadcast,
+                    IsActive = modalModel.IsActive
+                };
+                var success = await NotifSvc.UpdateAsync(editingId, req);
+                if (success)
+                {
+                    ShowFeedback("Cập nhật thông báo thành công!", true);
+                    CloseModal();
+                    await LoadDataAsync();
+                }
+                else
+                {
+                    ShowFeedback("Không thể cập nhật thông báo. Vui lòng kiểm tra lại!", false);
+                }
+            }
+            else
+            {
+                var req = new CreateNotificationRequest
+                {
+                    Title = modalModel.Title.Trim(),
+                    Message = modalModel.Message.Trim(),
+                    Type = modalModel.Type,
+                    Icon = string.IsNullOrWhiteSpace(modalModel.Icon) ? "bi-bell-fill" : modalModel.Icon.Trim(),
+                    TargetUrl = modalModel.TargetUrl?.Trim(),
+                    IsBroadcast = modalModel.IsBroadcast,
+                    IsActive = modalModel.IsActive
+                };
+                var success = await NotifSvc.CreateAsync(req);
+                if (success)
+                {
+                    ShowFeedback("Tạo thông báo mới thành công!", true);
+                    CloseModal();
+                    await LoadDataAsync();
+                }
+                else
+                {
+                    ShowFeedback("Không thể tạo thông báo mới. Vui lòng kiểm tra lại!", false);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowFeedback($"Lỗi xử lý: {ex.Message}", false);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ToggleActiveAsync(AdminNotificationDto n)
+    {
+        var req = new UpdateNotificationRequest
+        {
+            Title = n.Title,
+            Message = n.Message,
+            Type = n.Type,
+            Icon = n.Icon,
+            TargetUrl = n.TargetUrl,
+            IsBroadcast = n.IsBroadcast,
+            IsActive = !n.IsActive
+        };
+
+        var success = await NotifSvc.UpdateAsync(n.Id, req);
+        if (success)
+        {
+            n.IsActive = !n.IsActive;
+            StateHasChanged();
+        }
+        else
+        {
+            ShowFeedback("Không thể thay đổi trạng thái thông báo.", false);
+        }
+    }
+
+    private void ConfirmDelete(AdminNotificationDto n)
+    {
+        deleteTarget = n;
+    }
+
+    private async Task ExecuteDeleteAsync()
+    {
+        if (deleteTarget == null) return;
+        isDeleting = true;
+        try
+        {
+            var success = await NotifSvc.DeleteAsync(deleteTarget.Id);
+            if (success)
+            {
+                ShowFeedback("Đã xóa thông báo thành công!", true);
+                notifications.Remove(deleteTarget);
+                deleteTarget = null;
+            }
+            else
+            {
+                ShowFeedback("Xóa thông báo thất bại.", false);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowFeedback($"Lỗi xóa thông báo: {ex.Message}", false);
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+
+    private void ShowFeedback(string message, bool isSuccess)
+    {
+        feedbackMessage = message;
+        isFeedbackSuccess = isSuccess;
+    }
+
+    private string GetTypeLabel(string type) => type switch
+    {
+        "system" => "Hệ thống",
+        "exam" => "Đề thi",
+        "update" => "Cập nhật",
+        "reminder" => "Nhắc nhở",
+        _ => type
+    };
+}

@@ -96,6 +96,15 @@ builder.Services.AddScoped(sp =>
         BaseAddress = new Uri(backendApiBaseUrl)
     };
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    return new NotificationService(httpClient, localStorage);
+});
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
     var streakService = sp.GetRequiredService<StreakService>();
     return new ToeicStudyTrackerService(localStorage, streakService, httpClient);
 });
