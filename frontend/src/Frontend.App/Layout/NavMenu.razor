@@ -134,7 +134,7 @@
                                         <div class="notif-list">
                                             @foreach (var n in notifications)
                                             {
-                                                <div class="notif-card @(n.IsRead ? "read" : "unread")" @onclick="() => HandleNotificationClick(n)">
+                                                <div class="notif-card @(n.IsRead ? "read" : "unread")" @onclick="() => HandleNotificationCardClick(n)">
                                                     <div class="notif-icon-wrap notif-icon-@n.Type">
                                                         <i class="bi @(string.IsNullOrWhiteSpace(n.Icon) ? "bi-bell-fill" : n.Icon)"></i>
                                                     </div>
@@ -151,7 +151,10 @@
                                                             <span class="notif-time">@GetTimeAgo(n.CreatedAt)</span>
                                                             @if (!string.IsNullOrWhiteSpace(n.TargetUrl))
                                                             {
-                                                                <span class="notif-link-hint">Xem chi tiết <i class="bi bi-arrow-right"></i></span>
+                                                                <button type="button" class="notif-link-btn" @onclick="() => HandleNavigateTarget(n)" @onclick:stopPropagation title="Xem chi tiết liên kết">
+                                                                    <span>Xem chi tiết</span>
+                                                                    <i class="bi bi-arrow-right"></i>
+                                                                </button>
                                                             }
                                                         </div>
                                                     </div>
@@ -525,7 +528,18 @@
         }
     }
 
-    private async Task HandleNotificationClick(NotificationDto notif)
+    private async Task HandleNotificationCardClick(NotificationDto notif)
+    {
+        if (!notif.IsRead)
+        {
+            await NotifSvc.MarkAsReadAsync(notif.Id);
+            notif.IsRead = true;
+            StateHasChanged();
+        }
+        // Không đóng menu và không chuyển trang
+    }
+
+    private async Task HandleNavigateTarget(NotificationDto notif)
     {
         if (!notif.IsRead)
         {
