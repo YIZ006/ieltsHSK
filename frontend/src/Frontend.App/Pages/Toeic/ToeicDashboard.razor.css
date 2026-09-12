@@ -31,6 +31,7 @@
 
 /* ── GRID ── */
 .td-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+.td-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .td-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
 .td-grid-tight { gap: 14px; }
 .td-mb { margin-bottom: 26px; }
@@ -1221,11 +1222,11 @@
 
 /* ── RESPONSIVE ── */
 @media (max-width: 1024px) {
-    .td-grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .td-grid-3, .td-grid-4 { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 768px) {
-    .td-grid-2, .td-grid-4 { grid-template-columns: 1fr; }
+    .td-grid-2, .td-grid-3, .td-grid-4 { grid-template-columns: 1fr; }
     .td-page { padding: 16px 4px 40px; }
     .td-hero { padding: 22px 20px; }
     .td-hero-title { font-size: 22px; }
