@@ -5,7 +5,6 @@ namespace Backend.Infrastructure.Persistence;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    public DbSet<LearningResource> LearningResources { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<Admin> Admins { get; set; }
     public DbSet<UserActivityLog> UserActivityLogs { get; set; }
