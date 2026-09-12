@@ -5,12 +5,9 @@
 @using Blazored.LocalStorage
 @inject MockTestService MockTestService
 @inject ExamSubmissionService Submissions
-@inject StreakService Streak
 @inject ToeicAchievementService Achievements
 @inject IJSRuntime JS
 @inject ILocalStorageService LocalStorage
-@inject ToeicStudyTrackerService Tracker
-@implements IDisposable
 
 <PageTitle>TOEIC Dashboard - ieltsHSK</PageTitle>
 
@@ -27,7 +24,7 @@
     </div>
 
     @* ===== STATS ===== *@
-    <div class="td-grid-4 td-mb">
+    <div class="td-grid-3 td-mb">
         <div class="td-stat td-anim-up td-delay-1">
             <div class="td-stat-icon purple"><i class="bi bi-journal-check"></i></div>
             <div class="td-stat-info">
@@ -54,17 +51,9 @@
                 <div class="td-stat-change up"><i class="bi bi-clock-history"></i> 120 phút</div>
             </div>
         </div>
-        <div class="td-stat blue td-anim-up td-delay-4">
-            <div class="td-stat-icon blue"><i class="bi bi-lightning-charge-fill"></i></div>
-            <div class="td-stat-info">
-                <div class="td-stat-value">@(1240 + bonusXp)</div>
-                <div class="td-stat-label">Điểm XP của bạn</div>
-                <div class="td-stat-change up"><i class="bi bi-trophy-fill"></i> Hạng #5 toàn quốc</div>
-            </div>
-        </div>
     </div>
 
-    @* ===== SKILLS + WORD/STREAK/WEEKLY ===== *@
+    @* ===== SKILLS + VOCAB & RECENT EXAMS ===== *@
     <div class="td-grid-2 td-mb">
         <div>
             <div class="td-section-header">
@@ -155,89 +144,51 @@
                 <div class="td-word-example">"@wordOfDay.Example"</div>
             </div>
 
-            @* Weekly Study Activity Bar Chart *@
-            <div id="progress" class="td-card td-anim-up td-delay-3">
-                <div class="td-section-header td-section-header-tight">
-                    <div class="td-section-title td-section-title-sm">
-                        <i class="bi bi-bar-chart-fill td-accent"></i> Hoạt động tuần này
-                        <span class="td-live-tag" title="Thời gian học được tính và cập nhật trực tiếp theo thời gian thực">
-                            <span class="td-live-pulse-dot"></span> Trực tiếp
-                        </span>
-                    </div>
-                    <span class="td-weekly-total-badge"><i class="bi bi-clock-history"></i> @weeklyTotalMinutes phút</span>
+            @* Recent Submissions *@
+            <div class="td-card td-anim-up td-delay-3">
+                <div class="td-section-header">
+                    <div class="td-section-title">Bài thi gần đây</div>
+                    <a href="/toeic/test" class="td-section-link">Làm bài <i class="bi bi-arrow-right"></i></a>
                 </div>
-                <div class="td-weekly-chart">
-                    @{
-                        var maxMins = Math.Max(60, weeklyActivity.Count > 0 ? weeklyActivity.Max(w => w.Minutes) : 60);
-                    }
-                    @foreach (var d in weeklyActivity)
-                    {
-                        var heightPct = d.IsFuture ? 0 : (d.Minutes == 0 && d.Seconds == 0 ? 0 : Math.Min(100, Math.Max(12, d.Minutes * 100 / maxMins)));
-                        <div class="td-bar-col @(d.IsToday ? "today" : "") @(d.IsFuture ? "future" : "")"
-                             title="@(d.IsFuture ? $"{d.DayLabel} ({d.Date:dd/MM}): Chưa bắt đầu" : $"{d.DayLabel} ({d.Date:dd/MM}): {d.Minutes} phút {d.Seconds % 60}s")">
-                            <span class="td-bar-mins @(d.IsToday ? "td-bar-today" : "")">
-                                @if (d.IsFuture)
+                @if (recentSubmissions.Count == 0)
+                {
+                    <div class="td-empty">
+                        <div class="td-empty-icon">📝</div>
+                        <div class="td-empty-title">Chưa có bài thi nào</div>
+                        <div class="td-empty-sub">Làm bài thi đầu tiên để xem lịch sử và tiến độ tại đây.</div>
+                        <a href="/toeic/test" class="td-btn td-btn-primary td-btn-sm"><i class="bi bi-play-fill"></i> Bắt đầu ngay</a>
+                    </div>
+                }
+                else
+                {
+                    <div class="td-lesson-list">
+                        @foreach (var s in recentSubmissions.Take(5))
+                        {
+                            <div class="td-lesson">
+                                <div class="td-lesson-thumb">📘</div>
+                                <div class="td-lesson-body">
+                                    <div class="td-lesson-title">@s.ExamTitle</div>
+                                    <div class="td-lesson-meta">
+                                        @s.SubmittedAt.ToString("d MMM yyyy, HH:mm", Vi) · @FormatDuration(s.DurationSeconds)@(s.CorrectCount.HasValue && s.TotalQuestions.HasValue ? $" · Đúng {s.CorrectCount}/{s.TotalQuestions} câu" : "")
+                                    </div>
+                                </div>
+                                @if (s.TotalScore.HasValue)
                                 {
-                                    <text>—</text>
-                                }
-                                else if (d.IsToday && d.Minutes == 0)
-                                {
-                                    <text>@(d.Seconds)s</text>
+                                    <div class="td-score-badge @ScoreClass(s.TotalScore)">@s.TotalScore.Value<span>/990</span></div>
                                 }
                                 else
                                 {
-                                    <text>@d.Minutes p</text>
+                                    <div class="td-lesson-badge @(s.TimedOut ? "td-badge-ongoing" : "td-badge-done")">@(s.TimedOut ? "Hết giờ" : "Đã nộp")</div>
                                 }
-                                @if (d.IsToday)
-                                {
-                                    <span class="td-today-dot"></span>
-                                }
-                            </span>
-                            <div class="td-bar-track">
-                                <div class="td-bar-fill @(d.IsToday ? "active" : "")" style="height:@heightPct%;">
-                                    <div class="td-bar-shine"></div>
-                                </div>
                             </div>
-                            <span class="td-bar-day @(d.IsToday ? "td-bar-day-today" : "")">@d.DayLabel</span>
-                        </div>
-                    }
-                </div>
-                <div class="td-weekly-footer">
-                    <span class="td-today-live-status">
-                        <i class="bi bi-lightning-charge-fill" style="color:#10b981;"></i>
-                        Hôm nay: <strong class="td-accent-green">@FormatTodayStudyTime()</strong>
-                    </span>
-                    <span>Tổng: <strong>@weeklyTotalMinutes phút</strong> trong tuần này</span>
-                </div>
-            </div>
-
-            @* Streak calendar *@
-            <div class="td-card td-anim-up td-delay-4">
-                <div class="td-section-header td-section-header-tight">
-                    <div class="td-section-title td-section-title-sm"><i class="bi bi-calendar-check td-accent"></i> Chuỗi học tập</div>
-                    <span class="td-streak-badge">🔥 @streakCount ngày@(bestStreak > streakCount ? $" · Kỷ lục {bestStreak}" : "")</span>
-                </div>
-                <div class="td-streak-grid">
-                    @foreach (var d in StreakDays())
-                    {
-                        <div class="td-streak-day @(d.Done ? "done" : "") @(d.Today ? "today" : "")" title="@d.Date.ToString("dd/MM/yyyy")"></div>
-                    }
-                </div>
-                <div class="td-streak-note">
-                    @if (streakCount > 0)
-                    {
-                        <text><i class="bi bi-lightning-charge"></i> Ô xanh = ngày bạn truy cập ieltsHSK</text>
-                    }
-                    else
-                    {
-                        <text><i class="bi bi-info-circle"></i> Đăng nhập mỗi ngày để bắt đầu chuỗi học tập</text>
-                    }
-                </div>
+                        }
+                    </div>
+                }
             </div>
         </div>
     </div>
 
-    @* ===== QUICK TOPIC QUIZZES & RECENT EXAMS ===== *@
+    @* ===== QUICK TOPIC QUIZZES & EXAM STRUCTURE ===== *@
     <div class="td-grid-2 td-mb">
         @* Quick Quizzes *@
         <div id="quizzes" class="td-card td-anim-up td-delay-2">
@@ -265,46 +216,25 @@
             </div>
         </div>
 
-        @* Recent Submissions *@
+        @* Exam Structure *@
         <div class="td-card td-anim-up td-delay-3">
             <div class="td-section-header">
-                <div class="td-section-title">Bài thi gần đây</div>
-                <a href="/toeic/test" class="td-section-link">Làm bài <i class="bi bi-arrow-right"></i></a>
+                <div class="td-section-title">Cấu trúc đề thi TOEIC chuẩn Quốc Tế</div>
+                <span class="td-total-badge">200 câu · 120 phút</span>
             </div>
-            @if (recentSubmissions.Count == 0)
-            {
-                <div class="td-empty">
-                    <div class="td-empty-icon">📝</div>
-                    <div class="td-empty-title">Chưa có bài thi nào</div>
-                    <div class="td-empty-sub">Làm bài thi đầu tiên để xem lịch sử và tiến độ tại đây.</div>
-                    <a href="/toeic/test" class="td-btn td-btn-primary td-btn-sm"><i class="bi bi-play-fill"></i> Bắt đầu ngay</a>
-                </div>
-            }
-            else
-            {
-                <div class="td-lesson-list">
-                    @foreach (var s in recentSubmissions.Take(5))
-                    {
-                        <div class="td-lesson">
-                            <div class="td-lesson-thumb">📘</div>
-                            <div class="td-lesson-body">
-                                <div class="td-lesson-title">@s.ExamTitle</div>
-                                <div class="td-lesson-meta">
-                                    @s.SubmittedAt.ToString("d MMM yyyy, HH:mm", Vi) · @FormatDuration(s.DurationSeconds)@(s.CorrectCount.HasValue && s.TotalQuestions.HasValue ? $" · Đúng {s.CorrectCount}/{s.TotalQuestions} câu" : "")
-                                </div>
-                            </div>
-                            @if (s.TotalScore.HasValue)
-                            {
-                                <div class="td-score-badge @ScoreClass(s.TotalScore)">@s.TotalScore.Value<span>/990</span></div>
-                            }
-                            else
-                            {
-                                <div class="td-lesson-badge @(s.TimedOut ? "td-badge-ongoing" : "td-badge-done")">@(s.TimedOut ? "Hết giờ" : "Đã nộp")</div>
-                            }
+            <div class="td-lesson-list">
+                @foreach (var p in ExamStructure)
+                {
+                    <div class="td-lesson">
+                        <div class="td-part-num">@p.Number</div>
+                        <div class="td-lesson-body">
+                            <div class="td-lesson-title">@p.Name</div>
+                            <div class="td-lesson-meta">@p.Desc</div>
                         </div>
-                    }
-                </div>
-            }
+                        <div class="td-part-count">@p.Questions câu</div>
+                    </div>
+                }
+            </div>
         </div>
     </div>
 
@@ -379,26 +309,7 @@
         </div>
     </div>
 
-    @* ===== EXAM STRUCTURE ===== *@
-    <div class="td-card td-mb td-anim-up td-delay-3">
-        <div class="td-section-header">
-            <div class="td-section-title">Cấu trúc đề thi TOEIC chuẩn Quốc Tế</div>
-            <span class="td-total-badge">200 câu · 120 phút</span>
-        </div>
-        <div class="td-lesson-list">
-            @foreach (var p in ExamStructure)
-            {
-                <div class="td-lesson">
-                    <div class="td-part-num">@p.Number</div>
-                    <div class="td-lesson-body">
-                        <div class="td-lesson-title">@p.Name</div>
-                        <div class="td-lesson-meta">@p.Desc</div>
-                    </div>
-                    <div class="td-part-count">@p.Questions câu</div>
-                </div>
-            }
-        </div>
-    </div>
+
 
     @* ===== ACHIEVEMENTS ===== *@
     @if (achievements.Count > 0)
@@ -548,7 +459,6 @@
 @code {
     private sealed record ToeicWord(string Word, string Ipa, string Meaning, string Example);
     private sealed record ToeicPartInfo(string Number, string Name, string Desc, int Questions);
-    private sealed record WeeklyActivityDay(string Day, int Minutes, bool IsToday);
     private sealed record LeaderboardUser(int Rank, string Name, int Xp, bool IsSelf);
 
     public sealed class QuizQuestion
@@ -801,12 +711,7 @@
 
     private List<MockTestDto> toeicTests = new();
     private List<IeltsSubmissionRecord> recentSubmissions = new();
-    private HashSet<DateTime> activeDays = new();
-    private int streakCount;
-    private int bestStreak;
     private List<ToeicAchievement> achievements = new();
-    private List<DailyStudyActivity> weeklyActivity = new();
-    private int weeklyTotalMinutes => weeklyActivity.Sum(w => w.Minutes);
 
     private int achUnlocked => achievements.Count(a => a.Unlocked);
     private int achTotal => achievements.Count;
@@ -854,28 +759,12 @@
 
         try
         {
-            activeDays = await Streak.GetActiveDaysAsync();
-            streakCount = await Streak.GetCurrentStreakAsync();
-            bestStreak = await Streak.GetBestStreakAsync();
-        }
-        catch
-        {
-            activeDays = new();
-        }
-
-        try
-        {
             achievements = await Achievements.GetAllAsync();
         }
         catch
         {
             achievements = new();
         }
-
-        // Real-time Weekly Activity & Study Tracker
-        Tracker.StartTracking();
-        Tracker.OnStudyTimeChanged += HandleStudyTimeChanged;
-        await LoadWeeklyActivityAsync();
 
         wordOfDay = ToeicWords[DateTime.Now.DayOfYear % ToeicWords.Count];
 
@@ -1010,7 +899,6 @@
             try
             {
                 await LocalStorage.SetItemAsync("toeic_quiz_bonus_xp", bonusXp);
-                await Tracker.AddSecondsTodayAsync(180); // +3 phút hoạt động học tập
             }
             catch { }
         }
@@ -1031,16 +919,6 @@
         activeQuiz = null;
     }
 
-    private IEnumerable<(DateTime Date, bool Done, bool Today)> StreakDays()
-    {
-        var today = DateTime.Today;
-        for (var i = 34; i >= 0; i--)
-        {
-            var date = today.AddDays(-i);
-            yield return (date, activeDays.Contains(date), date == today);
-        }
-    }
-
     private static string FormatDuration(int seconds)
     {
         if (seconds <= 0) return "—";
@@ -1053,53 +931,6 @@
         >= 500 => "td-score-mid",
         _ => "td-score-low"
     };
-
-    private void HandleStudyTimeChanged()
-    {
-        _ = InvokeAsync(async () =>
-        {
-            if (weeklyActivity == null || weeklyActivity.Count == 0)
-            {
-                await LoadWeeklyActivityAsync();
-            }
-            else
-            {
-                var todaySec = await Tracker.GetSecondsForDateAsync(DateTime.Today);
-                var idx = weeklyActivity.FindIndex(a => a.IsToday);
-                if (idx >= 0)
-                {
-                    var cur = weeklyActivity[idx];
-                    weeklyActivity[idx] = cur with { Seconds = todaySec, Minutes = todaySec / 60 };
-                }
-            }
-            StateHasChanged();
-        });
-    }
-
-    private async Task LoadWeeklyActivityAsync()
-    {
-        try
-        {
-            weeklyActivity = await Tracker.GetCurrentWeekActivityAsync(recentSubmissions);
-        }
-        catch { }
-    }
-
-    private string FormatTodayStudyTime()
-    {
-        var todayAct = weeklyActivity.FirstOrDefault(a => a.IsToday);
-        if (todayAct == null || todayAct.Seconds <= 0) return "0s";
-        var m = todayAct.Seconds / 60;
-        var s = todayAct.Seconds % 60;
-        if (m == 0) return $"{s}s";
-        return $"{m} phút {s}s";
-    }
-
-    public void Dispose()
-    {
-        Tracker.OnStudyTimeChanged -= HandleStudyTimeChanged;
-        Tracker.StopTracking();
-    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
