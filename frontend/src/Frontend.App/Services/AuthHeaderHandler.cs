@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using Blazored.LocalStorage;
 
 namespace Frontend.App.Services;
 
@@ -11,10 +12,12 @@ namespace Frontend.App.Services;
 public class AuthHeaderHandler : DelegatingHandler
 {
     private readonly TokenRefreshService _tokenService;
+    private readonly ILocalStorageService _localStorage;
 
-    public AuthHeaderHandler(TokenRefreshService tokenService)
+    public AuthHeaderHandler(TokenRefreshService tokenService, ILocalStorageService localStorage)
     {
         _tokenService = tokenService;
+        _localStorage = localStorage;
         // Bắt buộc: DelegatingHandler phải có handler bên trong để gửi request đi tiếp
         InnerHandler = new HttpClientHandler();
     }
@@ -50,7 +53,23 @@ public class AuthHeaderHandler : DelegatingHandler
     {
         try
         {
-            var token = await _tokenService.GetAccessTokenAsync();
+            var path = request.RequestUri?.AbsolutePath?.ToLowerInvariant() ?? "";
+            string? token = null;
+
+            if (path.Contains("/api/admin"))
+            {
+                // Ưu tiên token riêng của Admin
+                token = await _localStorage.GetItemAsync<string>("admin_authToken");
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    token = await _tokenService.GetAccessTokenAsync();
+                }
+            }
+            else
+            {
+                // API học viên dùng token qua TokenRefreshService
+                token = await _tokenService.GetAccessTokenAsync();
+            }
             if (!string.IsNullOrWhiteSpace(token))
             {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);

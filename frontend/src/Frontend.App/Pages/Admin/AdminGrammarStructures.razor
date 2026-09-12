@@ -62,7 +62,9 @@
             <div class="filter-group">
                 <select @bind="selectedBandFilter" @bind:after="ApplyFilters" class="filter-select">
                     <option value="all">Tất cả Band</option>
+                    <option value="4.0 - 5.0">Band 4.0 - 5.0 (Cơ bản / Nền tảng)</option>
                     <option value="5.0 - 6.0">Band 5.0 - 6.0</option>
+                    <option value="5.5 - 6.5">Band 5.5 - 6.5</option>
                     <option value="6.5 - 7.0">Band 6.5 - 7.0</option>
                     <option value="7.0 - 8.0">Band 7.0 - 8.0</option>
                     <option value="7.5 - 8.5">Band 7.5 - 8.5</option>
@@ -95,12 +97,16 @@
                 </button>
             }
 
-            <a href="@GrammarService.GetTemplateDownloadUrl()" target="_blank" class="btn-action-outline" title="Tải file Excel mẫu với 12 cột chuẩn">
+            <a href="@GrammarService.GetTemplateDownloadUrl()" target="_blank" class="btn-action-outline" title="Tải file Excel mẫu với 11 cột chuẩn">
                 <i class="bi bi-file-earmark-arrow-down-fill text-primary me-1"></i> Tải mẫu Excel
             </a>
 
+            <a href="@GrammarService.GetExportUrl()" target="_blank" class="btn-action-outline" title="Xuất toàn bộ cấu trúc ra file Excel (.xlsx)">
+                <i class="bi bi-file-earmark-arrow-up-fill text-success me-1"></i> Xuất Excel
+            </a>
+
             <button class="btn-action-outline" @onclick="OpenImportModal" title="Import nhiều file Excel cùng lúc">
-                <i class="bi bi-file-earmark-excel-fill text-success me-1"></i> Import Excel
+                <i class="bi bi-file-earmark-excel-fill text-info me-1"></i> Import Excel
             </button>
 
             <button class="btn-action-primary" @onclick="OpenCreateModal">
@@ -141,7 +147,7 @@
                             <th class="th-code">Mã / Band</th>
                             <th class="th-topic">Chủ điểm & Công thức</th>
                             <th class="th-usage">Chức năng biểu đạt</th>
-                            <th class="th-example">Ví dụ nâng cao (Band 7.5+) & Nghĩa</th>
+                            <th class="th-example">Ví dụ minh họa & Nghĩa</th>
                             <th class="th-action text-end">Thao tác</th>
                         </tr>
                     </thead>
@@ -181,7 +187,7 @@
                                 </td>
                                 <td class="td-example">
                                     <div class="adv-example-box">
-                                        <span class="adv-text">@item.AdvancedExample</span>
+                                        <span class="adv-text">@(!string.IsNullOrWhiteSpace(item.AdvancedExample) ? item.AdvancedExample : item.BasicExample)</span>
                                     </div>
                                     <div class="vn-meaning-box">
                                         <small class="text-muted">🇻🇳 @item.VietnameseMeaning</small>
@@ -208,27 +214,13 @@
                                     <td colspan="6">
                                         <div class="details-expanded-pane">
                                             <div class="details-grid">
-                                                @if (!string.IsNullOrWhiteSpace(item.BasicExample))
-                                                {
-                                                    <div class="detail-box basic-box">
-                                                        <h6><i class="bi bi-arrow-down-circle text-secondary me-1"></i> Câu gốc (Band 5.0 - 5.5):</h6>
-                                                        <p><s>@item.BasicExample</s></p>
-                                                    </div>
-                                                }
                                                 <div class="detail-box adv-box">
-                                                    <h6><i class="bi bi-arrow-up-circle text-primary me-1"></i> Câu nâng cấp (Band 7.5 - 8.5):</h6>
-                                                    <p><b>@item.AdvancedExample</b></p>
+                                                    <h6><i class="bi bi-lightbulb-fill text-primary me-1"></i> Ví dụ minh họa:</h6>
+                                                    <p><b>@(!string.IsNullOrWhiteSpace(item.AdvancedExample) ? item.AdvancedExample : item.BasicExample)</b></p>
                                                 </div>
                                             </div>
 
                                             <div class="details-meta-grid mt-2">
-                                                @if (!string.IsNullOrWhiteSpace(item.KeyCollocations))
-                                                {
-                                                    <div class="detail-meta-item">
-                                                        <strong><i class="bi bi-tags-fill text-info me-1"></i> Từ vựng / Collocations:</strong>
-                                                        <span>@item.KeyCollocations</span>
-                                                    </div>
-                                                }
                                                 @if (!string.IsNullOrWhiteSpace(item.CommonMistakes))
                                                 {
                                                     <div class="detail-meta-item mistake">
@@ -333,13 +325,9 @@
                         <input type="text" class="form-control font-monospace" placeholder="VD: Not only + Aux + S + V, but S + also + V" @bind="editModel.Formula" />
                     </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label">Câu Gốc Band 5.0 - 5.5 (Tùy chọn)</label>
-                        <textarea class="form-control" rows="2" placeholder="VD: Computers help students study and work." @bind="editModel.BasicExample"></textarea>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Câu Nâng Cấp Band 7.5 - 8.5 <span class="text-danger">*</span></label>
-                        <textarea class="form-control" rows="2" placeholder="VD: Not only does technological adoption facilitate learning, but it also..." @bind="editModel.AdvancedExample"></textarea>
+                    <div class="col-12">
+                        <label class="form-label">Ví dụ minh họa <span class="text-danger">*</span></label>
+                        <textarea class="form-control" rows="2" placeholder="VD: He walks to work every morning." @bind="editModel.AdvancedExample"></textarea>
                     </div>
 
                     <div class="col-12">
@@ -347,11 +335,7 @@
                         <input type="text" class="form-control" placeholder="Bản dịch nghĩa chuẩn tiếng Việt" @bind="editModel.VietnameseMeaning" />
                     </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label">Từ Vựng / Collocations Đi Kèm</label>
-                        <input type="text" class="form-control" placeholder="VD: technological adoption, workforce productivity" @bind="editModel.KeyCollocations" />
-                    </div>
-                    <div class="col-md-6">
+                    <div class="col-12">
                         <label class="form-label">Lỗi Thường Gặp</label>
                         <input type="text" class="form-control" placeholder="VD: Quên đảo trợ động từ lên trước chủ ngữ" @bind="editModel.CommonMistakes" />
                     </div>
@@ -407,7 +391,7 @@
                 <div class="upload-dropzone">
                     <i class="bi bi-cloud-arrow-up-fill upload-icon"></i>
                     <p class="mb-1 fw-bold">Kéo thả hoặc chọn nhiều file Excel (.xlsx)</p>
-                    <small class="text-muted">Hỗ trợ tự động map 12 cột chuẩn hoặc tiếng Việt</small>
+                    <small class="text-muted">Hỗ trợ tự động map 11 cột chuẩn hoặc file xuất từ hệ thống</small>
                     <InputFile OnChange="HandleFileSelected" multiple accept=".xlsx" class="dropzone-input" />
                 </div>
 
@@ -698,6 +682,11 @@
         {
             ShowBanner("Vui lòng nhập Mã cấu trúc và Công thức.", false);
             return;
+        }
+
+        if (string.IsNullOrWhiteSpace(editModel.BasicExample))
+        {
+            editModel.BasicExample = editModel.AdvancedExample;
         }
 
         isSaving = true;

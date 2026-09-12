@@ -28,6 +28,25 @@ public sealed class NavigationService(HttpClient http)
             _cache[key] = (DateTime.UtcNow, result);
             return [.. result];
         }
+        catch (HttpRequestException)
+        {
+            try
+            {
+                await Task.Delay(500);
+                var data = await http.GetFromJsonAsync<List<LearningSectionDto>>(url);
+                var result = data ?? new();
+                _cache[key] = (DateTime.UtcNow, result);
+                return [.. result];
+            }
+            catch
+            {
+                if (_cache.TryGetValue(key, out var fallback))
+                {
+                    return [.. fallback.Items];
+                }
+                return new();
+            }
+        }
         catch 
         { 
             if (_cache.TryGetValue(key, out var fallback))

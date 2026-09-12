@@ -7,6 +7,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<LearningResource> LearningResources { get; set; }
     public DbSet<User> Users { get; set; }
+    public DbSet<Admin> Admins { get; set; }
     public DbSet<UserActivityLog> UserActivityLogs { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
     
@@ -41,6 +42,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // Admin
+        modelBuilder.Entity<Admin>(entity =>
+        {
+            entity.ToTable("admins");
+            entity.HasIndex(a => a.Email).IsUnique();
+            entity.HasIndex(a => a.Username).IsUnique();
+        });
 
         // User
         modelBuilder.Entity<User>(entity =>

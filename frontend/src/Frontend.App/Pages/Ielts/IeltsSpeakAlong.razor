@@ -484,18 +484,99 @@
 <!-- Modal Audio & Mic Test -->
 @if (showAudioTestModal)
 {
-    <div class="audio-modal-overlay">
-        <div class="audio-modal-card">
+    <div class="audio-modal-overlay" @onclick="CloseAudioTestModal">
+        <div class="audio-modal-card" @onclick:stopPropagation>
             <div class="audio-modal-header">
-                <h3>Kiểm tra Micro & Âm thanh</h3>
+                <div class="audio-modal-title">
+                    <i class="bi bi-mic-fill text-primary"></i>
+                    <div>
+                        <h3>Kiểm tra Micro & Âm thanh</h3>
+                        <p class="audio-modal-sub">Đảm bảo tai nghe và microphone thu âm rõ nét trước khi luyện nói</p>
+                    </div>
+                </div>
                 <button class="audio-modal-close" @onclick="CloseAudioTestModal">×</button>
             </div>
             <div class="audio-modal-body">
-                <p>Thử nói vào micro:</p>
-                <canvas id="shadowing-waveform" class="waveform-canvas" width="460" height="60"></canvas>
+                <!-- Step 1: Chọn & Test Micro -->
+                <div class="test-step-card mb-3">
+                    <div class="step-badge-title">
+                        <i class="bi bi-mic text-primary"></i>
+                        <span>Bước 1: Kiểm tra Microphone</span>
+                    </div>
+
+                    @if (microphones.Count > 0)
+                    {
+                        <div class="mic-select-row mb-2">
+                            <select class="custom-select-device" value="@selectedMicrophoneId" @onchange="OnMicrophoneChanged">
+                                @foreach (var m in microphones)
+                                {
+                                    <option value="@m.DeviceId">@m.Label</option>
+                                }
+                            </select>
+                            <button class="btn-refresh-devices" @onclick="RefreshMicrophonesList" title="Làm mới danh sách Micro">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                    }
+
+                    <div class="waveform-box">
+                        <div class="waveform-header">
+                            <div class="waveform-status-text">
+                                @if (isConnectingMic)
+                                {
+                                    <span class="spinner-border spinner-border-sm text-primary me-1" role="status"></span>
+                                    <span>Đang kết nối microphone...</span>
+                                }
+                                else if (isMicReady)
+                                {
+                                    <span class="mic-pulse-dot"></span>
+                                    <span class="text-success fw-bold">Microphone đang hoạt động — Hãy thử nói để thấy sóng âm nhảy!</span>
+                                }
+                                else if (micError)
+                                {
+                                    <span class="text-danger fw-bold">⚠️ Chưa kết nối được Micro. Bấm nút bên dưới để cấp quyền.</span>
+                                }
+                                else
+                                {
+                                    <span>Sóng âm giọng nói của bạn:</span>
+                                }
+                            </div>
+                        </div>
+
+                        <canvas id="shadowing-waveform" class="waveform-canvas" width="480" height="60"></canvas>
+
+                        @if (!isMicReady)
+                        {
+                            <div class="mt-2 text-center">
+                                <button type="button" class="btn btn-primary btn-sm px-3" @onclick="ConnectMicAsync">
+                                    <i class="bi bi-mic-fill me-1"></i> Bật & Cấp quyền Micro
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Step 2: Test Loa -->
+                <div class="test-step-card">
+                    <div class="step-badge-title">
+                        <i class="bi bi-volume-up text-success"></i>
+                        <span>Bước 2: Kiểm tra Loa / Tai nghe</span>
+                    </div>
+                    <div class="speaker-test-row">
+                        <div class="speaker-info">
+                            <span>Phát đoạn chuông mẫu để chắc chắn bạn nghe rõ âm thanh bài học:</span>
+                        </div>
+                        <button type="button" class="btn-test-speaker" @onclick="TestSpeakerAsync">
+                            <i class="bi @(isSpeakerTesting ? "bi-soundwave" : "bi-play-fill")"></i>
+                            <span>@(isSpeakerTesting ? "Đang phát..." : "Nghe thử loa")</span>
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="audio-modal-footer">
-                <button class="btn-modal-done" @onclick="CloseAudioTestModal">Xong</button>
+                <button class="btn-modal-done" @onclick="CloseAudioTestModal">
+                    <i class="bi bi-check-lg me-1"></i> Xong, bắt đầu luyện tập
+                </button>
             </div>
         </div>
     </div>
@@ -583,6 +664,9 @@
     // Audio & Mic Setup
     private bool showAudioTestModal = false;
     private bool isMicReady = false;
+    private bool isConnectingMic = false;
+    private bool isSpeakerTesting = false;
+    private bool micError = false;
     private List<MicrophoneDevice> microphones = new();
     private string selectedMicrophoneId = "";
     private bool needsVisualizerStart = false;
@@ -637,8 +721,8 @@
         if (needsVisualizerStart && showAudioTestModal)
         {
             needsVisualizerStart = false;
-            await Task.Delay(100);
-            await JS.InvokeVoidAsync("SpeakingInterop.startMicVisualizer", "shadowing-waveform");
+            await Task.Delay(150);
+            await JS.InvokeVoidAsync("SpeakingInterop.startMicVisualizer", "shadowing-waveform", selectedMicrophoneId);
         }
     }
 
@@ -1320,8 +1404,113 @@
         catch { }
     }
 
-    private void OpenAudioTestModal() => showAudioTestModal = true;
-    private void CloseAudioTestModal() => showAudioTestModal = false;
+    private async Task OpenAudioTestModal()
+    {
+        showAudioTestModal = true;
+        needsVisualizerStart = true;
+        isConnectingMic = true;
+        micError = false;
+        StateHasChanged();
+
+        try
+        {
+            var res = await JS.InvokeAsync<System.Text.Json.JsonElement>("SpeakingInterop.requestMicPermission");
+            isMicReady = res.GetProperty("success").GetBoolean();
+            micError = !isMicReady;
+            if (isMicReady)
+            {
+                await RefreshMicrophonesList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error requesting mic: {ex.Message}");
+            micError = true;
+        }
+        finally
+        {
+            isConnectingMic = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CloseAudioTestModal()
+    {
+        showAudioTestModal = false;
+        needsVisualizerStart = false;
+        try
+        {
+            await JS.InvokeVoidAsync("SpeakingInterop.stopVisualizer");
+        }
+        catch { }
+    }
+
+    private async Task RefreshMicrophonesList()
+    {
+        try
+        {
+            microphones = await JS.InvokeAsync<List<MicrophoneDevice>>("SpeakingInterop.getMicrophones");
+            if (microphones.Count > 0 && string.IsNullOrEmpty(selectedMicrophoneId))
+            {
+                selectedMicrophoneId = microphones[0].DeviceId;
+            }
+        }
+        catch { }
+    }
+
+    private async Task OnMicrophoneChanged(ChangeEventArgs e)
+    {
+        selectedMicrophoneId = e.Value?.ToString() ?? "";
+        if (!string.IsNullOrEmpty(selectedMicrophoneId))
+        {
+            await JS.InvokeVoidAsync("SpeakingInterop.selectMicrophone", selectedMicrophoneId);
+            await JS.InvokeVoidAsync("SpeakingInterop.startMicVisualizer", "shadowing-waveform", selectedMicrophoneId);
+        }
+    }
+
+    private async Task ConnectMicAsync()
+    {
+        isConnectingMic = true;
+        micError = false;
+        StateHasChanged();
+        try
+        {
+            var res = await JS.InvokeAsync<System.Text.Json.JsonElement>("SpeakingInterop.requestMicPermission");
+            isMicReady = res.GetProperty("success").GetBoolean();
+            micError = !isMicReady;
+            if (isMicReady)
+            {
+                await RefreshMicrophonesList();
+                await JS.InvokeVoidAsync("SpeakingInterop.startMicVisualizer", "shadowing-waveform", selectedMicrophoneId);
+            }
+        }
+        catch
+        {
+            micError = true;
+        }
+        finally
+        {
+            isConnectingMic = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TestSpeakerAsync()
+    {
+        if (isSpeakerTesting) return;
+        isSpeakerTesting = true;
+        StateHasChanged();
+        try
+        {
+            await JS.InvokeAsync<bool>("SpeakingInterop.playTestAudio");
+        }
+        catch { }
+        finally
+        {
+            isSpeakerTesting = false;
+            StateHasChanged();
+        }
+    }
 
     private async Task SwitchPart(string partKey)
     {
