@@ -1,10 +1,12 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
+@using Frontend.App.Models
 @inject AuthService AuthService
 @inject NavigationManager NavigationManager
 @inject ExamHeaderService ExamHeader
 @inject ProfileService ProfileSvc
 @inject StreakService StreakSvc
+@inject NotificationService NotifSvc
 @inject AuthenticationStateProvider AuthStateProvider
 @implements IDisposable
 
@@ -75,6 +77,88 @@
                                             <span>Xuất sắc! Bạn đang rất kiên trì 🌟</span>
                                         }
                                     </div>
+                                </div>
+                            </div>
+                        }
+                    </li>
+
+                    <li class="nav-item notif-menu">
+                        <button class="notif-btn @(showNotifMenu ? "active" : "") @(unreadNotifCount > 0 ? "has-unread" : "")" 
+                                @onclick="ToggleNotifMenu" 
+                                @onclick:stopPropagation 
+                                title="Thông báo (@unreadNotifCount chưa đọc)">
+                            <i class="bi bi-bell-fill notif-bell-icon"></i>
+                            @if (unreadNotifCount > 0)
+                            {
+                                <span class="notif-badge">@(unreadNotifCount > 99 ? "99+" : unreadNotifCount)</span>
+                            }
+                        </button>
+                        @if (showNotifMenu)
+                        {
+                            <div class="user-backdrop" @onclick="() => showNotifMenu = false" @onclick:stopPropagation></div>
+                            <div class="notif-popover" @onclick:stopPropagation>
+                                <div class="notif-popover-header">
+                                    <div class="notif-header-left">
+                                        <i class="bi bi-bell-fill text-warning"></i>
+                                        <span class="notif-popover-title">Thông báo</span>
+                                        @if (unreadNotifCount > 0)
+                                        {
+                                            <span class="notif-count-chip">@unreadNotifCount mới</span>
+                                        }
+                                    </div>
+                                    @if (unreadNotifCount > 0)
+                                    {
+                                        <button type="button" class="notif-mark-all-btn" @onclick="HandleMarkAllAsRead" title="Đánh dấu tất cả đã đọc">
+                                            <i class="bi bi-check2-all"></i> Đã đọc tất cả
+                                        </button>
+                                    }
+                                </div>
+                                <div class="notif-popover-body">
+                                    @if (isLoadingNotifs)
+                                    {
+                                        <div class="notif-loading">
+                                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                                            <span>Đang tải thông báo...</span>
+                                        </div>
+                                    }
+                                    else if (notifications.Count == 0)
+                                    {
+                                        <div class="notif-empty">
+                                            <div class="notif-empty-icon">🔔</div>
+                                            <div class="notif-empty-title">Chưa có thông báo nào</div>
+                                            <div class="notif-empty-sub">Khi có thông báo về đề thi, cập nhật hệ thống hoặc sự kiện, bạn sẽ nhận được tại đây.</div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="notif-list">
+                                            @foreach (var n in notifications)
+                                            {
+                                                <div class="notif-card @(n.IsRead ? "read" : "unread")" @onclick="() => HandleNotificationClick(n)">
+                                                    <div class="notif-icon-wrap notif-icon-@n.Type">
+                                                        <i class="bi @(string.IsNullOrWhiteSpace(n.Icon) ? "bi-bell-fill" : n.Icon)"></i>
+                                                    </div>
+                                                    <div class="notif-content-wrap">
+                                                        <div class="notif-title-row">
+                                                            <span class="notif-item-title">@n.Title</span>
+                                                            @if (!n.IsRead)
+                                                            {
+                                                                <span class="notif-unread-dot" title="Chưa đọc"></span>
+                                                            }
+                                                        </div>
+                                                        <div class="notif-item-message">@n.Message</div>
+                                                        <div class="notif-meta-row">
+                                                            <span class="notif-time">@GetTimeAgo(n.CreatedAt)</span>
+                                                            @if (!string.IsNullOrWhiteSpace(n.TargetUrl))
+                                                            {
+                                                                <span class="notif-link-hint">Xem chi tiết <i class="bi bi-arrow-right"></i></span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
                                 </div>
                             </div>
                         }
@@ -258,6 +342,11 @@
 
     private bool showUserMenu = false;
     private bool showStreakMenu = false;
+    private bool showNotifMenu = false;
+    private bool isLoadingNotifs = false;
+    private List<NotificationDto> notifications = new();
+    private int unreadNotifCount => notifications.Count(n => !n.IsRead);
+
     private string welcomeName = !string.IsNullOrEmpty(_cachedWelcomeName) ? _cachedWelcomeName : "Học viên";
     private string userEmail = _cachedUserEmail;
     private string avatarEmoji = !string.IsNullOrEmpty(_cachedAvatarEmoji) ? _cachedAvatarEmoji : "🎓";
@@ -322,6 +411,8 @@
 
         ExamHeader.OnChange += OnExamHeaderChanged;
         NavigationManager.LocationChanged += OnLocationChanged;
+        NotifSvc.OnChange += OnNotifChanged;
+        _ = LoadNotificationsAsync();
     }
 
     private bool IsHomePage
@@ -336,6 +427,9 @@
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
+        showUserMenu = false;
+        showStreakMenu = false;
+        showNotifMenu = false;
         InvokeAsync(StateHasChanged);
     }
 
@@ -385,13 +479,93 @@
     private void ToggleUserMenu()
     {
         showUserMenu = !showUserMenu;
-        if (showUserMenu) showStreakMenu = false;
+        if (showUserMenu)
+        {
+            showStreakMenu = false;
+            showNotifMenu = false;
+        }
     }
 
     private void ToggleStreakMenu()
     {
         showStreakMenu = !showStreakMenu;
-        if (showStreakMenu) showUserMenu = false;
+        if (showStreakMenu)
+        {
+            showUserMenu = false;
+            showNotifMenu = false;
+        }
+    }
+
+    private async Task ToggleNotifMenu()
+    {
+        showNotifMenu = !showNotifMenu;
+        if (showNotifMenu)
+        {
+            showUserMenu = false;
+            showStreakMenu = false;
+            await LoadNotificationsAsync();
+        }
+    }
+
+    private async Task LoadNotificationsAsync()
+    {
+        try
+        {
+            isLoadingNotifs = true;
+            notifications = await NotifSvc.GetNotificationsAsync();
+        }
+        catch
+        {
+            // fallback gracefully
+        }
+        finally
+        {
+            isLoadingNotifs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleNotificationClick(NotificationDto notif)
+    {
+        if (!notif.IsRead)
+        {
+            await NotifSvc.MarkAsReadAsync(notif.Id);
+            notif.IsRead = true;
+        }
+        showNotifMenu = false;
+        if (!string.IsNullOrWhiteSpace(notif.TargetUrl))
+        {
+            NavigationManager.NavigateTo(notif.TargetUrl);
+        }
+    }
+
+    private async Task HandleMarkAllAsRead()
+    {
+        await NotifSvc.MarkAllAsReadAsync();
+        foreach (var n in notifications)
+        {
+            n.IsRead = true;
+        }
+        StateHasChanged();
+    }
+
+    private string GetTimeAgo(DateTime dt)
+    {
+        var span = DateTime.UtcNow - dt;
+        if (span.TotalMinutes < 1) return "Vừa xong";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes} phút trước";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours} giờ trước";
+        if (span.TotalDays < 7) return $"{(int)span.TotalDays} ngày trước";
+        return dt.ToLocalTime().ToString("dd/MM/yyyy");
+    }
+
+    private void OnNotifChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            notifications = await NotifSvc.GetNotificationsAsync();
+            StateHasChanged();
+        });
     }
 
     private void OnExamHeaderChanged() => InvokeAsync(StateHasChanged);
@@ -400,6 +574,7 @@
     {
         ExamHeader.OnChange -= OnExamHeaderChanged;
         NavigationManager.LocationChanged -= OnLocationChanged;
+        NotifSvc.OnChange -= OnNotifChanged;
     }
 
     private async Task Logout()

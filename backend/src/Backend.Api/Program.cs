@@ -6087,6 +6087,243 @@ app.MapGet("/api/admin/grammar-structures/export", async (
     );
 });
 
+// ── NOTIFICATION APIS ──
+// 1. Get notifications for user (broadcast + specific user)
+app.MapGet("/api/notifications", async (
+    System.Security.Claims.ClaimsPrincipal user,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    int? currentUserId = null;
+    var subClaim = user.FindFirst("sub")?.Value 
+                   ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (int.TryParse(subClaim, out var uid))
+    {
+        currentUserId = uid;
+    }
+
+    var notifs = await dbContext.Notifications
+        .AsNoTracking()
+        .Where(n => n.IsActive && (n.IsBroadcast || (currentUserId.HasValue && n.UserId == currentUserId.Value)))
+        .OrderByDescending(n => n.CreatedAt)
+        .Take(30)
+        .ToListAsync(cancellationToken);
+
+    HashSet<int> readNotifIds = new();
+    if (currentUserId.HasValue)
+    {
+        var notifIds = notifs.Select(n => n.Id).ToList();
+        readNotifIds = (await dbContext.UserNotificationReads
+            .AsNoTracking()
+            .Where(r => r.UserId == currentUserId.Value && notifIds.Contains(r.NotificationId))
+            .Select(r => r.NotificationId)
+            .ToListAsync(cancellationToken))
+            .ToHashSet();
+    }
+
+    var result = notifs.Select(n => new Backend.Application.DTOs.NotificationDto
+    {
+        Id = n.Id,
+        Title = n.Title,
+        Message = n.Message,
+        Type = n.Type,
+        Icon = n.Icon,
+        TargetUrl = n.TargetUrl,
+        CreatedAt = n.CreatedAt,
+        IsRead = readNotifIds.Contains(n.Id)
+    }).ToList();
+
+    return Results.Ok(result);
+});
+
+// 2. Mark a notification as read
+app.MapPost("/api/notifications/{id:int}/read", [Microsoft.AspNetCore.Authorization.Authorize] async (
+    int id,
+    System.Security.Claims.ClaimsPrincipal user,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var subClaim = user.FindFirst("sub")?.Value 
+                   ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(subClaim, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var exists = await dbContext.UserNotificationReads
+        .AnyAsync(r => r.UserId == userId && r.NotificationId == id, cancellationToken);
+
+    if (!exists)
+    {
+        dbContext.UserNotificationReads.Add(new Backend.Domain.Entities.UserNotificationRead
+        {
+            UserId = userId,
+            NotificationId = id,
+            ReadAt = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    return Results.Ok(new { success = true });
+});
+
+// 3. Mark all notifications as read
+app.MapPost("/api/notifications/read-all", [Microsoft.AspNetCore.Authorization.Authorize] async (
+    System.Security.Claims.ClaimsPrincipal user,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var subClaim = user.FindFirst("sub")?.Value 
+                   ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(subClaim, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var activeNotifIds = await dbContext.Notifications
+        .AsNoTracking()
+        .Where(n => n.IsActive && (n.IsBroadcast || n.UserId == userId))
+        .Select(n => n.Id)
+        .ToListAsync(cancellationToken);
+
+    var alreadyReadIds = (await dbContext.UserNotificationReads
+        .AsNoTracking()
+        .Where(r => r.UserId == userId && activeNotifIds.Contains(r.NotificationId))
+        .Select(r => r.NotificationId)
+        .ToListAsync(cancellationToken))
+        .ToHashSet();
+
+    var unreadIds = activeNotifIds.Where(id => !alreadyReadIds.Contains(id)).ToList();
+    if (unreadIds.Count > 0)
+    {
+        var readsToAdd = unreadIds.Select(id => new Backend.Domain.Entities.UserNotificationRead
+        {
+            UserId = userId,
+            NotificationId = id,
+            ReadAt = DateTime.UtcNow
+        });
+        dbContext.UserNotificationReads.AddRange(readsToAdd);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    return Results.Ok(new { success = true, markedCount = unreadIds.Count });
+});
+
+// ── ADMIN NOTIFICATION APIS ──
+// 4. Admin: Get all notifications
+app.MapGet("/api/admin/notifications", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var notifs = await dbContext.Notifications
+        .AsNoTracking()
+        .OrderByDescending(n => n.CreatedAt)
+        .ToListAsync(cancellationToken);
+
+    var readCounts = await dbContext.UserNotificationReads
+        .AsNoTracking()
+        .GroupBy(r => r.NotificationId)
+        .Select(g => new { NotificationId = g.Key, Count = g.Count() })
+        .ToDictionaryAsync(g => g.NotificationId, g => g.Count, cancellationToken);
+
+    var dtos = notifs.Select(n => new Backend.Application.DTOs.AdminNotificationDto
+    {
+        Id = n.Id,
+        Title = n.Title,
+        Message = n.Message,
+        Type = n.Type,
+        Icon = n.Icon,
+        TargetUrl = n.TargetUrl,
+        CreatedAt = n.CreatedAt,
+        CreatedByAdmin = n.CreatedByAdmin,
+        IsBroadcast = n.IsBroadcast,
+        UserId = n.UserId,
+        IsActive = n.IsActive,
+        ReadCount = readCounts.GetValueOrDefault(n.Id, 0)
+    }).ToList();
+
+    return Results.Ok(dtos);
+});
+
+// 5. Admin: Create notification
+app.MapPost("/api/admin/notifications", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
+    Backend.Application.DTOs.CreateNotificationRequest req,
+    System.Security.Claims.ClaimsPrincipal user,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Title) || string.IsNullOrWhiteSpace(req.Message))
+    {
+        return Results.BadRequest(new { message = "Tiêu đề và nội dung thông báo không được để trống." });
+    }
+
+    var adminName = user.FindFirst("name")?.Value 
+                    ?? user.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value 
+                    ?? "Admin";
+
+    var notif = new Backend.Domain.Entities.Notification
+    {
+        Title = req.Title.Trim(),
+        Message = req.Message.Trim(),
+        Type = string.IsNullOrWhiteSpace(req.Type) ? "system" : req.Type.Trim(),
+        Icon = string.IsNullOrWhiteSpace(req.Icon) ? "bi-bell-fill" : req.Icon.Trim(),
+        TargetUrl = string.IsNullOrWhiteSpace(req.TargetUrl) ? null : req.TargetUrl.Trim(),
+        CreatedAt = DateTime.UtcNow,
+        CreatedByAdmin = adminName,
+        IsBroadcast = req.IsBroadcast,
+        UserId = req.UserId,
+        IsActive = req.IsActive
+    };
+
+    dbContext.Notifications.Add(notif);
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new { success = true, id = notif.Id });
+});
+
+// 6. Admin: Update notification
+app.MapPut("/api/admin/notifications/{id:int}", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
+    int id,
+    Backend.Application.DTOs.UpdateNotificationRequest req,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var notif = await dbContext.Notifications.FindAsync(new object[] { id }, cancellationToken);
+    if (notif == null)
+    {
+        return Results.NotFound(new { message = "Không tìm thấy thông báo." });
+    }
+
+    if (!string.IsNullOrWhiteSpace(req.Title)) notif.Title = req.Title.Trim();
+    if (!string.IsNullOrWhiteSpace(req.Message)) notif.Message = req.Message.Trim();
+    if (!string.IsNullOrWhiteSpace(req.Type)) notif.Type = req.Type.Trim();
+    if (!string.IsNullOrWhiteSpace(req.Icon)) notif.Icon = req.Icon.Trim();
+    notif.TargetUrl = string.IsNullOrWhiteSpace(req.TargetUrl) ? null : req.TargetUrl.Trim();
+    notif.IsBroadcast = req.IsBroadcast;
+    notif.UserId = req.UserId;
+    notif.IsActive = req.IsActive;
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { success = true });
+});
+
+// 7. Admin: Delete notification
+app.MapDelete("/api/admin/notifications/{id:int}", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
+    int id,
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var notif = await dbContext.Notifications.FindAsync(new object[] { id }, cancellationToken);
+    if (notif == null)
+    {
+        return Results.NotFound(new { message = "Không tìm thấy thông báo." });
+    }
+
+    dbContext.Notifications.Remove(notif);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { success = true });
+});
+
 app.Run();
 
 public record CreateExamRequest(string Title, string DataUrl, string Category = "IELTS");

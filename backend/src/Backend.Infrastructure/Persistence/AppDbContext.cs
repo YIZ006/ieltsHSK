@@ -38,6 +38,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<UserGameProgress> UserGameProgresses { get; set; }
     public DbSet<ExamCheckpoint> ExamCheckpoints { get; set; }
     public DbSet<GrammarStructure> GrammarStructures { get; set; }
+    public DbSet<Notification> Notifications { get; set; }
+    public DbSet<UserNotificationRead> UserNotificationReads { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -236,6 +238,31 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(c => c.User)
                 .WithMany()
                 .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Notification
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.ToTable("notifications");
+            entity.HasOne(n => n.User)
+                .WithMany()
+                .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // UserNotificationRead
+        modelBuilder.Entity<UserNotificationRead>(entity =>
+        {
+            entity.ToTable("user_notification_reads");
+            entity.HasIndex(r => new { r.UserId, r.NotificationId }).IsUnique();
+            entity.HasOne(r => r.User)
+                .WithMany()
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(r => r.Notification)
+                .WithMany()
+                .HasForeignKey(r => r.NotificationId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
