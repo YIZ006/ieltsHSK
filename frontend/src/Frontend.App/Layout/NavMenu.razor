@@ -134,17 +134,20 @@
                                         <div class="notif-list">
                                             @foreach (var n in notifications)
                                             {
-                                                <div class="notif-card @(n.IsRead ? "read" : "unread")" @onclick="() => HandleNotificationCardClick(n)">
+                                                <div class="notif-card @(n.IsRead ? "read" : "unread") @(expandedNotifIds.Contains(n.Id) ? "expanded" : "")" @onclick="() => HandleNotificationCardClick(n)">
                                                     <div class="notif-icon-wrap notif-icon-@n.Type">
                                                         <i class="bi @(string.IsNullOrWhiteSpace(n.Icon) ? "bi-bell-fill" : n.Icon)"></i>
                                                     </div>
                                                     <div class="notif-content-wrap">
                                                         <div class="notif-title-row">
                                                             <span class="notif-item-title">@n.Title</span>
-                                                            @if (!n.IsRead)
-                                                            {
-                                                                <span class="notif-unread-dot" title="Chưa đọc"></span>
-                                                            }
+                                                            <div class="notif-title-actions">
+                                                                @if (!n.IsRead)
+                                                                {
+                                                                    <span class="notif-unread-dot" title="Chưa đọc"></span>
+                                                                }
+                                                                <i class="bi @(expandedNotifIds.Contains(n.Id) ? "bi-chevron-up" : "bi-chevron-down") notif-expand-chevron" title="@(expandedNotifIds.Contains(n.Id) ? "Thu gọn" : "Mở rộng")"></i>
+                                                            </div>
                                                         </div>
                                                         <div class="notif-item-message">@n.Message</div>
                                                         <div class="notif-meta-row">
@@ -349,6 +352,7 @@
     private bool isLoadingNotifs = false;
     private List<NotificationDto> notifications = new();
     private int unreadNotifCount => notifications.Count(n => !n.IsRead);
+    private HashSet<int> expandedNotifIds = new();
 
     private string welcomeName = !string.IsNullOrEmpty(_cachedWelcomeName) ? _cachedWelcomeName : "Học viên";
     private string userEmail = _cachedUserEmail;
@@ -534,9 +538,17 @@
         {
             await NotifSvc.MarkAsReadAsync(notif.Id);
             notif.IsRead = true;
-            StateHasChanged();
         }
-        // Không đóng menu và không chuyển trang
+
+        if (expandedNotifIds.Contains(notif.Id))
+        {
+            expandedNotifIds.Remove(notif.Id);
+        }
+        else
+        {
+            expandedNotifIds.Add(notif.Id);
+        }
+        StateHasChanged();
     }
 
     private async Task HandleNavigateTarget(NotificationDto notif)
