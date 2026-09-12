@@ -187,42 +187,33 @@
         </div>
     </div>
 
-    @* ===== QUICK TOPIC QUIZZES & EXAM STRUCTURE ===== *@
-    <div class="td-grid-2 td-mb">
-        @* Quick Quizzes *@
-        <div id="quizzes" class="td-card td-anim-up td-delay-2">
-            <div class="td-section-header">
-                <div>
-                    <div class="td-section-title"><i class="bi bi-lightning-charge-fill" style="color:#f59e0b;"></i> Quiz nhanh theo chủ đề</div>
-                    <div class="td-section-subtitle">Kiểm tra 4 câu hỏi thực chiến, nhận thưởng ngay +50 XP</div>
-                </div>
-                <span class="td-total-badge">5 chủ đề</span>
+    @* ===== EXAM STRUCTURE ===== *@
+    <div class="td-card td-mb td-anim-up td-delay-2">
+        <div class="td-section-header">
+            <div>
+                <div class="td-section-title">Cấu trúc đề thi TOEIC chuẩn Quốc Tế</div>
+                <div class="td-section-subtitle">Chi tiết 7 phần thi Listening &amp; Reading theo format chuẩn ETS</div>
             </div>
-            <div class="td-quiz-list">
-                @foreach (var quiz in QuickQuizzes)
+            <span class="td-total-badge">200 câu · 120 phút</span>
+        </div>
+        <div class="td-grid-2 td-grid-tight">
+            <div class="td-lesson-list">
+                <div class="td-part-group-title"><i class="bi bi-headphones"></i> Phần thi Listening (100 câu · 45 phút)</div>
+                @foreach (var p in ExamStructure.Take(4))
                 {
-                    <div class="td-quiz-item">
-                        <div class="td-quiz-icon" style="background:@quiz.BgColor;color:@quiz.Color;">@quiz.Icon</div>
-                        <div class="td-quiz-info">
-                            <div class="td-quiz-title">@quiz.Title</div>
-                            <div class="td-quiz-meta">@quiz.Questions.Count câu hỏi · @quiz.Difficulty · Thưởng +50 XP</div>
+                    <div class="td-lesson">
+                        <div class="td-part-num">@p.Number</div>
+                        <div class="td-lesson-body">
+                            <div class="td-lesson-title">@p.Name</div>
+                            <div class="td-lesson-meta">@p.Desc</div>
                         </div>
-                        <button class="td-btn td-btn-outline td-btn-sm" @onclick="() => StartQuiz(quiz)">
-                            <i class="bi bi-play-fill"></i> Bắt đầu
-                        </button>
+                        <div class="td-part-count">@p.Questions câu</div>
                     </div>
                 }
             </div>
-        </div>
-
-        @* Exam Structure *@
-        <div class="td-card td-anim-up td-delay-3">
-            <div class="td-section-header">
-                <div class="td-section-title">Cấu trúc đề thi TOEIC chuẩn Quốc Tế</div>
-                <span class="td-total-badge">200 câu · 120 phút</span>
-            </div>
             <div class="td-lesson-list">
-                @foreach (var p in ExamStructure)
+                <div class="td-part-group-title"><i class="bi bi-file-earmark-text"></i> Phần thi Reading (100 câu · 75 phút)</div>
+                @foreach (var p in ExamStructure.Skip(4))
                 {
                     <div class="td-lesson">
                         <div class="td-part-num">@p.Number</div>
@@ -236,147 +227,11 @@
             </div>
         </div>
     </div>
-
-    @* ===== INTERACTIVE QUIZ MODAL ===== *@
-    @if (activeQuiz != null)
-    {
-        <div class="td-modal-backdrop" @onclick="CloseQuiz">
-            <div class="td-modal" @onclick:stopPropagation="true">
-                <div class="td-modal-header">
-                    <div class="td-modal-title">
-                        <span>@activeQuiz.Icon</span> @activeQuiz.Title
-                    </div>
-                    <button class="td-modal-close" @onclick="CloseQuiz"><i class="bi bi-x-lg"></i></button>
-                </div>
-
-                @if (!quizFinished)
-                {
-                    var currentQ = activeQuiz.Questions[quizQuestionIndex];
-                    <div class="td-modal-progress">
-                        <div class="td-modal-progress-bar">
-                            <div class="td-modal-progress-fill" style="width:@((quizQuestionIndex + 1) * 100 / activeQuiz.Questions.Count)%"></div>
-                        </div>
-                        <div class="td-modal-progress-text">Câu @(quizQuestionIndex + 1) / @activeQuiz.Questions.Count · Điểm: @quizScore/@activeQuiz.Questions.Count</div>
-                    </div>
-
-                    <div class="td-modal-body">
-                        <div class="td-quiz-question-box">
-                            <span class="td-quiz-qnum">Q@(quizQuestionIndex + 1)</span>
-                            <div class="td-quiz-qtext">@currentQ.QuestionText</div>
-                        </div>
-
-                        <div class="td-quiz-options">
-                            @for (var i = 0; i < currentQ.Options.Count; i++)
-                            {
-                                var optIndex = i;
-                                var opt = currentQ.Options[i];
-                                var isChosen = quizSelectedOption == optIndex;
-                                var isCorrect = optIndex == currentQ.CorrectIndex;
-                                var btnClass = "";
-                                if (quizAnswered)
-                                {
-                                    if (isCorrect) btnClass = "correct";
-                                    else if (isChosen) btnClass = "incorrect";
-                                }
-                                else if (isChosen)
-                                {
-                                    btnClass = "selected";
-                                }
-
-                                <button class="td-quiz-opt-btn @btnClass" disabled="@quizAnswered" @onclick="() => SelectOption(optIndex)">
-                                    <span class="td-opt-letter">@((char)('A' + optIndex))</span>
-                                    <span class="td-opt-text">@opt</span>
-                                    @if (quizAnswered && isCorrect)
-                                    {
-                                        <i class="bi bi-check-circle-fill td-opt-icon check"></i>
-                                    }
-                                    else if (quizAnswered && isChosen && !isCorrect)
-                                    {
-                                        <i class="bi bi-x-circle-fill td-opt-icon times"></i>
-                                    }
-                                </button>
-                            }
-                        </div>
-
-                        @if (quizAnswered)
-                        {
-                            <div class="td-quiz-explanation @(quizSelectedOption == currentQ.CorrectIndex ? "correct" : "incorrect")">
-                                <div class="td-quiz-exp-title">
-                                    <i class="bi @(quizSelectedOption == currentQ.CorrectIndex ? "bi-check-circle-fill" : "bi-info-circle-fill")"></i>
-                                    @(quizSelectedOption == currentQ.CorrectIndex ? "Chính xác! +10 XP" : "Chưa chính xác!")
-                                </div>
-                                <div class="td-quiz-exp-text">@currentQ.Explanation</div>
-                            </div>
-                        }
-                    </div>
-
-                    <div class="td-modal-footer">
-                        @if (quizAnswered)
-                        {
-                            <button class="td-btn td-btn-primary" @onclick="NextQuizQuestion">
-                                @(quizQuestionIndex + 1 < activeQuiz.Questions.Count ? "Câu tiếp theo" : "Xem tổng kết") <i class="bi bi-arrow-right"></i>
-                            </button>
-                        }
-                        else
-                        {
-                            <span class="td-quiz-tip"><i class="bi bi-lightbulb"></i> Hãy chọn một phương án</span>
-                        }
-                    </div>
-                }
-                else
-                {
-                    <div class="td-modal-body td-quiz-result">
-                        <div class="td-result-icon">🎉</div>
-                        <div class="td-result-title">Hoàn thành bài Quiz!</div>
-                        <div class="td-result-score">Bạn trả lời đúng <strong>@quizScore / @activeQuiz.Questions.Count</strong> câu</div>
-                        <div class="td-result-xp"><i class="bi bi-lightning-charge-fill"></i> +@(quizScore * 10 + 10) XP kinh nghiệm TOEIC</div>
-                        <div class="td-result-msg">
-                            @if (quizScore == activeQuiz.Questions.Count)
-                            {
-                                <text>Xuất sắc! Bạn đã nắm rất vững kiến thức phần này.</text>
-                            }
-                            else if (quizScore >= activeQuiz.Questions.Count / 2)
-                            {
-                                <text>Khá tốt! Hãy ôn lại các câu chưa đúng để đạt điểm tuyệt đối nhé.</text>
-                            }
-                            else
-                            {
-                                <text>Hãy tiếp tục luyện tập thêm để nâng cao phản xạ bài thi nhé!</text>
-                            }
-                        </div>
-                    </div>
-                    <div class="td-modal-footer" style="justify-content:center;gap:12px;">
-                        <button class="td-btn td-btn-outline" @onclick="RetryQuiz"><i class="bi bi-arrow-repeat"></i> Làm lại</button>
-                        <button class="td-btn td-btn-primary" @onclick="CloseQuiz"><i class="bi bi-check-lg"></i> Đóng &amp; Nhận XP</button>
-                    </div>
-                }
-            </div>
-        </div>
-    }
 </div>
 
 @code {
     private sealed record ToeicWord(string Word, string Ipa, string Meaning, string Example);
     private sealed record ToeicPartInfo(string Number, string Name, string Desc, int Questions);
-
-    public sealed class QuizQuestion
-    {
-        public string QuestionText { get; set; } = "";
-        public List<string> Options { get; set; } = new();
-        public int CorrectIndex { get; set; }
-        public string Explanation { get; set; } = "";
-    }
-
-    public sealed class QuickQuiz
-    {
-        public string Id { get; set; } = "";
-        public string Icon { get; set; } = "";
-        public string Title { get; set; } = "";
-        public string Difficulty { get; set; } = "";
-        public string BgColor { get; set; } = "";
-        public string Color { get; set; } = "";
-        public List<QuizQuestion> Questions { get; set; } = new();
-    }
 
     private static readonly List<ToeicWord> ToeicWords = new()
     {
@@ -403,223 +258,10 @@
         new("P7", "Reading Comprehension", "Đọc hiểu", 54),
     };
 
-    private static readonly List<QuickQuiz> QuickQuizzes = new()
-    {
-        new()
-        {
-            Id = "vocab_business",
-            Icon = "💼",
-            Title = "Từ vựng Kinh doanh & Công sở",
-            Difficulty = "Cơ bản - Trung cấp",
-            BgColor = "rgba(16,185,129,0.14)",
-            Color = "#10b981",
-            Questions = new()
-            {
-                new()
-                {
-                    QuestionText = "The marketing director announced that the company will _______ a new promotional campaign next Monday.",
-                    Options = new() { "launch", "expire", "hesitate", "detain" },
-                    CorrectIndex = 0,
-                    Explanation = "'launch a campaign' là collocation quen thuộc có nghĩa là khởi động/phát động chiến dịch."
-                },
-                new()
-                {
-                    QuestionText = "All employees must submit their travel _______ reports by the end of the month.",
-                    Options = new() { "expense", "expensive", "expend", "expensively" },
-                    CorrectIndex = 0,
-                    Explanation = "Cụm danh từ ghép 'expense reports' = báo cáo chi phí công tác."
-                },
-                new()
-                {
-                    QuestionText = "Due to unforeseen circumstances, the quarterly board meeting has been _______ until next Friday.",
-                    Options = new() { "postponed", "applied", "accepted", "maintained" },
-                    CorrectIndex = 0,
-                    Explanation = "'postponed' = bị hoãn lại cho tới thứ Sáu tuần sau."
-                },
-                new()
-                {
-                    QuestionText = "The human resources manager is looking for a _______ candidate who can speak both English and Japanese.",
-                    Options = new() { "qualified", "qualifying", "qualify", "qualification" },
-                    CorrectIndex = 0,
-                    Explanation = "Cần tính từ 'qualified' đứng trước danh từ 'candidate' = ứng viên có năng lực/đủ tiêu chuẩn."
-                }
-            }
-        },
-        new()
-        {
-            Id = "grammar_part5",
-            Icon = "✍️",
-            Title = "Ngữ pháp Part 5 (Thì & Từ loại)",
-            Difficulty = "Độ khó Trung cấp",
-            BgColor = "rgba(108,99,255,0.14)",
-            Color = "#6c63ff",
-            Questions = new()
-            {
-                new()
-                {
-                    QuestionText = "Ms. Tanaka _______ the financial report before she left for the regional conference in Tokyo.",
-                    Options = new() { "had reviewed", "reviews", "will review", "is reviewing" },
-                    CorrectIndex = 0,
-                    Explanation = "Hành động xem xét báo cáo diễn ra trước một hành động khác trong quá khứ ('before she left') nên chia thì Quá khứ hoàn thành."
-                },
-                new()
-                {
-                    QuestionText = "The customer service team answered all inquiries _______ and professionally.",
-                    Options = new() { "promptly", "prompt", "promptness", "prompter" },
-                    CorrectIndex = 0,
-                    Explanation = "Cần trạng từ 'promptly' để bổ nghĩa cho động từ 'answered' (trả lời một cách nhanh chóng và chuyên nghiệp)."
-                },
-                new()
-                {
-                    QuestionText = "If the shipment _______ by tomorrow morning, please notify the warehouse manager immediately.",
-                    Options = new() { "does not arrive", "will not arrive", "did not arrive", "had not arrived" },
-                    CorrectIndex = 0,
-                    Explanation = "Mệnh đề IF của câu điều kiện loại 1 chia ở thì Hiện tại đơn: 'does not arrive'."
-                },
-                new()
-                {
-                    QuestionText = "Neither the supervisor _______ the team members were aware of the scheduling conflict.",
-                    Options = new() { "nor", "or", "and", "but" },
-                    CorrectIndex = 0,
-                    Explanation = "Cấu trúc tương quan cố định: 'Neither ... nor ...' (cả ... và ... đều không)."
-                }
-            }
-        },
-        new()
-        {
-            Id = "listening_office",
-            Icon = "🎧",
-            Title = "Nghe hiểu văn phòng & Hội thoại",
-            Difficulty = "Cơ bản Part 2-3",
-            BgColor = "rgba(59,130,246,0.14)",
-            Color = "#3b82f6",
-            Questions = new()
-            {
-                new()
-                {
-                    QuestionText = "Where is the new photocopying machine located?",
-                    Options = new() { "On the second floor, next to the breakroom.", "Yes, it was copied yesterday.", "About 50 pages.", "Mr. Henderson ordered it." },
-                    CorrectIndex = 0,
-                    Explanation = "Câu hỏi 'Where' hỏi nơi chốn -> trả lời vị trí 'On the second floor, next to the breakroom'."
-                },
-                new()
-                {
-                    QuestionText = "Who is responsible for organizing the annual banquet this year?",
-                    Options = new() { "The social committee is handling it.", "At the Grand Palace Hotel.", "It was very delicious.", "Around 7:00 PM." },
-                    CorrectIndex = 0,
-                    Explanation = "Câu hỏi 'Who' hỏi về người/bộ phận phụ trách -> 'The social committee is handling it'."
-                },
-                new()
-                {
-                    QuestionText = "Could you help me set up the projector for the 2 o'clock presentation?",
-                    Options = new() { "Sure, I'll be there in five minutes.", "The project was completed last week.", "No, I don't like movies.", "It's on page 14." },
-                    CorrectIndex = 0,
-                    Explanation = "Lời đề nghị giúp đỡ -> lời đáp nhã nhặn 'Sure, I'll be there in five minutes'."
-                },
-                new()
-                {
-                    QuestionText = "Why hasn't the shipment of office supplies arrived yet?",
-                    Options = new() { "The delivery truck broke down this morning.", "Yes, we supply paper and pens.", "Next to the main entrance.", "50 boxes of envelopes." },
-                    CorrectIndex = 0,
-                    Explanation = "Câu hỏi 'Why' hỏi lý do chậm trễ -> 'The delivery truck broke down this morning'."
-                }
-            }
-        },
-        new()
-        {
-            Id = "reading_memos",
-            Icon = "📧",
-            Title = "Đọc hiểu Email & Thông báo",
-            Difficulty = "Độ khó Part 6-7",
-            BgColor = "rgba(245,158,11,0.14)",
-            Color = "#f59e0b",
-            Questions = new()
-            {
-                new()
-                {
-                    QuestionText = "In a formal business letter, which phrase is best suited for the opening paragraph to express gratitude?",
-                    Options = new() { "Thank you for your continued partnership and support.", "Hey there, what's up?", "I want to tell you something good.", "Listen carefully to this." },
-                    CorrectIndex = 0,
-                    Explanation = "'Thank you for your continued partnership and support' là câu mở đầu lịch thiệp và chuyên nghiệp nhất trong thư tín thương mại."
-                },
-                new()
-                {
-                    QuestionText = "Subject: System Maintenance Notice. What should employees do before 6:00 PM on Friday?",
-                    Options = new() { "Save all open files and log out of the network.", "Contact IT to install new hardware.", "Work overtime from home.", "Delete all temporary emails." },
-                    CorrectIndex = 0,
-                    Explanation = "Thông báo bảo trì hệ thống luôn khuyến nghị người dùng lưu tài liệu và đăng xuất trước thời gian bảo trì."
-                },
-                new()
-                {
-                    QuestionText = "What is the primary purpose of an internal memo regarding updated parking regulations?",
-                    Options = new() { "To inform staff about changes in parking permit procedures.", "To sell used vehicles to employees.", "To advertise a new car repair shop.", "To organize a company road trip." },
-                    CorrectIndex = 0,
-                    Explanation = "Mục đích của thông báo nội bộ về đỗ xe là để thông tin đến toàn thể nhân viên về quy định và thủ tục mới."
-                },
-                new()
-                {
-                    QuestionText = "Notice: 'All visitors must present valid photo identification at the security reception desk.' Who does this rule apply to?",
-                    Options = new() { "External guests visiting the building.", "Full-time security guards only.", "The IT department staff.", "Delivery drivers after midnight only." },
-                    CorrectIndex = 0,
-                    Explanation = "'Visitors' là khách vãng lai bên ngoài đến làm việc tại tòa nhà."
-                }
-            }
-        },
-        new()
-        {
-            Id = "toeic_collocations",
-            Icon = "🧩",
-            Title = "Cụm từ & Collocations TOEIC",
-            Difficulty = "Thường gặp 700+",
-            BgColor = "rgba(236,72,153,0.14)",
-            Color = "#ec4899",
-            Questions = new()
-            {
-                new()
-                {
-                    QuestionText = "The sales representatives are working hard to _______ their quarterly targets.",
-                    Options = new() { "meet", "catch", "touch", "hold" },
-                    CorrectIndex = 0,
-                    Explanation = "'meet the targets / meet the deadline' = đạt được mục tiêu / kịp hạn chót."
-                },
-                new()
-                {
-                    QuestionText = "Before signing the agreement, the legal team decided to _______ a thorough investigation.",
-                    Options = new() { "conduct", "perform", "compose", "produce" },
-                    CorrectIndex = 0,
-                    Explanation = "'conduct an investigation / conduct research' = tiến hành điều tra / nghiên cứu."
-                },
-                new()
-                {
-                    QuestionText = "Please note that special discounts are available _______ a limited time only.",
-                    Options = new() { "for", "in", "with", "on" },
-                    CorrectIndex = 0,
-                    Explanation = "Cụm thành ngữ cố định: 'for a limited time' = chỉ trong khoảng thời gian giới hạn."
-                },
-                new()
-                {
-                    QuestionText = "All participants are expected to take _______ in the workshop discussion.",
-                    Options = new() { "part", "place", "role", "note" },
-                    CorrectIndex = 0,
-                    Explanation = "'take part in' = tham gia vào (= participate in)."
-                }
-            }
-        }
-    };
-
     private List<MockTestDto> toeicTests = new();
     private List<IeltsSubmissionRecord> recentSubmissions = new();
     private ToeicWord wordOfDay = ToeicWords[0];
     private bool isBookmarked;
-    private int bonusXp = 0;
-
-    // Quiz Modal
-    private QuickQuiz? activeQuiz;
-    private int quizQuestionIndex;
-    private int? quizSelectedOption;
-    private bool quizAnswered;
-    private int quizScore;
-    private bool quizFinished;
 
     private static System.Globalization.CultureInfo Vi => new("vi-VN");
 
@@ -654,7 +296,6 @@
         {
             var bookmarks = await LocalStorage.GetItemAsync<List<string>>("toeic_bookmarked_words") ?? new();
             isBookmarked = bookmarks.Contains(wordOfDay.Word);
-            bonusXp = await LocalStorage.GetItemAsync<int>("toeic_quiz_bonus_xp");
         }
         catch
         {
@@ -690,64 +331,6 @@
             await JS.InvokeVoidAsync("speakText", text);
         }
         catch { }
-    }
-
-    // Quiz Handler
-    private void StartQuiz(QuickQuiz quiz)
-    {
-        activeQuiz = quiz;
-        quizQuestionIndex = 0;
-        quizSelectedOption = null;
-        quizAnswered = false;
-        quizScore = 0;
-        quizFinished = false;
-    }
-
-    private void SelectOption(int optIndex)
-    {
-        if (quizAnswered || activeQuiz == null) return;
-        quizSelectedOption = optIndex;
-        quizAnswered = true;
-        if (optIndex == activeQuiz.Questions[quizQuestionIndex].CorrectIndex)
-        {
-            quizScore++;
-        }
-    }
-
-    private async Task NextQuizQuestion()
-    {
-        if (activeQuiz == null) return;
-        if (quizQuestionIndex + 1 < activeQuiz.Questions.Count)
-        {
-            quizQuestionIndex++;
-            quizSelectedOption = null;
-            quizAnswered = false;
-        }
-        else
-        {
-            quizFinished = true;
-            bonusXp += (quizScore * 10 + 10);
-            try
-            {
-                await LocalStorage.SetItemAsync("toeic_quiz_bonus_xp", bonusXp);
-            }
-            catch { }
-        }
-    }
-
-    private void RetryQuiz()
-    {
-        if (activeQuiz == null) return;
-        quizQuestionIndex = 0;
-        quizSelectedOption = null;
-        quizAnswered = false;
-        quizScore = 0;
-        quizFinished = false;
-    }
-
-    private void CloseQuiz()
-    {
-        activeQuiz = null;
     }
 
     private static string FormatDuration(int seconds)
