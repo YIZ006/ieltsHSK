@@ -236,9 +236,18 @@ public static class DependencyInjection
                             EXCEPTION WHEN OTHERS THEN NULL;
                             END;
                         END IF;
+                        ALTER TABLE listen_videos DROP COLUMN IF EXISTS submitted_by_user_id;
                     END IF;
 
-                    -- 3. Bảng ielts_vocabulary_progresses
+                    -- 3. Bảng lessons: dọn dẹp cột xp_reward
+                    IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'lessons') THEN
+                        ALTER TABLE lessons DROP COLUMN IF EXISTS xp_reward;
+                    END IF;
+
+                    -- Dọn dẹp bảng mồ côi learning_resources (đã thay bằng websites, categories, languages)
+                    DROP TABLE IF EXISTS learning_resources;
+
+                    -- 4. Bảng ielts_vocabulary_progresses
                     IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'ielts_vocabularies') THEN
                         CREATE TABLE IF NOT EXISTS ielts_vocabulary_progresses (
                             id SERIAL PRIMARY KEY,
@@ -250,7 +259,7 @@ public static class DependencyInjection
                         );
                     END IF;
 
-                    -- 4. Bảng users: thêm các cột cá nhân hoá & mục tiêu
+                    -- 5. Bảng users: thêm các cột cá nhân hoá & mục tiêu
                     IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'users') THEN
                         ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color TEXT;
                         ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;

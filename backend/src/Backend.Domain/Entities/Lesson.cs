@@ -18,8 +18,6 @@ public class Lesson
     public int Order { get; set; } = 0;
     public string Status { get; set; } = "draft"; // 'draft', 'published'
     
-    public int XpReward { get; set; } = 10;
-    
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 }

@@ -563,53 +563,6 @@ namespace Backend.Infrastructure.Migrations
                     b.ToTable("languages", (string)null);
                 });
 
-            modelBuilder.Entity("Backend.Domain.Entities.LearningResource", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("category");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("integer")
-                        .HasColumnName("display_order");
-
-                    b.Property<string>("ImageUrl")
-                        .HasColumnType("text")
-                        .HasColumnName("image_url");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_active");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("title");
-
-                    b.Property<string>("Url")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("url");
-
-                    b.HasKey("Id")
-                        .HasName("pk_learning_resources");
-
-                    b.ToTable("learning_resources", (string)null);
-                });
-
             modelBuilder.Entity("Backend.Domain.Entities.LearningSection", b =>
                 {
                     b.Property<int>("Id")
@@ -710,10 +663,6 @@ namespace Backend.Infrastructure.Migrations
                     b.Property<string>("VideoUrl")
                         .HasColumnType("text")
                         .HasColumnName("video_url");
-
-                    b.Property<int>("XpReward")
-                        .HasColumnType("integer")
-                        .HasColumnName("xp_reward");
 
                     b.HasKey("Id")
                         .HasName("pk_lessons");

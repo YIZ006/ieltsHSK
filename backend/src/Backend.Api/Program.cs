@@ -344,7 +344,6 @@ app.MapPost("/api/listen-videos/submit",
         Category = "Giao tiếp",
         IsApproved = false,
         SubmittedAt = DateTime.UtcNow,
-        SubmittedByUserId = submittedBy,
         UserId = submitterUserId
     };
 
