@@ -238,105 +238,55 @@
         </div>
     </div>
 
-    @* ===== LEADERBOARD ===== *@
-    <div id="leaderboard" class="td-card td-mb td-anim-up td-delay-2">
+    @* ===== ACHIEVEMENTS (TOP 3 UNLOCKED + VIEW MORE) ===== *@
+    <div class="td-card td-anim-up td-delay-2">
         <div class="td-section-header">
             <div>
-                <div class="td-section-title">🏆 Bảng Xếp Hạng Học Viên TOEIC</div>
-                <div class="td-section-subtitle">Cạnh tranh cùng cộng đồng hàng nghìn học viên TOEIC trên toàn quốc</div>
-            </div>
-            <div class="td-tabs">
-                <button class="td-tab @(leaderboardTab == "week" ? "active" : "")" @onclick='() => SetLeaderboardTab("week")'>Tuần này</button>
-                <button class="td-tab @(leaderboardTab == "month" ? "active" : "")" @onclick='() => SetLeaderboardTab("month")'>Tháng này</button>
-                <button class="td-tab @(leaderboardTab == "all" ? "active" : "")" @onclick='() => SetLeaderboardTab("all")'>Tất cả</button>
-            </div>
-        </div>
-
-        @* Top 3 Podium *@
-        <div class="td-podium">
-            <!-- Rank 2 (Silver) -->
-            <div class="td-podium-col rank-2">
-                <div class="td-podium-medal">🥈</div>
-                <div class="td-podium-avatar avatar-silver">T</div>
-                <div class="td-podium-name">Thu Hà</div>
-                <div class="td-podium-xp">@GetPodiumXp("Thu Hà").ToString("N0") XP</div>
-                <div class="td-podium-pedestal pedestal-silver">
-                    <span class="pedestal-num">2</span>
-                </div>
-            </div>
-
-            <!-- Rank 1 (Gold) -->
-            <div class="td-podium-col rank-1">
-                <div class="td-podium-crown">👑</div>
-                <div class="td-podium-medal">🥇</div>
-                <div class="td-podium-avatar avatar-gold">M</div>
-                <div class="td-podium-name">Minh Tuấn</div>
-                <div class="td-podium-xp">@GetPodiumXp("Minh Tuấn").ToString("N0") XP</div>
-                <div class="td-podium-pedestal pedestal-gold">
-                    <span class="pedestal-num">1</span>
-                </div>
-            </div>
-
-            <!-- Rank 3 (Bronze) -->
-            <div class="td-podium-col rank-3">
-                <div class="td-podium-medal">🥉</div>
-                <div class="td-podium-avatar avatar-bronze">H</div>
-                <div class="td-podium-name">Hữu Nam</div>
-                <div class="td-podium-xp">@GetPodiumXp("Hữu Nam").ToString("N0") XP</div>
-                <div class="td-podium-pedestal pedestal-bronze">
-                    <span class="pedestal-num">3</span>
-                </div>
-            </div>
-        </div>
-
-        @* Ranks 4 to 10 List *@
-        <div class="td-rankings-list">
-            @foreach (var user in CurrentLeaderboardRankings)
-            {
-                <div class="td-rank-row @(user.IsSelf ? "self" : "")">
-                    <div class="td-rank-num">#@user.Rank</div>
-                    <div class="td-rank-avatar">@user.Name.Substring(0, 1)</div>
-                    <div class="td-rank-info">
-                        <div class="td-rank-name">@user.Name @(user.IsSelf ? " (Bạn)" : "")</div>
-                        <div class="td-rank-xp">@user.Xp.ToString("N0") XP</div>
-                    </div>
-                    @if (user.IsSelf)
-                    {
-                        <span class="td-badge-self"><i class="bi bi-star-fill"></i> Vị trí của bạn</span>
-                    }
-                </div>
-            }
-        </div>
-    </div>
-
-
-
-    @* ===== ACHIEVEMENTS ===== *@
-    @if (achievements.Count > 0)
-    {
-        <div class="td-card td-anim-up td-delay-2">
-            <div class="td-section-header">
                 <div class="td-section-title">🏅 Thành tích đạt được</div>
-                <span class="td-total-badge">Đã đạt @achUnlocked/@achTotal</span>
+                <div class="td-section-subtitle">Huy hiệu bạn đã xuất sắc mở khóa trong quá trình luyện tập</div>
             </div>
-            <div class="td-grid-4 td-grid-tight">
-                @foreach (var a in achievements)
+            <a href="/toeic/achievements" class="td-section-link">
+                Xem tất cả (@achUnlocked/@achTotal) <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+
+        @{
+            var unlockedAchievements = achievements.Where(a => a.Unlocked).Take(3).ToList();
+        }
+
+        @if (unlockedAchievements.Count > 0)
+        {
+            <div class="td-grid-3 td-grid-tight">
+                @foreach (var a in unlockedAchievements)
                 {
-                    <div class="td-ach @(a.Unlocked ? "unlocked" : "locked")">
-                        @if (a.Unlocked)
-                        {
-                            <span class="td-ach-check"><i class="bi bi-check-lg"></i></span>
-                        }
+                    <div class="td-ach unlocked">
+                        <span class="td-ach-check"><i class="bi bi-check-lg"></i></span>
                         <div class="td-ach-icon">@a.Icon</div>
                         <div class="td-ach-title">@a.Title</div>
                         <div class="td-ach-desc">@a.Description</div>
-                        <div class="td-progress-bar"><div class="td-progress-fill @(a.Unlocked ? "green" : "purple")" style="width:@a.ProgressPercent%"></div></div>
-                        <span class="td-ach-progress-text">@a.ProgressText</span>
+                        <div class="td-progress-bar"><div class="td-progress-fill green" style="width:100%"></div></div>
+                        <span class="td-ach-progress-text"><i class="bi bi-patch-check-fill text-success"></i> Đã đạt</span>
                     </div>
                 }
             </div>
+        }
+        else
+        {
+            <div class="td-empty" style="padding: 24px 16px;">
+                <div class="td-empty-icon">🎯</div>
+                <div class="td-empty-title">Chưa có thành tích nào được mở khóa</div>
+                <div class="td-empty-sub">Hãy hoàn thành bài thi TOEIC đầu tiên hoặc học 50 từ flashcard để nhận huy hiệu đầu tiên!</div>
+                <a href="/toeic/test" class="td-btn td-btn-primary td-btn-sm"><i class="bi bi-play-fill"></i> Bắt đầu bài thi ngay</a>
+            </div>
+        }
+
+        <div class="td-ach-footer">
+            <a href="/toeic/achievements" class="td-ach-more-btn">
+                <span>Xem thêm thành tích (@achTotal huy hiệu)</span>
+                <i class="bi bi-arrow-right"></i>
+            </a>
         </div>
-    }
+    </div>
 
     @* ===== INTERACTIVE QUIZ MODAL ===== *@
     @if (activeQuiz != null)
@@ -459,7 +409,6 @@
 @code {
     private sealed record ToeicWord(string Word, string Ipa, string Meaning, string Example);
     private sealed record ToeicPartInfo(string Number, string Name, string Desc, int Questions);
-    private sealed record LeaderboardUser(int Rank, string Name, int Xp, bool IsSelf);
 
     public sealed class QuizQuestion
     {
@@ -719,9 +668,6 @@
     private bool isBookmarked;
     private int bonusXp = 0;
 
-    // Leaderboard
-    private string leaderboardTab = "week";
-
     // Quiz Modal
     private QuickQuiz? activeQuiz;
     private int quizQuestionIndex;
@@ -808,57 +754,6 @@
             await JS.InvokeVoidAsync("speakText", text);
         }
         catch { }
-    }
-
-    private void SetLeaderboardTab(string tab)
-    {
-        leaderboardTab = tab;
-    }
-
-    private int GetPodiumXp(string name)
-    {
-        return (leaderboardTab, name) switch
-        {
-            ("week", "Minh Tuấn") => 2840,
-            ("week", "Thu Hà") => 2610,
-            ("week", "Hữu Nam") => 2200,
-
-            ("month", "Minh Tuấn") => 8920,
-            ("month", "Thu Hà") => 7850,
-            ("month", "Hữu Nam") => 6940,
-
-            ("all", "Minh Tuấn") => 24500,
-            ("all", "Thu Hà") => 21300,
-            ("all", "Hữu Nam") => 18700,
-
-            _ => 1000
-        };
-    }
-
-    private List<LeaderboardUser> CurrentLeaderboardRankings
-    {
-        get
-        {
-            var multiplier = leaderboardTab switch
-            {
-                "month" => 3,
-                "all" => 10,
-                _ => 1
-            };
-
-            var userXp = (1240 + bonusXp) * (leaderboardTab == "week" ? 1 : (leaderboardTab == "month" ? 3 : 9));
-
-            return new List<LeaderboardUser>
-            {
-                new(4, "Lan Anh", 1980 * multiplier, false),
-                new(5, "Bạn", userXp, true),
-                new(6, "Quốc Bảo", 1100 * multiplier, false),
-                new(7, "Ngọc Mai", 980 * multiplier, false),
-                new(8, "Văn Hùng", 860 * multiplier, false),
-                new(9, "Phương Linh", 720 * multiplier, false),
-                new(10, "Tuấn Anh", 640 * multiplier, false),
-            };
-        }
     }
 
     // Quiz Handler
