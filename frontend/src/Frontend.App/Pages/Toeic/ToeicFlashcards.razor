@@ -7,6 +7,7 @@
 @inject IJSRuntime JS
 @inject ILocalStorageService LocalStorage
 @inject ToeicStudyTrackerService Tracker
+@inject ToeicVocabularyService VocabService
 @implements IDisposable
 
 <PageTitle>Flashcard &amp; Từ vựng TOEIC - ieltsHSK</PageTitle>
@@ -359,6 +360,9 @@
     private string topicFilter = "Tất cả";
     private bool autoSpeak = true;
 
+    [SupplyParameterFromQuery(Name = "mode")]
+    public string? Mode { get; set; }
+
     // View Mode & Table filter
     private string viewMode = "flashcards"; // "flashcards" | "table"
     private string tableSearch = "";
@@ -425,41 +429,32 @@
         Tracker.StartTracking();
         try
         {
-            var baseWords = await Http.GetFromJsonAsync<List<ToeicVocabItem>>("sample-data/toeic-vocabulary.json") ?? new List<ToeicVocabItem>();
-            allWords = baseWords;
+            allWords = await VocabService.GetVocabulariesAsync();
+            customWords = allWords.Where(w => w.IsCustom).ToList();
+            var (l, a) = await VocabService.GetProgressAsync(allWords);
+            learned = l;
+            againSet = a;
         }
-        catch
+        catch (Exception ex)
         {
             loadError = "Không tải được dữ liệu từ vựng.";
+            Console.WriteLine($"[ToeicFlashcards] Init note: {ex.Message}");
         }
-
-        try
-        {
-            customWords = await LocalStorage.GetItemAsync<List<ToeicVocabItem>>(CustomVocabKey) ?? new();
-            foreach (var cw in customWords)
-            {
-                cw.IsCustom = true;
-                if (!allWords.Any(w => w.Id == cw.Id))
-                {
-                    allWords.Add(cw);
-                }
-            }
-        }
-        catch { }
-
-        try
-        {
-            var state = await LocalStorage.GetItemAsync<ToeicFlashcardState>(StateKey);
-            if (state != null)
-            {
-                learned = state.Learned.ToHashSet();
-                againSet = state.Again.ToHashSet();
-            }
-        }
-        catch { }
 
         BuildDeck();
         loading = false;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (string.Equals(Mode, "table", StringComparison.OrdinalIgnoreCase))
+        {
+            viewMode = "table";
+        }
+        else if (string.Equals(Mode, "flashcards", StringComparison.OrdinalIgnoreCase))
+        {
+            viewMode = "flashcards";
+        }
     }
 
     private void BuildDeck()
@@ -502,6 +497,7 @@
         var id = deck[index].Id;
         learned.Add(id);
         againSet.Remove(id);
+        _ = VocabService.UpdateProgressAsync(id, "Learned");
         await SaveStateAsync();
 
         flipped = false;
@@ -518,6 +514,7 @@
         var card = deck[index];
         againSet.Add(card.Id);
         learned.Remove(card.Id);
+        _ = VocabService.UpdateProgressAsync(card.Id, "Again");
         await SaveStateAsync();
 
         deck.RemoveAt(index);
@@ -534,11 +531,13 @@
         {
             learned.Remove(item.Id);
             againSet.Add(item.Id);
+            _ = VocabService.UpdateProgressAsync(item.Id, "Again");
         }
         else
         {
             learned.Add(item.Id);
             againSet.Remove(item.Id);
+            _ = VocabService.UpdateProgressAsync(item.Id, "Learned");
         }
         await SaveStateAsync();
         BuildDeck();
@@ -561,6 +560,10 @@
 
     private async Task ResetProgressAsync()
     {
+        foreach (var id in learned.Concat(againSet).ToList())
+        {
+            _ = VocabService.UpdateProgressAsync(id, "None");
+        }
         learned.Clear();
         againSet.Clear();
         await SaveStateAsync();
@@ -571,11 +574,7 @@
     {
         try
         {
-            await LocalStorage.SetItemAsync(StateKey, new ToeicFlashcardState
-            {
-                Learned = learned.ToList(),
-                Again = againSet.ToList()
-            });
+            await VocabService.SaveLocalStateAsync(learned, againSet);
         }
         catch { }
     }
@@ -628,20 +627,34 @@
             return;
         }
 
-        var nextId = allWords.Count > 0 ? allWords.Max(w => w.Id) + 1 : 1000;
-        var newItem = new ToeicVocabItem
-        {
-            Id = nextId,
-            Word = newWord.Trim(),
-            Ipa = string.IsNullOrWhiteSpace(newIpa) ? "/—/" : newIpa.Trim(),
-            Meaning = newMeaning.Trim(),
-            Topic = string.IsNullOrWhiteSpace(newTopic) ? "Khác" : newTopic.Trim(),
-            Example = string.IsNullOrWhiteSpace(newExample) ? "" : newExample.Trim(),
-            IsCustom = true
-        };
+        var created = await VocabService.CreateCustomVocabAsync(
+            newWord.Trim(),
+            newIpa,
+            newMeaning.Trim(),
+            newExample,
+            newTopic);
 
-        customWords.Add(newItem);
-        allWords.Add(newItem);
+        if (created != null)
+        {
+            customWords.Add(created);
+            allWords.Add(created);
+        }
+        else
+        {
+            var nextId = allWords.Count > 0 ? allWords.Max(w => w.Id) + 1 : 1000;
+            var newItem = new ToeicVocabItem
+            {
+                Id = nextId,
+                Word = newWord.Trim(),
+                Ipa = string.IsNullOrWhiteSpace(newIpa) ? "/—/" : newIpa.Trim(),
+                Meaning = newMeaning.Trim(),
+                Topic = string.IsNullOrWhiteSpace(newTopic) ? "Khác" : newTopic.Trim(),
+                Example = string.IsNullOrWhiteSpace(newExample) ? "" : newExample.Trim(),
+                IsCustom = true
+            };
+            customWords.Add(newItem);
+            allWords.Add(newItem);
+        }
 
         try
         {
@@ -655,6 +668,8 @@
 
     private async Task DeleteCustomWordAsync(ToeicVocabItem item)
     {
+        _ = VocabService.DeleteCustomVocabAsync(item.Id);
+        _ = VocabService.UpdateProgressAsync(item.Id, "None");
         customWords.RemoveAll(w => w.Id == item.Id);
         allWords.RemoveAll(w => w.Id == item.Id);
         learned.Remove(item.Id);

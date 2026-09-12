@@ -14,6 +14,7 @@
 @inject ProfileService ProfileSvc
 @inject IJSRuntime JS
 @inject NavigationManager NavManager
+@inject UserGameProgressService GameProgressService
 @implements IDisposable
 
 <PageTitle>Đấu Trường Trò Chơi Học Tập - ieltsHSK</PageTitle>
@@ -1322,10 +1323,10 @@ else if (selectedGameForInfo == "hsk-shooter")
             int totalCleared = 0;
             foreach (var lvl in new[] { "HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6" })
             {
-                var raw = await JS.InvokeAsync<string?>("localStorage.getItem", $"hsk_max_unlocked_{lvl}");
-                if (int.TryParse(raw, out var unlocked) && unlocked > 0)
+                var (_, unlocked, _) = await GameProgressService.LoadProgressAsync("hsk_shooter", lvl);
+                if (unlocked > 0)
                 {
-                    // localStorage stores 0-indexed stage; display as 1-indexed count
+                    // stage index is 0-indexed; display as count
                     totalCleared += unlocked;
                     if (unlocked + 1 > bestStage) bestStage = unlocked + 1;
                 }
@@ -1956,26 +1957,21 @@ else if (selectedGameForInfo == "hsk-shooter")
         _totalStages = (int)Math.Ceiling(hskVocabPool.Count / (double)WordsPerStage);
         if (_totalStages == 0) _totalStages = 1;
 
-        // Check LocalStorage for saved progress and max unlocked stage
+        // Check database / LocalStorage for saved progress and max unlocked stage
         try
         {
-            var savedStageStr = await JS.InvokeAsync<string>("localStorage.getItem", $"hsk_progress_{level}");
-            var maxUnlockedStr = await JS.InvokeAsync<string>("localStorage.getItem", $"hsk_max_unlocked_{level}");
+            var (savedStage, maxUnlocked, _) = await GameProgressService.LoadProgressAsync("hsk_shooter", level);
 
-            if (int.TryParse(maxUnlockedStr, out var maxUnlocked) && maxUnlocked >= 0)
+            if (maxUnlocked >= 0)
             {
                 _maxUnlockedStageIndex = Math.Min(maxUnlocked, _totalStages - 1);
-            }
-            else if (int.TryParse(savedStageStr, out var savedFallback) && savedFallback >= 0)
-            {
-                _maxUnlockedStageIndex = Math.Min(savedFallback, _totalStages - 1);
             }
             else
             {
                 _maxUnlockedStageIndex = 0;
             }
 
-            if (int.TryParse(savedStageStr, out var savedStage) && savedStage > 0 && savedStage < _totalStages)
+            if (savedStage > 0 && savedStage < _totalStages)
             {
                 _savedStageIndex = savedStage;
                 _showResumeDialog = true;
@@ -1984,7 +1980,7 @@ else if (selectedGameForInfo == "hsk-shooter")
                 return;
             }
         }
-        catch { /* Ignore JS interop errors during prerendering/initialization */ }
+        catch { /* Ignore errors during prerendering/initialization */ }
 
         await StartFreshFromStage0();
     }
@@ -2041,13 +2037,8 @@ else if (selectedGameForInfo == "hsk-shooter")
         hskBullets.Clear();
         hskImpacts.Clear();
         
-        // Save progress & max unlocked
-        try
-        {
-            await JS.InvokeVoidAsync("localStorage.setItem", $"hsk_progress_{hskShooterSelectedLevel}", _currentStageIndex.ToString());
-            await JS.InvokeVoidAsync("localStorage.setItem", $"hsk_max_unlocked_{hskShooterSelectedLevel}", _maxUnlockedStageIndex.ToString());
-        }
-        catch { }
+        // Save progress & max unlocked to database & local cache
+        _ = GameProgressService.SaveProgressAsync("hsk_shooter", hskShooterSelectedLevel, _currentStageIndex, _maxUnlockedStageIndex, hskScore);
 
         int skip = stageIndex * WordsPerStage;
         int take = (stageIndex == _totalStages - 1) ? hskVocabPool.Count - skip : WordsPerStage;
@@ -2084,11 +2075,7 @@ else if (selectedGameForInfo == "hsk-shooter")
         _showStageComplete = true;
         _stageCountdown = 3;
         _maxUnlockedStageIndex = Math.Max(_maxUnlockedStageIndex, Math.Min(_currentStageIndex + 1, _totalStages - 1));
-        try
-        {
-            _ = JS.InvokeVoidAsync("localStorage.setItem", $"hsk_max_unlocked_{hskShooterSelectedLevel}", _maxUnlockedStageIndex.ToString());
-        }
-        catch { }
+        _ = GameProgressService.SaveProgressAsync("hsk_shooter", hskShooterSelectedLevel, _currentStageIndex, _maxUnlockedStageIndex, hskScore);
         StateHasChanged();
         _ = FocusHskOverlay();
 

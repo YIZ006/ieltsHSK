@@ -1054,11 +1054,24 @@
         _ => "td-score-low"
     };
 
-    private async void HandleStudyTimeChanged()
+    private void HandleStudyTimeChanged()
     {
-        await InvokeAsync(async () =>
+        _ = InvokeAsync(async () =>
         {
-            await LoadWeeklyActivityAsync();
+            if (weeklyActivity == null || weeklyActivity.Count == 0)
+            {
+                await LoadWeeklyActivityAsync();
+            }
+            else
+            {
+                var todaySec = await Tracker.GetSecondsForDateAsync(DateTime.Today);
+                var idx = weeklyActivity.FindIndex(a => a.IsToday);
+                if (idx >= 0)
+                {
+                    var cur = weeklyActivity[idx];
+                    weeklyActivity[idx] = cur with { Seconds = todaySec, Minutes = todaySec / 60 };
+                }
+            }
             StateHasChanged();
         });
     }
@@ -1075,11 +1088,11 @@
     private string FormatTodayStudyTime()
     {
         var todayAct = weeklyActivity.FirstOrDefault(a => a.IsToday);
-        if (todayAct == null || todayAct.Seconds <= 0) return "0 phút";
+        if (todayAct == null || todayAct.Seconds <= 0) return "0s";
         var m = todayAct.Seconds / 60;
         var s = todayAct.Seconds % 60;
-        if (m == 0) return $"{s} giây";
-        return s > 0 ? $"{m} phút {s}s" : $"{m} phút";
+        if (m == 0) return $"{s}s";
+        return $"{m} phút {s}s";
     }
 
     public void Dispose()

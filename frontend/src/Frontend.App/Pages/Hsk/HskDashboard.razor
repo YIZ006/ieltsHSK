@@ -10,6 +10,7 @@
 @inject ILocalStorageService LocalStorage
 @inject NavigationManager NavigationManager
 @inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
+@inject ExamSubmissionService SubmissionService
 
 <PageTitle>HSK Dashboard - Học tập hôm nay</PageTitle>
 
@@ -168,14 +169,39 @@
         // Load learned state from localStorage
         await LoadLearnedState();
 
-        // Load recent results from local storage
+        // Load recent results from database (ExamSubmissionService) with localStorage fallback
         recentResults = new List<HskRecentResult>();
         try
         {
-            var stored = await LocalStorage.GetItemAsync<List<HskRecentResult>>("hsk_recent_results");
-            if (stored != null) recentResults = stored;
+            var subs = await SubmissionService.GetAllAsync();
+            var hskSubs = subs
+                .Where(s => (s.Skill ?? "").Contains("hsk", StringComparison.OrdinalIgnoreCase) || (s.ExamUrl ?? "").Contains("hsk", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(s => s.SubmittedAt)
+                .Take(5)
+                .ToList();
+
+            if (hskSubs.Count > 0)
+            {
+                recentResults = hskSubs.Select(s => new HskRecentResult
+                {
+                    Skill = s.Skill ?? "HSK Test",
+                    Score = s.BandScore.GetValueOrDefault(),
+                    Passed = s.BandScore.GetValueOrDefault() >= 60 || (s.TotalQuestions.GetValueOrDefault() > 0 && s.CorrectCount.GetValueOrDefault() * 100 / s.TotalQuestions.GetValueOrDefault(1) >= 60),
+                    SubmittedAt = s.SubmittedAt.LocalDateTime
+                }).ToList();
+            }
         }
         catch { }
+
+        if (recentResults.Count == 0)
+        {
+            try
+            {
+                var stored = await LocalStorage.GetItemAsync<List<HskRecentResult>>("hsk_recent_results");
+                if (stored != null) recentResults = stored;
+            }
+            catch { }
+        }
     }
 
     private async Task LoadLearnedState()

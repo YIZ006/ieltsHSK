@@ -36,19 +36,47 @@ else if (showTestList)
                 <span class="r2-pulse-dot"></span>
                 <span><i class="bi bi-cloud-check-fill"></i> Cloudflare R2</span>
             </div>
-            <button class="btn-refresh-r2" @onclick="RefreshTestsAsync" title="Quét lại folder R2 để tìm đề mới">
-                <i class="bi bi-arrow-clockwise @(isLoading ? "spin" : "")"></i> Làm mới đề
-            </button>
+            <div class="toeic-topbar-actions">
+                <button class="btn-refresh-r2" @onclick="RefreshTestsAsync" title="Quét lại folder R2 để tìm đề mới">
+                    <i class="bi bi-arrow-clockwise @(isLoading ? "spin" : "")"></i> Làm mới đề
+                </button>
+            </div>
         </div>
 
         <div class="header-logo" style="justify-content: center; margin-top: 1.5rem; margin-bottom: 0.5rem;">
             <span class="logo-icon">🎓</span>
             <span class="header-title" style="font-size: 2rem;">HỆ THỐNG THI TRỰC TUYẾN</span>
         </div>
-        <h2 style="text-align: center; color: #0d1b2a; margin-bottom: 1.75rem;">
+        <h2 style="text-align: center; color: #0d1b2a; margin-bottom: 1.25rem;">
             Danh sách đề thi TOEIC (@(availableTests?.Count ?? 0) đề)
         </h2>
-        
+
+        @* ── THANH LỌC NĂM & SẮP XẾP ĐỀ ── *@
+        @if (availableTests != null && availableTests.Any())
+        {
+            <div class="toeic-filter-toolbar">
+                <div class="filter-pills-group">
+                    <button type="button" class="filter-pill @(selectedYear == null ? "active" : "")" @onclick="() => SelectYear(null)">
+                        <i class="bi bi-grid-fill"></i> Tất cả (@availableTests.Count)
+                    </button>
+                    @foreach (var y in AvailableYears)
+                    {
+                        var count = availableTests.Count(t => ExtractYear(t.CollectionName, t.Title) == y);
+                        <button type="button" class="filter-pill @(selectedYear == y ? "active" : "")" @onclick="() => SelectYear(y)">
+                            <i class="bi bi-calendar3"></i> Năm @y (@count)
+                        </button>
+                    }
+                </div>
+                <div class="sort-order-group">
+                    <button type="button" class="btn-sort-toggle" @onclick="ToggleYearSort" title="Nhấp để đổi thứ tự sắp xếp theo năm">
+                        <i class="bi bi-arrow-down-up"></i>
+                        <span>Năm: @(sortYearDescending ? "Mới nhất (2026 → cũ)" : "Cũ nhất (cũ → 2026)")</span>
+                    </button>
+                </div>
+            </div>
+        }
+
+        @* ── DANH SÁCH ĐỀ THI (SẮP XẾP THEO NĂM, TRONG 1 NĂM XẾP TỪ TEST 1) ── *@
         @if (availableTests == null || !availableTests.Any())
         {
             <div class="toeic-empty-r2">
@@ -59,22 +87,142 @@ else if (showTestList)
         }
         else
         {
-            <div class="test-grid">
-                @foreach (var t in availableTests)
+            <div class="toeic-year-groups-list">
+                @foreach (var group in GroupedTests)
                 {
-                    <div class="test-card" @onclick="() => GoToTest(t.ToeicUrl)">
-                        <div class="test-collection">@t.CollectionName</div>
-                        <div class="test-title">@t.Title</div>
-                        <div class="test-meta-pills">
-                            <span><i class="bi bi-clock"></i> 120 phút</span>
-                            <span><i class="bi bi-ui-checks"></i> 200 câu</span>
-                            <span><i class="bi bi-layers"></i> 7 Parts</span>
+                    <div class="toeic-year-group-box">
+                        <div class="year-group-header">
+                            <div class="year-group-header-left">
+                                <span class="year-group-badge"><i class="bi bi-award-fill"></i> @(group.Year > 0 ? $"NĂM {group.Year}" : "BỘ ĐỀ")</span>
+                                <span class="year-group-title">@group.CollectionName</span>
+                            </div>
+                            <div class="year-group-header-right">
+                                <span class="year-group-hint"><i class="bi bi-sort-numeric-down"></i> @group.Tests.Count đề · Xếp từ Test 1</span>
+                            </div>
                         </div>
-                        <button class="btn-start">Làm bài →</button>
+
+                        <div class="test-grid">
+                            @foreach (var t in group.Tests)
+                            {
+                                <div class="test-card" @onclick="() => GoToTest(t.ToeicUrl)">
+                                    <div class="test-collection">@t.CollectionName</div>
+                                    <div class="test-title">@t.Title</div>
+                                    <div class="test-meta-pills">
+                                        <span><i class="bi bi-clock"></i> 120 phút</span>
+                                        <span><i class="bi bi-ui-checks"></i> 200 câu</span>
+                                        <span><i class="bi bi-layers"></i> 7 Parts</span>
+                                    </div>
+                                    <button class="btn-start">Làm bài →</button>
+                                </div>
+                            }
+                        </div>
                     </div>
                 }
             </div>
         }
+
+        @* ── DROPDOWN LỊCH SỬ LÀM BÀI (HIỂN THỊ BÊN DƯỚI DANH SÁCH ĐỀ) ── *@
+        <div class="toeic-history-dropdown-section">
+            <button type="button" class="btn-history-dropdown-trigger @(isHistoryExpanded ? "expanded" : "")" @onclick="ToggleHistoryDropdown">
+                <div class="trigger-left">
+                    <span class="trigger-icon"><i class="bi bi-clock-history"></i></span>
+                    <span class="trigger-text">Lịch sử làm bài</span>
+                    @if (toeicSubmissions.Count > 0)
+                    {
+                        <span class="history-count-badge">@toeicSubmissions.Count đề đã làm</span>
+                    }
+                </div>
+                <div class="trigger-right">
+                    <span class="trigger-toggle-label">@(isHistoryExpanded ? "Thu gọn" : "Xem danh sách")</span>
+                    <i class="bi @(isHistoryExpanded ? "bi-chevron-up" : "bi-chevron-down") trigger-arrow"></i>
+                </div>
+            </button>
+
+            @if (isHistoryExpanded)
+            {
+                <div class="toeic-history-dropdown-panel">
+                    @if (isLoadingHistory)
+                    {
+                        <div class="toeic-history-loading">
+                            <div class="loading-spinner"></div>
+                            <p>Đang tải lịch sử bài thi...</p>
+                        </div>
+                    }
+                    else if (toeicSubmissions.Count == 0)
+                    {
+                        <div class="toeic-history-empty">
+                            <div class="history-empty-icon">📝</div>
+                            <h4>Chưa có bài thi nào</h4>
+                            <p>Bạn chưa nộp bài thi TOEIC nào. Hãy chọn một đề thi bên trên để bắt đầu thử sức nhé!</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="toeic-history-list">
+                            @foreach (var sub in toeicSubmissions)
+                            {
+                                <div class="toeic-history-card">
+                                    <div class="toeic-history-card-main">
+                                        <div class="history-exam-name">
+                                            @(string.IsNullOrWhiteSpace(sub.ExamTitle) ? (string.IsNullOrWhiteSpace(sub.TestTitle) ? "Đề thi TOEIC" : sub.TestTitle) : sub.ExamTitle)
+                                        </div>
+                                        <div class="history-meta-row">
+                                            <span><i class="bi bi-calendar3"></i> @sub.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                                            <span><i class="bi bi-clock"></i> @FormatDuration(sub.DurationSeconds)</span>
+                                            @if (sub.CorrectCount.HasValue && sub.TotalQuestions.HasValue)
+                                            {
+                                                <span><i class="bi bi-check2-circle"></i> Đúng @sub.CorrectCount/@sub.TotalQuestions câu</span>
+                                            }
+                                        </div>
+                                        @if (sub.ListeningScore.HasValue || sub.ReadingScore.HasValue)
+                                        {
+                                            <div class="history-subscores">
+                                                @if (sub.ListeningScore.HasValue)
+                                                {
+                                                    <span class="subscore-pill listening"><i class="bi bi-headphones"></i> Listening: <b>@sub.ListeningScore</b>/495</span>
+                                                }
+                                                @if (sub.ReadingScore.HasValue)
+                                                {
+                                                    <span class="subscore-pill reading"><i class="bi bi-book"></i> Reading: <b>@sub.ReadingScore</b>/495</span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <div class="toeic-history-card-side">
+                                        @if (sub.TotalScore.HasValue)
+                                        {
+                                            <div class="history-total-badge @ScoreClass(sub.TotalScore)">
+                                                <span class="history-total-num">@sub.TotalScore.Value</span>
+                                                <span class="history-total-max">/990</span>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="history-status-badge @(sub.TimedOut ? "timed-out" : "submitted")">
+                                                @(sub.TimedOut ? "Hết giờ" : "Đã nộp")
+                                            </div>
+                                        }
+
+                                        <div class="history-card-actions">
+                                            <button type="button" class="btn-review-exam" @onclick="() => ReviewExam(sub)" title="Xem lại bài làm và lời giải">
+                                                <i class="bi bi-eye"></i> Xem lại bài
+                                            </button>
+                                            @if (!string.IsNullOrWhiteSpace(sub.ExamUrl))
+                                            {
+                                                <button type="button" class="btn-retake" @onclick="() => RetakeExam(sub.ExamUrl)" title="Làm lại đề thi này">
+                                                    <i class="bi bi-arrow-repeat"></i> Làm lại
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
     </div>
 }
 else if (exam == null)
@@ -245,7 +393,7 @@ else
                 <div class="toeic-review-tag">
                     <i class="bi bi-eye"></i> <span>ĐANG XEM ĐÁP ÁN</span>
                 </div>
-                <button type="button" class="btn-save-exit" @onclick='() => NavManager.NavigateTo("/toeic/test")' title="Về danh sách đề">
+                <button type="button" class="btn-save-exit" @onclick="ReturnToTestList" title="Về danh sách đề">
                     <i class="bi bi-arrow-left"></i> <span>Danh sách đề</span>
                 </button>
                 <button type="button" class="btn-nopbai" @onclick='() => showResult = true' title="Xem bảng điểm">
@@ -851,7 +999,91 @@ else
 
     private string loadError = "";
     private List<MockTestDto>? availableTests;
-    private bool showTestList => string.IsNullOrWhiteSpace(ExamUrl);
+    private bool showTestList => string.IsNullOrWhiteSpace(ExamUrl) && !showAnswers;
+
+    // ── LỊCH SỬ BÀI THI TOEIC ──
+    private List<IeltsSubmissionRecord> toeicSubmissions = new();
+    private bool isHistoryExpanded = false;
+    private bool isLoadingHistory = false;
+
+    // ── LỌC VÀ SẮP XẾP ĐỀ THEO NĂM & TEST 1 ──
+    private int? selectedYear = null;
+    private bool sortYearDescending = true;
+
+    private static int ExtractYear(string? collection, string? title)
+    {
+        var text = $"{collection} {title}";
+        var match = System.Text.RegularExpressions.Regex.Match(text, @"(20\d\d)");
+        return match.Success && int.TryParse(match.Groups[1].Value, out var y) ? y : 0;
+    }
+
+    private static int ExtractTestNumber(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return int.MaxValue;
+        var match = System.Text.RegularExpressions.Regex.Match(title, @"Test\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var n)) return n;
+        var m2 = System.Text.RegularExpressions.Regex.Match(title, @"(\d+)");
+        return m2.Success && int.TryParse(m2.Groups[1].Value, out var n2) ? n2 : int.MaxValue;
+    }
+
+    private List<int> AvailableYears => (availableTests ?? new())
+        .Select(t => ExtractYear(t.CollectionName, t.Title))
+        .Where(y => y > 0)
+        .Distinct()
+        .OrderByDescending(y => y)
+        .ToList();
+
+    private sealed class ToeicYearGroup
+    {
+        public int Year { get; set; }
+        public string CollectionName { get; set; } = "";
+        public List<MockTestDto> Tests { get; set; } = new();
+    }
+
+    private List<ToeicYearGroup> GroupedTests
+    {
+        get
+        {
+            if (availableTests == null || !availableTests.Any()) return new();
+
+            var filtered = availableTests.AsEnumerable();
+            if (selectedYear.HasValue)
+            {
+                filtered = filtered.Where(t => ExtractYear(t.CollectionName, t.Title) == selectedYear.Value);
+            }
+
+            var groups = filtered
+                .GroupBy(t =>
+                {
+                    var y = ExtractYear(t.CollectionName, t.Title);
+                    return (Year: y, Collection: string.IsNullOrWhiteSpace(t.CollectionName) ? (y > 0 ? $"TOEIC ETS {y}" : "Đề thi TOEIC") : t.CollectionName);
+                });
+
+            var orderedGroups = sortYearDescending
+                ? groups.OrderByDescending(g => g.Key.Year)
+                : groups.OrderBy(g => g.Key.Year);
+
+            return orderedGroups
+                .Select(g => new ToeicYearGroup
+                {
+                    Year = g.Key.Year,
+                    CollectionName = g.Key.Collection,
+                    // Trong 1 năm luôn luôn xếp từ Test 1 đi:
+                    Tests = g.OrderBy(t => ExtractTestNumber(t.Title)).ThenBy(t => t.Title).ToList()
+                })
+                .ToList();
+        }
+    }
+
+    private void SelectYear(int? year)
+    {
+        selectedYear = year;
+    }
+
+    private void ToggleYearSort()
+    {
+        sortYearDescending = !sortYearDescending;
+    }
 
     // ── SETUP SCREEN: chọn part & thời gian ──
     private bool showSetup = false;
@@ -930,6 +1162,7 @@ else
         try
         {
             availableTests = await MockTestService.GetToeicMockTestsAsync(forceRefresh: true);
+            await LoadToeicSubmissionsAsync();
         }
         catch (Exception ex)
         {
@@ -972,6 +1205,7 @@ else
                     showSetup = false;
                     exam = null;
                     availableTests = await MockTestService.GetToeicMockTestsAsync(forceRefresh: true);
+                    _ = LoadToeicSubmissionsAsync();
                 }
                 else
                 {
@@ -1622,6 +1856,26 @@ else
             var totalQuestions = exam.Parts.Sum(p => p.QuestionGroups.Sum(g => g.Questions.Count));
             var examUrl = string.IsNullOrWhiteSpace(_lastLoadKey) ? (ExamUrl ?? "") : _lastLoadKey;
 
+            var gradingQuestions = new Dictionary<int, QuestionResultRecord>();
+            foreach (var part in exam.Parts)
+            {
+                foreach (var g in part.QuestionGroups)
+                {
+                    foreach (var q in g.Questions)
+                    {
+                        var isCorrect = q.CorrectOptionId > 0 && q.SelectedOptionId.HasValue && q.SelectedOptionId.Value == q.CorrectOptionId;
+                        gradingQuestions[q.Id] = new QuestionResultRecord
+                        {
+                            QuestionNumber = q.Id,
+                            StudentAnswer = q.SelectedOptionId?.ToString() ?? "",
+                            CorrectAnswer = q.CorrectOptionId.ToString(),
+                            IsCorrect = isCorrect,
+                            IsBlank = !q.SelectedOptionId.HasValue
+                        };
+                    }
+                }
+            }
+
             await Submissions.SaveAsync(new IeltsSubmissionRecord
             {
                 Skill = "Toeic",
@@ -1633,7 +1887,13 @@ else
                 TotalQuestions = totalQuestions,
                 ListeningScore = listenScore,
                 ReadingScore = readScore,
-                TotalScore = totalScore
+                TotalScore = totalScore,
+                Grading = new GradingResultRecord
+                {
+                    CorrectCount = listenCorrect + readCorrect,
+                    TotalCount = totalQuestions,
+                    Questions = gradingQuestions
+                }
             });
         }
         catch (Exception ex)
@@ -1745,7 +2005,27 @@ else
     private void CloseResultModal()
     {
         showResult = false;
-        NavManager.NavigateTo("/toeic/test");
+        if (!showAnswers)
+        {
+            ReturnToTestList();
+        }
+    }
+
+    private void ReturnToTestList()
+    {
+        StopTimer();
+        StopAudioIfReview();
+        showAnswers = false;
+        showResult = false;
+        exam = null;
+        if (!string.IsNullOrWhiteSpace(ExamUrl))
+        {
+            NavManager.NavigateTo("/toeic/test");
+        }
+        else
+        {
+            StateHasChanged();
+        }
     }
 
     private void ShowAnswers()
@@ -1772,6 +2052,152 @@ else
                     .Replace("<purple>", "<span class=\"text-purple\">")
                     .Replace("</purple>", "</span>")
                     .Replace("\n", "<br/>");
+    }
+
+    private async Task ToggleHistoryDropdown()
+    {
+        isHistoryExpanded = !isHistoryExpanded;
+        if (isHistoryExpanded && toeicSubmissions.Count == 0)
+        {
+            await LoadToeicSubmissionsAsync();
+        }
+    }
+
+    private async Task ReviewExam(IeltsSubmissionRecord sub)
+    {
+        if (string.IsNullOrWhiteSpace(sub.ExamUrl)) return;
+        isLoading = true;
+        loadError = "";
+        StateHasChanged();
+        try
+        {
+            var url = DecodeExamUrl(sub.ExamUrl);
+            url = ToeicService.ResolveUrl(url);
+            var loaded = await ToeicService.LoadExamAsync(url);
+            if (loaded?.Parts?.Count > 0)
+            {
+                exam = loaded;
+                _masterParts = loaded.Parts.ToList();
+                _masterTotalQuestions = loaded.TotalQuestions > 0 ? loaded.TotalQuestions : loaded.Parts.Sum(CountQuestions);
+                _masterTotalTimeSeconds = loaded.TotalTimeSeconds > 0 ? loaded.TotalTimeSeconds : 7200;
+
+                // Khôi phục các câu trả lời của thí sinh nếu đã lưu trong grading
+                if (sub.Grading?.Questions != null && sub.Grading.Questions.Count > 0)
+                {
+                    foreach (var part in exam.Parts)
+                    {
+                        foreach (var group in part.QuestionGroups)
+                        {
+                            foreach (var q in group.Questions)
+                            {
+                                if (sub.Grading.Questions.TryGetValue(q.Id, out var qRes) &&
+                                    int.TryParse(qRes.StudentAnswer, out var optId))
+                                {
+                                    q.SelectedOptionId = optId;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                totalScore = sub.TotalScore ?? 0;
+                listenScore = sub.ListeningScore ?? 0;
+                readScore = sub.ReadingScore ?? 0;
+                listenCorrect = 0;
+                readCorrect = 0;
+                if (sub.Grading?.Questions != null && sub.Grading.Questions.Count > 0)
+                {
+                    int lc = 0, rc = 0;
+                    foreach (var part in exam.Parts)
+                    {
+                        bool isListening = part.HasListening || part.PartNumber <= 4;
+                        foreach (var g in part.QuestionGroups)
+                        {
+                            foreach (var q in g.Questions)
+                            {
+                                if (sub.Grading.Questions.TryGetValue(q.Id, out var qr) && qr.IsCorrect)
+                                {
+                                    if (isListening) lc++; else rc++;
+                                }
+                            }
+                        }
+                    }
+                    listenCorrect = lc;
+                    readCorrect = rc;
+                }
+                else if (sub.CorrectCount.HasValue)
+                {
+                    listenCorrect = sub.CorrectCount.Value;
+                }
+
+                secondsLeft = Math.Max(0, (exam.TotalTimeSeconds > 0 ? exam.TotalTimeSeconds : 7200) - sub.DurationSeconds);
+
+                StopTimer();
+                ExamHeader.Hide();
+                _ = ExamSession.SetUnloadWarningAsync(false);
+                showSetup = false;
+                showConfirm = false;
+                showResult = false;
+                showAnswers = true;
+                activePartIndex = 0;
+                activePageIndex = 0;
+                SetCurrentQuestion();
+            }
+            else
+            {
+                loadError = "Không tải được nội dung bài thi để xem lại.";
+            }
+        }
+        catch (Exception ex)
+        {
+            loadError = "Lỗi tải đề để xem lại: " + ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadToeicSubmissionsAsync()
+    {
+        isLoadingHistory = true;
+        try
+        {
+            var subs = await Submissions.GetAllAsync();
+            toeicSubmissions = subs
+                .Where(s => (s.ExamUrl ?? "").Contains("toeic", StringComparison.OrdinalIgnoreCase)
+                            || (s.Skill ?? "").Contains("toeic", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(s => s.SubmittedAt)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ToeicTest] Load history error: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingHistory = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string ScoreClass(int? score) => score switch
+    {
+        >= 780 => "score-high",
+        >= 500 => "score-mid",
+        _ => "score-low"
+    };
+
+    private void RetakeExam(string? examUrl)
+    {
+        isHistoryExpanded = false;
+        showAnswers = false;
+        exam = null;
+        if (!string.IsNullOrWhiteSpace(examUrl))
+        {
+            GoToTest(examUrl);
+        }
     }
 
     public void Dispose()

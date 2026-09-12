@@ -51,9 +51,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnTokenValidated = async context =>
             {
-                var dbContext = context.HttpContext.RequestServices
-                    .GetRequiredService<Backend.Infrastructure.Persistence.AppDbContext>();
-                // Tuỳ cấu hình MapInboundClaims, claim "sub" có thể bị đổi tên thành NameIdentifier
                 var userIdClaim = context.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
                     ?? context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 if (!int.TryParse(userIdClaim, out var userId))
@@ -62,8 +59,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     return;
                 }
 
-                var user = await dbContext.Users.FindAsync(new object[] { userId }, context.HttpContext.RequestAborted);
-                if (user == null || !user.IsActive)
+                var cache = context.HttpContext.RequestServices.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
+                var cacheKey = $"auth_user_active_{userId}";
+
+                if (!cache.TryGetValue(cacheKey, out bool isActive))
+                {
+                    var dbContext = context.HttpContext.RequestServices
+                        .GetRequiredService<Backend.Infrastructure.Persistence.AppDbContext>();
+                    var user = await dbContext.Users.FindAsync(new object[] { userId }, context.HttpContext.RequestAborted);
+                    isActive = user != null && user.IsActive;
+                    cache.Set(cacheKey, isActive, TimeSpan.FromSeconds(60));
+                }
+
+                if (!isActive)
                 {
                     context.Fail("Account is disabled or no longer exists.");
                 }
@@ -924,10 +932,18 @@ app.MapGet("/api/user/me", [Microsoft.AspNetCore.Authorization.Authorize] async 
             {
                 dbUser.Id,
                 dbUser.Username,
+                dbUser.UsernameChangedAt,
                 dbUser.FullName,
                 dbUser.Email,
                 dbUser.Role,
                 dbUser.Avatar,
+                dbUser.AvatarColor,
+                dbUser.Bio,
+                dbUser.TargetExam,
+                dbUser.TargetScore,
+                dbUser.TargetDeadline,
+                dbUser.IeltsLevel,
+                dbUser.HskLevel,
                 dbUser.Level,
                 dbUser.Xp,
                 dbUser.Streak,
@@ -958,6 +974,22 @@ app.MapPut("/api/user/profile", [Microsoft.AspNetCore.Authorization.Authorize] a
 
                 if (!string.Equals(dbUser.Username, newUsername, StringComparison.OrdinalIgnoreCase))
                 {
+                    if (dbUser.UsernameChangedAt.HasValue)
+                    {
+                        var daysSinceChange = (DateTime.UtcNow - dbUser.UsernameChangedAt.Value).TotalDays;
+                        if (daysSinceChange < 30)
+                        {
+                            var daysLeft = Math.Max(1, (int)Math.Ceiling(30 - daysSinceChange));
+                            var nextAllowed = dbUser.UsernameChangedAt.Value.AddDays(30);
+                            return Results.BadRequest(new
+                            {
+                                message = $"Bạn chỉ có thể đổi tên hiển thị 30 ngày một lần. Vui lòng quay lại sau {daysLeft} ngày nữa (ngày {nextAllowed:dd/MM/yyyy}).",
+                                daysRemaining = daysLeft,
+                                nextAllowedAt = nextAllowed
+                            });
+                        }
+                    }
+
                     var isTaken = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
                         dbContext.Users,
                         u => u.Id != userId && u.Username.ToLower() == newUsername,
@@ -968,15 +1000,38 @@ app.MapPut("/api/user/profile", [Microsoft.AspNetCore.Authorization.Authorize] a
                         return Results.BadRequest(new { message = "Tên hiển thị (username) này đã có người sử dụng. Vui lòng chọn tên khác." });
                     }
                     dbUser.Username = newUsername;
+                    dbUser.UsernameChangedAt = DateTime.UtcNow;
                 }
             }
 
             if (!string.IsNullOrWhiteSpace(request.FullName)) dbUser.FullName = request.FullName.Trim();
             if (!string.IsNullOrWhiteSpace(request.Avatar)) dbUser.Avatar = request.Avatar.Trim();
+            if (request.AvatarColor != null) dbUser.AvatarColor = request.AvatarColor.Trim();
+            if (request.Bio != null) dbUser.Bio = request.Bio.Trim();
+            if (request.TargetExam != null) dbUser.TargetExam = request.TargetExam.Trim();
+            if (request.TargetScore != null) dbUser.TargetScore = request.TargetScore.Trim();
+            if (request.TargetDeadline.HasValue) dbUser.TargetDeadline = DateTime.SpecifyKind(request.TargetDeadline.Value, DateTimeKind.Utc);
+            if (request.IeltsLevel != null) dbUser.IeltsLevel = request.IeltsLevel.Trim();
+            if (request.HskLevel != null) dbUser.HskLevel = request.HskLevel.Trim();
             if (!string.IsNullOrWhiteSpace(request.Level)) dbUser.Level = request.Level.Trim();
             dbUser.UpdatedAt = DateTime.UtcNow;
             await dbContext.SaveChangesAsync(cancellationToken);
-            return Results.Ok(new { dbUser.Id, dbUser.Username, dbUser.FullName, dbUser.Avatar, dbUser.Level });
+            return Results.Ok(new
+            {
+                dbUser.Id,
+                dbUser.Username,
+                dbUser.UsernameChangedAt,
+                dbUser.FullName,
+                dbUser.Avatar,
+                dbUser.AvatarColor,
+                dbUser.Bio,
+                dbUser.TargetExam,
+                dbUser.TargetScore,
+                dbUser.TargetDeadline,
+                dbUser.IeltsLevel,
+                dbUser.HskLevel,
+                dbUser.Level
+            });
         }
     }
     return Results.Unauthorized();
@@ -1028,6 +1083,725 @@ app.MapPut("/api/user/level", [Microsoft.AspNetCore.Authorization.Authorize] asy
     return Results.Unauthorized();
 });
 
+// ==========================================
+// STUDY ACTIVITY & STREAK ENDPOINTS
+// ==========================================
+app.MapPost("/api/user/study-time", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.AddStudyTimeRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var dbUser = await dbContext.Users.FindAsync(new object[] { userId }, cancellationToken);
+    if (dbUser == null) return Results.Unauthorized();
+
+    if (request.Seconds <= 0)
+    {
+        return Results.BadRequest(new { message = "Seconds must be greater than 0" });
+    }
+
+    var targetDateUtc = DateTime.SpecifyKind((request.Date ?? DateTime.UtcNow).Date, DateTimeKind.Utc);
+
+    var activity = await dbContext.UserStudyActivities
+        .FirstOrDefaultAsync(a => a.UserId == userId && a.ActivityDate == targetDateUtc, cancellationToken);
+
+    if (activity == null)
+    {
+        activity = new Backend.Domain.Entities.UserStudyActivity
+        {
+            UserId = userId,
+            ActivityDate = targetDateUtc,
+            StudySeconds = request.Seconds,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.UserStudyActivities.Add(activity);
+    }
+    else
+    {
+        activity.StudySeconds += request.Seconds;
+        activity.UpdatedAt = DateTime.UtcNow;
+    }
+
+    // Award XP: 1 XP per minute studied
+    var earnedXp = request.Seconds / 60;
+    if (earnedXp > 0)
+    {
+        dbUser.Xp += earnedXp;
+    }
+
+    // Calculate updated streak
+    var allActivities = await dbContext.UserStudyActivities
+        .Where(a => a.UserId == userId && a.StudySeconds > 0)
+        .Select(a => a.ActivityDate)
+        .ToListAsync(cancellationToken);
+
+    if (!allActivities.Any(d => d.Date == targetDateUtc.Date))
+    {
+        allActivities.Add(targetDateUtc);
+    }
+
+    var activeDates = allActivities.Select(d => d.Date).Distinct().ToHashSet();
+    var todayUtc = DateTime.UtcNow.Date;
+    int currentStreak = 0;
+    var checkDate = todayUtc;
+    if (!activeDates.Contains(checkDate))
+    {
+        checkDate = todayUtc.AddDays(-1);
+    }
+    while (activeDates.Contains(checkDate))
+    {
+        currentStreak++;
+        checkDate = checkDate.AddDays(-1);
+    }
+
+    dbUser.Streak = currentStreak;
+    dbUser.LastActive = DateTime.UtcNow;
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new
+    {
+        streak = dbUser.Streak,
+        xp = dbUser.Xp,
+        todaySeconds = activity.StudySeconds,
+        earnedXp
+    });
+});
+
+app.MapGet("/api/user/study-activity", [Microsoft.AspNetCore.Authorization.Authorize] async (System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var activities = await dbContext.UserStudyActivities.AsNoTracking()
+        .Where(a => a.UserId == userId && a.StudySeconds > 0)
+        .OrderBy(a => a.ActivityDate)
+        .ToListAsync(cancellationToken);
+
+    var activeDates = activities.Select(a => a.ActivityDate.Date).Distinct().ToHashSet();
+    var activeDays = activeDates.OrderBy(d => d).Select(d => d.ToString("yyyy-MM-dd")).ToList();
+
+    int bestStreak = 0;
+    int tempStreak = 0;
+    DateTime? prev = null;
+    foreach (var d in activeDates.OrderBy(d => d))
+    {
+        if (prev.HasValue && d == prev.Value.AddDays(1))
+        {
+            tempStreak++;
+        }
+        else
+        {
+            tempStreak = 1;
+        }
+        if (tempStreak > bestStreak) bestStreak = tempStreak;
+        prev = d;
+    }
+
+    var todayUtc = DateTime.UtcNow.Date;
+    int currentStreak = 0;
+    var checkDate = todayUtc;
+    if (!activeDates.Contains(checkDate))
+    {
+        checkDate = todayUtc.AddDays(-1);
+    }
+    while (activeDates.Contains(checkDate))
+    {
+        currentStreak++;
+        checkDate = checkDate.AddDays(-1);
+    }
+
+    var todayActivity = activities.FirstOrDefault(a => a.ActivityDate.Date == todayUtc);
+    int todaySeconds = todayActivity?.StudySeconds ?? 0;
+
+    var dailyList = activities.Select(a => new Backend.Application.DTOs.DailyStudyItemDto(a.ActivityDate, a.StudySeconds)).ToList();
+
+    return Results.Ok(new Backend.Application.DTOs.StudyActivityResponseDto(
+        currentStreak,
+        bestStreak,
+        todaySeconds,
+        dailyList,
+        activeDays
+    ));
+});
+
+app.MapPost("/api/user/study-activity/migrate", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.MigrateStudyActivityRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var dbUser = await dbContext.Users.FindAsync(new object[] { userId }, cancellationToken);
+    if (dbUser == null) return Results.Unauthorized();
+
+    int migratedCount = 0;
+
+    if (request.DailySeconds != null)
+    {
+        foreach (var (dateStr, sec) in request.DailySeconds)
+        {
+            if (DateTime.TryParse(dateStr, out var parsedDate))
+            {
+                var dateUtc = DateTime.SpecifyKind(parsedDate.Date, DateTimeKind.Utc);
+                var act = await dbContext.UserStudyActivities
+                    .FirstOrDefaultAsync(a => a.UserId == userId && a.ActivityDate == dateUtc, cancellationToken);
+                if (act == null)
+                {
+                    dbContext.UserStudyActivities.Add(new Backend.Domain.Entities.UserStudyActivity
+                    {
+                        UserId = userId,
+                        ActivityDate = dateUtc,
+                        StudySeconds = sec,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                }
+                else if (sec > act.StudySeconds)
+                {
+                    act.StudySeconds = sec;
+                    act.UpdatedAt = DateTime.UtcNow;
+                }
+                migratedCount++;
+            }
+        }
+    }
+
+    if (request.ActiveDays != null)
+    {
+        foreach (var dateStr in request.ActiveDays)
+        {
+            if (DateTime.TryParse(dateStr, out var parsedDate))
+            {
+                var dateUtc = DateTime.SpecifyKind(parsedDate.Date, DateTimeKind.Utc);
+                var act = await dbContext.UserStudyActivities
+                    .FirstOrDefaultAsync(a => a.UserId == userId && a.ActivityDate == dateUtc, cancellationToken);
+                if (act == null)
+                {
+                    dbContext.UserStudyActivities.Add(new Backend.Domain.Entities.UserStudyActivity
+                    {
+                        UserId = userId,
+                        ActivityDate = dateUtc,
+                        StudySeconds = 60, // ensure at least 1 minute to count as active
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                    migratedCount++;
+                }
+            }
+        }
+    }
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    // Recalculate streak
+    var allActivities = await dbContext.UserStudyActivities
+        .Where(a => a.UserId == userId && a.StudySeconds > 0)
+        .Select(a => a.ActivityDate)
+        .ToListAsync(cancellationToken);
+
+    var activeDates = allActivities.Select(d => d.Date).Distinct().ToHashSet();
+    var todayUtc = DateTime.UtcNow.Date;
+    int currentStreak = 0;
+    var checkDate = todayUtc;
+    if (!activeDates.Contains(checkDate))
+    {
+        checkDate = todayUtc.AddDays(-1);
+    }
+    while (activeDates.Contains(checkDate))
+    {
+        currentStreak++;
+        checkDate = checkDate.AddDays(-1);
+    }
+
+    dbUser.Streak = currentStreak;
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new { migratedCount, streak = dbUser.Streak });
+});
+
+// ==========================================
+// TOEIC VOCABULARY & PROGRESS ENDPOINTS
+// ==========================================
+app.MapGet("/api/toeic/vocab", async (string? topic, string? search, System.Security.Claims.ClaimsPrincipal? user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    int? userId = null;
+    if (user != null)
+    {
+        var uidStr = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                     ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(uidStr, out int parsedId)) userId = parsedId;
+    }
+
+    var query = dbContext.ToeicVocabularies.AsNoTracking().Where(v => v.IsActive);
+
+    if (userId.HasValue)
+    {
+        query = query.Where(v => !v.IsCustom || v.UserId == userId.Value);
+    }
+    else
+    {
+        query = query.Where(v => !v.IsCustom);
+    }
+
+    if (!string.IsNullOrWhiteSpace(topic) && !string.Equals(topic, "All", StringComparison.OrdinalIgnoreCase) && !string.Equals(topic, "Tất cả", StringComparison.OrdinalIgnoreCase))
+    {
+        query = query.Where(v => v.Topic == topic);
+    }
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var s = search.Trim().ToLower();
+        query = query.Where(v => v.Word.ToLower().Contains(s) || v.Meaning.ToLower().Contains(s));
+    }
+
+    var items = await query.OrderBy(v => v.Id).Select(v => new Backend.Application.DTOs.ToeicVocabDto(
+        v.Id,
+        v.Word,
+        v.Ipa,
+        v.Meaning,
+        v.Example,
+        v.Topic,
+        v.IsCustom
+    )).ToListAsync(cancellationToken);
+
+    return Results.Ok(items);
+});
+
+app.MapPost("/api/toeic/vocab", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.CreateToeicVocabRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    if (string.IsNullOrWhiteSpace(request.Word) || string.IsNullOrWhiteSpace(request.Meaning))
+    {
+        return Results.BadRequest(new { message = "Word and Meaning are required." });
+    }
+
+    var vocab = new Backend.Domain.Entities.ToeicVocabulary
+    {
+        Word = request.Word.Trim(),
+        Ipa = request.Ipa?.Trim() ?? string.Empty,
+        Meaning = request.Meaning.Trim(),
+        Example = request.Example?.Trim(),
+        Topic = string.IsNullOrWhiteSpace(request.Topic) ? "Khác" : request.Topic.Trim(),
+        IsCustom = true,
+        UserId = userId,
+        IsActive = true,
+        CreatedAt = DateTime.UtcNow
+    };
+
+    dbContext.ToeicVocabularies.Add(vocab);
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new Backend.Application.DTOs.ToeicVocabDto(
+        vocab.Id,
+        vocab.Word,
+        vocab.Ipa,
+        vocab.Meaning,
+        vocab.Example,
+        vocab.Topic,
+        vocab.IsCustom
+    ));
+});
+
+app.MapDelete("/api/toeic/vocab/{id:int}", [Microsoft.AspNetCore.Authorization.Authorize] async (int id, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var vocab = await dbContext.ToeicVocabularies.FindAsync(new object[] { id }, cancellationToken);
+    if (vocab == null) return Results.NotFound();
+
+    var role = user.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+    if (vocab.UserId != userId && role != "admin")
+    {
+        return Results.Forbid();
+    }
+
+    dbContext.ToeicVocabularies.Remove(vocab);
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { message = "Deleted" });
+});
+
+app.MapGet("/api/toeic/vocab/progress", [Microsoft.AspNetCore.Authorization.Authorize] async (System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var progresses = await dbContext.ToeicVocabularyProgresses.AsNoTracking()
+        .Where(p => p.UserId == userId)
+        .ToListAsync(cancellationToken);
+
+    var learnedIds = progresses.Where(p => p.Status == "Learned").Select(p => p.VocabularyId).ToList();
+    var againIds = progresses.Where(p => p.Status == "Again").Select(p => p.VocabularyId).ToList();
+
+    return Results.Ok(new Backend.Application.DTOs.ToeicVocabProgressResponse(learnedIds, againIds));
+});
+
+app.MapPost("/api/toeic/vocab/progress", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.UpdateToeicVocabProgressRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var existing = await dbContext.ToeicVocabularyProgresses
+        .FirstOrDefaultAsync(p => p.UserId == userId && p.VocabularyId == request.VocabularyId, cancellationToken);
+
+    if (string.Equals(request.Status, "None", StringComparison.OrdinalIgnoreCase))
+    {
+        if (existing != null)
+        {
+            dbContext.ToeicVocabularyProgresses.Remove(existing);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+    }
+    else
+    {
+        if (existing == null)
+        {
+            dbContext.ToeicVocabularyProgresses.Add(new Backend.Domain.Entities.ToeicVocabularyProgress
+            {
+                UserId = userId,
+                VocabularyId = request.VocabularyId,
+                Status = request.Status,
+                LearnedAt = DateTime.UtcNow
+            });
+        }
+        else
+        {
+            existing.Status = request.Status;
+            existing.LearnedAt = DateTime.UtcNow;
+        }
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    return Results.Ok(new { success = true });
+});
+
+app.MapPost("/api/toeic/vocab/progress/migrate", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.MigrateToeicVocabRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    if (request.CustomWords != null && request.CustomWords.Count > 0)
+    {
+        foreach (var cw in request.CustomWords)
+        {
+            if (string.IsNullOrWhiteSpace(cw.Word) || string.IsNullOrWhiteSpace(cw.Meaning)) continue;
+            var wTrim = cw.Word.Trim().ToLower();
+            var exists = await dbContext.ToeicVocabularies.AnyAsync(v => v.UserId == userId && v.Word.ToLower() == wTrim, cancellationToken);
+            if (!exists)
+            {
+                dbContext.ToeicVocabularies.Add(new Backend.Domain.Entities.ToeicVocabulary
+                {
+                    Word = cw.Word.Trim(),
+                    Ipa = cw.Ipa?.Trim() ?? string.Empty,
+                    Meaning = cw.Meaning.Trim(),
+                    Example = cw.Example?.Trim(),
+                    Topic = string.IsNullOrWhiteSpace(cw.Topic) ? "Khác" : cw.Topic.Trim(),
+                    IsCustom = true,
+                    UserId = userId,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+        }
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    if (request.LearnedIds != null)
+    {
+        foreach (var id in request.LearnedIds)
+        {
+            var existing = await dbContext.ToeicVocabularyProgresses
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.VocabularyId == id, cancellationToken);
+            if (existing == null)
+            {
+                dbContext.ToeicVocabularyProgresses.Add(new Backend.Domain.Entities.ToeicVocabularyProgress
+                {
+                    UserId = userId,
+                    VocabularyId = id,
+                    Status = "Learned",
+                    LearnedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                existing.Status = "Learned";
+            }
+        }
+    }
+
+    if (request.AgainIds != null)
+    {
+        foreach (var id in request.AgainIds)
+        {
+            var existing = await dbContext.ToeicVocabularyProgresses
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.VocabularyId == id, cancellationToken);
+            if (existing == null)
+            {
+                dbContext.ToeicVocabularyProgresses.Add(new Backend.Domain.Entities.ToeicVocabularyProgress
+                {
+                    UserId = userId,
+                    VocabularyId = id,
+                    Status = "Again",
+                    LearnedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                existing.Status = "Again";
+            }
+        }
+    }
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+    return Results.Ok(new { success = true });
+});
+
+// ==========================================
+// GAME PROGRESS ENDPOINTS
+// ==========================================
+app.MapGet("/api/user/game-progress", [Microsoft.AspNetCore.Authorization.Authorize] async (string? gameType, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var query = dbContext.UserGameProgresses.AsNoTracking().Where(g => g.UserId == userId);
+    if (!string.IsNullOrWhiteSpace(gameType))
+    {
+        query = query.Where(g => g.GameType == gameType);
+    }
+
+    var list = await query.ToListAsync(cancellationToken);
+    return Results.Ok(list.Select(g => new Backend.Application.DTOs.UserGameProgressDto(
+        g.GameType,
+        g.Level,
+        g.CurrentStage,
+        g.MaxUnlockedStage,
+        g.HighScore,
+        g.UpdatedAt
+    )));
+});
+
+app.MapPost("/api/user/game-progress", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.SaveGameProgressRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var existing = await dbContext.UserGameProgresses
+        .FirstOrDefaultAsync(g => g.UserId == userId && g.GameType == request.GameType && g.Level == request.Level, cancellationToken);
+
+    if (existing == null)
+    {
+        existing = new Backend.Domain.Entities.UserGameProgress
+        {
+            UserId = userId,
+            GameType = request.GameType,
+            Level = request.Level,
+            CurrentStage = request.CurrentStage ?? 0,
+            MaxUnlockedStage = request.MaxUnlockedStage ?? 0,
+            HighScore = request.Score ?? 0,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.UserGameProgresses.Add(existing);
+    }
+    else
+    {
+        if (request.CurrentStage.HasValue) existing.CurrentStage = request.CurrentStage.Value;
+        if (request.MaxUnlockedStage.HasValue && request.MaxUnlockedStage.Value > existing.MaxUnlockedStage)
+            existing.MaxUnlockedStage = request.MaxUnlockedStage.Value;
+        if (request.Score.HasValue && request.Score.Value > existing.HighScore)
+            existing.HighScore = request.Score.Value;
+        existing.UpdatedAt = DateTime.UtcNow;
+    }
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new Backend.Application.DTOs.UserGameProgressDto(
+        existing.GameType,
+        existing.Level,
+        existing.CurrentStage,
+        existing.MaxUnlockedStage,
+        existing.HighScore,
+        existing.UpdatedAt
+    ));
+});
+
+app.MapPost("/api/user/game-progress/migrate", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.MigrateGameProgressRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    if (request.ProgressItems != null)
+    {
+        foreach (var item in request.ProgressItems)
+        {
+            var existing = await dbContext.UserGameProgresses
+                .FirstOrDefaultAsync(g => g.UserId == userId && g.GameType == item.GameType && g.Level == item.Level, cancellationToken);
+            if (existing == null)
+            {
+                dbContext.UserGameProgresses.Add(new Backend.Domain.Entities.UserGameProgress
+                {
+                    UserId = userId,
+                    GameType = item.GameType,
+                    Level = item.Level,
+                    CurrentStage = item.CurrentStage ?? 0,
+                    MaxUnlockedStage = item.MaxUnlockedStage ?? 0,
+                    HighScore = item.Score ?? 0,
+                    UpdatedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                if (item.CurrentStage.HasValue) existing.CurrentStage = item.CurrentStage.Value;
+                if (item.MaxUnlockedStage.HasValue && item.MaxUnlockedStage.Value > existing.MaxUnlockedStage)
+                    existing.MaxUnlockedStage = item.MaxUnlockedStage.Value;
+                if (item.Score.HasValue && item.Score.Value > existing.HighScore)
+                    existing.HighScore = item.Score.Value;
+                existing.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    return Results.Ok(new { success = true, count = request.ProgressItems?.Count ?? 0 });
+});
+
+// ==========================================
+// EXAM CHECKPOINTS ENDPOINTS
+// ==========================================
+app.MapGet("/api/exam-checkpoints", async (string examUrl, string skill, string? userIdentifier, System.Security.Claims.ClaimsPrincipal? user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    int? userId = null;
+    if (user != null)
+    {
+        var uidStr = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                     ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(uidStr, out int parsedId)) userId = parsedId;
+    }
+
+    var query = dbContext.ExamCheckpoints.AsNoTracking()
+        .Where(c => c.ExamUrl == examUrl && c.Skill == skill);
+
+    if (userId.HasValue)
+    {
+        query = query.Where(c => c.UserId == userId.Value || c.UserIdentifier == userIdentifier);
+    }
+    else if (!string.IsNullOrWhiteSpace(userIdentifier))
+    {
+        query = query.Where(c => c.UserIdentifier == userIdentifier);
+    }
+    else
+    {
+        return Results.BadRequest(new { message = "UserIdentifier or Auth token is required." });
+    }
+
+    var cp = await query.OrderByDescending(c => c.LastSavedAt).FirstOrDefaultAsync(cancellationToken);
+    if (cp == null) return Results.NotFound();
+
+    return Results.Ok(new Backend.Application.DTOs.ExamCheckpointDto(
+        cp.Id,
+        cp.UserIdentifier,
+        cp.Skill,
+        cp.ExamUrl,
+        cp.MockTestId,
+        cp.CheckpointDataJson,
+        cp.SecondsRemaining,
+        cp.LastSavedAt
+    ));
+});
+
+app.MapPost("/api/exam-checkpoints", async (Backend.Application.DTOs.SaveCheckpointRequest request, System.Security.Claims.ClaimsPrincipal? user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    int? userId = null;
+    if (user != null)
+    {
+        var uidStr = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                     ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(uidStr, out int parsedId)) userId = parsedId;
+    }
+
+    var existing = await dbContext.ExamCheckpoints
+        .FirstOrDefaultAsync(c =>
+            (userId.HasValue && c.UserId == userId.Value && c.ExamUrl == request.ExamUrl && c.Skill == request.Skill) ||
+            (c.UserIdentifier == request.UserIdentifier && c.ExamUrl == request.ExamUrl && c.Skill == request.Skill),
+            cancellationToken);
+
+    if (existing == null)
+    {
+        existing = new Backend.Domain.Entities.ExamCheckpoint
+        {
+            UserId = userId,
+            UserIdentifier = request.UserIdentifier,
+            Skill = request.Skill,
+            ExamUrl = request.ExamUrl,
+            MockTestId = request.MockTestId,
+            CheckpointDataJson = request.CheckpointDataJson,
+            SecondsRemaining = request.SecondsRemaining,
+            LastSavedAt = DateTime.UtcNow
+        };
+        dbContext.ExamCheckpoints.Add(existing);
+    }
+    else
+    {
+        if (userId.HasValue && !existing.UserId.HasValue) existing.UserId = userId;
+        existing.CheckpointDataJson = request.CheckpointDataJson;
+        existing.SecondsRemaining = request.SecondsRemaining;
+        if (request.MockTestId.HasValue) existing.MockTestId = request.MockTestId;
+        existing.LastSavedAt = DateTime.UtcNow;
+    }
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    return Results.Ok(new { success = true, lastSavedAt = existing.LastSavedAt });
+});
+
+app.MapDelete("/api/exam-checkpoints", async (string examUrl, string skill, string? userIdentifier, System.Security.Claims.ClaimsPrincipal? user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    int? userId = null;
+    if (user != null)
+    {
+        var uidStr = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                     ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(uidStr, out int parsedId)) userId = parsedId;
+    }
+
+    var query = dbContext.ExamCheckpoints
+        .Where(c => c.ExamUrl == examUrl && c.Skill == skill);
+
+    if (userId.HasValue)
+    {
+        query = query.Where(c => c.UserId == userId.Value || c.UserIdentifier == userIdentifier);
+    }
+    else if (!string.IsNullOrWhiteSpace(userIdentifier))
+    {
+        query = query.Where(c => c.UserIdentifier == userIdentifier);
+    }
+    else
+    {
+        return Results.BadRequest(new { message = "UserIdentifier or Auth token is required." });
+    }
+
+    var list = await query.ToListAsync(cancellationToken);
+    if (list.Count > 0)
+    {
+        dbContext.ExamCheckpoints.RemoveRange(list);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    return Results.Ok(new { success = true });
+});
+
 // MOCK TESTS API
 app.MapGet("/api/mock-tests", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
@@ -1062,13 +1836,24 @@ app.MapGet("/api/toeic/r2-tests", async (Backend.Application.Abstractions.IR2Sto
     {
         var publicUrlBase = (config["CloudflareR2:PublicUrlBase"] ?? "https://pub-91655bd1442d498b9788d1f8f8575587.r2.dev").TrimEnd('/');
         var allKeys = await r2Service.ListFilesAsync("Cuongkeng/Toeic Data/", cancellationToken);
+        static int ExtractYearFromKey(string path)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(path, @"(20\d\d)");
+            return m.Success && int.TryParse(m.Groups[1].Value, out var y) ? y : 0;
+        }
+
+        static int ExtractTestNumFromKey(string path)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(path, @"Test\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (m.Success && int.TryParse(m.Groups[1].Value, out var n)) return n;
+            var m2 = System.Text.RegularExpressions.Regex.Match(path, @"(\d+)");
+            return m2.Success && int.TryParse(m2.Groups[1].Value, out var n2) ? n2 : int.MaxValue;
+        }
+
         var jsonKeys = allKeys
             .Where(k => k.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(k =>
-            {
-                var match = System.Text.RegularExpressions.Regex.Match(k, @"Test\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                return match.Success && int.TryParse(match.Groups[1].Value, out var n) ? n : int.MaxValue;
-            })
+            .OrderByDescending(k => ExtractYearFromKey(k))
+            .ThenBy(k => ExtractTestNumFromKey(k))
             .ThenBy(k => k)
             .ToList();
 
