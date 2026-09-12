@@ -94,6 +94,21 @@ public class MockTestService
             _cache = result ?? new List<MockTestDto>();
             return _cache;
         }
+        catch (HttpRequestException)
+        {
+            try
+            {
+                await Task.Delay(500);
+                var result = await _http.GetFromJsonAsync<List<MockTestDto>>("api/mock-tests");
+                _cache = result ?? new List<MockTestDto>();
+                return _cache;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching mock tests on retry: {ex.Message}");
+                return _cache ?? new List<MockTestDto>();
+            }
+        }
         catch (Exception ex)
         {
             Console.WriteLine($"Error fetching mock tests: {ex.Message}");

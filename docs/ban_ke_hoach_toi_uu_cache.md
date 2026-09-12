@@ -1,3 +1,11 @@
+# KẾ HOẠCH KỸ THUẬT
+
+- **Ngày thực hiện**: 01/09/2026
+- **Tên báo cáo**: BẢN KẾ HOẠCH TỐI ƯU CACHE CHO TỪ VỰNG VÀ TRUY VẤN POSTGRESQL
+- **Người viết**: YIZ006 (https://github.com/YIZ006)
+
+---
+
 Hiện hệ thống chưa dùng Redis cho từ vựng: API /api/hsk/vocab đang đọc PostgreSQL trực tiếp, còn frontend chỉ lưu một số trạng thái học vào localStorage. Kế hoạch phù hợp nhất là triển khai Redis theo mô hình cache-aside ở backend, kết hợp tối ưu truy vấn PostgreSQL và giảm số lần frontend gọi API.
 Các vị trí cần tác động:
 - [Program.cs (line 3079)](/E:/tailieu/Dự án/ielstHSK-PostgeSQL/backend/src/Backend.Api/Program.cs:3079): API đọc/thêm/sửa/xóa/import từ vựng.

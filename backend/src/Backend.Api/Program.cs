@@ -59,21 +59,46 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     return;
                 }
 
-                var cache = context.HttpContext.RequestServices.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
-                var cacheKey = $"auth_user_active_{userId}";
+                var dbContext = context.HttpContext.RequestServices
+                    .GetRequiredService<Backend.Infrastructure.Persistence.AppDbContext>();
+                var role = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+                    ?? context.Principal?.FindFirst("role")?.Value;
+                var isAdmin = string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase)
+                    || context.Principal?.FindFirst("admin_id") != null;
 
-                if (!cache.TryGetValue(cacheKey, out bool isActive))
+                var cache = context.HttpContext.RequestServices.GetService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
+                var cacheKey = isAdmin ? $"auth_admin_active_{userId}" : $"auth_user_active_{userId}";
+
+                if (cache != null && cache.TryGetValue(cacheKey, out bool isActive))
                 {
-                    var dbContext = context.HttpContext.RequestServices
-                        .GetRequiredService<Backend.Infrastructure.Persistence.AppDbContext>();
-                    var user = await dbContext.Users.FindAsync(new object[] { userId }, context.HttpContext.RequestAborted);
-                    isActive = user != null && user.IsActive;
-                    cache.Set(cacheKey, isActive, TimeSpan.FromSeconds(60));
+                    if (!isActive)
+                    {
+                        context.Fail(isAdmin ? "Admin account is disabled or no longer exists." : "Account is disabled or no longer exists.");
+                    }
+                    return;
                 }
 
-                if (!isActive)
+                if (isAdmin)
                 {
-                    context.Fail("Account is disabled or no longer exists.");
+                    var admin = await dbContext.Admins.FindAsync(new object[] { userId }, context.HttpContext.RequestAborted);
+                    if (admin == null || !admin.IsActive)
+                    {
+                        cache?.Set(cacheKey, false, TimeSpan.FromSeconds(60));
+                        context.Fail("Admin account is disabled or no longer exists.");
+                        return;
+                    }
+                    cache?.Set(cacheKey, true, TimeSpan.FromSeconds(60));
+                }
+                else
+                {
+                    var user = await dbContext.Users.FindAsync(new object[] { userId }, context.HttpContext.RequestAborted);
+                    if (user == null || !user.IsActive)
+                    {
+                        cache?.Set(cacheKey, false, TimeSpan.FromSeconds(60));
+                        context.Fail("Account is disabled or no longer exists.");
+                        return;
+                    }
+                    cache?.Set(cacheKey, true, TimeSpan.FromSeconds(60));
                 }
             }
         };
@@ -82,14 +107,29 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-try
+// Khởi chạy kết nối DB, nạp trước model EF Core, kết nối Redis và kiểm tra seed ngầm
+// để Kestrel mở cổng 5101 NGAY LẬP TỨC (< 100ms) mà không chặn các request đầu tiên từ client.
+_ = Task.Run(async () =>
 {
-    await app.Services.SeedDataAsync();
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"[Startup Warning] SeedDataAsync encountered an issue: {ex.Message}");
-}
+    try
+    {
+        // 1. Kích hoạt mở sẵn kết nối (pre-warm) tới PostgreSQL & nạp model EF Core
+        using var scope = app.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<Backend.Infrastructure.Persistence.AppDbContext>();
+        await dbContext.Database.CanConnectAsync();
+
+        // 2. Kích hoạt kết nối trước tới Redis nếu có bật
+        _ = app.Services.GetService<StackExchange.Redis.IConnectionMultiplexer>();
+
+        // 3. Đồng bộ migration và kiểm tra dữ liệu khởi tạo
+        await app.Services.SeedDataAsync();
+        Console.WriteLine("[Startup] Database connection warmed up & seed data verified.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Startup Warning] Background initialization note: {ex.Message}");
+    }
+});
 
 // Enable Swagger in all environments
 app.UseSwagger();
@@ -872,6 +912,19 @@ app.MapPost("/api/auth/login", async (LoginRequest request, IAuthService authSer
     }
 });
 
+app.MapPost("/api/admin/auth/login", async (LoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var result = await authService.AdminLoginAsync(request, cancellationToken);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
 app.MapPost("/api/auth/google-login", async (GoogleLoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
 {
     try
@@ -957,6 +1010,17 @@ app.MapGet("/api/user/me", [Microsoft.AspNetCore.Authorization.Authorize] async 
 
 app.MapPut("/api/user/profile", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.UpdateProfileRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
+    try
+    {
+        Backend.Application.Common.SecuritySanitizer.ValidateSafeText(request.FullName, "Họ và tên");
+        Backend.Application.Common.SecuritySanitizer.ValidateSafeText(request.Username, "Tên hiển thị");
+        Backend.Application.Common.SecuritySanitizer.ValidateSafeText(request.Avatar, "Ảnh đại diện");
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { message = ex.Message });
+    }
+
     var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
                        ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
     if (int.TryParse(userIdString, out int userId))
@@ -3268,9 +3332,9 @@ app.MapGet("/api/admin/dashboard/stats",
     var newUsersThisMonth = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
         dbContext.Users.Where(u => u.CreatedAt >= monthStart), cancellationToken);
     var totalAdmins = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
-        dbContext.Users.Where(u => u.Role == "admin"), cancellationToken);
+        dbContext.Admins, cancellationToken);
     var totalStudents = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
-        dbContext.Users.Where(u => u.Role == "user"), cancellationToken);
+        dbContext.Users, cancellationToken);
     var lockedUsers = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
         dbContext.Users.Where(u => !u.IsActive), cancellationToken);
 
@@ -3846,12 +3910,23 @@ app.MapPut("/api/admin/users/{id}/toggle-active",
 app.MapPut("/api/admin/users/{id}",
         [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (int id, Backend.Application.DTOs.UpdateUserRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
+    try
+    {
+        Backend.Application.Common.SecuritySanitizer.ValidateSafeText(request.Username, "Tên tài khoản");
+        Backend.Application.Common.SecuritySanitizer.ValidateSafeText(request.Email, "Email");
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { message = ex.Message });
+    }
+
     var user = await dbContext.Users.FindAsync(new object[] { id }, cancellationToken);
     if (user == null) return Results.NotFound();
 
     user.Username = request.Username;
     user.Email = request.Email;
-    user.Role = request.Role;
+    // Khóa chặt bảo mật: Bảng users chỉ dành riêng cho học viên, không bao giờ cho phép leo lên quyền admin
+    user.Role = "user";
     user.Level = request.Level;
 
     dbContext.UserActivityLogs.Add(new Backend.Domain.Entities.UserActivityLog
@@ -3928,6 +4003,12 @@ app.MapPost("/api/admin/navigation", [Microsoft.AspNetCore.Authorization.Authori
 {
     if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Route) || string.IsNullOrWhiteSpace(dto.Language))
         return Results.BadRequest("Name, Route and Language are required.");
+    try
+    {
+        await dbContext.Database.ExecuteSqlRawAsync("SELECT setval(pg_get_serial_sequence('learning_sections', 'id'), COALESCE(MAX(id), 1)) FROM learning_sections;", cancellationToken);
+    }
+    catch { }
+
     var entity = new Backend.Domain.Entities.LearningSection
     {
         Name = dto.Name.Trim(),
@@ -5743,13 +5824,13 @@ app.MapPost("/api/admin/grammar-structures/import-multiple", async (
             int colTopic = GetCol(new[] { "GrammarTopic", "Chủ điểm", "Topic", "Chủ điểm ngữ pháp" }, 4);
             int colFormula = GetCol(new[] { "Formula", "Công thức", "Cấu trúc" }, 5);
             int colUsage = GetCol(new[] { "UsageFunction", "Chức năng", "Mục đích", "Usage" }, 6);
-            int colBasicEx = GetCol(new[] { "BasicExample", "Câu gốc", "Band 5.0", "Ví dụ gốc" }, 7);
-            int colAdvEx = GetCol(new[] { "AdvancedExample", "Câu nâng cấp", "Band 8.0", "Ví dụ nâng cao", "Example" }, 8);
-            int colMeaning = GetCol(new[] { "VietnameseMeaning", "Nghĩa tiếng Việt", "Dịch nghĩa", "Meaning" }, 9);
-            int colColloc = GetCol(new[] { "KeyCollocations", "Collocations", "Từ vựng", "Từ khóa" }, 10);
-            int colMistakes = GetCol(new[] { "CommonMistakes", "Lỗi sai", "Lỗi thường gặp", "Pitfalls" }, 11);
-            int colExercise = GetCol(new[] { "PracticeExercise", "Bài tập", "Exercise", "Luyện tập" }, 12);
-            int colTags = GetCol(new[] { "Tags", "Tag", "Từ khóa lọc" }, 13);
+            int colExample = GetCol(new[] { "Example", "Ví dụ", "Ví dụ minh họa", "Câu ví dụ", "BasicExample", "Câu gốc", "Ví dụ gốc" }, 7);
+            int colAdvEx = GetCol(new[] { "AdvancedExample", "Câu nâng cấp", "Band 8.0", "Ví dụ nâng cao" }, -1);
+            int colMeaning = GetCol(new[] { "VietnameseMeaning", "Nghĩa tiếng Việt", "Dịch nghĩa", "Meaning" }, 8);
+            int colMistakes = GetCol(new[] { "CommonMistakes", "Lỗi sai", "Lỗi thường gặp", "Pitfalls" }, 9);
+            int colExercise = GetCol(new[] { "PracticeExercise", "Bài tập", "Exercise", "Luyện tập" }, 10);
+            int colTags = GetCol(new[] { "Tags", "Tag", "Từ khóa lọc" }, 11);
+            int colColloc = GetCol(new[] { "KeyCollocations", "Collocations", "Từ vựng", "Từ khóa" }, -1);
 
             for (int r = 2; r <= lastRow; r++)
             {
@@ -5773,15 +5854,17 @@ app.MapPost("/api/admin/grammar-structures/import-multiple", async (
                 string category = row.Cell(colCat).GetString()?.Trim() ?? "Writing Task 2";
                 string topic = row.Cell(colTopic).GetString()?.Trim() ?? "Ngữ pháp nâng cao";
                 string usage = row.Cell(colUsage).GetString()?.Trim() ?? "Nâng cao điểm Grammatical Range & Accuracy";
-                string basicEx = row.Cell(colBasicEx).GetString()?.Trim() ?? "";
-                string advEx = row.Cell(colAdvEx).GetString()?.Trim() ?? "";
+                string ex = row.Cell(colExample).GetString()?.Trim() ?? "";
+                string advEx = (colAdvEx > 0 ? row.Cell(colAdvEx).GetString()?.Trim() : "") ?? "";
+                string basicEx = ex;
+                if (string.IsNullOrWhiteSpace(advEx)) advEx = ex;
+                if (string.IsNullOrWhiteSpace(advEx)) advEx = formula;
                 string meaning = row.Cell(colMeaning).GetString()?.Trim() ?? "";
-                string colloc = row.Cell(colColloc).GetString()?.Trim() ?? "";
+                string colloc = (colColloc > 0 ? row.Cell(colColloc).GetString()?.Trim() : "") ?? "";
                 string mistakes = row.Cell(colMistakes).GetString()?.Trim() ?? "";
                 string exercise = row.Cell(colExercise).GetString()?.Trim() ?? "";
                 string tags = row.Cell(colTags).GetString()?.Trim() ?? "";
 
-                if (string.IsNullOrWhiteSpace(advEx)) advEx = formula;
                 if (string.IsNullOrWhiteSpace(meaning)) meaning = topic;
 
                 if (existingDict.TryGetValue(code, out var existing))
@@ -5859,12 +5942,12 @@ app.MapGet("/api/admin/grammar-structures/template", () =>
     using var workbook = new ClosedXML.Excel.XLWorkbook();
     var ws = workbook.Worksheets.Add("Grammar_Structures");
 
-    // Header Titles
+    // Header Titles (11 columns chuẩn)
     var headers = new[]
     {
         "StructureCode", "BandLevel", "Category", "GrammarTopic",
-        "Formula", "UsageFunction", "BasicExample", "AdvancedExample",
-        "VietnameseMeaning", "KeyCollocations", "CommonMistakes", "PracticeExercise", "Tags"
+        "Formula", "UsageFunction", "Example",
+        "VietnameseMeaning", "CommonMistakes", "PracticeExercise", "Tags"
     };
 
     for (int i = 0; i < headers.Length; i++)
@@ -5873,60 +5956,52 @@ app.MapGet("/api/admin/grammar-structures/template", () =>
         cell.Value = headers[i];
         cell.Style.Font.Bold = true;
         cell.Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
-        cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#4F46E5");
+        cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#0284C7");
         cell.Style.Alignment.Horizontal = ClosedXML.Excel.XLAlignmentHorizontalValues.Center;
     }
 
-    // Demo Rows
+    // Demo Rows (4 dòng đại diện các cấp độ)
     var demoData = new[]
     {
         new[] {
+            "FND_TENSE_01", "4.0 - 5.0", "General", "Thì hiện tại đơn (Present Simple)",
+            "S + V(s/es) + O | S + do/does + not + V",
+            "Diễn tả chân lý, sự thật hiển nhiên, thói quen lặp lại; diễn tả số liệu cố định trong Task 1.",
+            "He walks to work every morning.",
+            "Anh ấy đi bộ đi làm mỗi buổi sáng.",
+            "Quên thêm s/es khi chủ ngữ là ngôi thứ 3 số ít (He, She, It, danh từ số ít).",
+            "Chia động từ: The data (indicate) that urban areas (consume) more electricity than rural regions.",
+            "present_simple, tenses, foundation, task1"
+        },
+        new[] {
+            "FND_PASS_01", "5.0 - 6.0", "Writing Task 1 & 2", "Câu bị động (Passive Voice)",
+            "S + be + V3/ed (+ by O)",
+            "Tạo phong cách học thuật khách quan trong IELTS Writing, đặc biệt khi tả bài quy trình (Process Task 1).",
+            "Raw tea leaves are harvested by hand and transported to processing facilities.",
+            "Lá chè tươi được thu hoạch thủ công và sau đó được vận chuyển đến các cơ sở chế biến.",
+            "Dùng sai dạng phân từ 2 (V3) hoặc quên động từ 'to be' chia theo thì của câu.",
+            "Chuyển sang câu bị động: Workers clean and dry the coffee beans.",
+            "passive_voice, process, task1, academic"
+        },
+        new[] {
+            "FND_COND_02", "5.5 - 6.5", "Writing Task 2", "Câu điều kiện loại 2 (Conditional Type 2)",
+            "If + S + V2/were, S + would/could/might + V",
+            "Diễn tả giả định trái với thực tế hiện tại; lập luận biện chứng phản đề trong Task 2.",
+            "If governments subsidized renewable energy infrastructure, fossil fuel dependence would diminish.",
+            "Nếu các chính phủ trợ cấp cho cơ sở hạ tầng năng lượng tái tạo, sự phụ thuộc vào nhiên liệu hóa thạch sẽ giảm.",
+            "Dùng 'was' thay vì 'were' trong văn phong học thuật trang trọng; nhầm lẫn thì ở mệnh đề chính.",
+            "Viết lại câu giả định: Because petrol is cheap, people drive private cars too much.",
+            "conditional, type2, task2, hypothesis"
+        },
+        new[] {
             "W_INV_01", "7.5 - 8.5", "Writing Task 2", "Đảo ngữ (Inversion)",
             "Not only + Aux + S + V, but S + (also) + V",
-            "Nhấn mạnh 2 tác động song hành, tạo ấn tượng học thuật mạnh ở mở đoạn hoặc câu chủ đề",
-            "Computers help students study and they make work easier.",
-            "Not only does technological adoption facilitate self-directed learning, but it also enhances workforce productivity.",
-            "Không chỉ việc áp dụng công nghệ tạo điều kiện cho việc tự học, mà nó còn nâng cao năng suất của lực lượng lao động.",
-            "technological adoption, facilitate self-directed learning, workforce productivity",
-            "Quên đảo trợ động từ lên trước chủ ngữ sau 'Not only' (ví dụ viết sai: Not only computers help...)",
+            "Nhấn mạnh 2 tác động song hành, tạo ấn tượng học thuật mạnh ở mở đoạn hoặc câu chủ đề.",
+            "Not only does technological adoption facilitate learning, but it also enhances productivity.",
+            "Không chỉ việc áp dụng công nghệ tạo điều kiện cho học tập, mà nó còn nâng cao năng suất.",
+            "Quên đảo trợ động từ lên trước chủ ngữ sau 'Not only' (ví dụ viết sai: Not only computers help...).",
             "Rewrite: Tourism creates jobs and it also introduces local culture.",
             "inversion, emphasis, task2, academic"
-        },
-        new[] {
-            "W_NOM_01", "7.0 - 8.0", "Writing Task 1 & 2", "Danh từ hóa (Nominalisation)",
-            "The [Noun phrase] + led to / resulted in + a [Adj] [Noun]",
-            "Biến đổi câu văn nói chứa động từ thành văn phong học thuật khách quan, trang trọng",
-            "People used more renewable energy so emissions decreased rapidly.",
-            "The widespread adoption of renewable energy resulted in a substantial reduction in carbon emissions.",
-            "Việc áp dụng rộng rãi năng lượng tái tạo đã dẫn đến sự sụt giảm đáng kể lượng phát thải carbon.",
-            "widespread adoption, substantial reduction, carbon emissions",
-            "Dùng sai giới từ đi kèm với danh từ (ví dụ: reduction of thay vì reduction in)",
-            "Rewrite: Cars increased rapidly so air became heavily polluted.",
-            "nominalisation, academic_style, task1, task2"
-        },
-        new[] {
-            "W_CLEFT_01", "7.5 - 8.5", "Writing Task 2", "Câu chẻ (Cleft Sentence)",
-            "It is/was + [Thành phần nhấn mạnh] + that/who + [Mệnh đề]",
-            "Nhấn mạnh chính xác chủ thể chịu trách nhiệm hoặc giải pháp cốt lõi cho một vấn đề",
-            "The government should solve this problem, not citizens.",
-            "It is the municipal authorities, rather than individuals, that must take decisive action against urban pollution.",
-            "Chính các cơ quan chính quyền đô thị, chứ không phải các cá nhân, mới là bên phải hành động quyết liệt để chống lại ô nhiễm.",
-            "municipal authorities, take decisive action, urban pollution",
-            "Dùng nhầm 'which' thay vì 'that' khi thành phần nhấn mạnh là danh từ chỉ vật",
-            "Rewrite: Early education shapes a child's future, not higher education.",
-            "cleft_sentence, emphasis, solutions, task2"
-        },
-        new[] {
-            "W_PART_01", "7.0 - 8.0", "Writing Task 1", "Mệnh đề phân từ (Participle Clause)",
-            "[Main Clause], thereby + V-ing / leading to + [Noun phrase]",
-            "Diễn tả chuỗi biến động kết quả liên hoàn trong bài mô tả biểu đồ Task 1",
-            "The car sales rose to 50,000 and this made it the most popular product.",
-            "Car sales surged to 50,000 units in 2020, thereby overtaking motorbikes as the leading vehicle category.",
-            "Doanh số ô tô tăng vọt lên 50.000 chiếc vào năm 2020, qua đó vượt qua xe máy để trở thành nhóm phương tiện dẫn đầu.",
-            "surge to, overtake, leading vehicle category",
-            "Dùng 'thereby + V nguyên mẫu' thay vì 'thereby + V-ing'",
-            "Rewrite: Company revenue doubled in Q3 and this allowed further expansion.",
-            "participle, task1, trend, cause_effect"
         }
     };
 
@@ -5948,6 +6023,67 @@ app.MapGet("/api/admin/grammar-structures/template", () =>
         bytes,
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "IELTS_Grammar_Structures_Template.xlsx"
+    );
+});
+
+// ─── Export All Grammar Structures to Excel (.xlsx) ───
+app.MapGet("/api/admin/grammar-structures/export", async (
+    Backend.Infrastructure.Persistence.AppDbContext dbContext,
+    CancellationToken cancellationToken) =>
+{
+    var list = await dbContext.GrammarStructures
+        .OrderBy(g => g.DisplayOrder)
+        .ThenBy(g => g.Id)
+        .ToListAsync(cancellationToken);
+
+    using var workbook = new ClosedXML.Excel.XLWorkbook();
+    var ws = workbook.Worksheets.Add("Grammar_Structures");
+
+    var headers = new[]
+    {
+        "StructureCode", "BandLevel", "Category", "GrammarTopic",
+        "Formula", "UsageFunction", "Example",
+        "VietnameseMeaning", "CommonMistakes", "PracticeExercise", "Tags"
+    };
+
+    for (int i = 0; i < headers.Length; i++)
+    {
+        var cell = ws.Cell(1, i + 1);
+        cell.Value = headers[i];
+        cell.Style.Font.Bold = true;
+        cell.Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
+        cell.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#0284C7");
+        cell.Style.Alignment.Horizontal = ClosedXML.Excel.XLAlignmentHorizontalValues.Center;
+    }
+
+    for (int r = 0; r < list.Count; r++)
+    {
+        var item = list[r];
+        string ex = !string.IsNullOrWhiteSpace(item.BasicExample) ? item.BasicExample : item.AdvancedExample;
+        ws.Cell(r + 2, 1).Value = item.StructureCode;
+        ws.Cell(r + 2, 2).Value = item.BandLevel;
+        ws.Cell(r + 2, 3).Value = item.Category;
+        ws.Cell(r + 2, 4).Value = item.GrammarTopic;
+        ws.Cell(r + 2, 5).Value = item.Formula;
+        ws.Cell(r + 2, 6).Value = item.UsageFunction;
+        ws.Cell(r + 2, 7).Value = ex;
+        ws.Cell(r + 2, 8).Value = item.VietnameseMeaning;
+        ws.Cell(r + 2, 9).Value = item.CommonMistakes ?? "";
+        ws.Cell(r + 2, 10).Value = item.PracticeExercise ?? "";
+        ws.Cell(r + 2, 11).Value = item.Tags ?? "";
+    }
+
+    ws.Columns().AdjustToContents();
+
+    using var stream = new MemoryStream();
+    workbook.SaveAs(stream);
+    var bytes = stream.ToArray();
+
+    var filename = $"IELTS_Grammar_Structures_Export_{DateTime.UtcNow:yyyyMMdd_HHmm}.xlsx";
+    return Results.File(
+        bytes,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename
     );
 });
 

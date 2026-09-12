@@ -1,4 +1,10 @@
-# Kế Hoạch Triển Khai: Quản Lý Cấu Trúc Ngữ Pháp Theo Band & Import Excel
+# KẾ HOẠCH KỸ THUẬT
+
+- **Ngày thực hiện**: 30/08/2026
+- **Tên báo cáo**: KẾ HOẠCH TRIỂN KHAI QUẢN LÝ CẤU TRÚC NGỮ PHÁP THEO BAND VÀ IMPORT EXCEL
+- **Người viết**: YIZ006 (https://github.com/YIZ006)
+
+---
 
 Xây dựng module quản lý Ngân hàng Cấu trúc Ngữ pháp IELTS theo Band điểm, hỗ trợ tìm kiếm, lọc theo Band/Chủ điểm, phân trang, cache hiệu năng cao, thêm/sửa/xóa nhanh (Bulk Delete), và tính năng Upload/Import nhiều file Excel (`.xlsx`) kèm xuất file mẫu.
 

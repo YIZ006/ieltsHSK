@@ -56,18 +56,29 @@ public class HskService
                 return _sectionsCache;
             }
         }
+        catch (HttpRequestException)
+        {
+            try
+            {
+                await Task.Delay(500);
+                var sections = await _http.GetFromJsonAsync<List<HskLearningSection>>("/api/hsk/sections");
+                if (sections != null && sections.Any())
+                {
+                    _sectionsCache = sections;
+                    return _sectionsCache;
+                }
+            }
+            catch { }
+        }
         catch
         {
         }
 
         return new List<HskLearningSection>
         {
-            new HskLearningSection { Name = "Từ vựng HSK", Route = "/hsk/vocabulary", Icon = "bi-book-half", Description = "Flashcard và tra cứu từ vựng chuẩn HSK 1–6" },
-            new HskLearningSection { Name = "Luyện nghe", Route = "/hsk/listening", Icon = "bi-headphones", Description = "Nghe hội thoại và đoạn văn chuẩn phổ thông" },
-            new HskLearningSection { Name = "Luyện đọc", Route = "/hsk/reading", Icon = "bi-journal-text", Description = "Đọc hiểu đoạn văn, nối câu và sắp xếp câu" },
-            new HskLearningSection { Name = "Luyện viết", Route = "/hsk/writing", Icon = "bi-pencil-square", Description = "Tập viết chữ Hán, điền từ và dịch thuật" },
-            new HskLearningSection { Name = "Luyện nói HSKK", Route = "/hsk/speaking", Icon = "bi-mic-fill", Description = "Luyện phát âm, đọc to và miêu tả tranh" },
-            new HskLearningSection { Name = "Thi thử HSK", Route = "/hsk/mock-tests", Icon = "bi-journal-check", Description = "Bộ đề thi thử mô phỏng thời gian thực" },
+            new HskLearningSection { Name = "Luyện đề HSK", Route = "/hsk/luyen-de", Icon = "bi-journal-check", Description = "Bộ đề thi thử mô phỏng thời gian thực" },
+            new HskLearningSection { Name = "Từ vựng HSK", Route = "/hsk/tu-vung", Icon = "bi-book-half", Description = "Flashcard và tra cứu từ vựng chuẩn HSK 1–6" },
+            new HskLearningSection { Name = "Trò chơi", Route = "/hsk/games", Icon = "bi-controller", Description = "Game học từ & phản xạ" },
             new HskLearningSection { Name = "Bắn Từ Vựng", Route = "/hsk/vocab-shooter", Icon = "bi-crosshair", Description = "Gõ pinyin bắn từ vựng rơi" }
         };
     }
@@ -81,16 +92,34 @@ public class HskService
             return cachedVocab;
         }
 
+        var url = "/api/hsk/vocab";
+        if (!string.IsNullOrEmpty(level)) url += $"?level={Uri.EscapeDataString(level)}";
+
         try
         {
-            var url = "/api/hsk/vocab";
-            if (!string.IsNullOrEmpty(level)) url += $"?level={Uri.EscapeDataString(level)}";
             var items = await _http.GetFromJsonAsync<List<HskVocabularyItem>>(url);
             if (items != null)
             {
                 _vocabCache[cacheKey] = items;
             }
             return items ?? new List<HskVocabularyItem>();
+        }
+        catch (HttpRequestException)
+        {
+            try
+            {
+                await Task.Delay(500);
+                var items = await _http.GetFromJsonAsync<List<HskVocabularyItem>>(url);
+                if (items != null)
+                {
+                    _vocabCache[cacheKey] = items;
+                }
+                return items ?? new List<HskVocabularyItem>();
+            }
+            catch
+            {
+                return _vocabCache.TryGetValue(cacheKey, out var fallback) ? fallback : null;
+            }
         }
         catch
         {

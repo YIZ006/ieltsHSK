@@ -34,12 +34,58 @@
                     @if (!micChecked)
                     {
                         <p>We need access to your microphone to record your answers.</p>
+                        @if (isInsecureOrigin)
+                        {
+                            <div class="sp-insecure-box">
+                                <div class="sp-insecure-box-header">
+                                    <span>⚠️ Lưu ý: Bạn đang truy cập qua IP (@currentAuthority)</span>
+                                </div>
+                                <div class="sp-insecure-box-desc">
+                                    Trình duyệt (Cốc Cốc, Chrome, Edge) mặc định chặn Micro trên các kết nối IP không bảo mật. Nếu bạn đang chạy trên máy tính này, hãy bấm chuyển sang <b>localhost</b> để bật Micro ngay.
+                                </div>
+                                <div class="sp-insecure-box-actions">
+                                    <button type="button" class="sp-btn-switch-localhost" @onclick="SwitchToLocalhost">
+                                        🚀 Chuyển sang localhost:@(currentPort) dùng Mic ngay
+                                    </button>
+                                </div>
+                            </div>
+                        }
                         <button class="sp-btn-primary" @onclick="RequestMic">🎙️ Allow Microphone</button>
                     }
                     else if (micError)
                     {
-                        <p class="sp-error-msg">⚠️ Microphone access was denied. Please click the camera icon in your browser address bar, allow microphone, then reload.</p>
-                        <button class="sp-btn-secondary" @onclick="RequestMic">🔄 Try again</button>
+                        @if (isInsecureOrigin)
+                        {
+                            <div class="sp-insecure-box error">
+                                <div class="sp-insecure-box-header">
+                                    <span>⚠️ Trình duyệt chặn Microphone do kết nối Không bảo mật</span>
+                                </div>
+                                <div class="sp-insecure-box-desc">
+                                    Trình duyệt tuân thủ chính sách bảo mật WebRTC: <b>Microphone chỉ được phép hoạt động trên <code>localhost</code> hoặc kết nối bảo mật <code>HTTPS</code></b>. Địa chỉ <code>http://@currentAuthority</code> bị đánh dấu là "Không bảo mật" nên trình duyệt tự động khóa Micro.
+                                </div>
+                                <div class="sp-insecure-box-actions">
+                                    <button type="button" class="sp-btn-switch-localhost" @onclick="SwitchToLocalhost">
+                                        🚀 Chuyển sang localhost:@(currentPort) (Khuyên dùng)
+                                    </button>
+                                    <button type="button" class="sp-btn-secondary" @onclick="RequestMic">
+                                        🔄 Thử lại
+                                    </button>
+                                </div>
+                                <details class="sp-lan-details">
+                                    <summary>📱 Bạn đang truy cập từ điện thoại hoặc thiết bị khác trong mạng LAN?</summary>
+                                    <ol>
+                                        <li>Mở tab mới trên Cốc Cốc / Chrome, nhập: <code>coccoc://flags/#unsafely-treat-insecure-origin-as-secure</code> (hoặc <code>chrome://flags</code>)</li>
+                                        <li>Tại mục <b>Insecure origins treated as secure</b>, nhập: <code>http://@currentAuthority</code></li>
+                                        <li>Chọn <b>Enabled</b> và bấm <b>Relaunch</b> để khởi động lại trình duyệt.</li>
+                                    </ol>
+                                </details>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="sp-error-msg">⚠️ Microphone access was denied. Please click the camera icon in your browser address bar, allow microphone, then reload.</p>
+                            <button class="sp-btn-secondary" @onclick="RequestMic">🔄 Try again</button>
+                        }
                     }
                     else if (micOk)
                     {
@@ -488,8 +534,38 @@
     private string GetTimerClass() => partSecondsLeft < 30 ? "sp-timer-warn" : "";
     private double GetProgress() => ((activePartIndex + 1.0) / (exam?.Parts.Count ?? 1)) * 100;
 
+    private bool isInsecureOrigin = false;
+    private string currentAuthority = "";
+    private int currentPort = 5102;
+
+    private void CheckInsecureOrigin()
+    {
+        if (Uri.TryCreate(Navigation.Uri, UriKind.Absolute, out var uri))
+        {
+            currentAuthority = uri.Authority;
+            currentPort = uri.Port > 0 ? uri.Port : 5102;
+            if (uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase) &&
+                !uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) &&
+                !uri.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase))
+            {
+                isInsecureOrigin = true;
+            }
+        }
+    }
+
+    private void SwitchToLocalhost()
+    {
+        if (Uri.TryCreate(Navigation.Uri, UriKind.Absolute, out var uri))
+        {
+            var targetPort = uri.Port > 0 ? $":{uri.Port}" : "";
+            var localhostUrl = $"http://localhost{targetPort}{uri.PathAndQuery}";
+            Navigation.NavigateTo(localhostUrl, forceLoad: true);
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
+        CheckInsecureOrigin();
         string? url = ExamUrl;
         if (string.IsNullOrWhiteSpace(url)) url = QueryExamUrl;
         string finalUrl = string.IsNullOrWhiteSpace(url) ? "sample-data/speaking-test-1.json" : Uri.UnescapeDataString(url);
@@ -510,6 +586,12 @@
         var result = await JS.InvokeAsync<System.Text.Json.JsonElement>("SpeakingInterop.requestMicPermission");
         micOk = result.GetProperty("success").GetBoolean();
         micError = !micOk;
+
+        if (result.TryGetProperty("isInsecureContext", out var insecureProp) && insecureProp.GetBoolean())
+        {
+            isInsecureOrigin = true;
+        }
+
         if (micOk)
         {
             selectedMicrophoneId = result.GetProperty("deviceId").GetString();

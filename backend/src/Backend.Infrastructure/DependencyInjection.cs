@@ -4,6 +4,7 @@ using Backend.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace Backend.Infrastructure;
 
@@ -31,6 +32,29 @@ public static class DependencyInjection
                 @";?\s*Trust\s*Server\s*Certificate\s*=\s*(true|false);?", 
                 ";", 
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim(';', ' ');
+
+            // Tối ưu hóa cho kết nối Supabase Pooler (PgBouncer/Supavisor):
+            // - KeepAlive=30: Tránh AWS NAT tự ngắt kết nối socket khi rảnh, loại bỏ tình trạng đơ/chậm sau vài phút
+            // - No Reset On Close=true: Tránh lỗi và độ trễ do lệnh DISCARD ALL trên pooler
+            // - Minimum Pool Size=1: Mở sẵn kết nối ấm, triệt tiêu độ trễ TLS handshake ở request đầu tiên
+            // - Connection Idle Lifetime=60: Tự động dọn kết nối cũ an toàn
+            try
+            {
+                var csb = new NpgsqlConnectionStringBuilder(connStr);
+                if (csb.Host != null && csb.Host.Contains("pooler.supabase.com", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (csb.KeepAlive <= 0) csb.KeepAlive = 30;
+                    if (!connStr.Contains("No Reset On Close", StringComparison.OrdinalIgnoreCase))
+                        csb["No Reset On Close"] = true;
+                    if (csb.MinPoolSize <= 0) csb.MinPoolSize = 1;
+                    if (csb.ConnectionIdleLifetime <= 0) csb.ConnectionIdleLifetime = 60;
+                    connStr = csb.ConnectionString;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Startup Warning] NpgsqlConnectionStringBuilder: {ex.Message}");
+            }
         }
 
         services.AddDbContext<AppDbContext>(options =>
@@ -48,15 +72,25 @@ public static class DependencyInjection
 
         if (redisEnabled && !string.IsNullOrWhiteSpace(redisConn))
         {
-            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(sp =>
+            var lazyMultiplexer = new Lazy<StackExchange.Redis.IConnectionMultiplexer>(() =>
             {
-                var options = StackExchange.Redis.ConfigurationOptions.Parse(redisConn);
-                options.AbortOnConnectFail = false; // Resilience: Do not crash if Redis is unavailable on startup
-                options.ConnectTimeout = 3000;
-                options.SyncTimeout = 3000;
-                options.AsyncTimeout = 3000;
-                return StackExchange.Redis.ConnectionMultiplexer.Connect(options);
+                try
+                {
+                    var options = StackExchange.Redis.ConfigurationOptions.Parse(redisConn);
+                    options.AbortOnConnectFail = false; // Resilience: Do not crash if Redis is unavailable
+                    options.ConnectTimeout = 1000;      // Fast timeout: không làm nghẽn request đầu nếu Redis tắt
+                    options.SyncTimeout = 1000;
+                    options.AsyncTimeout = 1000;
+                    return StackExchange.Redis.ConnectionMultiplexer.Connect(options);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Redis Notice] Could not connect to Redis ({redisConn}): {ex.Message}. Falling back to MemoryCache.");
+                    return null!;
+                }
             });
+
+            services.AddSingleton<StackExchange.Redis.IConnectionMultiplexer>(_ => lazyMultiplexer.Value);
         }
         else
         {
@@ -286,6 +320,31 @@ public static class DependencyInjection
                     );
                     CREATE INDEX IF NOT EXISTS ix_exam_checkpoints_lookup ON exam_checkpoints (user_identifier, skill, exam_url);
                 END $$;
+
+                -- Tạo bảng admins riêng biệt không chung với users
+                CREATE TABLE IF NOT EXISTS admins (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(100) NOT NULL UNIQUE,
+                    full_name VARCHAR(255) NOT NULL,
+                    email VARCHAR(255) NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    role VARCHAR(50) NOT NULL DEFAULT 'admin',
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    last_login_at TIMESTAMP WITH TIME ZONE NULL,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NULL
+                );
+
+                -- Khóa chặt: Toàn bộ bảng users chỉ là học viên (role = 'user'), tuyệt đối không có quyền admin
+                UPDATE users SET role = 'user' WHERE role != 'user';
+
+                -- Tự động sửa sequence cho learning_sections nếu bị lệch ID
+                DO $seq$
+                BEGIN
+                    IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'learning_sections') THEN
+                        PERFORM setval(pg_get_serial_sequence('learning_sections', 'id'), COALESCE(MAX(id), 1)) FROM learning_sections;
+                    END IF;
+                END $seq$;
             ");
         }
         catch (Exception ex)
@@ -295,34 +354,35 @@ public static class DependencyInjection
 
         try
         {
-            // Seed Admin User (cuongnane)
-            if (!await dbContext.Users.AnyAsync(u => u.Email == "cuong20067@gmail.com"))
+            // 1. Luôn đảm bảo tài khoản Admin mẫu trong bảng admins riêng biệt
+            var sampleAdmin = await dbContext.Admins.FirstOrDefaultAsync(a => a.Email == "admin@ieltshsk.com" || a.Username == "admin");
+            if (sampleAdmin == null)
             {
-                var adminUser = new User
+                sampleAdmin = new Admin
                 {
-                    Username = "cuongnane",
-                    Email = "cuong20067@gmail.com",
+                    Username = "admin",
+                    FullName = "Quản trị viên Hệ thống",
+                    Email = "admin@ieltshsk.com",
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword("Aa@cuongnane"),
                     Role = "admin",
-                    Level = "C2",
                     IsActive = true,
-                    LastLoginAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow
                 };
-                dbContext.Users.Add(adminUser);
-                await dbContext.SaveChangesAsync();
+                dbContext.Admins.Add(sampleAdmin);
             }
+            else
+            {
+                sampleAdmin.PasswordHash = BCrypt.Net.BCrypt.HashPassword("Aa@cuongnane");
+                sampleAdmin.Role = "admin";
+                sampleAdmin.IsActive = true;
+            }
+            await dbContext.SaveChangesAsync();
 
-            // Ensure Admin role for admins
-            try
+            // Kiểm tra nhanh: Nếu LearningSections đã tồn tại, các bảng khởi tạo ban đầu khác đã đầy đủ
+            bool alreadySeeded = await dbContext.LearningSections.AnyAsync();
+
+            if (!alreadySeeded)
             {
-                await dbContext.Database.ExecuteSqlRawAsync(@"
-                    UPDATE users SET role = 'admin' WHERE email IN ('cuong20067@gmail.com', 'phamc13579@gmail.com');
-                ");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[SeedData] Admin role update note: {ex.Message}");
-            }
 
             // Seed Languages
             if (!await dbContext.Languages.AnyAsync(l => l.Code == "EN"))
@@ -378,8 +438,8 @@ public static class DependencyInjection
             // Seed Course
             if (!await dbContext.Courses.AnyAsync(c => c.Slug == "ielts-listening-master"))
             {
-                var admin = await dbContext.Users.FirstOrDefaultAsync(u => u.Email == "cuong20067@gmail.com");
-                if (admin != null)
+                var author = await dbContext.Users.FirstOrDefaultAsync();
+                if (author != null)
                 {
                     dbContext.Courses.Add(new Course
                     {
@@ -390,7 +450,7 @@ public static class DependencyInjection
                         Category = "listening",
                         Status = "published",
                         DurationMinutes = 1200,
-                        CreatedById = admin.Id
+                        CreatedById = author.Id
                     });
                     await dbContext.SaveChangesAsync();
                 }
@@ -420,13 +480,23 @@ public static class DependencyInjection
                 );
                 await dbContext.SaveChangesAsync();
             }
-            else if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "HSK" && s.Route == "/hsk/vocab-shooter"))
+            // Dọn dẹp các mục Nghe HSK, Đọc HSK, Viết HSK, Nói HSK khỏi learning_sections
+            var deprecatedHskRoutes = new[] { "/hsk/listening", "/hsk/reading", "/hsk/writing", "/hsk/speaking" };
+            var deprecatedSections = await dbContext.LearningSections
+                .Where(s => s.Language == "HSK" && deprecatedHskRoutes.Contains(s.Route))
+                .ToListAsync();
+            if (deprecatedSections.Any())
             {
-                dbContext.LearningSections.Add(
-                    new LearningSection { Name = "Bắn Từ Vựng", Description = "Gõ pinyin bắn từ vựng rơi", Icon = "bi-crosshair", Route = "/hsk/vocab-shooter", Language = "HSK", OrderIndex = 3 }
-                );
+                dbContext.LearningSections.RemoveRange(deprecatedSections);
                 await dbContext.SaveChangesAsync();
             }
+
+            // Đảm bảo các mục HSK còn lại có đúng thứ tự (OrderIndex: 1. Luyện đề, 2. Từ vựng)
+            var luyenDeHsk = await dbContext.LearningSections.FirstOrDefaultAsync(s => s.Language == "HSK" && s.Route == "/hsk/luyen-de");
+            if (luyenDeHsk != null && luyenDeHsk.OrderIndex != 1) { luyenDeHsk.OrderIndex = 1; }
+            var tuVungHsk = await dbContext.LearningSections.FirstOrDefaultAsync(s => s.Language == "HSK" && s.Route == "/hsk/tu-vung");
+            if (tuVungHsk != null && tuVungHsk.OrderIndex != 2) { tuVungHsk.OrderIndex = 2; }
+            await dbContext.SaveChangesAsync();
 
             // Seed TOEIC LearningSections
             if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "TOEIC"))
@@ -437,6 +507,30 @@ public static class DependencyInjection
                     new LearningSection { Name = "Từ vựng", Description = "Flashcard 70 từ", Icon = "bi-layers", Route = "/toeic/flashcards", Language = "TOEIC", OrderIndex = 3 },
                     new LearningSection { Name = "Nghe Part 1-4", Description = "Luyện Listening", Icon = "bi-headphones", Route = "/toeic/listening", Language = "TOEIC", OrderIndex = 4 },
                     new LearningSection { Name = "Đọc Part 5-7", Description = "Luyện Reading", Icon = "bi-book", Route = "/toeic/reading", Language = "TOEIC", OrderIndex = 5 }
+                );
+                await dbContext.SaveChangesAsync();
+            }
+        }
+
+            // Ensure Ngữ pháp exists for IELTS
+            if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "IELTS" && (s.Route == "/ielts/grammar" || s.Route == "/ielts/ngu-phap")))
+            {
+                var uuTien = await dbContext.LearningSections.FirstOrDefaultAsync(s => s.Language == "IELTS" && s.Route == "/ielts/uu-tien");
+                if (uuTien != null && uuTien.OrderIndex <= 6)
+                {
+                    uuTien.OrderIndex = 7;
+                }
+
+                dbContext.LearningSections.Add(
+                    new LearningSection
+                    {
+                        Name = "Ngữ pháp",
+                        Description = "Kho cấu trúc câu theo Band",
+                        Icon = "bi-diagram-3",
+                        Route = "/ielts/grammar",
+                        Language = "IELTS",
+                        OrderIndex = 6
+                    }
                 );
                 await dbContext.SaveChangesAsync();
             }
@@ -478,108 +572,43 @@ public static class DependencyInjection
         try
         {
             await dbContext.Database.ExecuteSqlRawAsync(@"
-                CREATE TABLE IF NOT EXISTS ""GrammarStructures"" (
-                    ""Id"" integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-                    ""StructureCode"" text NOT NULL,
-                    ""BandLevel"" text NOT NULL,
-                    ""Category"" text NOT NULL,
-                    ""GrammarTopic"" text NOT NULL,
-                    ""Formula"" text NOT NULL,
-                    ""UsageFunction"" text NOT NULL,
-                    ""BasicExample"" text,
-                    ""AdvancedExample"" text NOT NULL,
-                    ""VietnameseMeaning"" text NOT NULL,
-                    ""KeyCollocations"" text,
-                    ""CommonMistakes"" text,
-                    ""PracticeExercise"" text,
-                    ""Tags"" text,
-                    ""DisplayOrder"" integer NOT NULL DEFAULT 0,
-                    ""IsActive"" boolean NOT NULL DEFAULT TRUE,
-                    ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    ""UpdatedAt"" timestamp with time zone
-                );
+                DO $$
+                BEGIN
+                    -- Xóa bảng PascalCase cũ nếu đã tạo nhầm trước đó
+                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'GrammarStructures') THEN
+                        DROP TABLE ""GrammarStructures"";
+                    END IF;
+
+                    -- Tạo bảng snake_case chuẩn EF Core Npgsql
+                    CREATE TABLE IF NOT EXISTS grammar_structures (
+                        id integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                        structure_code text NOT NULL,
+                        band_level text NOT NULL,
+                        category text NOT NULL,
+                        grammar_topic text NOT NULL,
+                        formula text NOT NULL,
+                        usage_function text NOT NULL,
+                        basic_example text,
+                        advanced_example text NOT NULL,
+                        vietnamese_meaning text NOT NULL,
+                        key_collocations text,
+                        common_mistakes text,
+                        practice_exercise text,
+                        tags text,
+                        display_order integer NOT NULL DEFAULT 0,
+                        is_active boolean NOT NULL DEFAULT TRUE,
+                        created_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at timestamp with time zone
+                    );
+                END $$;
             ");
+
+            await GrammarSeedData.SeedGrammarStructuresAsync(dbContext);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[SeedData] GrammarStructures table creation note: {ex.Message}");
         }
-
-        if (!dbContext.GrammarStructures.Any())
-        {
-            dbContext.GrammarStructures.AddRange(
-                new GrammarStructure
-                {
-                    StructureCode = "W_INV_01",
-                    BandLevel = "7.5 - 8.5",
-                    Category = "Writing Task 2",
-                    GrammarTopic = "Đảo ngữ (Inversion)",
-                    Formula = "Not only + Aux + S + V, but S + (also) + V",
-                    UsageFunction = "Nhấn mạnh 2 tác động song hành, tạo ấn tượng học thuật mạnh ở mở đoạn hoặc câu chủ đề",
-                    BasicExample = "Computers help students study and they make work easier.",
-                    AdvancedExample = "Not only does technological adoption facilitate self-directed learning, but it also enhances workforce productivity.",
-                    VietnameseMeaning = "Không chỉ việc áp dụng công nghệ tạo điều kiện cho việc tự học, mà nó còn nâng cao năng suất của lực lượng lao động.",
-                    KeyCollocations = "technological adoption, facilitate self-directed learning, workforce productivity",
-                    CommonMistakes = "Quên đảo trợ động từ lên trước chủ ngữ sau 'Not only' (ví dụ viết sai: Not only computers help...)",
-                    PracticeExercise = "Rewrite: Tourism creates jobs and it also introduces local culture.",
-                    Tags = "inversion, emphasis, task2, academic",
-                    DisplayOrder = 1
-                },
-                new GrammarStructure
-                {
-                    StructureCode = "W_NOM_01",
-                    BandLevel = "7.0 - 8.0",
-                    Category = "Writing Task 1 & 2",
-                    GrammarTopic = "Danh từ hóa (Nominalisation)",
-                    Formula = "The [Noun phrase] + led to / resulted in + a [Adj] [Noun]",
-                    UsageFunction = "Biến đổi câu văn nói chứa động từ thành văn phong học thuật khách quan, trang trọng",
-                    BasicExample = "People used more renewable energy so emissions decreased rapidly.",
-                    AdvancedExample = "The widespread adoption of renewable energy resulted in a substantial reduction in carbon emissions.",
-                    VietnameseMeaning = "Việc áp dụng rộng rãi năng lượng tái tạo đã dẫn đến sự sụt giảm đáng kể lượng phát thải carbon.",
-                    KeyCollocations = "widespread adoption, substantial reduction, carbon emissions",
-                    CommonMistakes = "Dùng sai giới từ đi kèm với danh từ (ví dụ: reduction of thay vì reduction in)",
-                    PracticeExercise = "Rewrite: Cars increased rapidly so air became heavily polluted.",
-                    Tags = "nominalisation, academic_style, task1, task2",
-                    DisplayOrder = 2
-                },
-                new GrammarStructure
-                {
-                    StructureCode = "W_CLEFT_01",
-                    BandLevel = "7.5 - 8.5",
-                    Category = "Writing Task 2",
-                    GrammarTopic = "Câu chẻ (Cleft Sentence)",
-                    Formula = "It is/was + [Thành phần nhấn mạnh] + that/who + [Mệnh đề]",
-                    UsageFunction = "Nhấn mạnh chính xác chủ thể chịu trách nhiệm hoặc giải pháp cốt lõi cho một vấn đề",
-                    BasicExample = "The government should solve this problem, not citizens.",
-                    AdvancedExample = "It is the municipal authorities, rather than individuals, that must take decisive action against urban pollution.",
-                    VietnameseMeaning = "Chính các cơ quan chính quyền đô thị, chứ không phải các cá nhân, mới là bên phải hành động quyết liệt để chống lại ô nhiễm.",
-                    KeyCollocations = "municipal authorities, take decisive action, urban pollution",
-                    CommonMistakes = "Dùng nhầm 'which' thay vì 'that' khi thành phần nhấn mạnh là danh từ chỉ vật",
-                    PracticeExercise = "Rewrite: Early education shapes a child's future, not higher education.",
-                    Tags = "cleft_sentence, emphasis, solutions, task2",
-                    DisplayOrder = 3
-                },
-                new GrammarStructure
-                {
-                    StructureCode = "W_PART_01",
-                    BandLevel = "7.0 - 8.0",
-                    Category = "Writing Task 1",
-                    GrammarTopic = "Mệnh đề phân từ (Participle Clause)",
-                    Formula = "[Main Clause], thereby + V-ing / leading to + [Noun phrase]",
-                    UsageFunction = "Diễn tả chuỗi biến động kết quả liên hoàn trong bài mô tả biểu đồ Task 1",
-                    BasicExample = "The car sales rose to 50,000 and this made it the most popular product.",
-                    AdvancedExample = "Car sales surged to 50,000 units in 2020, thereby overtaking motorbikes as the leading vehicle category.",
-                    VietnameseMeaning = "Doanh số ô tô tăng vọt lên 50.000 chiếc vào năm 2020, qua đó vượt qua xe máy để trở thành nhóm phương tiện dẫn đầu.",
-                    KeyCollocations = "surge to, overtake, leading vehicle category",
-                    CommonMistakes = "Dùng 'thereby + V nguyên mẫu' thay vì 'thereby + V-ing'",
-                    PracticeExercise = "Rewrite: Company revenue doubled in Q3 and this allowed further expansion.",
-                    Tags = "participle, task1, trend, cause_effect",
-                    DisplayOrder = 4
-                }
-            );
-            await dbContext.SaveChangesAsync();
-        }
-
         // Seed TOEIC Vocabulary
         await ToeicVocabSeedData.SeedToeicVocabularyAsync(dbContext);
     }

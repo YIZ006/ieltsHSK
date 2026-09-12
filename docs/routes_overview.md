@@ -1,6 +1,12 @@
-# Bảng Tổng Hợp Router Dự Án ieltsHSK
+# TÀI LIỆU KỸ THUẬT
 
-Tài liệu này liệt kê toàn bộ các đường dẫn (routes) hiện có trong dự án, được chia làm 2 phần: Frontend (Giao diện) và Backend (API).
+- **Ngày thực hiện**: 04/09/2026
+- **Tên báo cáo**: BẢNG TỔNG HỢP ROUTER TOÀN DIỆN DỰ ÁN ieltsHSK (FRONTEND VÀ BACKEND API)
+- **Người viết**: YIZ006 (https://github.com/YIZ006)
+
+---
+
+Tài liệu này liệt kê toàn bộ các đường dẫn (routes) hiện có trong dự án, được chia làm 2 phần: Frontend (Giao diện Blazor) và Backend (Minimal API).
 
 ---
 
@@ -13,10 +19,6 @@ Tài liệu này liệt kê toàn bộ các đường dẫn (routes) hiện có 
 - `/hsk/overview` - Cổng chọn cấp độ HSK 3.0 (HSK1-HSK9)
 - `/hsk/luyen-de` - Danh sách các bộ đề thi HSK (lọc theo HskUrl)
 - `/hsk/tu-vung` - Tra cứu từ vựng HSK theo cấp độ (flashcard)
-- `/hsk/listening`, `/hsk/listening/preview`, `/hsk/listening/{ExamUrl}` - Bài thi Nghe HSK
-- `/hsk/reading`, `/hsk/reading/preview`, `/hsk/reading/{ExamUrl}` - Bài thi Đọc HSK
-- `/hsk/writing`, `/hsk/writing/preview`, `/hsk/writing/{ExamUrl}` - Bài thi Viết HSK
-- `/hsk/speaking`, `/hsk/speaking/preview`, `/hsk/speaking/{ExamUrl}` - Bài thi Nói HSK
 - `/ielts` - Trang giới thiệu/cổng thông tin IELTS
 - `/ielts/dashboard` - Bảng điều khiển IELTS của người dùng
 - `/ielts/luyen-de` - Trang danh sách các bộ đề thi IELTS

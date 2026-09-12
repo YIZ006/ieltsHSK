@@ -96,18 +96,11 @@
             }
             requestAnimationFrame(tick);
 
-            // Giả lập tiến trình lướt êm ái ban đầu
+            // Giả lập tiến trình lướt êm ái ban đầu (giữ ở 95% cho tới khi Blazor tải xong thực sự)
             targetProgress = 35;
-            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 65); }, 250);
-            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 85); }, 600);
-            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 92); }, 1200);
-            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 97); }, 2500);
-
-            // Safety Fallback: Tự động mở màn hình sau 4.5s để không bao giờ bị đứng
-            setTimeout(() => {
-                blazorReady = true;
-                targetProgress = 100;
-            }, 4500);
+            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 65); }, 400);
+            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 85); }, 1000);
+            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 95); }, 2500);
 
             function startBlazor() {
                 if (window.Blazor && !window._blazorStarted) {
@@ -116,7 +109,13 @@
                         blazorReady = true;
                         targetProgress = 100;
                     }).catch(err => {
-                        console.warn("Blazor boot notice:", err);
+                        console.error("Blazor boot error:", err);
+                        var errUi = document.getElementById('blazor-error-ui');
+                        if (errUi) {
+                            errUi.style.display = 'block';
+                            errUi.innerHTML = '<strong>Không thể khởi chạy:</strong> ' + (err && err.message ? err.message : err) + ' <a href="." class="reload">Tải lại</a>';
+                        }
+                        // Vẫn mở màn hình nếu có lỗi để người dùng thấy thông báo thay vì màn hình trống
                         blazorReady = true;
                         targetProgress = 100;
                     });
@@ -160,7 +159,7 @@
             });
         };
     </script>
-    <script src="js/guard.js"></script>
+    <!-- <script src="js/guard.js"></script> -->
     <script src="js/youtubePlayer.js"></script>
     <script src="js/exam-session.js"></script>
     <script src="js/tab-visibility.js"></script>
@@ -459,15 +458,16 @@
             }
 
             function advanceStep() {
-                if (completeTypewriterImmediately()) {
-                    // Instantly revealed full text
+                var wasTyping = isTyping;
+                if (wasTyping) {
+                    completeTypewriterImmediately();
+                    return;
+                }
+                if (currentTutorialStep < TUTORIAL_STEPS.length - 1) {
+                    currentTutorialStep++;
+                    renderStep(currentTutorialStep);
                 } else {
-                    if (currentTutorialStep < TUTORIAL_STEPS.length - 1) {
-                        currentTutorialStep++;
-                        renderStep(currentTutorialStep);
-                    } else {
-                        end();
-                    }
+                    end();
                 }
             }
 
@@ -834,7 +834,10 @@
                 },
 
                 toggleBgm: function () {
-                    if (this._bgmPlaying) {
+                    if (this._bossBgmPlaying) {
+                        this.stopBossBgm();
+                        return false;
+                    } else if (this._bgmPlaying) {
                         this.stopBgm();
                         return false;
                     } else {
@@ -844,7 +847,389 @@
                 },
 
                 isBgmPlaying: function () {
-                    return this._bgmPlaying;
+                    return this._bgmPlaying || this._bossBgmPlaying;
+                },
+
+                // ─── Nhạc Nền Boss Ma Vương (soundtrack/boss-fight-big.wav) ───
+                _bossAudio: null,
+                _bossBgmPlaying: false,
+
+                initBossAudio: function () {
+                    if (!this._bossAudio) {
+                        try {
+                            const origin = window.location.origin || '';
+                            const soundUrl = origin + '/soundtrack/boss-fight-big.wav';
+                            this._bossAudio = new Audio(soundUrl);
+                            this._bossAudio.loop = true;
+                            this._bossAudio.volume = 0.70;
+                            this._bossAudio.preload = 'auto';
+                            this._bossAudio.load();
+                        } catch (e) {
+                            console.warn('Init boss audio error:', e);
+                        }
+                    }
+                    return this._bossAudio;
+                },
+
+                startBossBgm: function () {
+                    this.stopBgm(); // Dừng nhạc synth thường
+                    this._bossBgmPlaying = true;
+                    try {
+                        const audio = this.initBossAudio();
+                        if (audio) {
+                            audio.currentTime = 0;
+                            const p = audio.play();
+                            if (p !== undefined) {
+                                p.catch(function (err) {
+                                    console.warn('Boss BGM autoplay waiting for user interaction:', err);
+                                    const resumeAudio = function () {
+                                        if (window.WordleSfx && window.WordleSfx._bossBgmPlaying && audio.paused) {
+                                            audio.play().catch(function () { });
+                                        }
+                                        document.removeEventListener('pointerdown', resumeAudio);
+                                        document.removeEventListener('keydown', resumeAudio);
+                                    };
+                                    document.addEventListener('pointerdown', resumeAudio, { once: true });
+                                    document.addEventListener('keydown', resumeAudio, { once: true });
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('startBossBgm error:', e);
+                    }
+                },
+
+                stopBossBgm: function () {
+                    this._bossBgmPlaying = false;
+                    try {
+                        if (this._bossAudio) {
+                            this._bossAudio.pause();
+                            this._bossAudio.currentTime = 0;
+                        }
+                    } catch (e) { }
+                },
+
+                pauseBossBgm: function () {
+                    try {
+                        if (this._bossAudio) {
+                            this._bossAudio.pause();
+                        }
+                    } catch (e) { }
+                },
+
+                resumeBossBgm: function () {
+                    if (!this._bossBgmPlaying) return;
+                    try {
+                        if (this._bossAudio) {
+                            const p = this._bossAudio.play();
+                            if (p !== undefined) p.catch(function () { });
+                        } else {
+                            this.startBossBgm();
+                        }
+                    } catch (e) { }
+                },
+
+                toggleBossBgm: function () {
+                    if (this._bossBgmPlaying) {
+                        this.stopBossBgm();
+                        return false;
+                    } else {
+                        this.startBossBgm();
+                        return true;
+                    }
+                },
+
+                // ─── HSK Boss "Ma Vương Hán Tự" Dramatic SFX & Chinese Voice ───
+                _cachedZhVoice: null,
+                _currentChargeNodes: null,
+
+                initBossVoices: function () {
+                    if (!('speechSynthesis' in window)) return;
+                    const updateVoice = () => {
+                        try {
+                            const voices = window.speechSynthesis.getVoices();
+                            const zhVoices = voices.filter(v => v.lang && (v.lang.toLowerCase().startsWith('zh') || (v.name || '').toLowerCase().includes('chinese')));
+                            
+                            // Ưu tiên giọng nam trầm uy lực, dứt khoát (Yunxi, Kangkang, Yunyang, Yunjian, Male, Brian, etc.)
+                            const maleKeywords = ['yunxi', 'yunyang', 'kangkang', 'yunjian', 'brian', 'male', 'man', 'nan'];
+                            let selected = zhVoices.find(v => {
+                                const n = (v.name || '').toLowerCase();
+                                return maleKeywords.some(k => n.includes(k));
+                            });
+
+                            if (!selected) {
+                                selected = zhVoices.find(v => (v.name || '').toLowerCase().includes('natural')) ||
+                                           zhVoices.find(v => v.lang === 'zh-CN') ||
+                                           zhVoices[0] ||
+                                           null;
+                            }
+                            this._cachedZhVoice = selected;
+                        } catch (e) { }
+                    };
+                    updateVoice();
+                    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+                        window.speechSynthesis.onvoiceschanged = updateVoice;
+                    }
+                },
+
+                // Cinematic Sub-bass Boss Roar / Rumble
+                bossRoar: function () {
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+                        const osc1 = c.createOscillator();
+                        const osc2 = c.createOscillator();
+                        const filter = c.createBiquadFilter();
+                        const gain = c.createGain();
+
+                        osc1.type = 'sawtooth';
+                        osc1.frequency.setValueAtTime(48, t);
+                        osc1.frequency.exponentialRampToValueAtTime(32, t + 1.2);
+
+                        osc2.type = 'square';
+                        osc2.frequency.setValueAtTime(50, t);
+                        osc2.frequency.exponentialRampToValueAtTime(28, t + 1.2);
+
+                        filter.type = 'lowpass';
+                        filter.frequency.setValueAtTime(140, t);
+                        filter.frequency.exponentialRampToValueAtTime(60, t + 1.2);
+
+                        gain.gain.setValueAtTime(0.38, t);
+                        gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+
+                        osc1.connect(filter);
+                        osc2.connect(filter);
+                        filter.connect(gain);
+                        gain.connect(c.destination);
+
+                        osc1.start(t);
+                        osc2.start(t);
+                        osc1.stop(t + 1.2);
+                        osc2.stop(t + 1.2);
+                    } catch (e) { }
+                },
+
+                // Warning Siren khi Boss giáng lâm
+                bossWarningSiren: function () {
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+                        for (let i = 0; i < 2; i++) {
+                            const st = t + i * 0.7;
+                            const osc = c.createOscillator();
+                            const gain = c.createGain();
+                            osc.type = 'sawtooth';
+                            osc.frequency.setValueAtTime(420, st);
+                            osc.frequency.linearRampToValueAtTime(780, st + 0.35);
+                            osc.frequency.linearRampToValueAtTime(420, st + 0.65);
+                            gain.gain.setValueAtTime(0.2, st);
+                            gain.gain.exponentialRampToValueAtTime(0.01, st + 0.68);
+                            osc.connect(gain);
+                            gain.connect(c.destination);
+                            osc.start(st);
+                            osc.stop(st + 0.68);
+                        }
+                    } catch (e) { }
+                },
+
+                // Sinister chord khi Boss buông lời đe dọa (Taunt)
+                bossTauntStinger: function () {
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+                        [73.4, 110, 138.6, 174.6].forEach((freq, idx) => {
+                            const osc = c.createOscillator();
+                            const gain = c.createGain();
+                            osc.type = idx % 2 === 0 ? 'sawtooth' : 'sine';
+                            osc.frequency.setValueAtTime(freq, t);
+                            gain.gain.setValueAtTime(0.14, t);
+                            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+                            osc.connect(gain);
+                            gain.connect(c.destination);
+                            osc.start(t);
+                            osc.stop(t + 0.9);
+                        });
+                    } catch (e) { }
+                },
+
+                // Âm thanh tụ năng lượng hắc ám (dâng trào căng thẳng)
+                bossSkillCharge: function (durationSec) {
+                    this.stopBossCharge();
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+                        const dur = durationSec || 6.0;
+
+                        const osc1 = c.createOscillator();
+                        const osc2 = c.createOscillator();
+                        const gain = c.createGain();
+
+                        osc1.type = 'sawtooth';
+                        osc1.frequency.setValueAtTime(75, t);
+                        osc1.frequency.exponentialRampToValueAtTime(280, t + dur);
+
+                        osc2.type = 'sine';
+                        osc2.frequency.setValueAtTime(150, t);
+                        osc2.frequency.exponentialRampToValueAtTime(560, t + dur);
+
+                        gain.gain.setValueAtTime(0.06, t);
+                        gain.gain.linearRampToValueAtTime(0.28, t + dur);
+
+                        osc1.connect(gain);
+                        osc2.connect(gain);
+                        gain.connect(c.destination);
+
+                        osc1.start(t);
+                        osc2.start(t);
+                        osc1.stop(t + dur);
+                        osc2.stop(t + dur);
+
+                        this._currentChargeNodes = { osc1, osc2, gain };
+                    } catch (e) { }
+                },
+
+                stopBossCharge: function () {
+                    try {
+                        if (this._currentChargeNodes) {
+                            const c = ctx();
+                            const t = c.currentTime;
+                            this._currentChargeNodes.gain.gain.linearRampToValueAtTime(0.001, t + 0.1);
+                            setTimeout(() => {
+                                try {
+                                    this._currentChargeNodes.osc1.stop();
+                                    this._currentChargeNodes.osc2.stop();
+                                } catch (err) { }
+                                this._currentChargeNodes = null;
+                            }, 120);
+                        }
+                    } catch (e) { }
+                },
+
+                // Tia Laser Khổng Lồ Bắn Nổ (Laser Roar)
+                bossLaserBlast: function () {
+                    this.stopBossCharge();
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+
+                        // 1. Heavy bass boom
+                        const boom = c.createOscillator();
+                        const boomGain = c.createGain();
+                        boom.type = 'triangle';
+                        boom.frequency.setValueAtTime(190, t);
+                        boom.frequency.exponentialRampToValueAtTime(24, t + 0.95);
+                        boomGain.gain.setValueAtTime(0.55, t);
+                        boomGain.gain.exponentialRampToValueAtTime(0.001, t + 0.95);
+                        boom.connect(boomGain);
+                        boomGain.connect(c.destination);
+                        boom.start(t);
+                        boom.stop(t + 0.95);
+
+                        // 2. High laser sizzle / beam blast
+                        const duration = 0.85;
+                        const bufferSize = Math.floor(c.sampleRate * duration);
+                        const noiseBuffer = c.createBuffer(1, bufferSize, c.sampleRate);
+                        const output = noiseBuffer.getChannelData(0);
+                        for (let i = 0; i < bufferSize; i++) {
+                            output[i] = (Math.random() * 2 - 1) * 0.75;
+                        }
+                        const whiteNoise = c.createBufferSource();
+                        whiteNoise.buffer = noiseBuffer;
+                        const filter = c.createBiquadFilter();
+                        filter.type = 'bandpass';
+                        filter.frequency.setValueAtTime(1400, t);
+                        filter.frequency.exponentialRampToValueAtTime(320, t + duration);
+                        filter.Q.setValueAtTime(3.2, t);
+                        const noiseGain = c.createGain();
+                        noiseGain.gain.setValueAtTime(0.45, t);
+                        noiseGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+                        whiteNoise.connect(filter);
+                        filter.connect(noiseGain);
+                        noiseGain.connect(c.destination);
+                        whiteNoise.start(t);
+                        whiteNoise.stop(t + duration);
+                    } catch (e) { }
+                },
+
+                // Phá vỡ tụ năng lượng hắc ám (Shatter / Glass break)
+                bossChargeBroken: function () {
+                    this.stopBossCharge();
+                    try {
+                        [1400, 1850, 2200, 950].forEach((freq, idx) => {
+                            beep(freq, 'triangle', 0.14, 0.25, idx * 0.04);
+                        });
+                        beep(160, 'sawtooth', 0.28, 0.35, 0.05);
+                    } catch (e) { }
+                },
+
+                // Vượt qua 1 đợt (Victory chime)
+                bossWaveCleared: function () {
+                    try {
+                        [392, 523, 659, 784].forEach((freq, idx) => {
+                            beep(freq, 'sine', 0.14, 0.35, idx * 0.1);
+                        });
+                    } catch (e) { }
+                },
+
+                // Boss chết (Multi explosions)
+                bossDefeatedExplosion: function () {
+                    this.stopBossCharge();
+                    try {
+                        [0, 250, 550, 900, 1300].forEach((delay, idx) => {
+                            setTimeout(() => {
+                                this.bulletHit();
+                                if (idx === 4) this.bossRoar();
+                            }, delay);
+                        });
+                    } catch (e) { }
+                },
+
+                // Phát giọng nói tiếng Trung của Boss Ma Vương (Dứt khoát, uy lực, sạch tiếng, âm vang tự nhiên)
+                bossSpeak: function (chineseText, options) {
+                    options = options || {};
+                    try {
+                        if (!('speechSynthesis' in window)) return;
+                        window.speechSynthesis.cancel(); // Dừng câu trước nếu còn đang đọc
+
+                        // Âm bass nổ gọn gàng uy lực mở đầu chiêu thức (sóng sine tròn trịa, không rè, không xì xèo)
+                        if (options.isSkill) {
+                            try {
+                                const c = ctx();
+                                const t = c.currentTime;
+                                const osc = c.createOscillator();
+                                const gain = c.createGain();
+                                osc.type = 'sine'; // Sóng sine thuần khiết, 100% êm mượt không nhiễu
+                                osc.frequency.setValueAtTime(80, t);
+                                osc.frequency.exponentialRampToValueAtTime(32, t + 0.45);
+                                gain.gain.setValueAtTime(0.35, t);
+                                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+                                osc.connect(gain);
+                                gain.connect(c.destination);
+                                osc.start(t);
+                                osc.stop(t + 0.45);
+                            } catch (e) { }
+                        }
+
+                        if (!this._cachedZhVoice) {
+                            this.initBossVoices();
+                        }
+
+                        const u = new SpeechSynthesisUtterance(chineseText);
+                        u.lang = 'zh-CN';
+                        // Giọng đọc cực kỳ có lực: pitch 0.94 - 0.96 tự nhiên chuẩn xác không méo formants, rate 0.95 đanh thép, volume 1.0 to rõ
+                        let p = options.pitch !== undefined ? options.pitch : 0.94;
+                        if (p < 0.85) p = 0.94; // Chống hạ pitch quá sâu gây nghẹt, chối tai
+                        u.pitch = p;
+                        u.rate = options.rate !== undefined ? options.rate : 0.96;
+                        u.volume = 1.0;
+                        if (this._cachedZhVoice) {
+                            u.voice = this._cachedZhVoice;
+                        }
+
+                        window.speechSynthesis.speak(u);
+                    } catch (e) {
+                        console.warn('Boss speech error:', e);
+                    }
                 }
             };
         })();

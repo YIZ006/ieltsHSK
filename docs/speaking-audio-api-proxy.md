@@ -1,4 +1,10 @@
-# Speaking Audio API Proxy Implementation
+# BÁO CÁO KỸ THUẬT
+
+- **Ngày thực hiện**: 28/08/2026
+- **Tên báo cáo**: TRIỂN KHAI SPEAKING AUDIO API PROXY VÀ LƯU TRỮ CLOUDFLARE R2 BẢO MẬT
+- **Người viết**: YIZ006 (https://github.com/YIZ006)
+
+---
 
 ## Goal
 
