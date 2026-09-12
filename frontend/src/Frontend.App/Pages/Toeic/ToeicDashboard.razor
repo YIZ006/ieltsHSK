@@ -5,7 +5,6 @@
 @using Blazored.LocalStorage
 @inject MockTestService MockTestService
 @inject ExamSubmissionService Submissions
-@inject ToeicAchievementService Achievements
 @inject IJSRuntime JS
 @inject ILocalStorageService LocalStorage
 
@@ -235,56 +234,6 @@
                     </div>
                 }
             </div>
-        </div>
-    </div>
-
-    @* ===== ACHIEVEMENTS (TOP 3 UNLOCKED + VIEW MORE) ===== *@
-    <div class="td-card td-anim-up td-delay-2">
-        <div class="td-section-header">
-            <div>
-                <div class="td-section-title">🏅 Thành tích đạt được</div>
-                <div class="td-section-subtitle">Huy hiệu bạn đã xuất sắc mở khóa trong quá trình luyện tập</div>
-            </div>
-            <a href="/toeic/achievements" class="td-section-link">
-                Xem tất cả (@achUnlocked/@achTotal) <i class="bi bi-arrow-right"></i>
-            </a>
-        </div>
-
-        @{
-            var unlockedAchievements = achievements.Where(a => a.Unlocked).Take(3).ToList();
-        }
-
-        @if (unlockedAchievements.Count > 0)
-        {
-            <div class="td-grid-3 td-grid-tight">
-                @foreach (var a in unlockedAchievements)
-                {
-                    <div class="td-ach unlocked">
-                        <span class="td-ach-check"><i class="bi bi-check-lg"></i></span>
-                        <div class="td-ach-icon">@a.Icon</div>
-                        <div class="td-ach-title">@a.Title</div>
-                        <div class="td-ach-desc">@a.Description</div>
-                        <div class="td-progress-bar"><div class="td-progress-fill green" style="width:100%"></div></div>
-                        <span class="td-ach-progress-text"><i class="bi bi-patch-check-fill text-success"></i> Đã đạt</span>
-                    </div>
-                }
-            </div>
-        }
-        else
-        {
-            <div class="td-empty" style="padding: 24px 16px;">
-                <div class="td-empty-icon">🎯</div>
-                <div class="td-empty-title">Chưa có thành tích nào được mở khóa</div>
-                <div class="td-empty-sub">Hãy hoàn thành bài thi TOEIC đầu tiên hoặc học 50 từ flashcard để nhận huy hiệu đầu tiên!</div>
-                <a href="/toeic/test" class="td-btn td-btn-primary td-btn-sm"><i class="bi bi-play-fill"></i> Bắt đầu bài thi ngay</a>
-            </div>
-        }
-
-        <div class="td-ach-footer">
-            <a href="/toeic/achievements" class="td-ach-more-btn">
-                <span>Xem thêm thành tích (@achTotal huy hiệu)</span>
-                <i class="bi bi-arrow-right"></i>
-            </a>
         </div>
     </div>
 
@@ -660,10 +609,6 @@
 
     private List<MockTestDto> toeicTests = new();
     private List<IeltsSubmissionRecord> recentSubmissions = new();
-    private List<ToeicAchievement> achievements = new();
-
-    private int achUnlocked => achievements.Count(a => a.Unlocked);
-    private int achTotal => achievements.Count;
     private ToeicWord wordOfDay = ToeicWords[0];
     private bool isBookmarked;
     private int bonusXp = 0;
@@ -701,15 +646,6 @@
         catch
         {
             recentSubmissions = new();
-        }
-
-        try
-        {
-            achievements = await Achievements.GetAllAsync();
-        }
-        catch
-        {
-            achievements = new();
         }
 
         wordOfDay = ToeicWords[DateTime.Now.DayOfYear % ToeicWords.Count];
