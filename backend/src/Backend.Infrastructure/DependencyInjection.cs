@@ -67,7 +67,7 @@ public static class DependencyInjection
                 .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
         // Redis Distributed Cache & In-Memory Fallback
-        var redisConn = configuration["Redis:ConnectionString"] ?? "localhost:6379";
+        var redisConn = configuration["Redis:ConnectionString"] ?? "127.0.0.1:6379";
         var redisEnabled = configuration.GetValue<bool?>("Redis:Enabled") ?? true;
 
         if (redisEnabled && !string.IsNullOrWhiteSpace(redisConn))
@@ -78,10 +78,15 @@ public static class DependencyInjection
                 {
                     var options = StackExchange.Redis.ConfigurationOptions.Parse(redisConn);
                     options.AbortOnConnectFail = false; // Resilience: Do not crash if Redis is unavailable
-                    options.ConnectTimeout = 1000;      // Fast timeout: không làm nghẽn request đầu nếu Redis tắt
-                    options.SyncTimeout = 1000;
-                    options.AsyncTimeout = 1000;
-                    return StackExchange.Redis.ConnectionMultiplexer.Connect(options);
+                    options.ConnectTimeout = 3000;
+                    options.SyncTimeout = 3000;
+                    options.AsyncTimeout = 3000;
+                    var multiplexer = StackExchange.Redis.ConnectionMultiplexer.Connect(options);
+                    if (multiplexer.IsConnected)
+                    {
+                        Console.WriteLine($"[Redis Success] Connected to Redis server ({redisConn}).");
+                    }
+                    return multiplexer;
                 }
                 catch (Exception ex)
                 {
