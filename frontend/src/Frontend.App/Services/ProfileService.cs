@@ -19,7 +19,6 @@ public sealed class UserProfile
     public string LastName { get; set; } = "";
     public string FullName { get; set; } = "";
     public string Email { get; set; } = "";
-    public int Xp { get; set; }
     public int Streak { get; set; }
     public DateTime? UsernameChangedAt { get; set; }
 
@@ -77,7 +76,6 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
                     if (!string.IsNullOrWhiteSpace(srvUser.IeltsLevel)) local.IeltsLevel = srvUser.IeltsLevel;
                     if (!string.IsNullOrWhiteSpace(srvUser.HskLevel)) local.HskLevel = srvUser.HskLevel;
                     if (!string.IsNullOrWhiteSpace(srvUser.Level)) local.StudyLevel = srvUser.Level;
-                    local.Xp = srvUser.Xp;
                     local.Streak = srvUser.Streak;
 
                     // Migrate local customizations to server if server doesn't have them yet
@@ -176,7 +174,6 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
         string? IeltsLevel,
         string? HskLevel,
         string? Level,
-        int Xp,
         int Streak,
         DateTime? LastActive,
         DateTime? UsernameChangedAt = null);
