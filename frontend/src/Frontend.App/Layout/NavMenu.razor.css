@@ -999,6 +999,35 @@
     flex-shrink: 0;
 }
 
+.notif-title-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.notif-expand-chevron {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.notif-card:hover .notif-expand-chevron {
+    color: #3b82f6;
+}
+
+.notif-card.expanded {
+    background-color: #f8fafc;
+}
+
+.notif-card.expanded .notif-item-message {
+    display: block;
+    -webkit-line-clamp: unset;
+    white-space: pre-line;
+    word-break: break-word;
+    color: #1e293b;
+}
+
 .notif-item-message {
     font-size: 0.82rem;
     color: #475569;
@@ -1008,6 +1037,7 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    transition: all 0.2s ease;
 }
 
 .notif-meta-row {
