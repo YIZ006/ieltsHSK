@@ -998,7 +998,6 @@ app.MapGet("/api/user/me", [Microsoft.AspNetCore.Authorization.Authorize] async 
                 dbUser.IeltsLevel,
                 dbUser.HskLevel,
                 dbUser.Level,
-                dbUser.Xp,
                 dbUser.Streak,
                 dbUser.LastActive,
                 dbUser.CreatedAt
@@ -1121,11 +1120,10 @@ app.MapPost("/api/user/streak", [Microsoft.AspNetCore.Authorization.Authorize] a
                 {
                     dbUser.Streak = 1;
                 }
-                dbUser.Xp += 10; // Daily check-in XP bonus
                 dbUser.LastActive = DateTime.UtcNow;
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
-            return Results.Ok(new { streak = dbUser.Streak, xp = dbUser.Xp, lastActive = dbUser.LastActive });
+            return Results.Ok(new { streak = dbUser.Streak, lastActive = dbUser.LastActive });
         }
     }
     return Results.Unauthorized();
@@ -1187,13 +1185,6 @@ app.MapPost("/api/user/study-time", [Microsoft.AspNetCore.Authorization.Authoriz
         activity.UpdatedAt = DateTime.UtcNow;
     }
 
-    // Award XP: 1 XP per minute studied
-    var earnedXp = request.Seconds / 60;
-    if (earnedXp > 0)
-    {
-        dbUser.Xp += earnedXp;
-    }
-
     // Calculate updated streak
     var allActivities = await dbContext.UserStudyActivities
         .Where(a => a.UserId == userId && a.StudySeconds > 0)
@@ -1227,9 +1218,7 @@ app.MapPost("/api/user/study-time", [Microsoft.AspNetCore.Authorization.Authoriz
     return Results.Ok(new
     {
         streak = dbUser.Streak,
-        xp = dbUser.Xp,
-        todaySeconds = activity.StudySeconds,
-        earnedXp
+        todaySeconds = activity.StudySeconds
     });
 });
 
@@ -2194,8 +2183,7 @@ app.MapPost("/api/test-submissions", async (
                 userEmail = currentUser.Email;
             }
 
-            // Tự động thưởng XP khi nộp bài và cập nhật chuỗi học Streak
-            currentUser.Xp += 50;
+            // Cập nhật chuỗi học Streak khi nộp bài
             var today = DateTime.UtcNow.Date;
             if (!currentUser.LastActive.HasValue || currentUser.LastActive.Value.Date != today)
             {

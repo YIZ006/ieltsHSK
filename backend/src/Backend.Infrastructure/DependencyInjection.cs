@@ -260,6 +260,7 @@ public static class DependencyInjection
                         ALTER TABLE users ADD COLUMN IF NOT EXISTS ielts_level TEXT;
                         ALTER TABLE users ADD COLUMN IF NOT EXISTS hsk_level TEXT;
                         ALTER TABLE users ADD COLUMN IF NOT EXISTS username_changed_at TIMESTAMPTZ;
+                        ALTER TABLE users DROP COLUMN IF EXISTS xp;
                     END IF;
 
                     -- 5. Bảng user_study_activities

@@ -246,11 +246,6 @@
                                         <span class="stat-label">Mục tiêu</span>
                                         <span class="stat-val">@(string.IsNullOrWhiteSpace(targetExam) ? "TOEIC" : targetExam)</span>
                                     </div>
-                                    <div class="popover-stat-divider"></div>
-                                    <div class="popover-stat-item">
-                                        <span class="stat-label">Điểm XP</span>
-                                        <span class="stat-val">@userXp</span>
-                                    </div>
                                 </div>
 
                                 @* ── Action Navigation List ── *@
@@ -341,7 +336,6 @@
     private static string _cachedUserEmail = "";
     private static string _cachedStudyLevel = "HSK3";
     private static string _cachedTargetExam = "HSK";
-    private static int _cachedUserXp = 0;
     private static bool _cachedIsAdmin = false;
     private static int _cachedCurrentStreak = 0;
     private static int _cachedBestStreak = 0;
@@ -359,7 +353,6 @@
     private string avatarEmoji = !string.IsNullOrEmpty(_cachedAvatarEmoji) ? _cachedAvatarEmoji : "🎓";
     private string studyLevel = _cachedStudyLevel;
     private string targetExam = _cachedTargetExam;
-    private int userXp = _cachedUserXp;
     private bool isAdmin = _cachedIsAdmin;
     private int currentStreak = _cachedCurrentStreak;
     private int bestStreak = _cachedBestStreak;
@@ -472,8 +465,6 @@
             targetExam = profile.TargetExam;
             _cachedTargetExam = targetExam;
         }
-        userXp = profile.Xp;
-        _cachedUserXp = userXp;
     }
 
     private string GetInitial(string name)

@@ -19,7 +19,6 @@ public class User
     public string? IeltsLevel { get; set; }
     public string? HskLevel { get; set; }
     public string Level { get; set; } = "A1";
-    public int Xp { get; set; } = 0;
     public int Streak { get; set; } = 0;
     public DateTime? LastActive { get; set; }
     public DateTime? LastLoginAt { get; set; }
