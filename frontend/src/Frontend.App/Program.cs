@@ -30,7 +30,16 @@ builder.Services.AddScoped(sp =>
 });
 builder.Services.AddScoped<ExamSessionService>();
 builder.Services.AddScoped<ExamHeaderService>();
-builder.Services.AddScoped<ExamCheckpointService>();
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    var authStateProvider = sp.GetRequiredService<AuthenticationStateProvider>();
+    return new ExamCheckpointService(localStorage, authStateProvider, httpClient);
+});
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
@@ -58,7 +67,34 @@ builder.Services.AddScoped(sp =>
     return new ProfileService(localStorage, httpClient);
 });
 builder.Services.AddScoped<ToeicAchievementService>();
-builder.Services.AddScoped<ToeicStudyTrackerService>();
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    var streakService = sp.GetRequiredService<StreakService>();
+    return new ToeicStudyTrackerService(localStorage, streakService, httpClient);
+});
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    return new ToeicVocabularyService(httpClient, localStorage);
+});
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    return new UserGameProgressService(httpClient, localStorage);
+});
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())

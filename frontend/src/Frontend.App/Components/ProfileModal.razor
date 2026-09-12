@@ -125,11 +125,27 @@
                             </div>
 
                             <div class="form-field">
-                                <label class="field-label">Tên hiển thị (@@)</label>
-                                <input class="form-control-custom" value="@profile.DisplayName" @oninput="OnDisplayNameInput" placeholder="Ví dụ: cuongnane, anhnhi..." maxlength="30" />
-                                <span class="field-hint-notice">
-                                    <i class="bi bi-info-circle-fill"></i> Lưu ý: Bạn chỉ có thể đổi username sau 30 ngày. Không dùng tiếng Việt có dấu.
-                                </span>
+                                <label class="field-label">
+                                    Tên hiển thị (@@)
+                                    @if (!profile.CanChangeUsername)
+                                    {
+                                        <span class="field-badge-cooldown"><i class="bi bi-clock-history"></i> Đổi lại sau @profile.UsernameDaysRemaining ngày</span>
+                                    }
+                                </label>
+                                @if (!profile.CanChangeUsername)
+                                {
+                                    <input class="form-control-custom readonly-field" value="@profile.DisplayName" readonly title="Bạn chỉ có thể đổi tên hiển thị 30 ngày một lần" />
+                                    <span class="field-hint-notice notice-cooldown">
+                                        <i class="bi bi-lock-fill"></i> Bạn đã đổi tên hiển thị vào <b>@(profile.UsernameChangedAt?.ToLocalTime().ToString("dd/MM/yyyy"))</b>. Bạn có thể đổi lại sau <b>@profile.UsernameDaysRemaining ngày</b> (ngày @(profile.UsernameNextChangeAllowedAt?.ToLocalTime().ToString("dd/MM/yyyy"))).
+                                    </span>
+                                }
+                                else
+                                {
+                                    <input class="form-control-custom" value="@profile.DisplayName" @oninput="OnDisplayNameInput" placeholder="Ví dụ: cuongnane, anhnhi..." maxlength="30" />
+                                    <span class="field-hint-notice">
+                                        <i class="bi bi-info-circle-fill"></i> Lưu ý: Bạn chỉ có thể đổi tên hiển thị <b>mỗi 30 ngày một lần</b>. Không dùng tiếng Việt có dấu.
+                                    </span>
+                                }
                             </div>
 
                             <div class="form-field full-width">
@@ -396,10 +412,15 @@
                 profile.FullName = userFullNameClaim;
             }
 
-            // If DisplayName was accidentally equal to FullName from past bug, clean it up so it is empty
-            if (!string.IsNullOrWhiteSpace(profile.DisplayName) && (profile.DisplayName == profile.FullName || profile.DisplayName == userFullNameClaim))
+            // If DisplayName had spaces or was not set, clean and populate properly
+            if (!string.IsNullOrWhiteSpace(profile.DisplayName) && profile.DisplayName.Contains(' '))
             {
-                profile.DisplayName = "";
+                profile.DisplayName = SanitizeUsername(profile.DisplayName);
+            }
+
+            if (string.IsNullOrWhiteSpace(profile.DisplayName) && !string.IsNullOrWhiteSpace(username) && !username.Contains(' ') && username != userFullNameClaim)
+            {
+                profile.DisplayName = username;
             }
 
             if (string.IsNullOrWhiteSpace(profile.AvatarEmoji)) profile.AvatarEmoji = "🎓";

@@ -183,7 +183,7 @@
             new LearningSectionDto{ Name="Tiến độ", Route="/toeic#progress", Icon="bi-bar-chart-line-fill", Language="TOEIC", Category="Tổng quan", Badge="Mới", OrderIndex=2, Description="Biểu đồ tuần & Streak" },
 
             // ── Học tập ──
-            new LearningSectionDto{ Name="Từ vựng", Route="/toeic/flashcards", Icon="bi-book-half", Language="TOEIC", Category="Học tập", OrderIndex=3, Description="Bảng từ tra cứu chi tiết" },
+            new LearningSectionDto{ Name="Từ vựng", Route="/toeic/flashcards?mode=table", Icon="bi-book-half", Language="TOEIC", Category="Học tập", OrderIndex=3, Description="Bảng từ tra cứu chi tiết" },
             new LearningSectionDto{ Name="Flashcard 3D", Route="/toeic/flashcards", Icon="bi-layers-fill", Language="TOEIC", Category="Học tập", OrderIndex=4, Description="Thẻ lật 3D thông minh" },
             new LearningSectionDto{ Name="Luyện nghe", Route="/toeic/test", Icon="bi-headphones", Language="TOEIC", Category="Học tập", OrderIndex=5, Description="Part 1–4 Listening" },
             new LearningSectionDto{ Name="Luyện đọc", Route="/toeic/test", Icon="bi-file-earmark-text-fill", Language="TOEIC", Category="Học tập", OrderIndex=6, Description="Part 5–7 Reading" },
@@ -315,6 +315,13 @@
 
     private async Task LoadMenuAsync()
     {
+        if (PredefinedMenus.TryGetValue(selectedProgram, out var defaults) && defaults.Count > 0)
+        {
+            menuItems = [.. defaults];
+            StateHasChanged();
+            return;
+        }
+
         var data = await NavService.GetAsync(selectedProgram);
         if (data.Count > 0)
         {
