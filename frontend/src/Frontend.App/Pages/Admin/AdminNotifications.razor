@@ -230,18 +230,26 @@
         </div>
 
         <div class="modal-body-custom">
+            @if (!string.IsNullOrEmpty(modalErrorMessage))
+            {
+                <div class="alert alert-danger d-flex align-items-center gap-2 mb-3 py-2 px-3" style="border-radius: 10px; font-size: 0.88rem;">
+                    <i class="bi bi-exclamation-triangle-fill flex-shrink-0 text-danger"></i>
+                    <span>@modalErrorMessage</span>
+                </div>
+            }
+
             <!-- Title -->
             <div class="form-group mb-3">
                 <label class="form-label required">Tiêu đề thông báo</label>
                 <input type="text" class="form-control" placeholder="Ví dụ: Cập nhật bộ đề thi TOEIC mới..." 
-                       @bind="modalModel.Title" />
+                       @bind="modalModel.Title" @bind:event="oninput" />
             </div>
 
             <!-- Message -->
             <div class="form-group mb-3">
                 <label class="form-label required">Nội dung chi tiết</label>
                 <textarea class="form-control" rows="3" placeholder="Nhập nội dung thông báo gửi đến học viên..."
-                          @bind="modalModel.Message"></textarea>
+                          @bind="modalModel.Message" @bind:event="oninput"></textarea>
             </div>
 
             <!-- Type & Icon Row -->
@@ -371,6 +379,7 @@
 
     private string? feedbackMessage;
     private bool isFeedbackSuccess = true;
+    private string? modalErrorMessage;
 
     // Modal state
     private bool isModalOpen = false;
@@ -457,6 +466,7 @@
     {
         isEditMode = false;
         editingId = 0;
+        modalErrorMessage = null;
         modalModel = new NotificationFormModel
         {
             Type = "system",
@@ -471,6 +481,7 @@
     {
         isEditMode = true;
         editingId = n.Id;
+        modalErrorMessage = null;
         modalModel = new NotificationFormModel
         {
             Title = n.Title,
@@ -487,19 +498,22 @@
     private void CloseModal()
     {
         isModalOpen = false;
+        modalErrorMessage = null;
     }
 
     private async Task SaveModalAsync()
     {
+        modalErrorMessage = null;
+
         if (string.IsNullOrWhiteSpace(modalModel.Title))
         {
-            ShowFeedback("Vui lòng nhập tiêu đề thông báo!", false);
+            modalErrorMessage = "Vui lòng nhập tiêu đề thông báo!";
             return;
         }
 
         if (string.IsNullOrWhiteSpace(modalModel.Message))
         {
-            ShowFeedback("Vui lòng nhập nội dung thông báo!", false);
+            modalErrorMessage = "Vui lòng nhập nội dung thông báo!";
             return;
         }
 
@@ -518,7 +532,7 @@
                     IsBroadcast = modalModel.IsBroadcast,
                     IsActive = modalModel.IsActive
                 };
-                var success = await NotifSvc.UpdateAsync(editingId, req);
+                var (success, errMsg) = await NotifSvc.UpdateAsync(editingId, req);
                 if (success)
                 {
                     ShowFeedback("Cập nhật thông báo thành công!", true);
@@ -527,7 +541,7 @@
                 }
                 else
                 {
-                    ShowFeedback("Không thể cập nhật thông báo. Vui lòng kiểm tra lại!", false);
+                    modalErrorMessage = errMsg ?? "Không thể cập nhật thông báo. Vui lòng kiểm tra lại!";
                 }
             }
             else
@@ -542,7 +556,7 @@
                     IsBroadcast = modalModel.IsBroadcast,
                     IsActive = modalModel.IsActive
                 };
-                var success = await NotifSvc.CreateAsync(req);
+                var (success, errMsg) = await NotifSvc.CreateAsync(req);
                 if (success)
                 {
                     ShowFeedback("Tạo thông báo mới thành công!", true);
@@ -551,13 +565,13 @@
                 }
                 else
                 {
-                    ShowFeedback("Không thể tạo thông báo mới. Vui lòng kiểm tra lại!", false);
+                    modalErrorMessage = errMsg ?? "Không thể tạo thông báo mới. Vui lòng kiểm tra lại!";
                 }
             }
         }
         catch (Exception ex)
         {
-            ShowFeedback($"Lỗi xử lý: {ex.Message}", false);
+            modalErrorMessage = $"Lỗi xử lý: {ex.Message}";
         }
         finally
         {
@@ -578,7 +592,7 @@
             IsActive = !n.IsActive
         };
 
-        var success = await NotifSvc.UpdateAsync(n.Id, req);
+        var (success, errMsg) = await NotifSvc.UpdateAsync(n.Id, req);
         if (success)
         {
             n.IsActive = !n.IsActive;
@@ -586,7 +600,7 @@
         }
         else
         {
-            ShowFeedback("Không thể thay đổi trạng thái thông báo.", false);
+            ShowFeedback(errMsg ?? "Không thể thay đổi trạng thái thông báo.", false);
         }
     }
 
@@ -601,7 +615,7 @@
         isDeleting = true;
         try
         {
-            var success = await NotifSvc.DeleteAsync(deleteTarget.Id);
+            var (success, errMsg) = await NotifSvc.DeleteAsync(deleteTarget.Id);
             if (success)
             {
                 ShowFeedback("Đã xóa thông báo thành công!", true);
@@ -610,7 +624,7 @@
             }
             else
             {
-                ShowFeedback("Xóa thông báo thất bại.", false);
+                ShowFeedback(errMsg ?? "Xóa thông báo thất bại.", false);
             }
         }
         catch (Exception ex)

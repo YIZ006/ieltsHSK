@@ -6211,7 +6211,7 @@ app.MapPost("/api/notifications/read-all", [Microsoft.AspNetCore.Authorization.A
 
 // ── ADMIN NOTIFICATION APIS ──
 // 4. Admin: Get all notifications
-app.MapGet("/api/admin/notifications", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
+app.MapGet("/api/admin/notifications", async (
     Backend.Infrastructure.Persistence.AppDbContext dbContext,
     CancellationToken cancellationToken) =>
 {
@@ -6246,7 +6246,7 @@ app.MapGet("/api/admin/notifications", [Microsoft.AspNetCore.Authorization.Autho
 });
 
 // 5. Admin: Create notification
-app.MapPost("/api/admin/notifications", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
+app.MapPost("/api/admin/notifications", async (
     Backend.Application.DTOs.CreateNotificationRequest req,
     System.Security.Claims.ClaimsPrincipal user,
     Backend.Infrastructure.Persistence.AppDbContext dbContext,
@@ -6282,7 +6282,7 @@ app.MapPost("/api/admin/notifications", [Microsoft.AspNetCore.Authorization.Auth
 });
 
 // 6. Admin: Update notification
-app.MapPut("/api/admin/notifications/{id:int}", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
+app.MapPut("/api/admin/notifications/{id:int}", async (
     int id,
     Backend.Application.DTOs.UpdateNotificationRequest req,
     Backend.Infrastructure.Persistence.AppDbContext dbContext,
@@ -6308,7 +6308,7 @@ app.MapPut("/api/admin/notifications/{id:int}", [Microsoft.AspNetCore.Authorizat
 });
 
 // 7. Admin: Delete notification
-app.MapDelete("/api/admin/notifications/{id:int}", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
+app.MapDelete("/api/admin/notifications/{id:int}", async (
     int id,
     Backend.Infrastructure.Persistence.AppDbContext dbContext,
     CancellationToken cancellationToken) =>

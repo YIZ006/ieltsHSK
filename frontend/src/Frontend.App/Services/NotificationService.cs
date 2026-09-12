@@ -145,7 +145,7 @@ public class NotificationService
         }
     }
 
-    public async Task<bool> CreateAsync(CreateNotificationRequest request)
+    public async Task<(bool Success, string? ErrorMessage)> CreateAsync(CreateNotificationRequest request)
     {
         try
         {
@@ -153,18 +153,21 @@ public class NotificationService
             if (res.IsSuccessStatusCode)
             {
                 await GetNotificationsAsync(forceRefresh: true);
-                return true;
+                return (true, null);
             }
-            return false;
+            var err = await res.Content.ReadAsStringAsync();
+            var msg = string.IsNullOrWhiteSpace(err) ? $"Mã lỗi {(int)res.StatusCode}: {res.ReasonPhrase}" : err;
+            Console.WriteLine($"[NotificationService] Create failed: {msg}");
+            return (false, msg);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[NotificationService] Create error: {ex.Message}");
-            return false;
+            return (false, ex.Message);
         }
     }
 
-    public async Task<bool> UpdateAsync(int id, UpdateNotificationRequest request)
+    public async Task<(bool Success, string? ErrorMessage)> UpdateAsync(int id, UpdateNotificationRequest request)
     {
         try
         {
@@ -172,18 +175,21 @@ public class NotificationService
             if (res.IsSuccessStatusCode)
             {
                 await GetNotificationsAsync(forceRefresh: true);
-                return true;
+                return (true, null);
             }
-            return false;
+            var err = await res.Content.ReadAsStringAsync();
+            var msg = string.IsNullOrWhiteSpace(err) ? $"Mã lỗi {(int)res.StatusCode}: {res.ReasonPhrase}" : err;
+            Console.WriteLine($"[NotificationService] Update failed: {msg}");
+            return (false, msg);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[NotificationService] Update error: {ex.Message}");
-            return false;
+            return (false, ex.Message);
         }
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<(bool Success, string? ErrorMessage)> DeleteAsync(int id)
     {
         try
         {
@@ -192,14 +198,17 @@ public class NotificationService
             {
                 _cachedNotifications.RemoveAll(n => n.Id == id);
                 NotifyStateChanged();
-                return true;
+                return (true, null);
             }
-            return false;
+            var err = await res.Content.ReadAsStringAsync();
+            var msg = string.IsNullOrWhiteSpace(err) ? $"Mã lỗi {(int)res.StatusCode}: {res.ReasonPhrase}" : err;
+            Console.WriteLine($"[NotificationService] Delete failed: {msg}");
+            return (false, msg);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[NotificationService] Delete error: {ex.Message}");
-            return false;
+            return (false, ex.Message);
         }
     }
 
