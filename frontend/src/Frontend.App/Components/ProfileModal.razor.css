@@ -553,6 +553,165 @@
 .score-hsk { border-color: #fecaca; background: #fef2f2; }
 .score-hsk .score-prog { color: #dc2626; }
 
+/* ── Achievements Block in Stats Tab ── */
+.achievements-modal-block {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.achievements-modal-block .block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.achievements-modal-block .block-title {
+    margin-bottom: 0;
+}
+
+.ach-count-badge {
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: #4338ca;
+    background: #e0e7ff;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+
+.modal-ach-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.modal-ach-card {
+    border-radius: 12px;
+    padding: 12px 14px;
+    border: 1.5px solid #e2e8f0;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.modal-ach-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.modal-ach-card.unlocked {
+    border-color: #fde047;
+    background: linear-gradient(135deg, #fefce8 0%, #ffffff 100%);
+    box-shadow: 0 2px 8px rgba(234, 179, 8, 0.08);
+}
+
+.modal-ach-card.locked {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    opacity: 0.88;
+}
+
+.modal-ach-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-ach-icon {
+    font-size: 1.35rem;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: #f1f5f9;
+}
+
+.modal-ach-card.unlocked .modal-ach-icon {
+    background: #fef08a;
+}
+
+.modal-ach-card.locked .modal-ach-icon {
+    filter: grayscale(85%);
+    opacity: 0.65;
+}
+
+.status-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.status-badge.unlocked {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.status-badge.locked {
+    background: #e2e8f0;
+    color: #64748b;
+}
+
+.modal-ach-title {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 2px;
+}
+
+.modal-ach-desc {
+    font-size: 0.74rem;
+    color: #64748b;
+    line-height: 1.35;
+    min-height: 28px;
+}
+
+.modal-ach-progress-wrap {
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.modal-ach-progress-bar {
+    flex: 1;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.modal-ach-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #6366f1);
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+
+.modal-ach-card.unlocked .modal-ach-progress-fill {
+    background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.modal-ach-progress-text {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.modal-ach-card.unlocked .modal-ach-progress-text {
+    color: #15803d;
+    font-weight: 700;
+}
+
 /* ── History Tab ── */
 .history-list {
     display: flex;
@@ -729,6 +888,6 @@
 
 @media (max-width: 640px) {
     .form-grid { grid-template-columns: 1fr; }
-    .stats-cards-grid, .scores-row { grid-template-columns: 1fr; }
+    .stats-cards-grid, .scores-row, .modal-ach-grid { grid-template-columns: 1fr; }
     .tab-btn span { display: none; }
 }
