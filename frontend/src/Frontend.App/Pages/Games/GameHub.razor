@@ -1243,7 +1243,7 @@ else if (selectedGameForInfo == "hsk-shooter")
                                 {
                                     <div class="cc-connector @(isLeft ? "cc-conn-right" : "cc-conn-left")"></div>
                                 }
-                                <div class="cc-node-circle" @onclick="() => { if (isUnlocked) { if (isActive) ResumeAndCloseMap(); else ReplayStage(stageIdx); } }">
+                                <div class="cc-node-circle" @onclick="async () => { if (isUnlocked) { if (isActive) ResumeAndCloseMap(); else await ReplayStage(stageIdx); } }">
                                     @if (isCurrent)
                                     {
                                         <div class="player-map-avatar-circle" style="background: @_userAvatarColor">
