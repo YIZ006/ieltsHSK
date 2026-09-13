@@ -9,4 +9,6 @@ public class LearningSectionDto
     public string Route { get; set; } = string.Empty;
     public string Language { get; set; } = string.Empty;
     public int OrderIndex { get; set; }
+    public string Category { get; set; } = string.Empty;
+    public string Badge { get; set; } = string.Empty;
 }

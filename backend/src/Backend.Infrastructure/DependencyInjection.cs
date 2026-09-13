@@ -67,7 +67,7 @@ public static class DependencyInjection
                 .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
         // Redis Distributed Cache & In-Memory Fallback
-        var redisConn = configuration["Redis:ConnectionString"] ?? "localhost:6379";
+        var redisConn = configuration["Redis:ConnectionString"] ?? "127.0.0.1:6379";
         var redisEnabled = configuration.GetValue<bool?>("Redis:Enabled") ?? true;
 
         if (redisEnabled && !string.IsNullOrWhiteSpace(redisConn))
@@ -78,10 +78,15 @@ public static class DependencyInjection
                 {
                     var options = StackExchange.Redis.ConfigurationOptions.Parse(redisConn);
                     options.AbortOnConnectFail = false; // Resilience: Do not crash if Redis is unavailable
-                    options.ConnectTimeout = 1000;      // Fast timeout: không làm nghẽn request đầu nếu Redis tắt
-                    options.SyncTimeout = 1000;
-                    options.AsyncTimeout = 1000;
-                    return StackExchange.Redis.ConnectionMultiplexer.Connect(options);
+                    options.ConnectTimeout = 3000;
+                    options.SyncTimeout = 3000;
+                    options.AsyncTimeout = 3000;
+                    var multiplexer = StackExchange.Redis.ConnectionMultiplexer.Connect(options);
+                    if (multiplexer.IsConnected)
+                    {
+                        Console.WriteLine($"[Redis Success] Connected to Redis server ({redisConn}).");
+                    }
+                    return multiplexer;
                 }
                 catch (Exception ex)
                 {
@@ -231,9 +236,18 @@ public static class DependencyInjection
                             EXCEPTION WHEN OTHERS THEN NULL;
                             END;
                         END IF;
+                        ALTER TABLE listen_videos DROP COLUMN IF EXISTS submitted_by_user_id;
                     END IF;
 
-                    -- 3. Bảng ielts_vocabulary_progresses
+                    -- 3. Bảng lessons: dọn dẹp cột xp_reward
+                    IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'lessons') THEN
+                        ALTER TABLE lessons DROP COLUMN IF EXISTS xp_reward;
+                    END IF;
+
+                    -- Dọn dẹp bảng mồ côi learning_resources (đã thay bằng websites, categories, languages)
+                    DROP TABLE IF EXISTS learning_resources;
+
+                    -- 4. Bảng ielts_vocabulary_progresses
                     IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'ielts_vocabularies') THEN
                         CREATE TABLE IF NOT EXISTS ielts_vocabulary_progresses (
                             id SERIAL PRIMARY KEY,
@@ -244,6 +258,107 @@ public static class DependencyInjection
                             CONSTRAINT uq_ielts_vocab_progress_user_vocab UNIQUE (user_id, vocabulary_id)
                         );
                     END IF;
+
+                    -- 5. Bảng users: thêm các cột cá nhân hoá & mục tiêu
+                    IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'users') THEN
+                        ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color TEXT;
+                        ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
+                        ALTER TABLE users ADD COLUMN IF NOT EXISTS target_exam TEXT;
+                        ALTER TABLE users ADD COLUMN IF NOT EXISTS target_score TEXT;
+                        ALTER TABLE users ADD COLUMN IF NOT EXISTS target_deadline TIMESTAMPTZ;
+                        ALTER TABLE users ADD COLUMN IF NOT EXISTS ielts_level TEXT;
+                        ALTER TABLE users ADD COLUMN IF NOT EXISTS hsk_level TEXT;
+                        ALTER TABLE users ADD COLUMN IF NOT EXISTS username_changed_at TIMESTAMPTZ;
+                        ALTER TABLE users DROP COLUMN IF EXISTS xp;
+                    END IF;
+
+                    -- 5. Bảng user_study_activities
+                    CREATE TABLE IF NOT EXISTS user_study_activities (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        activity_date TIMESTAMPTZ NOT NULL,
+                        study_seconds INTEGER NOT NULL DEFAULT 0,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        CONSTRAINT uq_user_study_activities_user_date UNIQUE (user_id, activity_date)
+                    );
+
+                    -- 6. Bảng toeic_vocabularies
+                    CREATE TABLE IF NOT EXISTS toeic_vocabularies (
+                        id SERIAL PRIMARY KEY,
+                        word TEXT NOT NULL,
+                        ipa TEXT NOT NULL DEFAULT '',
+                        meaning TEXT NOT NULL,
+                        example TEXT,
+                        topic TEXT NOT NULL DEFAULT 'Khác',
+                        is_custom BOOLEAN NOT NULL DEFAULT FALSE,
+                        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    );
+                    CREATE INDEX IF NOT EXISTS ix_toeic_vocabularies_topic ON toeic_vocabularies(topic);
+
+                    -- 7. Bảng toeic_vocabulary_progresses
+                    CREATE TABLE IF NOT EXISTS toeic_vocabulary_progresses (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        vocabulary_id INTEGER NOT NULL REFERENCES toeic_vocabularies(id) ON DELETE CASCADE,
+                        status TEXT NOT NULL DEFAULT 'Learned',
+                        learned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        CONSTRAINT uq_toeic_vocab_progress_user_vocab UNIQUE (user_id, vocabulary_id)
+                    );
+
+                    -- 8. Bảng user_game_progresses
+                    CREATE TABLE IF NOT EXISTS user_game_progresses (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        game_type TEXT NOT NULL,
+                        level TEXT NOT NULL,
+                        current_stage INTEGER NOT NULL DEFAULT 0,
+                        max_unlocked_stage INTEGER NOT NULL DEFAULT 0,
+                        high_score INTEGER NOT NULL DEFAULT 0,
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        CONSTRAINT uq_user_game_progresses_user_game_lvl UNIQUE (user_id, game_type, level)
+                    );
+
+                    -- 9. Bảng exam_checkpoints
+                    CREATE TABLE IF NOT EXISTS exam_checkpoints (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                        user_identifier TEXT NOT NULL,
+                        skill TEXT NOT NULL,
+                        exam_url TEXT NOT NULL,
+                        mock_test_id INTEGER,
+                        checkpoint_data_json JSONB NOT NULL,
+                        seconds_remaining INTEGER NOT NULL DEFAULT 0,
+                        last_saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    );
+                    CREATE INDEX IF NOT EXISTS ix_exam_checkpoints_lookup ON exam_checkpoints (user_identifier, skill, exam_url);
+
+                    -- 10. Bảng notifications & user_notification_reads
+                    CREATE TABLE IF NOT EXISTS notifications (
+                        id SERIAL PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        message TEXT NOT NULL,
+                        type TEXT NOT NULL DEFAULT 'system',
+                        icon TEXT NOT NULL DEFAULT 'bi-bell-fill',
+                        target_url TEXT,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        created_by_admin TEXT,
+                        is_broadcast BOOLEAN NOT NULL DEFAULT TRUE,
+                        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE
+                    );
+                    CREATE INDEX IF NOT EXISTS ix_notifications_created_at ON notifications (created_at DESC);
+
+                    CREATE TABLE IF NOT EXISTS user_notification_reads (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        notification_id INTEGER NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+                        read_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        CONSTRAINT uq_user_notif_read UNIQUE (user_id, notification_id)
+                    );
+                    CREATE INDEX IF NOT EXISTS ix_user_notif_reads_user ON user_notification_reads (user_id);
                 END $$;
 
                 -- Tạo bảng admins riêng biệt không chung với users
@@ -302,6 +417,50 @@ public static class DependencyInjection
                 sampleAdmin.IsActive = true;
             }
             await dbContext.SaveChangesAsync();
+
+            // 2. Seed thông báo mẫu nếu bảng notifications chưa có dữ liệu
+            if (!await dbContext.Notifications.AnyAsync())
+            {
+                dbContext.Notifications.AddRange(
+                    new Notification
+                    {
+                        Title = "Chào mừng bạn đến với ieltsHSK!",
+                        Message = "Chúc bạn có những giờ học tập và luyện thi hiệu quả với hệ thống đề thi chuẩn IELTS, TOEIC và HSK.",
+                        Type = "system",
+                        Icon = "bi-stars",
+                        TargetUrl = "/",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedByAdmin = "Hệ thống",
+                        IsBroadcast = true,
+                        IsActive = true
+                    },
+                    new Notification
+                    {
+                        Title = "Bộ đề thi TOEIC ETS mới đã sẵn sàng",
+                        Message = "Luyện thi trọn bộ Listening & Reading chuẩn format quốc tế với đồng hồ bấm giờ và chấm điểm tự động.",
+                        Type = "exam",
+                        Icon = "bi-journal-check",
+                        TargetUrl = "/toeic/test",
+                        CreatedAt = DateTime.UtcNow.AddMinutes(-30),
+                        CreatedByAdmin = "Admin",
+                        IsBroadcast = true,
+                        IsActive = true
+                    },
+                    new Notification
+                    {
+                        Title = "Huy hiệu & Thành tích trong Trang cá nhân",
+                        Message = "Tính năng theo dõi tiến độ và huy hiệu đã được tích hợp trực tiếp vào hồ sơ học viên.",
+                        Type = "update",
+                        Icon = "bi-trophy-fill",
+                        TargetUrl = "",
+                        CreatedAt = DateTime.UtcNow.AddHours(-2),
+                        CreatedByAdmin = "Admin",
+                        IsBroadcast = true,
+                        IsActive = true
+                    }
+                );
+                await dbContext.SaveChangesAsync();
+            }
 
             // Kiểm tra nhanh: Nếu LearningSections đã tồn tại, các bảng khởi tạo ban đầu khác đã đầy đủ
             bool alreadySeeded = await dbContext.LearningSections.AnyAsync();
@@ -589,6 +748,8 @@ public static class DependencyInjection
         {
             Console.WriteLine($"[SeedData] GrammarStructures table creation note: {ex.Message}");
         }
+        // Seed TOEIC Vocabulary
+        await ToeicVocabSeedData.SeedToeicVocabularyAsync(dbContext);
     }
 }
 

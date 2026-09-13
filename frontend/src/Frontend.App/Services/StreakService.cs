@@ -1,15 +1,17 @@
 using Blazored.LocalStorage;
+using System.Net.Http.Json;
 
 namespace Frontend.App.Services;
 
 /// <summary>
 /// Tính chuỗi ngày học tập: một ngày được tính "active" khi người dùng
-/// đăng nhập/truy cập web trong ngày đó. Dữ liệu lưu localStorage và đồng bộ PostgreSQL khi có auth.
+/// đăng nhập/truy cập web hoặc học trong ngày đó. Dữ liệu lưu database PostgreSQL và cache localStorage.
 /// </summary>
 public class StreakService(ILocalStorageService localStorage, HttpClient? httpClient = null)
 {
     private const string StorageKey = "streak_active_days";
     private const int MaxTrackedDays = 400;
+    private static bool _migrationAttempted = false;
 
     /// <summary>Đánh dấu hôm nay là một ngày hoạt động (idempotent).</summary>
     public async Task MarkTodayAsync()
@@ -31,7 +33,7 @@ public class StreakService(ILocalStorageService localStorage, HttpClient? httpCl
         {
             try
             {
-                await httpClient.PostAsync("api/user/streak", null);
+                await httpClient.PostAsJsonAsync("api/user/study-time", new { Seconds = 60, Date = DateTime.UtcNow });
             }
             catch
             {
@@ -70,6 +72,16 @@ public class StreakService(ILocalStorageService localStorage, HttpClient? httpCl
         return best;
     }
 
+    private static List<DateTime>? _cachedDays;
+    private static DateTime _lastFetchTime = DateTime.MinValue;
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
+
+    public static void InvalidateCache()
+    {
+        _cachedDays = null;
+        _lastFetchTime = DateTime.MinValue;
+    }
+
     private static int CountCurrentStreak(List<DateTime> days)
     {
         var day = DateTime.Today;
@@ -85,28 +97,95 @@ public class StreakService(ILocalStorageService localStorage, HttpClient? httpCl
         return streak;
     }
 
-    private async Task<List<DateTime>> LoadAsync()
+    private async Task<List<DateTime>> LoadAsync(bool forceRefresh = false)
     {
+        if (!forceRefresh && _cachedDays != null && (DateTime.UtcNow - _lastFetchTime) < CacheDuration)
+        {
+            return _cachedDays;
+        }
+
+        List<DateTime> localDays = new();
         try
         {
             var raw = await localStorage.GetItemAsync<List<string>>(StorageKey);
-            if (raw == null || raw.Count == 0) return new List<DateTime>();
+            if (raw != null && raw.Count > 0)
+            {
+                localDays = raw
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Select(s => DateTime.ParseExact(s, "yyyy-MM-dd", null))
+                    .Distinct()
+                    .OrderBy(d => d)
+                    .ToList();
+            }
+        }
+        catch { }
 
-            return raw
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Select(s => DateTime.ParseExact(s, "yyyy-MM-dd", null))
-                .Distinct()
-                .OrderBy(d => d)
-                .ToList();
-        }
-        catch
+        if (httpClient != null)
         {
-            return new List<DateTime>();
+            try
+            {
+                var srv = await httpClient.GetFromJsonAsync<StudyActivityResponseDto>("api/user/study-activity");
+                if (srv != null)
+                {
+                    var srvDays = (srv.ActiveDays ?? new List<string>())
+                        .Where(s => !string.IsNullOrWhiteSpace(s))
+                        .Select(s => DateTime.ParseExact(s, "yyyy-MM-dd", null))
+                        .Distinct()
+                        .OrderBy(d => d)
+                        .ToList();
+
+                    // Check if we need to migrate existing local days to database
+                    if (!_migrationAttempted && localDays.Count > 0)
+                    {
+                        var unmerged = localDays.Except(srvDays).ToList();
+                        if (unmerged.Count > 0)
+                        {
+                            _migrationAttempted = true;
+                            _ = httpClient.PostAsJsonAsync("api/user/study-activity/migrate", new
+                            {
+                                ActiveDays = unmerged.Select(d => d.ToString("yyyy-MM-dd")).ToList()
+                            });
+                        }
+                    }
+
+                    // Database is source of truth
+                    if (srvDays.Count > 0)
+                    {
+                        await SaveAsync(srvDays);
+                        _cachedDays = srvDays;
+                        _lastFetchTime = DateTime.UtcNow;
+                        return srvDays;
+                    }
+                }
+            }
+            catch
+            {
+                // Offline fallback
+            }
         }
+
+        _cachedDays = localDays;
+        _lastFetchTime = DateTime.UtcNow;
+        return localDays;
     }
 
     private async Task SaveAsync(List<DateTime> days)
     {
-        await localStorage.SetItemAsync(StorageKey, days.Select(d => d.ToString("yyyy-MM-dd")).ToList());
+        _cachedDays = days;
+        _lastFetchTime = DateTime.UtcNow;
+        try
+        {
+            await localStorage.SetItemAsync(StorageKey, days.Select(d => d.ToString("yyyy-MM-dd")).ToList());
+        }
+        catch { }
     }
+
+    private sealed record StudyActivityResponseDto(
+        int CurrentStreak,
+        int BestStreak,
+        int TodaySeconds,
+        List<DailyStudyItemDto>? DailyActivities,
+        List<string>? ActiveDays);
+
+    private sealed record DailyStudyItemDto(DateTime Date, int Seconds);
 }

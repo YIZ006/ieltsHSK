@@ -17,7 +17,6 @@ public class ListenVideo
     public int WordCount { get; set; } = 0;
     
     public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
-    public string SubmittedByUserId { get; set; } = string.Empty;
     public int? UserId { get; set; }
     public User? User { get; set; }
 }

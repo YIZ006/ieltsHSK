@@ -1,0 +1,192 @@
+﻿@page "/toeic/achievements"
+@page "/toeic/thanh-tich"
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject ToeicAchievementService AchievementService
+@inject NavigationManager NavManager
+
+<PageTitle>Thành tích TOEIC - ieltsHSK</PageTitle>
+
+<div class="ach-page">
+    @* ── TOP NAVIGATION / HEADER ── *@
+    <div class="ach-header">
+        <div>
+            <a href="/toeic" class="ach-back-link">
+                <i class="bi bi-arrow-left"></i> Về TOEIC Dashboard
+            </a>
+            <h1 class="ach-title">
+                <i class="bi bi-award-fill ach-title-icon"></i>
+                Bộ Sưu Tập Thành Tích TOEIC
+            </h1>
+            <p class="ach-subtitle">
+                Ghi nhận tất cả các mốc tiến bộ, số bài thi đã hoàn thành và từ vựng bạn đã chinh phục.
+            </p>
+        </div>
+        <div class="ach-header-actions">
+            <a href="/toeic/test" class="ach-btn ach-btn-primary">
+                <i class="bi bi-play-fill"></i> Làm bài thi ngay
+            </a>
+            <a href="/toeic/flashcards" class="ach-btn ach-btn-outline">
+                <i class="bi bi-layers"></i> Học Flashcard
+            </a>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="ach-loading">
+            <div class="ach-spinner"></div>
+            <p>Đang tải danh sách thành tích...</p>
+        </div>
+    }
+    else
+    {
+        @* ── PROGRESS HERO SUMMARY ── *@
+        <div class="ach-summary-card">
+            <div class="ach-summary-left">
+                <div class="ach-trophy-box">
+                    <span class="ach-trophy-icon">🏆</span>
+                </div>
+                <div class="ach-summary-info">
+                    <div class="ach-summary-label">TIẾN ĐỘ THÀNH TÍCH TỔNG QUAN</div>
+                    <div class="ach-summary-title">
+                        Bạn đã mở khóa <strong class="ach-highlight">@unlockedCount</strong> / <strong>@achievements.Count</strong> huy hiệu
+                    </div>
+                    <div class="ach-progress-wrap">
+                        <div class="ach-progress-bar">
+                            <div class="ach-progress-fill" style="width:@completionRate%;"></div>
+                        </div>
+                        <span class="ach-progress-pct">@completionRate%</span>
+                    </div>
+                </div>
+            </div>
+            <div class="ach-summary-stats">
+                <div class="ach-stat-item">
+                    <span class="ach-stat-val text-success">@unlockedCount</span>
+                    <span class="ach-stat-lbl">Đã mở khóa</span>
+                </div>
+                <div class="ach-stat-item">
+                    <span class="ach-stat-val text-muted">@(achievements.Count - unlockedCount)</span>
+                    <span class="ach-stat-lbl">Đang thực hiện</span>
+                </div>
+                <div class="ach-stat-item">
+                    <span class="ach-stat-val text-primary">@achievements.Count</span>
+                    <span class="ach-stat-lbl">Tổng huy hiệu</span>
+                </div>
+            </div>
+        </div>
+
+        @* ── FILTER TABS ── *@
+        <div class="ach-tabs-wrap">
+            <div class="ach-tabs">
+                <button class="ach-tab @(filter == "all" ? "active" : "")" @onclick='() => filter = "all"'>
+                    <i class="bi bi-grid-fill"></i> Tất cả (@achievements.Count)
+                </button>
+                <button class="ach-tab @(filter == "unlocked" ? "active" : "")" @onclick='() => filter = "unlocked"'>
+                    <i class="bi bi-patch-check-fill text-success"></i> Đã mở khóa (@unlockedCount)
+                </button>
+                <button class="ach-tab @(filter == "locked" ? "active" : "")" @onclick='() => filter = "locked"'>
+                    <i class="bi bi-hourglass-split text-amber"></i> Đang thực hiện (@(achievements.Count - unlockedCount))
+                </button>
+            </div>
+        </div>
+
+        @* ── ACHIEVEMENTS GRID ── *@
+        var displayed = FilteredAchievements;
+        @if (displayed.Count == 0)
+        {
+            <div class="ach-empty">
+                <div class="ach-empty-icon">🎯</div>
+                <div class="ach-empty-title">Không tìm thấy thành tích phù hợp</div>
+                <div class="ach-empty-sub">Hãy hoàn thành thêm các bài thi và học từ vựng để mở khóa các huy hiệu còn lại nhé!</div>
+            </div>
+        }
+        else
+        {
+            <div class="ach-grid">
+                @foreach (var a in displayed)
+                {
+                    <div class="ach-card @(a.Unlocked ? "unlocked" : "locked")">
+                        <div class="ach-card-header">
+                            <div class="ach-card-icon-box">
+                                <span class="ach-card-icon">@a.Icon</span>
+                            </div>
+                            @if (a.Unlocked)
+                            {
+                                <span class="ach-badge-done">
+                                    <i class="bi bi-check-circle-fill"></i> Đã đạt
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="ach-badge-locked">
+                                    <i class="bi bi-lock-fill"></i> @a.ProgressPercent%
+                                </span>
+                            }
+                        </div>
+
+                        <div class="ach-card-body">
+                            <h3 class="ach-card-title">@a.Title</h3>
+                            <p class="ach-card-desc">@a.Description</p>
+                        </div>
+
+                        <div class="ach-card-footer">
+                            <div class="ach-card-progress-bar">
+                                <div class="ach-card-progress-fill @(a.Unlocked ? "done" : "")" style="width:@a.ProgressPercent%;"></div>
+                            </div>
+                            <div class="ach-card-progress-text">
+                                <span>Tiến độ:</span>
+                                <strong>@(a.Unlocked ? "Hoàn thành xuất sắc" : a.ProgressText)</strong>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @* ── ACTION TIPS BANNER ── *@
+        <div class="ach-tips-banner">
+            <div class="ach-tips-icon">💡</div>
+            <div class="ach-tips-content">
+                <h4>Cách mở khóa thêm nhiều huy hiệu mới:</h4>
+                <p>Mỗi ngày làm một bài thi TOEIC Listening/Reading, học thuộc 50 từ flashcard và duy trì chuỗi học tập để thu thập đủ trọn bộ 8 huy hiệu TOEIC danh giá!</p>
+            </div>
+            <a href="/toeic" class="ach-btn ach-btn-outline ach-btn-sm">
+                <i class="bi bi-house"></i> Về trang chủ TOEIC
+            </a>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ToeicAchievement> achievements = new();
+    private bool isLoading = true;
+    private string filter = "all";
+
+    private int unlockedCount => achievements.Count(a => a.Unlocked);
+    private int completionRate => achievements.Count > 0 ? (unlockedCount * 100 / achievements.Count) : 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            isLoading = true;
+            achievements = await AchievementService.GetAllAsync();
+        }
+        catch
+        {
+            achievements = new();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private List<ToeicAchievement> FilteredAchievements => filter switch
+    {
+        "unlocked" => achievements.Where(a => a.Unlocked).ToList(),
+        "locked" => achievements.Where(a => !a.Unlocked).ToList(),
+        _ => achievements
+    };
+}

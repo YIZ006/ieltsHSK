@@ -645,9 +645,6 @@
     private int currentSegmentIndex = 0;
     private VideoSegment? currentSegment;
     private double videoSpeed = 1.0;
-    private bool isPlayingSegment = false;
-    private bool isLoopingSegment = false;
-    private bool showTranslation = false;
     private bool showFullTranscript = true;
 
     // Mock Interview State
@@ -655,10 +652,7 @@
     private enum InterviewState { QuestionActive, Finished }
     private InterviewState interviewState = InterviewState.QuestionActive;
     private List<SpeakAlongItem> interviewQuestions = new();
-    private int interviewCurrentIndex = 0;
-    private SpeakAlongItem? currentInterviewItem;
     private int interviewSecondsLeft = 30;
-    private System.Threading.Timer? interviewTimer;
     private List<int> interviewScores = new();
 
     // Audio & Mic Setup
@@ -827,7 +821,7 @@
             }
         }
 
-        currentAudioLine = selectedAudioLesson.Lines.FirstOrDefault();
+        currentAudioLine = selectedAudioLesson?.Lines?.FirstOrDefault();
         if (currentAudioLine != null)
         {
             PrepareModelTokens(currentAudioLine.Text);
@@ -837,7 +831,7 @@
         StateHasChanged();
 
         await Task.Delay(150);
-        await JS.InvokeVoidAsync("initAudioShadowPlayer", "engnovate-main-audio", selectedAudioLesson.AudioUrl);
+        await JS.InvokeVoidAsync("initAudioShadowPlayer", "engnovate-main-audio", selectedAudioLesson?.AudioUrl);
     }
 
     public class AudioLessonDataParsed
@@ -855,7 +849,7 @@
             currentAudioLine = selectedAudioLesson.Lines[index];
             PrepareModelTokens(currentAudioLine.Text);
             ResetToIdle();
-            PlayCurrentAudioLineOnce();
+            _ = PlayCurrentAudioLineOnce();
         }
     }
 
@@ -1018,7 +1012,7 @@
             currentSegment = videoSegments[index];
             PrepareModelTokens(currentSegment.Text);
             ResetToIdle();
-            PlayCurrentSegmentOnce();
+            _ = PlayCurrentSegmentOnce();
         }
     }
 
@@ -1048,7 +1042,6 @@
     private async Task PlayCurrentSegmentOnce()
     {
         if (currentSegment == null) return;
-        isPlayingSegment = true;
         await JS.InvokeVoidAsync("playYouTubeSegment", currentSegment.StartTime, currentSegment.EndTime, videoSpeed, false, dotNetRef);
     }
 
@@ -1058,7 +1051,6 @@
     [JSInvokable]
     public void OnSegmentPlaybackEnded()
     {
-        isPlayingSegment = false;
         isPlayingAudio = false;
         InvokeAsync(StateHasChanged);
     }
@@ -1554,7 +1546,6 @@
     public void Dispose()
     {
         recordTimer?.Dispose();
-        interviewTimer?.Dispose();
         dotNetRef?.Dispose();
         JS.InvokeVoidAsync("pauseAudioSegment");
     }

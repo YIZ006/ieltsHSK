@@ -6,6 +6,7 @@
 @inject AuthService AuthSvc
 @inject StreakService StreakSvc
 @inject ExamSubmissionService Submissions
+@inject ToeicAchievementService AchievementService
 @inject NavigationManager NavigationManager
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JS
@@ -125,11 +126,27 @@
                             </div>
 
                             <div class="form-field">
-                                <label class="field-label">Tên hiển thị (@@)</label>
-                                <input class="form-control-custom" value="@profile.DisplayName" @oninput="OnDisplayNameInput" placeholder="Ví dụ: cuongnane, anhnhi..." maxlength="30" />
-                                <span class="field-hint-notice">
-                                    <i class="bi bi-info-circle-fill"></i> Lưu ý: Bạn chỉ có thể đổi username sau 30 ngày. Không dùng tiếng Việt có dấu.
-                                </span>
+                                <label class="field-label">
+                                    Tên hiển thị (@@)
+                                    @if (!profile.CanChangeUsername)
+                                    {
+                                        <span class="field-badge-cooldown"><i class="bi bi-clock-history"></i> Đổi lại sau @profile.UsernameDaysRemaining ngày</span>
+                                    }
+                                </label>
+                                @if (!profile.CanChangeUsername)
+                                {
+                                    <input class="form-control-custom readonly-field" value="@profile.DisplayName" readonly title="Bạn chỉ có thể đổi tên hiển thị 30 ngày một lần" />
+                                    <span class="field-hint-notice notice-cooldown">
+                                        <i class="bi bi-lock-fill"></i> Bạn đã đổi tên hiển thị vào <b>@(profile.UsernameChangedAt?.ToLocalTime().ToString("dd/MM/yyyy"))</b>. Bạn có thể đổi lại sau <b>@profile.UsernameDaysRemaining ngày</b> (ngày @(profile.UsernameNextChangeAllowedAt?.ToLocalTime().ToString("dd/MM/yyyy"))).
+                                    </span>
+                                }
+                                else
+                                {
+                                    <input class="form-control-custom" value="@profile.DisplayName" @oninput="OnDisplayNameInput" placeholder="Ví dụ: cuongnane, anhnhi..." maxlength="30" />
+                                    <span class="field-hint-notice">
+                                        <i class="bi bi-info-circle-fill"></i> Lưu ý: Bạn chỉ có thể đổi tên hiển thị <b>mỗi 30 ngày một lần</b>. Không dùng tiếng Việt có dấu.
+                                    </span>
+                                }
                             </div>
 
                             <div class="form-field full-width">
@@ -196,15 +213,6 @@
                                 <span class="stat-sub">Kỷ lục: @bestStreak ngày</span>
                             </div>
 
-                            <div class="stat-highlight-card stat-xp">
-                                <div class="stat-icon-circle">⚡</div>
-                                <div class="stat-content">
-                                    <span class="stat-num">@profile.Xp</span>
-                                    <span class="stat-text">Điểm kinh nghiệm (XP)</span>
-                                </div>
-                                <span class="stat-sub">Tích lũy từ bài học</span>
-                            </div>
-
                             <div class="stat-highlight-card stat-tests">
                                 <div class="stat-icon-circle">📝</div>
                                 <div class="stat-content">
@@ -233,6 +241,43 @@
                                     <span class="score-value">@(GetBestScore("HSK"))</span>
                                     <span class="score-scale">/ 300 Điểm</span>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div class="achievements-modal-block">
+                            <div class="block-header">
+                                <h5 class="block-title"><i class="bi bi-patch-check-fill text-warning"></i> Huy hiệu & Thành tích TOEIC</h5>
+                                <span class="ach-count-badge">@achievements.Count(a => a.Unlocked) / @achievements.Count đã đạt</span>
+                            </div>
+                            <div class="modal-ach-grid">
+                                @foreach (var a in achievements)
+                                {
+                                    <div class="modal-ach-card @(a.Unlocked ? "unlocked" : "locked")">
+                                        <div class="modal-ach-top">
+                                            <div class="modal-ach-icon">@a.Icon</div>
+                                            <div class="modal-ach-status">
+                                                @if (a.Unlocked)
+                                                {
+                                                    <span class="status-badge unlocked"><i class="bi bi-check-circle-fill"></i> Đạt</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="status-badge locked"><i class="bi bi-lock-fill"></i> Chưa đạt</span>
+                                                }
+                                            </div>
+                                        </div>
+                                        <div class="modal-ach-body">
+                                            <div class="modal-ach-title">@a.Title</div>
+                                            <div class="modal-ach-desc">@a.Description</div>
+                                            <div class="modal-ach-progress-wrap">
+                                                <div class="modal-ach-progress-bar">
+                                                    <div class="modal-ach-progress-fill" style="width: @(a.ProgressPercent)%"></div>
+                                                </div>
+                                                <span class="modal-ach-progress-text">@a.ProgressText</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
                             </div>
                         </div>
                     </div>
@@ -309,6 +354,7 @@
 
     private UserProfile profile = new();
     private List<IeltsSubmissionRecord> recentSubmissions = new();
+    private List<ToeicAchievement> achievements = new();
     private string activeTab = "info";
     private string username = "user";
     private string userEmail = "";
@@ -396,10 +442,15 @@
                 profile.FullName = userFullNameClaim;
             }
 
-            // If DisplayName was accidentally equal to FullName from past bug, clean it up so it is empty
-            if (!string.IsNullOrWhiteSpace(profile.DisplayName) && (profile.DisplayName == profile.FullName || profile.DisplayName == userFullNameClaim))
+            // If DisplayName had spaces or was not set, clean and populate properly
+            if (!string.IsNullOrWhiteSpace(profile.DisplayName) && profile.DisplayName.Contains(' '))
             {
-                profile.DisplayName = "";
+                profile.DisplayName = SanitizeUsername(profile.DisplayName);
+            }
+
+            if (string.IsNullOrWhiteSpace(profile.DisplayName) && !string.IsNullOrWhiteSpace(username) && !username.Contains(' ') && username != userFullNameClaim)
+            {
+                profile.DisplayName = username;
             }
 
             if (string.IsNullOrWhiteSpace(profile.AvatarEmoji)) profile.AvatarEmoji = "🎓";
@@ -411,6 +462,15 @@
 
             var allSubs = await Submissions.GetAllAsync();
             recentSubmissions = allSubs.OrderByDescending(s => s.SubmittedAt).Take(15).ToList();
+
+            try
+            {
+                achievements = await AchievementService.GetAllAsync();
+            }
+            catch
+            {
+                achievements = new();
+            }
         }
         catch { }
     }
