@@ -150,7 +150,7 @@ else
     <div class="listening-layout">
         
         <div class="custom-audio-player">
-            @if (!string.IsNullOrEmpty(exam.AudioUrl))
+            @if (!string.IsNullOrEmpty(CurrentAudioUrl))
             {
                 <div id="yt-hidden-player" style="position:absolute; width:1px; height:1px; top:-9999px;"></div>
                 
@@ -562,15 +562,29 @@ else
         }
     }
 
+    private string CurrentAudioUrl
+    {
+        get
+        {
+            if (exam == null) return "";
+            if (activePartIndex >= 0 && activePartIndex < exam.Parts.Count && !string.IsNullOrWhiteSpace(exam.Parts[activePartIndex].AudioUrl))
+            {
+                return exam.Parts[activePartIndex].AudioUrl;
+            }
+            return exam.AudioUrl ?? "";
+        }
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && isFinished)
             await ExamSession.LockTestContentAsync(".listening-layout");
 
-        if (exam != null && !isLoading && !string.IsNullOrEmpty(exam.AudioUrl) && _dotNetRef == null)
+        var audioToInit = CurrentAudioUrl;
+        if (exam != null && !isLoading && !string.IsNullOrEmpty(audioToInit) && _dotNetRef == null)
         {
             _dotNetRef = DotNetObjectReference.Create(this);
-            await JS.InvokeVoidAsync("initYouTubePlayer", exam.AudioUrl, _dotNetRef);
+            await JS.InvokeVoidAsync("initYouTubePlayer", audioToInit, _dotNetRef);
             await JS.InvokeVoidAsync("bindListeningInputs", _dotNetRef);
         }
         else if (_dotNetRef != null && exam != null)
@@ -643,10 +657,19 @@ else
         }
     }
 
-    private void ChangePart(int index)
+    private async Task ChangePart(int index)
     {
+        var prevAudio = CurrentAudioUrl;
         activePartIndex = index;
         activeQuestionId = exam!.Parts[index].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
+        var newAudio = CurrentAudioUrl;
+        if (!string.IsNullOrEmpty(newAudio) && newAudio != prevAudio && _dotNetRef != null)
+        {
+            isPlaying = false;
+            currentTime = 0;
+            totalDuration = 0;
+            await JS.InvokeVoidAsync("initYouTubePlayer", newAudio, _dotNetRef);
+        }
     }
 
     private void SelectOption(QuestionData q, int optionId)

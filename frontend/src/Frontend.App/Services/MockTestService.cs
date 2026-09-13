@@ -153,6 +153,59 @@ public class MockTestService
                 ListeningAnswerUrl = "sample-data/listening-actual-vol1-test1.answers.json"
             });
         }
+
+        // 3-8. IELTS Recent Actual Tests Vol 2 (Test 7 - 12)
+        var vol2Tests = new[]
+        {
+            (Id: 207, Title: "Test 7"),
+            (Id: 208, Title: "Test 8"),
+            (Id: 209, Title: "Test 9"),
+            (Id: 210, Title: "Test 10"),
+            (Id: 211, Title: "Test 11"),
+            (Id: 212, Title: "Test 12"),
+        };
+        foreach (var (id, testTitle) in vol2Tests)
+        {
+            if (!tests.Any(t => t.Id == id))
+            {
+                var slug = $"listening-actual-vol2-test{id - 200}";
+                tests.Add(new MockTestDto
+                {
+                    Id = id,
+                    CollectionName = "IELTS Recent Actual Tests Vol 2",
+                    Title = testTitle,
+                    ListeningUrl = $"sample-data/{slug}.json",
+                    ListeningAnswerUrl = $"sample-data/{slug}.answers.json"
+                });
+            }
+        }
+
+        // 9-14. IELTS Recent Actual Tests Vol 3 (Test 1 - 6)
+        var vol3Tests = new[]
+        {
+            (Id: 301, Title: "Test 1"),
+            (Id: 302, Title: "Test 2"),
+            (Id: 303, Title: "Test 3"),
+            (Id: 304, Title: "Test 4"),
+            (Id: 305, Title: "Test 5"),
+            (Id: 306, Title: "Test 6"),
+        };
+        foreach (var (id, testTitle) in vol3Tests)
+        {
+            if (!tests.Any(t => t.Id == id))
+            {
+                var num = id - 300;
+                var slug = $"listening-actual-vol3-test{num}";
+                tests.Add(new MockTestDto
+                {
+                    Id = id,
+                    CollectionName = "IELTS Recent Actual Tests Vol 3",
+                    Title = testTitle,
+                    ListeningUrl = $"sample-data/{slug}.json",
+                    ListeningAnswerUrl = $"sample-data/{slug}.answers.json"
+                });
+            }
+        }
     }
 
     public async Task<bool> CreateMockTestAsync(CreateMockTestRequest request)
