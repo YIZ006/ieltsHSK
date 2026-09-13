@@ -38,6 +38,10 @@ public class AuthHeaderHandler : DelegatingHandler
             return response;
         }
 
+        // Nếu request ban đầu không có token (người dùng chưa đăng nhập), không cần thử refresh
+        if (request.Headers.Authorization == null)
+            return response;
+
         // Token có thể vừa hết hạn/bị thu hồi: làm mới một lần rồi thử lại
         if (!await _tokenService.RefreshAsync(force: true))
             return response;

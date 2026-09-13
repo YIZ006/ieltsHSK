@@ -42,10 +42,16 @@ self.addEventListener('fetch', e => {
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req).catch(async () => {
-        const cached = await caches.match('./index.html') 
-                    || await caches.match('/index.html') 
-                    || await caches.match('index.html');
-        return cached || new Response('Offline', { status: 503, statusText: 'Offline' });
+        try {
+          const cached = await caches.match('./index.html') 
+                      || await caches.match('/index.html') 
+                      || await caches.match('index.html');
+          if (cached) return cached;
+        } catch {}
+        return new Response('<!DOCTYPE html><html><body>Offline</body></html>', { 
+          status: 200, 
+          headers: { 'Content-Type': 'text/html' } 
+        });
       })
     );
     return;
@@ -58,10 +64,14 @@ self.addEventListener('fetch', e => {
       return fetch(req).then(res => {
         if (res && res.ok) {
           const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(req, copy));
+          caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
         }
         return res;
+      }).catch(() => {
+        return new Response('', { status: 404, statusText: 'Resource unavailable offline' });
       });
+    }).catch(() => {
+      return new Response('', { status: 404, statusText: 'Cache lookup failed' });
     })
   );
 });

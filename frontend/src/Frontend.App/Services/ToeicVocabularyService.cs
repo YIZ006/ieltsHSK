@@ -99,39 +99,43 @@ public sealed class ToeicVocabularyService
         // Try load from server
         try
         {
-            var serverProgress = await _httpClient.GetFromJsonAsync<ToeicVocabProgressResponseDto>("api/toeic/vocab/progress");
-            if (serverProgress != null)
+            var token = await _localStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrWhiteSpace(token))
             {
-                var srvLearned = serverProgress.LearnedIds?.ToHashSet() ?? new();
-                var srvAgain = serverProgress.AgainIds?.ToHashSet() ?? new();
-
-                // Migration if local storage had data not on server
-                if (!_migrationAttempted && (learned.Count > 0 || againSet.Count > 0))
+                var serverProgress = await _httpClient.GetFromJsonAsync<ToeicVocabProgressResponseDto>("api/toeic/vocab/progress");
+                if (serverProgress != null)
                 {
-                    _migrationAttempted = true;
-                    var localCustom = await _localStorage.GetItemAsync<List<ToeicVocabItem>>(CustomVocabKey) ?? new();
-                    var customRequests = localCustom.Select(c => new
-                    {
-                        Word = c.Word,
-                        Ipa = c.Ipa,
-                        Meaning = c.Meaning,
-                        Example = c.Example,
-                        Topic = c.Topic
-                    }).ToList();
+                    var srvLearned = serverProgress.LearnedIds?.ToHashSet() ?? new();
+                    var srvAgain = serverProgress.AgainIds?.ToHashSet() ?? new();
 
-                    _ = _httpClient.PostAsJsonAsync("api/toeic/vocab/progress/migrate", new
+                    // Migration if local storage had data not on server
+                    if (!_migrationAttempted && (learned.Count > 0 || againSet.Count > 0))
                     {
-                        LearnedIds = learned.ToList(),
-                        AgainIds = againSet.ToList(),
-                        CustomWords = customRequests
-                    });
-                }
+                        _migrationAttempted = true;
+                        var localCustom = await _localStorage.GetItemAsync<List<ToeicVocabItem>>(CustomVocabKey) ?? new();
+                        var customRequests = localCustom.Select(c => new
+                        {
+                            Word = c.Word,
+                            Ipa = c.Ipa,
+                            Meaning = c.Meaning,
+                            Example = c.Example,
+                            Topic = c.Topic
+                        }).ToList();
 
-                if (srvLearned.Count > 0 || srvAgain.Count > 0)
-                {
-                    learned = srvLearned;
-                    againSet = srvAgain;
-                    await SaveLocalStateAsync(learned, againSet);
+                        _ = _httpClient.PostAsJsonAsync("api/toeic/vocab/progress/migrate", new
+                        {
+                            LearnedIds = learned.ToList(),
+                            AgainIds = againSet.ToList(),
+                            CustomWords = customRequests
+                        });
+                    }
+
+                    if (srvLearned.Count > 0 || srvAgain.Count > 0)
+                    {
+                        learned = srvLearned;
+                        againSet = srvAgain;
+                        await SaveLocalStateAsync(learned, againSet);
+                    }
                 }
             }
         }
@@ -147,6 +151,9 @@ public sealed class ToeicVocabularyService
     {
         try
         {
+            var token = await _localStorage.GetItemAsync<string>("authToken");
+            if (string.IsNullOrWhiteSpace(token)) return;
+
             await _httpClient.PostAsJsonAsync("api/toeic/vocab/progress", new
             {
                 VocabularyId = vocabId,

@@ -40,21 +40,25 @@ public sealed class UserGameProgressService
 
         try
         {
-            var serverItems = await _httpClient.GetFromJsonAsync<List<GameProgressResponseDto>>($"api/user/game-progress?gameType={Uri.EscapeDataString(gameType)}");
-            var item = serverItems?.FirstOrDefault(i => string.Equals(i.Level, level, StringComparison.OrdinalIgnoreCase));
-            if (item != null)
+            var token = await _localStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrWhiteSpace(token))
             {
-                var cur = Math.Max(item.CurrentStage, localCurrent);
-                var max = Math.Max(item.MaxUnlockedStage, localMax);
-                var score = item.HighScore;
+                var serverItems = await _httpClient.GetFromJsonAsync<List<GameProgressResponseDto>>($"api/user/game-progress?gameType={Uri.EscapeDataString(gameType)}");
+                var item = serverItems?.FirstOrDefault(i => string.Equals(i.Level, level, StringComparison.OrdinalIgnoreCase));
+                if (item != null)
+                {
+                    var cur = Math.Max(item.CurrentStage, localCurrent);
+                    var max = Math.Max(item.MaxUnlockedStage, localMax);
+                    var score = item.HighScore;
 
-                await SaveLocalAsync(gameType, level, cur, max);
-                return (cur, max, score);
-            }
-            else if (!_migrated && (localCurrent > 0 || localMax > 0))
-            {
-                _migrated = true;
-                _ = SaveProgressAsync(gameType, level, localCurrent, localMax);
+                    await SaveLocalAsync(gameType, level, cur, max);
+                    return (cur, max, score);
+                }
+                else if (!_migrated && (localCurrent > 0 || localMax > 0))
+                {
+                    _migrated = true;
+                    _ = SaveProgressAsync(gameType, level, localCurrent, localMax);
+                }
             }
         }
         catch
@@ -71,6 +75,9 @@ public sealed class UserGameProgressService
 
         try
         {
+            var token = await _localStorage.GetItemAsync<string>("authToken");
+            if (string.IsNullOrWhiteSpace(token)) return;
+
             await _httpClient.PostAsJsonAsync("api/user/game-progress", new
             {
                 GameType = gameType,
