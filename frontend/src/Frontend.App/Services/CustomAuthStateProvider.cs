@@ -15,7 +15,7 @@ public class CustomAuthStateProvider(ILocalStorageService localStorage) : Authen
         {
             var token = await localStorage.GetItemAsync<string>("authToken");
 
-            if (string.IsNullOrWhiteSpace(token))
+            if (string.IsNullOrWhiteSpace(token) || IsJwtExpired(token))
             {
                 return AnonymousState;
             }
@@ -114,5 +114,22 @@ public class CustomAuthStateProvider(ILocalStorageService localStorage) : Authen
             case 3: base64 += "="; break;
         }
         return Convert.FromBase64String(base64);
+    }
+
+    public static bool IsJwtExpired(string? jwt)
+    {
+        if (string.IsNullOrWhiteSpace(jwt)) return true;
+        try
+        {
+            var claims = ParseClaimsFromJwt(jwt);
+            var expClaim = claims.FirstOrDefault(c => c.Type == "exp")?.Value;
+            if (long.TryParse(expClaim, out var expSeconds))
+            {
+                var expDate = DateTimeOffset.FromUnixTimeSeconds(expSeconds);
+                return expDate <= DateTimeOffset.UtcNow;
+            }
+        }
+        catch { }
+        return false;
     }
 }

@@ -24,11 +24,15 @@ public class AuthHeaderHandler : DelegatingHandler
             var path = request.RequestUri?.AbsolutePath?.ToLowerInvariant() ?? "";
             string? token = null;
 
-            if (path.Contains("/api/admin"))
+            bool isAdminEndpoint = path.Contains("/api/admin") 
+                || (path.Contains("/api/mock-tests") && request.Method != HttpMethod.Get)
+                || path.Contains("/api/mock-tests/upload");
+
+            if (isAdminEndpoint)
             {
                 // Ưu tiên token riêng của Admin
                 token = await _localStorage.GetItemAsync<string>("admin_authToken");
-                if (string.IsNullOrWhiteSpace(token))
+                if (string.IsNullOrWhiteSpace(token) || CustomAuthStateProvider.IsJwtExpired(token))
                 {
                     token = await _localStorage.GetItemAsync<string>("authToken");
                 }
@@ -37,9 +41,17 @@ public class AuthHeaderHandler : DelegatingHandler
             {
                 // API học viên dùng token riêng của học viên
                 token = await _localStorage.GetItemAsync<string>("authToken");
+                if (string.IsNullOrWhiteSpace(token) || CustomAuthStateProvider.IsJwtExpired(token))
+                {
+                    var adm = await _localStorage.GetItemAsync<string>("admin_authToken");
+                    if (!string.IsNullOrWhiteSpace(adm) && !CustomAuthStateProvider.IsJwtExpired(adm))
+                    {
+                        token = adm;
+                    }
+                }
             }
 
-            if (!string.IsNullOrWhiteSpace(token))
+            if (!string.IsNullOrWhiteSpace(token) && !CustomAuthStateProvider.IsJwtExpired(token))
             {
                 request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             }

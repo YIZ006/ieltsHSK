@@ -3,8 +3,32 @@
 @inject NavigationManager NavigationManager
 @inject Frontend.App.Services.AuthService AuthService
 @inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
+@inject Frontend.App.Services.OfflineStorageService OfflineStorageService
 
-@if (isCheckingAuth)
+@if (!isOnline)
+{
+    <div class="admin-auth-guard">
+        <div class="auth-guard-card" style="max-width: 480px; text-align: center;">
+            <div class="auth-guard-icon" style="background: #fef2f2; color: #ef4444; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 1.8rem;">
+                <i class="bi bi-wifi-off"></i>
+            </div>
+            <h3 style="font-weight: 800; font-size: 1.35rem; margin-bottom: 8px; color: #1e293b;">Mất kết nối Internet</h3>
+            <p style="font-size: 0.92rem; color: #64748b; margin-bottom: 20px; line-height: 1.6;">
+                Trang Quản trị viên (Admin Hub) yêu cầu kết nối mạng để đồng bộ dữ liệu với PostgreSQL và Cloudflare R2.<br />
+                Chế độ Offline chỉ khả dụng cho Học viên ôn luyện bài thi.
+            </p>
+            <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                <a href="/" class="btn btn-outline-secondary" style="font-weight: 700; border-radius: 10px; padding: 10px 20px;">
+                    <i class="bi bi-house-door"></i> Cổng học viên
+                </a>
+                <a href="/ielts/mock-test" class="btn btn-primary" style="font-weight: 700; border-radius: 10px; padding: 10px 20px;">
+                    <i class="bi bi-journal-text"></i> Làm đề Offline
+                </a>
+            </div>
+        </div>
+    </div>
+}
+else if (isCheckingAuth)
 {
     <div class="admin-auth-guard">
         <div class="auth-guard-card">
@@ -244,6 +268,7 @@ else
     private bool isCheckingAuth = true;
     private bool isAdminAuthenticated = false;
     private bool isDisposed = false;
+    private bool isOnline = true;
     private string? adminName;
     private string? adminEmail;
 
@@ -251,7 +276,11 @@ else
     {
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
-        
+
+        await OfflineStorageService.InitializeAsync();
+        isOnline = await OfflineStorageService.IsOnlineAsync();
+        OfflineStorageService.NetworkStatusChanged += HandleNetworkStatusChanged;
+
         UpdateActiveDomain(currentUrl);
         await CheckAdminAuthState(initial: true);
     }
@@ -265,7 +294,7 @@ else
         {
             // Kiểm tra token riêng của Quản trị viên
             var adminToken = await AuthService.GetAdminTokenAsync();
-            if (!string.IsNullOrWhiteSpace(adminToken))
+            if (!string.IsNullOrWhiteSpace(adminToken) && !CustomAuthStateProvider.IsJwtExpired(adminToken))
             {
                 var claims = CustomAuthStateProvider.ParseClaimsFromJwt(adminToken);
                 var roleClaim = claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role")?.Value;
@@ -399,9 +428,17 @@ else
         return $"/{currentUrl}".StartsWith(path, StringComparison.OrdinalIgnoreCase);
     }
 
+    private async void HandleNetworkStatusChanged(bool online)
+    {
+        if (isDisposed) return;
+        isOnline = online;
+        await InvokeAsync(StateHasChanged);
+    }
+
     public void Dispose()
     {
         isDisposed = true;
         NavigationManager.LocationChanged -= OnLocationChanged;
+        OfflineStorageService.NetworkStatusChanged -= HandleNetworkStatusChanged;
     }
 }

@@ -166,7 +166,7 @@
         },
         ["IELTS"] = new()
         {
-            new LearningSectionDto{ Name="Luyện đề", Route="/ielts/luyen-de", Icon="bi-journal-text", Language="IELTS", OrderIndex=1, Description="Chưa thử — bắt đầu góc này?" },
+            new LearningSectionDto{ Name="Phòng thi thử", Route="/ielts/mock-test", Icon="bi-journal-text", Language="IELTS", OrderIndex=1, Description="Chưa thử — bắt đầu góc này?" },
             new LearningSectionDto{ Name="Nghe & điền từ", Route="/ielts/nghe-dien", Icon="bi-headphones", Language="IELTS", OrderIndex=2, Description="Chưa thử — bắt đầu góc này?" },
             new LearningSectionDto{ Name="Nói theo", Route="/ielts/noi-theo", Icon="bi-mic", Language="IELTS", OrderIndex=3, Description="Chưa thử — bắt đầu góc này?" },
             new LearningSectionDto{ Name="Đọc truyện", Route="/ielts/doc-truyen", Icon="bi-book", Language="IELTS", OrderIndex=4, Description="222 truyện theo trình độ đang chờ" },
@@ -292,6 +292,16 @@
         if (data.Count > 0)
         {
             menuItems = data.Where(m => m.Route != "/hsk/vocab-shooter").OrderBy(m => m.OrderIndex).ToList();
+
+            // Normalize IELTS mock test section
+            foreach (var item in menuItems)
+            {
+                if (item.Language == "IELTS" && (item.Route == "/ielts/luyen-de" || item.Route == "/ielts/phong-thi-thu" || item.Route == "/ielts/mock-test" || item.Route == "/ielts/mock-tests" || item.Name == "Luyện đề"))
+                {
+                    item.Name = "Phòng thi thử";
+                    item.Route = "/ielts/mock-test";
+                }
+            }
 
             var gameRoute = $"/{selectedProgram.ToLowerInvariant()}/games";
             // Normalize any generic or other-program game routes to current program

@@ -39,7 +39,7 @@
                 <div class="empty-icon">🎯</div>
                 <h3>Chưa có dữ liệu để phân tích</h3>
                 <p>Hãy làm ít nhất một bài Mock Test để hệ thống phân tích điểm mạnh, điểm yếu và đưa ra khuyến nghị ôn tập cá nhân hoá cho bạn.</p>
-                <button class="btn-go-test" @onclick='() => Navigation.NavigateTo("/ielts/luyen-de")'>
+                <button class="btn-go-test" @onclick='() => Navigation.NavigateTo("/ielts/mock-test")'>
                     <i class="bi bi-play-circle-fill"></i> Bắt đầu làm đề thi ngay
                 </button>
             </div>
@@ -367,7 +367,7 @@
                 Title = "Xem lại kết quả bài thi gần nhất",
                 Description = $"Bài {recentResults.First().Skill} gần nhất của bạn đạt Band {recentResults.First().BandScore:0.0}. Xem lại từng câu sai để hiểu rõ lỗi.",
                 ActionLabel = "Xem tổng hợp kết quả",
-                Route = "/ielts/luyen-de"
+                Route = "/ielts/mock-test"
             });
         }
 
@@ -404,7 +404,7 @@
             Title = "Thử sức với đề Mock Test mới",
             Description = "Làm thêm đề toàn diện để cập nhật dữ liệu phân tích và theo dõi tiến bộ theo thời gian.",
             ActionLabel = "Chọn đề thi",
-            Route = "/ielts/luyen-de"
+            Route = "/ielts/mock-test"
         });
     }
 
@@ -431,11 +431,11 @@
 
     private string GetSkillRoute(string skill) => skill switch
     {
-        "Listening" => "/ielts/luyen-de",
-        "Reading"   => "/ielts/luyen-de",
-        "Writing"   => "/ielts/luyen-de",
-        "Speaking"  => "/ielts/luyen-de",
-        _ => "/ielts/luyen-de"
+        "Listening" => "/ielts/mock-test",
+        "Reading"   => "/ielts/mock-test",
+        "Writing"   => "/ielts/mock-test",
+        "Speaking"  => "/ielts/mock-test",
+        _ => "/ielts/mock-test"
     };
 
     private string GetSkillIcon(string skill) => skill switch

@@ -1,10 +1,86 @@
 let ytPlayer;
 let ytDotNetHelper;
 let ytProgressInterval;
+let isDirectAudio = false;
+let directAudioPlayer = null;
 
-window.initYouTubePlayer = function (videoId, dotNetHelper) {
+window.initYouTubePlayer = function (urlOrId, dotNetHelper) {
     ytDotNetHelper = dotNetHelper;
-    
+    if (ytProgressInterval) {
+        clearInterval(ytProgressInterval);
+        ytProgressInterval = null;
+    }
+
+    // Stop and clean up any existing HTML5 audio player
+    if (directAudioPlayer) {
+        try {
+            directAudioPlayer.pause();
+            directAudioPlayer.src = "";
+            directAudioPlayer.load();
+        } catch (e) { }
+        directAudioPlayer = null;
+    }
+
+    const isMp3OrAudio = urlOrId && (
+        urlOrId.endsWith('.mp3') ||
+        urlOrId.endsWith('.wav') ||
+        urlOrId.endsWith('.ogg') ||
+        urlOrId.endsWith('.m4a') ||
+        urlOrId.includes('/audio/') ||
+        urlOrId.startsWith('sample-data/') ||
+        urlOrId.startsWith('blob:') ||
+        (urlOrId.startsWith('http') && !urlOrId.includes('youtube.com') && !urlOrId.includes('youtu.be'))
+    );
+
+    if (isMp3OrAudio) {
+        isDirectAudio = true;
+        let audioSrc = urlOrId;
+        if (!audioSrc.startsWith('http') && !audioSrc.startsWith('/') && !audioSrc.startsWith('blob:')) {
+            audioSrc = '/' + audioSrc;
+        }
+
+        directAudioPlayer = new Audio(audioSrc);
+        directAudioPlayer.preload = "auto";
+
+        const notifyReady = () => {
+            if (ytDotNetHelper && directAudioPlayer && directAudioPlayer.duration > 0) {
+                ytDotNetHelper.invokeMethodAsync('OnPlayerReady', directAudioPlayer.duration);
+            }
+        };
+
+        directAudioPlayer.addEventListener('loadedmetadata', notifyReady);
+        directAudioPlayer.addEventListener('canplaythrough', notifyReady);
+
+        directAudioPlayer.addEventListener('play', function () {
+            if (ytProgressInterval) clearInterval(ytProgressInterval);
+            ytProgressInterval = setInterval(updateProgress, 250);
+            if (ytDotNetHelper) ytDotNetHelper.invokeMethodAsync('OnPlayerStateChanged', true);
+        });
+
+        directAudioPlayer.addEventListener('pause', function () {
+            if (ytProgressInterval) clearInterval(ytProgressInterval);
+            if (ytDotNetHelper) ytDotNetHelper.invokeMethodAsync('OnPlayerStateChanged', false);
+        });
+
+        directAudioPlayer.addEventListener('ended', function () {
+            if (ytProgressInterval) clearInterval(ytProgressInterval);
+            if (ytDotNetHelper) ytDotNetHelper.invokeMethodAsync('OnPlayerStateChanged', false);
+        });
+
+        if (directAudioPlayer.readyState >= 1) {
+            notifyReady();
+        }
+
+        window.initProgressBarClick();
+        return;
+    }
+
+    isDirectAudio = false;
+    let videoId = urlOrId;
+    if (urlOrId && (urlOrId.includes('http://') || urlOrId.includes('https://'))) {
+        videoId = urlOrId.split('/').pop().split('?')[0];
+    }
+
     // Load YouTube API if not loaded
     if (!window.YT) {
         var tag = document.createElement('script');
@@ -18,6 +94,8 @@ window.initYouTubePlayer = function (videoId, dotNetHelper) {
     } else {
         createPlayer(videoId);
     }
+
+    window.initProgressBarClick();
 }
 
 function createPlayer(videoId) {
@@ -41,7 +119,7 @@ function createPlayer(videoId) {
 }
 
 function onPlayerReady(event) {
-    if (ytDotNetHelper) {
+    if (ytDotNetHelper && ytPlayer && ytPlayer.getDuration) {
         ytDotNetHelper.invokeMethodAsync('OnPlayerReady', ytPlayer.getDuration());
     }
 }
@@ -57,34 +135,68 @@ function onPlayerStateChange(event) {
 }
 
 function updateProgress() {
-    if (ytPlayer && ytPlayer.getCurrentTime && ytDotNetHelper) {
+    if (isDirectAudio && directAudioPlayer && ytDotNetHelper) {
+        ytDotNetHelper.invokeMethodAsync('OnPlayerProgress', directAudioPlayer.currentTime);
+    } else if (ytPlayer && ytPlayer.getCurrentTime && ytDotNetHelper) {
         let currentTime = ytPlayer.getCurrentTime();
         ytDotNetHelper.invokeMethodAsync('OnPlayerProgress', currentTime);
     }
 }
 
 window.playYouTube = function() {
-    if (ytPlayer && ytPlayer.playVideo) {
+    if (isDirectAudio && directAudioPlayer) {
+        directAudioPlayer.play().catch(e => console.warn('Direct audio play error:', e));
+    } else if (ytPlayer && ytPlayer.playVideo) {
         ytPlayer.playVideo();
     }
 }
 
 window.pauseYouTube = function() {
-    if (ytPlayer && ytPlayer.pauseVideo) {
+    if (isDirectAudio && directAudioPlayer) {
+        directAudioPlayer.pause();
+    } else if (ytPlayer && ytPlayer.pauseVideo) {
         ytPlayer.pauseVideo();
     }
 }
 
 window.seekYouTube = function(seconds) {
-    if (ytPlayer && ytPlayer.seekTo) {
+    if (isDirectAudio && directAudioPlayer) {
+        directAudioPlayer.currentTime = seconds;
+        if (ytDotNetHelper) ytDotNetHelper.invokeMethodAsync('OnPlayerProgress', directAudioPlayer.currentTime);
+    } else if (ytPlayer && ytPlayer.seekTo) {
         ytPlayer.seekTo(seconds, true);
     }
 }
 
 window.setYouTubeVolume = function(volume) {
-    if (ytPlayer && ytPlayer.setVolume) {
+    if (isDirectAudio && directAudioPlayer) {
+        directAudioPlayer.volume = Math.max(0, Math.min(1, volume / 100));
+    } else if (ytPlayer && ytPlayer.setVolume) {
         ytPlayer.setVolume(volume);
     }
+}
+
+window.initProgressBarClick = function() {
+    setTimeout(function() {
+        const container = document.querySelector('.progress-container');
+        if (container && !container.dataset.boundClick) {
+            container.dataset.boundClick = "true";
+            container.addEventListener('click', function(e) {
+                const rect = container.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+                if (isDirectAudio && directAudioPlayer && directAudioPlayer.duration) {
+                    const targetTime = ratio * directAudioPlayer.duration;
+                    directAudioPlayer.currentTime = targetTime;
+                    if (ytDotNetHelper) ytDotNetHelper.invokeMethodAsync('OnPlayerProgress', targetTime);
+                } else if (ytPlayer && ytPlayer.getDuration) {
+                    const targetTime = ratio * ytPlayer.getDuration();
+                    ytPlayer.seekTo(targetTime, true);
+                    if (ytDotNetHelper) ytDotNetHelper.invokeMethodAsync('OnPlayerProgress', targetTime);
+                }
+            });
+        }
+    }, 100);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

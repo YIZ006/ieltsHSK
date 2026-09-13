@@ -1170,20 +1170,29 @@ app.MapPost("/api/mock-tests/upload",
     var fileName = $"{safeFileName}_{DateTime.UtcNow:yyyyMMdd_HHmmss}{fileExt}";
     try
     {
-        string payload;
-        using (var reader = new StreamReader(file.OpenReadStream()))
-        {
-            payload = await reader.ReadToEndAsync(cancellationToken);
-        }
-
-        // Chống stored XSS: làm sạch nội dung JSON đề thi trước khi lưu lên R2
         var isJson = (file.ContentType ?? "").Contains("json", StringComparison.OrdinalIgnoreCase)
                      || file.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
-        var clean = isJson ? HtmlGuard.SanitizeJsonStrings(payload) : payload;
 
         var contentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
-        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(clean));
-        var url = await r2Service.UploadFileAsync(stream, fileName, contentType, cancellationToken);
+        string url;
+        if (isJson)
+        {
+            string payload;
+            using (var reader = new StreamReader(file.OpenReadStream()))
+            {
+                payload = await reader.ReadToEndAsync(cancellationToken);
+            }
+            // Chống stored XSS: làm sạch nội dung JSON đề thi trước khi lưu lên R2
+            var clean = HtmlGuard.SanitizeJsonStrings(payload);
+            using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(clean));
+            url = await r2Service.UploadFileAsync(stream, fileName, contentType, cancellationToken);
+        }
+        else
+        {
+            // Các file nhị phân (âm thanh mp3, wav, ảnh...) upload trực tiếp stream gốc
+            using var stream = file.OpenReadStream();
+            url = await r2Service.UploadFileAsync(stream, fileName, contentType, cancellationToken);
+        }
         return Results.Ok(new { Url = url });
     }
     catch (Exception ex)

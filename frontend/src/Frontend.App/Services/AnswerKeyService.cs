@@ -35,9 +35,14 @@ public sealed class GradingResult
 public sealed class AnswerKeyService
 {
     private readonly HttpClient _http;
+    private readonly OfflineStorageService? _offlineStorage;
     private readonly Dictionary<string, ExamAnswerKey> _cache = new();
 
-    public AnswerKeyService(HttpClient http) => _http = http;
+    public AnswerKeyService(HttpClient http, OfflineStorageService? offlineStorage = null)
+    {
+        _http = http;
+        _offlineStorage = offlineStorage;
+    }
 
     public async Task<ExamAnswerKey?> LoadAsync(string answerUrl)
     {
@@ -73,6 +78,41 @@ public sealed class AnswerKeyService
     {
         var answerUrl = NormalizeUrl(examUrl.Replace(".json", ".answers.json", StringComparison.OrdinalIgnoreCase));
         return LoadAsync(answerUrl);
+    }
+
+    /// <summary>
+    /// Tải đáp án từ R2 hoặc từ bộ nhớ IndexedDB offline nếu mất mạng
+    /// </summary>
+    public async Task<ExamAnswerKey?> LoadOfflineOrOnlineAsync(string? answerUrl, int? mockTestId, string skill, string? examUrl = null)
+    {
+        if (mockTestId.HasValue && _offlineStorage != null)
+        {
+            var isOnline = await _offlineStorage.IsOnlineAsync();
+            if (!isOnline)
+            {
+                var offKey = await _offlineStorage.GetOfflineAnswerKeyAsync(mockTestId.Value, skill);
+                if (offKey != null) return offKey;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(answerUrl))
+        {
+            var key = await LoadAsync(answerUrl);
+            if (key != null) return key;
+        }
+        else if (!string.IsNullOrWhiteSpace(examUrl))
+        {
+            var key = await LoadFromExamUrlAsync(examUrl);
+            if (key != null) return key;
+        }
+
+        if (mockTestId.HasValue && _offlineStorage != null)
+        {
+            var offKey = await _offlineStorage.GetOfflineAnswerKeyAsync(mockTestId.Value, skill);
+            if (offKey != null) return offKey;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -158,9 +198,9 @@ public sealed class AnswerKeyService
         return url.Replace(" ", "%20");
     }
 
-    private static double CalcBandScore(int correct, int total)
+    public static double CalcBandScore(int correct, int total = 40)
     {
-        if (total == 0) return 0;
+        if (total <= 0 || correct <= 0) return 0.0;
         // Scale to 40 if needed
         int scaled = total == 40 ? correct : (int)Math.Round((double)correct / total * 40);
         return scaled switch
@@ -175,10 +215,13 @@ public sealed class AnswerKeyService
             >= 18 => 5.5,
             >= 16 => 5.0,
             >= 13 => 4.5,
-            >= 11 => 4.0,
-            >= 9  => 3.5,
-            >= 5  => 3.0,
-            _     => 2.5
+            >= 10 => 4.0,
+            >= 8  => 3.5,
+            >= 6  => 3.0,
+            >= 4  => 2.5,
+            >= 2  => 2.0,
+            1     => 1.0,
+            _     => 0.0
         };
     }
 }
