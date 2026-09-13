@@ -17,6 +17,7 @@ public class ExamPart
     public int PartNumber { get; set; }
     public string PassageTitle { get; set; } = "";
     public string PassageHtml { get; set; } = "";
+    public string AudioUrl { get; set; } = "";
     public List<QuestionGroup> QuestionGroups { get; set; } = new();
     public List<QuestionData> Questions { get; set; } = new();
 }

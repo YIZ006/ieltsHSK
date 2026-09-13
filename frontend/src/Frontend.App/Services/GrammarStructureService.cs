@@ -59,6 +59,38 @@ public class GrammarStructureService
         catch (Exception ex)
         {
             Console.WriteLine($"Error fetching grammar structures: {ex.Message}");
+            if (_cache != null && _cache.Any()) return _cache;
+
+            // Fallback to local sample-data/ielts-grammar-comprehensive.json (Offline PWA mode)
+            try
+            {
+                var local = await _http.GetFromJsonAsync<List<GrammarStructureDto>>("sample-data/ielts-grammar-comprehensive.json");
+                if (local != null && local.Any())
+                {
+                    _cache = local;
+                    var filtered = local.AsEnumerable();
+                    if (!string.IsNullOrWhiteSpace(search))
+                    {
+                        var s = search.ToLowerInvariant();
+                        filtered = filtered.Where(x => x.GrammarTopic.ToLowerInvariant().Contains(s) || x.Formula.ToLowerInvariant().Contains(s) || x.VietnameseMeaning.ToLowerInvariant().Contains(s));
+                    }
+                    if (!string.IsNullOrWhiteSpace(bandLevel) && bandLevel != "all")
+                    {
+                        filtered = filtered.Where(x => x.BandLevel.Equals(bandLevel, StringComparison.OrdinalIgnoreCase));
+                    }
+                    if (!string.IsNullOrWhiteSpace(category) && category != "all")
+                    {
+                        filtered = filtered.Where(x => x.Category.Equals(category, StringComparison.OrdinalIgnoreCase));
+                    }
+                    if (!string.IsNullOrWhiteSpace(topic) && topic != "all")
+                    {
+                        filtered = filtered.Where(x => x.GrammarTopic.Equals(topic, StringComparison.OrdinalIgnoreCase));
+                    }
+                    return filtered.ToList();
+                }
+            }
+            catch { }
+
             return _cache ?? new List<GrammarStructureDto>();
         }
     }
