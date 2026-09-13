@@ -109,6 +109,10 @@ const OfflineDB = {
 
   async cacheMedia(url) {
     if (!url) return false;
+    // Bỏ qua link YouTube / nhúng video vì không thể fetch CORS vào CacheStorage
+    if (url.includes('youtube.com') || url.includes('youtu.be') || url.includes('vimeo.com')) {
+      return false;
+    }
     try {
       const cache = await caches.open(this.mediaCacheName);
       // Fetch và lưu vào Cache
@@ -119,7 +123,7 @@ const OfflineDB = {
       }
       return false;
     } catch (err) {
-      console.error('[OfflineStorage] cacheMedia error for url:', url, err);
+      console.warn('[OfflineStorage] cacheMedia skipped/failed for url:', url, err);
       return false;
     }
   },

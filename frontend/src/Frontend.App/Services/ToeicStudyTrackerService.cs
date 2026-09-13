@@ -160,6 +160,8 @@ public sealed class ToeicStudyTrackerService : IDisposable
     private async Task SyncToBackendAsync(bool force)
     {
         if (_httpClient == null || _pendingSeconds <= 0) return;
+        var token = await _localStorage.GetItemAsync<string>("authToken");
+        if (string.IsNullOrWhiteSpace(token)) return;
         if (!force && (DateTime.UtcNow - _lastSyncTime).TotalSeconds < 30) return;
 
         var secToSync = _pendingSeconds;

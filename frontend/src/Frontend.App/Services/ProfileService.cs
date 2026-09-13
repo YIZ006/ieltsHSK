@@ -52,7 +52,8 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
         }
         _inMemoryProfile = local;
 
-        if (httpClient != null)
+        var token = await localStorage.GetItemAsync<string>("authToken");
+        if (httpClient != null && !string.IsNullOrWhiteSpace(token))
         {
             try
             {
