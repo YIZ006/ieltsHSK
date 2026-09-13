@@ -388,7 +388,6 @@ else
     private IDisposable? _navigationRegistration;
     private string? _sessionKey;
     private bool isFinished;
-    private bool showReview = true;
     private bool timedOut;
     private bool isSubmitting;
     private GradingResult? gradingResult;
@@ -711,7 +710,7 @@ else
             if (!string.IsNullOrEmpty(_sessionKey)) await ExamSession.CompleteAsync(_sessionKey, timeExpired);
             await ExamSession.LockTestContentAsync(".listening-layout");
             await ExamSession.SetUnloadWarningAsync(false);
-            await CheckpointService.ClearCheckpointAsync("Listening", _examUrlLoaded, QueryMockTestId);
+            await CheckpointService.ClearCheckpointAsync("Listening", _examUrlLoaded ?? "", QueryMockTestId);
 
             if (!string.IsNullOrEmpty(_examUrlLoaded) || QueryMockTestId.HasValue)
             {

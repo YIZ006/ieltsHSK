@@ -1,4 +1,4 @@
-﻿/* ========================================================
+/* ========================================================
    TOEIC TEST PAGE - Dark Theme (Zenlish Style)
    Inter font is loaded globally via wwwroot/index.html
    ======================================================== */
@@ -112,16 +112,21 @@
     flex: 1;
     display: flex;
     align-items: center;
+    min-width: 0;
 }
 
 .header-logo {
     display: flex;
     align-items: center;
     gap: 10px;
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
 }
 
 .logo-icon {
     font-size: 1.4rem;
+    flex-shrink: 0;
 }
 
 .header-title {
@@ -130,6 +135,9 @@
     color: #0d1b2a;
     letter-spacing: 0.5px;
     text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .header-center {
@@ -143,7 +151,7 @@
     color: #ffffff;
     border: none;
     border-radius: 8px;
-    padding: 10px 28px;
+    padding: 10px 26px;
     font-size: 0.95rem;
     font-weight: 700;
     font-family: 'Inter', sans-serif;
@@ -152,6 +160,8 @@
     transition: var(--transition);
     box-shadow: 0 4px 16px rgba(255,107,53,0.4);
     text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .btn-nopbai:hover {
@@ -164,12 +174,53 @@
     transform: translateY(0);
 }
 
+.btn-save-exit {
+    background: #ffffff;
+    color: #57606a;
+    border: 1.5px solid #d0d7de;
+    border-radius: 8px;
+    padding: 9px 18px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.btn-save-exit:hover {
+    color: #dc2626;
+    border-color: #dc2626;
+    background: #fef2f2;
+    transform: translateY(-1px);
+}
+
+.toeic-review-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1.5px solid #f59e0b;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-weight: 700;
+    font-size: 0.88rem;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 .header-right {
-    flex: 1;
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 16px;
+    gap: 12px;
+    flex-shrink: 0;
 }
 
 /* â”€â”€ TIMER â”€â”€ */
@@ -1417,8 +1468,125 @@
 .toeic-test-list-container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 2rem;
+    padding: 1.5rem 2rem 3rem;
     font-family: 'Inter', sans-serif;
+}
+
+.toeic-test-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.btn-back-dashboard {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #4b5563;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    transition: all 0.2s ease;
+}
+
+.btn-back-dashboard:hover {
+    background: #e5e7eb;
+    color: #111827;
+    transform: translateX(-2px);
+}
+
+.toeic-r2-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #0284c7;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    padding: 6px 14px;
+    border-radius: 999px;
+}
+
+.r2-pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #0ea5e9;
+    box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.7);
+    animation: r2Pulse 1.8s infinite;
+}
+
+@keyframes r2Pulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(14, 165, 233, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
+}
+
+.btn-refresh-r2 {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    background: #ffffff;
+    color: #374151;
+    font-weight: 600;
+    font-size: 0.88rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-refresh-r2:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+}
+
+.btn-refresh-r2 .spin {
+    animation: spin 0.8s linear infinite;
+}
+
+.test-meta-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+
+.test-meta-pills span {
+    font-size: 0.8rem;
+    color: #6b7280;
+    background: #f9fafb;
+    border: 1px solid #f3f4f6;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+}
+
+.toeic-empty-r2 {
+    text-align: center;
+    padding: 3rem 1rem;
+    background: #f9fafb;
+    border-radius: 12px;
+    border: 2px dashed #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: #6b7280;
 }
 
 .toeic-test-list-container .header-title {
@@ -1484,6 +1652,150 @@
 
 .btn-start:hover {
     filter: brightness(1.08);
+}
+
+/* ── TOEIC FILTER & SORT TOOLBAR ── */
+.toeic-filter-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 1.75rem;
+    padding: 10px 16px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.filter-pills-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.filter-pill:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+    border-color: #cbd5e1;
+}
+
+.filter-pill.active {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+}
+
+.sort-order-group {
+    display: flex;
+    align-items: center;
+}
+
+.btn-sort-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-sort-toggle:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+
+/* ── TOEIC YEAR GROUPS & HEADERS ── */
+.toeic-year-groups-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2.25rem;
+    margin-bottom: 2.5rem;
+}
+
+.toeic-year-group-box {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.year-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #eef2ff;
+}
+
+.year-group-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.year-group-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+.year-group-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.year-group-header-right {
+    display: flex;
+    align-items: center;
+}
+
+.year-group-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.82rem;
+    color: #64748b;
+    font-weight: 600;
+    background: #f8fafc;
+    padding: 3px 10px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
 }
 
 
@@ -1580,6 +1892,19 @@
 
 .toeic-setup-container .setup-header {
     margin-bottom: 1.25rem;
+}
+
+.setup-collection {
+    display: inline-block;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #2563eb;
+    background: #eff6ff;
+    padding: 4px 12px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
 }
 
 .setup-title {
@@ -1760,4 +2085,360 @@
 
 .setup-back-btn:hover {
     text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+    .toeic-header {
+        padding: 0 12px;
+        height: 56px;
+        gap: 8px;
+    }
+    .header-title {
+        font-size: 0.82rem;
+        max-width: 130px;
+    }
+    .btn-save-exit {
+        padding: 6px 10px;
+        font-size: 0.78rem;
+    }
+    .btn-save-exit span {
+        display: none;
+    }
+    .btn-nopbai {
+        padding: 8px 14px;
+        font-size: 0.8rem;
+    }
+    .timer-display {
+        font-size: 1.05rem;
+        padding: 5px 10px;
+        min-width: 85px;
+        letter-spacing: 1px;
+    }
+}
+
+/* ── TOEIC TOPBAR ACTIONS ── */
+.toeic-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+/* ── TOEIC HISTORY DROPDOWN SECTION ── */
+.toeic-history-dropdown-section {
+    max-width: 960px;
+    margin: 2.5rem auto 3rem auto;
+    border-radius: 14px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.toeic-history-dropdown-section:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+}
+
+.btn-history-dropdown-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 22px;
+    background: #ffffff;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.2s ease;
+}
+
+.btn-history-dropdown-trigger:hover {
+    background: #f8fafc;
+}
+
+.btn-history-dropdown-trigger.expanded {
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.trigger-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.trigger-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #eef2ff;
+    color: #4f46e5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+}
+
+.trigger-text {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.history-count-badge {
+    background: #e0e7ff;
+    color: #4338ca;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 999px;
+    line-height: 1.3;
+}
+
+.trigger-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #64748b;
+    font-size: 0.88rem;
+    font-weight: 500;
+}
+
+.trigger-arrow {
+    font-size: 0.95rem;
+}
+
+.toeic-history-dropdown-panel {
+    padding: 18px 22px;
+    background: #f8fafc;
+    max-height: 520px;
+    overflow-y: auto;
+}
+
+.toeic-history-loading {
+    text-align: center;
+    padding: 30px 20px;
+    color: #64748b;
+}
+
+.toeic-history-empty {
+    text-align: center;
+    padding: 36px 20px;
+    color: #64748b;
+}
+
+.history-empty-icon {
+    font-size: 2.8rem;
+    margin-bottom: 10px;
+}
+
+.toeic-history-empty h4 {
+    color: #1e293b;
+    font-size: 1.05rem;
+    margin-bottom: 6px;
+    font-weight: 700;
+}
+
+.toeic-history-empty p {
+    font-size: 0.88rem;
+    max-width: 440px;
+    margin: 0 auto;
+}
+
+.toeic-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.toeic-history-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 16px 20px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    transition: all 0.2s ease;
+}
+
+.toeic-history-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+    transform: translateY(-1px);
+}
+
+.toeic-history-card-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.history-exam-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 0.82rem;
+    color: #64748b;
+    margin-bottom: 6px;
+}
+
+.history-meta-row span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.history-subscores {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.subscore-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.76rem;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.subscore-pill.listening {
+    background: rgba(59, 130, 246, 0.1);
+    color: #1d4ed8;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.subscore-pill.reading {
+    background: rgba(168, 85, 247, 0.1);
+    color: #6b21a8;
+    border: 1px solid rgba(168, 85, 247, 0.25);
+}
+
+.toeic-history-card-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.history-total-badge {
+    padding: 4px 14px;
+    border-radius: 8px;
+    font-weight: 800;
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+}
+
+.history-total-num {
+    font-size: 1.3rem;
+}
+
+.history-total-max {
+    font-size: 0.74rem;
+    opacity: 0.7;
+}
+
+.history-total-badge.score-high {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.history-total-badge.score-mid {
+    background: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.history-total-badge.score-low {
+    background: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.history-status-badge {
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.history-status-badge.submitted {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.history-status-badge.timed-out {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+}
+
+.history-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-review-exam {
+    background: #4f46e5;
+    color: #ffffff;
+    border: 1px solid #4f46e5;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
+}
+
+.btn-review-exam:hover {
+    background: #4338ca;
+    border-color: #4338ca;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+
+.btn-retake {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+}
+
+.btn-retake:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+    color: #0f172a;
 }

@@ -6,24 +6,36 @@
 @inject HttpClient Http
 @inject IJSRuntime JS
 @inject ILocalStorageService LocalStorage
+@inject ToeicStudyTrackerService Tracker
+@inject ToeicVocabularyService VocabService
 @implements IDisposable
 
-<PageTitle>Flashcard Từ vựng TOEIC - ieltsHSK</PageTitle>
+<PageTitle>Flashcard &amp; Từ vựng TOEIC - ieltsHSK</PageTitle>
 
 <div class="fc-page">
     <div class="fc-header">
         <div>
-            <h1 class="fc-title"><i class="bi bi-layers"></i> Flashcard Từ vựng TOEIC</h1>
-            <p class="fc-subtitle">Lật thẻ, nghe phát âm và học thuộc từ mới mỗi ngày.</p>
+            <h1 class="fc-title"><i class="bi bi-layers"></i> Flashcard &amp; Từ vựng TOEIC</h1>
+            <p class="fc-subtitle">Học từ vựng qua thẻ ghi nhớ 3D thông minh hoặc tra cứu bảng từ chi tiết.</p>
         </div>
         <a href="/toeic" class="fc-back-link"><i class="bi bi-arrow-left"></i> Về dashboard</a>
+    </div>
+
+    @* Mode Selector Tabs *@
+    <div class="fc-mode-switch">
+        <button class="fc-mode-btn @(viewMode == "flashcards" ? "active" : "")" @onclick='() => viewMode = "flashcards"'>
+            <i class="bi bi-layers-fill"></i> Chế độ Thẻ 3D
+        </button>
+        <button class="fc-mode-btn @(viewMode == "table" ? "active" : "")" @onclick='() => viewMode = "table"'>
+            <i class="bi bi-table"></i> Bảng từ vựng chi tiết (@allWords.Count)
+        </button>
     </div>
 
     @if (loading)
     {
         <div class="fc-loading">
             <div class="fc-spinner"></div>
-            <p>Đang tải bộ thẻ...</p>
+            <p>Đang tải bộ từ vựng TOEIC...</p>
         </div>
     }
     else if (loadError != null)
@@ -39,11 +51,15 @@
         <div class="fc-empty">
             <div class="fc-empty-icon">📭</div>
             <div class="fc-empty-title">Chưa có từ vựng nào</div>
-            <div class="fc-empty-sub">Dữ liệu bộ thẻ đang trống.</div>
+            <div class="fc-empty-sub">Hãy thêm từ đầu tiên để bắt đầu học.</div>
+            <button class="fc-btn fc-btn-know" style="margin-top:14px;" @onclick="OpenAddWordModal">
+                <i class="bi bi-plus-lg"></i> Thêm từ mới
+            </button>
         </div>
     }
-    else
+    else if (viewMode == "flashcards")
     {
+        @* ===== FLASHCARD 3D MODE ===== *@
         <div class="fc-stats">
             <span class="fc-chip fc-chip-green"><i class="bi bi-check-circle-fill"></i> Đã thuộc @learned.Count</span>
             <span class="fc-chip fc-chip-amber"><i class="bi bi-arrow-repeat"></i> Cần ôn @againSet.Count</span>
@@ -141,12 +157,199 @@
             <div class="fc-counter">Thẻ @(index + 1) / @deck.Count</div>
         }
     }
+    else
+    {
+        @* ===== VOCABULARY TABLE MODE ===== *@
+        <div class="fc-table-toolbar">
+            <div class="fc-table-search-box">
+                <i class="bi bi-search"></i>
+                <input type="text" placeholder="Tìm kiếm từ tiếng Anh, phiên âm, nghĩa..." @bind="tableSearch" @bind:event="oninput" />
+                @if (!string.IsNullOrEmpty(tableSearch))
+                {
+                    <button class="fc-clear-search" @onclick='() => tableSearch = ""'><i class="bi bi-x"></i></button>
+                }
+            </div>
+
+            <div class="fc-table-filters">
+                <select class="fc-select" @bind="tableTopicFilter">
+                    <option value="Tất cả">Tất cả chủ đề</option>
+                    @foreach (var topic in Topics)
+                    {
+                        <option value="@topic">@topic</option>
+                    }
+                </select>
+
+                <select class="fc-select" @bind="tableStatusFilter">
+                    <option value="Tất cả">Tất cả trạng thái</option>
+                    <option value="learned">Đã thuộc (@learned.Count)</option>
+                    <option value="again">Cần ôn (@againSet.Count)</option>
+                    <option value="new">Chưa học (@(allWords.Count - learned.Count - againSet.Count))</option>
+                </select>
+
+                <button class="fc-btn fc-btn-add-word" @onclick="OpenAddWordModal">
+                    <i class="bi bi-plus-lg"></i> Thêm từ mới
+                </button>
+            </div>
+        </div>
+
+        <div class="fc-table-container">
+            <table class="fc-table">
+                <thead>
+                    <tr>
+                        <th style="width: 22%;">TỪ TIẾNG ANH</th>
+                        <th style="width: 16%;">PHIÊN ÂM</th>
+                        <th style="width: 22%;">NGHĨA TIẾNG VIỆT</th>
+                        <th style="width: 18%;">CHỦ ĐỀ</th>
+                        <th style="width: 12%;">TRẠNG THÁI</th>
+                        <th style="width: 10%; text-align: center;">THAO TÁC</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (FilteredTableWords.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="fc-table-empty">
+                                <i class="bi bi-search"></i> Không tìm thấy từ vựng phù hợp với bộ lọc.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in FilteredTableWords)
+                        {
+                            var isLearned = learned.Contains(item.Id);
+                            var isAgain = againSet.Contains(item.Id);
+
+                            <tr class="fc-tr">
+                                <td class="fc-td-word">
+                                    <div class="fc-td-word-wrap">
+                                        <button class="fc-td-speak" @onclick="() => SpeakAsync(item.Word)" title="Phát âm">
+                                            <i class="bi bi-volume-up-fill"></i>
+                                        </button>
+                                        <span class="fc-td-en">@item.Word</span>
+                                        @if (item.IsCustom)
+                                        {
+                                            <span class="fc-td-custom-badge" title="Từ do bạn thêm">Bạn tạo</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td class="fc-td-ipa">@item.Ipa</td>
+                                <td class="fc-td-vi">
+                                    <div class="fc-vi-text">@item.Meaning</div>
+                                    @if (!string.IsNullOrEmpty(item.Example))
+                                    {
+                                        <div class="fc-example-text" title="@item.Example">"@item.Example"</div>
+                                    }
+                                </td>
+                                <td class="fc-td-topic">
+                                    <span class="fc-topic-tag">@item.Topic</span>
+                                </td>
+                                <td class="fc-td-status">
+                                    @if (isLearned)
+                                    {
+                                        <span class="fc-badge fc-badge-done"><i class="bi bi-check-circle-fill"></i> Đã thuộc</span>
+                                    }
+                                    else if (isAgain)
+                                    {
+                                        <span class="fc-badge fc-badge-again"><i class="bi bi-arrow-repeat"></i> Cần ôn</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="fc-badge fc-badge-new"><i class="bi bi-circle"></i> Chưa học</span>
+                                    }
+                                </td>
+                                <td class="fc-td-actions">
+                                    <div class="fc-actions-wrap">
+                                        <button class="fc-action-btn @(isLearned ? "btn-unmark" : "btn-mark")"
+                                                @onclick="() => ToggleLearnedTableAsync(item)"
+                                                title="@(isLearned ? "Bỏ đánh dấu thuộc" : "Đánh dấu đã thuộc")">
+                                            <i class="bi @(isLearned ? "bi-check-circle-fill" : "bi-check-circle")"></i>
+                                        </button>
+                                        @if (item.IsCustom)
+                                        {
+                                            <button class="fc-action-btn btn-delete"
+                                                    @onclick="() => DeleteCustomWordAsync(item)"
+                                                    title="Xóa từ này">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="fc-table-footer">
+            <span>Hiển thị <strong>@FilteredTableWords.Count</strong> / @allWords.Count từ vựng</span>
+            <span>Đã thuộc: <strong>@learned.Count</strong> (@GlobalPercent%)</span>
+        </div>
+    }
+
+    @* ===== MODAL THÊM TỪ MỚI ===== *@
+    @if (showAddWordModal)
+    {
+        <div class="fc-modal-backdrop" @onclick="CloseAddWordModal">
+            <div class="fc-modal" @onclick:stopPropagation="true">
+                <div class="fc-modal-header">
+                    <div class="fc-modal-title">
+                        <i class="bi bi-plus-circle-fill" style="color:var(--fc-primary);"></i> Thêm từ vựng TOEIC mới
+                    </div>
+                    <button class="fc-modal-close" @onclick="CloseAddWordModal"><i class="bi bi-x-lg"></i></button>
+                </div>
+
+                <div class="fc-modal-body">
+                    @if (!string.IsNullOrEmpty(newWordError))
+                    {
+                        <div class="fc-alert-error">
+                            <i class="bi bi-exclamation-triangle-fill"></i> @newWordError
+                        </div>
+                    }
+
+                    <div class="fc-form-group">
+                        <label class="fc-label">Từ tiếng Anh <span class="required">*</span></label>
+                        <input type="text" class="fc-input" placeholder="Ví dụ: Consolidate" @bind="newWord" />
+                    </div>
+
+                    <div class="fc-form-group">
+                        <label class="fc-label">Phiên âm IPA</label>
+                        <input type="text" class="fc-input" placeholder="Ví dụ: /kənˈsɑːlɪdeɪt/" @bind="newIpa" />
+                    </div>
+
+                    <div class="fc-form-group">
+                        <label class="fc-label">Nghĩa tiếng Việt <span class="required">*</span></label>
+                        <input type="text" class="fc-input" placeholder="Ví dụ: Củng cố, hợp nhất" @bind="newMeaning" />
+                    </div>
+
+                    <div class="fc-form-group">
+                        <label class="fc-label">Chủ đề <span class="required">*</span></label>
+                        <input type="text" class="fc-input" placeholder="Ví dụ: Kinh doanh, Văn phòng, Tài chính..." @bind="newTopic" />
+                    </div>
+
+                    <div class="fc-form-group">
+                        <label class="fc-label">Câu ví dụ</label>
+                        <textarea class="fc-textarea" rows="2" placeholder="Ví dụ: The company plans to consolidate its regional offices." @bind="newExample"></textarea>
+                    </div>
+                </div>
+
+                <div class="fc-modal-footer">
+                    <button class="fc-btn fc-btn-cancel" @onclick="CloseAddWordModal">Hủy</button>
+                    <button class="fc-btn fc-btn-save" @onclick="SaveNewWordAsync">
+                        <i class="bi bi-check2"></i> Lưu từ vựng
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
     private const string StateKey = "toeic_flashcards_v1";
+    private const string CustomVocabKey = "toeic_custom_words_v1";
 
     private List<ToeicVocabItem> allWords = new();
+    private List<ToeicVocabItem> customWords = new();
     private List<ToeicVocabItem> deck = new();
     private HashSet<int> learned = new();
     private HashSet<int> againSet = new();
@@ -157,7 +360,25 @@
     private string topicFilter = "Tất cả";
     private bool autoSpeak = true;
 
-    private List<string> Topics => allWords.Select(w => w.Topic).Distinct().ToList();
+    [SupplyParameterFromQuery(Name = "mode")]
+    public string? Mode { get; set; }
+
+    // View Mode & Table filter
+    private string viewMode = "flashcards"; // "flashcards" | "table"
+    private string tableSearch = "";
+    private string tableTopicFilter = "Tất cả";
+    private string tableStatusFilter = "Tất cả";
+
+    // Add Word Modal
+    private bool showAddWordModal = false;
+    private string newWord = "";
+    private string newIpa = "";
+    private string newMeaning = "";
+    private string newTopic = "Kinh doanh";
+    private string newExample = "";
+    private string? newWordError;
+
+    private List<string> Topics => allWords.Select(w => w.Topic).Distinct().OrderBy(t => t).ToList();
 
     private ToeicVocabItem CurrentCard => deck[index];
 
@@ -165,33 +386,75 @@
 
     private int GlobalPercent => allWords.Count == 0 ? 0 : learned.Count * 100 / allWords.Count;
 
+    private List<ToeicVocabItem> FilteredTableWords
+    {
+        get
+        {
+            var query = allWords.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(tableSearch))
+            {
+                var s = tableSearch.Trim();
+                query = query.Where(w =>
+                    w.Word.Contains(s, StringComparison.OrdinalIgnoreCase)
+                    || w.Meaning.Contains(s, StringComparison.OrdinalIgnoreCase)
+                    || w.Ipa.Contains(s, StringComparison.OrdinalIgnoreCase)
+                    || (!string.IsNullOrEmpty(w.Example) && w.Example.Contains(s, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            if (tableTopicFilter != "Tất cả")
+            {
+                query = query.Where(w => w.Topic.Equals(tableTopicFilter, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (tableStatusFilter == "learned")
+            {
+                query = query.Where(w => learned.Contains(w.Id));
+            }
+            else if (tableStatusFilter == "again")
+            {
+                query = query.Where(w => againSet.Contains(w.Id));
+            }
+            else if (tableStatusFilter == "new")
+            {
+                query = query.Where(w => !learned.Contains(w.Id) && !againSet.Contains(w.Id));
+            }
+
+            return query.ToList();
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
+        Tracker.StartTracking();
         try
         {
-            allWords = await Http.GetFromJsonAsync<List<ToeicVocabItem>>("sample-data/toeic-vocabulary.json") ?? new List<ToeicVocabItem>();
+            allWords = await VocabService.GetVocabulariesAsync();
+            customWords = allWords.Where(w => w.IsCustom).ToList();
+            var (l, a) = await VocabService.GetProgressAsync(allWords);
+            learned = l;
+            againSet = a;
         }
-        catch
+        catch (Exception ex)
         {
             loadError = "Không tải được dữ liệu từ vựng.";
-        }
-
-        try
-        {
-            var state = await LocalStorage.GetItemAsync<ToeicFlashcardState>(StateKey);
-            if (state != null)
-            {
-                learned = state.Learned.ToHashSet();
-                againSet = state.Again.ToHashSet();
-            }
-        }
-        catch
-        {
-            // Bỏ qua lỗi đọc localStorage, dùng trạng thái rỗng
+            Console.WriteLine($"[ToeicFlashcards] Init note: {ex.Message}");
         }
 
         BuildDeck();
         loading = false;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (string.Equals(Mode, "table", StringComparison.OrdinalIgnoreCase))
+        {
+            viewMode = "table";
+        }
+        else if (string.Equals(Mode, "flashcards", StringComparison.OrdinalIgnoreCase))
+        {
+            viewMode = "flashcards";
+        }
     }
 
     private void BuildDeck()
@@ -234,6 +497,7 @@
         var id = deck[index].Id;
         learned.Add(id);
         againSet.Remove(id);
+        _ = VocabService.UpdateProgressAsync(id, "Learned");
         await SaveStateAsync();
 
         flipped = false;
@@ -250,6 +514,7 @@
         var card = deck[index];
         againSet.Add(card.Id);
         learned.Remove(card.Id);
+        _ = VocabService.UpdateProgressAsync(card.Id, "Again");
         await SaveStateAsync();
 
         deck.RemoveAt(index);
@@ -258,6 +523,24 @@
 
         flipped = false;
         await SpeakCurrentAsync();
+    }
+
+    private async Task ToggleLearnedTableAsync(ToeicVocabItem item)
+    {
+        if (learned.Contains(item.Id))
+        {
+            learned.Remove(item.Id);
+            againSet.Add(item.Id);
+            _ = VocabService.UpdateProgressAsync(item.Id, "Again");
+        }
+        else
+        {
+            learned.Add(item.Id);
+            againSet.Remove(item.Id);
+            _ = VocabService.UpdateProgressAsync(item.Id, "Learned");
+        }
+        await SaveStateAsync();
+        BuildDeck();
     }
 
     private void ShuffleDeck()
@@ -277,6 +560,10 @@
 
     private async Task ResetProgressAsync()
     {
+        foreach (var id in learned.Concat(againSet).ToList())
+        {
+            _ = VocabService.UpdateProgressAsync(id, "None");
+        }
         learned.Clear();
         againSet.Clear();
         await SaveStateAsync();
@@ -285,11 +572,11 @@
 
     private async Task SaveStateAsync()
     {
-        await LocalStorage.SetItemAsync(StateKey, new ToeicFlashcardState
+        try
         {
-            Learned = learned.ToList(),
-            Again = againSet.ToList()
-        });
+            await VocabService.SaveLocalStateAsync(learned, againSet);
+        }
+        catch { }
     }
 
     private async Task SpeakCurrentAsync()
@@ -306,14 +593,101 @@
         {
             await JS.InvokeVoidAsync("speakText", text);
         }
-        catch
+        catch { }
+    }
+
+    // Modal Add Word
+    private void OpenAddWordModal()
+    {
+        newWord = "";
+        newIpa = "";
+        newMeaning = "";
+        newTopic = "Kinh doanh";
+        newExample = "";
+        newWordError = null;
+        showAddWordModal = true;
+    }
+
+    private void CloseAddWordModal()
+    {
+        showAddWordModal = false;
+    }
+
+    private async Task SaveNewWordAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newWord))
         {
-            // Trình duyệt không hỗ trợ Web Speech API
+            newWordError = "Vui lòng nhập từ tiếng Anh.";
+            return;
         }
+
+        if (string.IsNullOrWhiteSpace(newMeaning))
+        {
+            newWordError = "Vui lòng nhập nghĩa tiếng Việt.";
+            return;
+        }
+
+        var created = await VocabService.CreateCustomVocabAsync(
+            newWord.Trim(),
+            newIpa,
+            newMeaning.Trim(),
+            newExample,
+            newTopic);
+
+        if (created != null)
+        {
+            customWords.Add(created);
+            allWords.Add(created);
+        }
+        else
+        {
+            var nextId = allWords.Count > 0 ? allWords.Max(w => w.Id) + 1 : 1000;
+            var newItem = new ToeicVocabItem
+            {
+                Id = nextId,
+                Word = newWord.Trim(),
+                Ipa = string.IsNullOrWhiteSpace(newIpa) ? "/—/" : newIpa.Trim(),
+                Meaning = newMeaning.Trim(),
+                Topic = string.IsNullOrWhiteSpace(newTopic) ? "Khác" : newTopic.Trim(),
+                Example = string.IsNullOrWhiteSpace(newExample) ? "" : newExample.Trim(),
+                IsCustom = true
+            };
+            customWords.Add(newItem);
+            allWords.Add(newItem);
+        }
+
+        try
+        {
+            await LocalStorage.SetItemAsync(CustomVocabKey, customWords);
+        }
+        catch { }
+
+        BuildDeck();
+        showAddWordModal = false;
+    }
+
+    private async Task DeleteCustomWordAsync(ToeicVocabItem item)
+    {
+        _ = VocabService.DeleteCustomVocabAsync(item.Id);
+        _ = VocabService.UpdateProgressAsync(item.Id, "None");
+        customWords.RemoveAll(w => w.Id == item.Id);
+        allWords.RemoveAll(w => w.Id == item.Id);
+        learned.Remove(item.Id);
+        againSet.Remove(item.Id);
+
+        try
+        {
+            await LocalStorage.SetItemAsync(CustomVocabKey, customWords);
+            await SaveStateAsync();
+        }
+        catch { }
+
+        BuildDeck();
     }
 
     public void Dispose()
     {
+        Tracker.StopTracking();
         _ = JS.InvokeVoidAsync("stopSpeakText");
     }
 }

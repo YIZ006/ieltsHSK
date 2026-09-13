@@ -52,7 +52,16 @@ builder.Services.AddScoped(sp =>
 });
 builder.Services.AddScoped<ExamSessionService>();
 builder.Services.AddScoped<ExamHeaderService>();
-builder.Services.AddScoped<ExamCheckpointService>();
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    var authStateProvider = sp.GetRequiredService<AuthenticationStateProvider>();
+    return new ExamCheckpointService(localStorage, authStateProvider, httpClient);
+});
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
@@ -87,18 +96,69 @@ builder.Services.AddScoped(sp =>
         BaseAddress = new Uri(backendApiBaseUrl)
     };
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    return new NotificationService(httpClient, localStorage);
+});
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    var streakService = sp.GetRequiredService<StreakService>();
+    return new ToeicStudyTrackerService(localStorage, streakService, httpClient);
+});
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    return new ToeicVocabularyService(httpClient, localStorage);
+});
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    return new UserGameProgressService(httpClient, localStorage);
+});
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
     return new ExamSubmissionService(localStorage, httpClient);
 });
 builder.Services.AddScoped<GrammarStructureService>();
 
 builder.Services.AddAuthorizationCore();
-builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
+
+// TokenRefreshService: quản lý access token + refresh token, tự gia hạn phiên đăng nhập.
+// Dùng HttpClient "trần" (không qua AuthHeaderHandler) để tránh vòng lặp refresh.
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) };
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
-    var authStateProvider = sp.GetRequiredService<AuthenticationStateProvider>();
-    return new AuthService(httpClient, localStorage, authStateProvider);
+    return new TokenRefreshService(httpClient, localStorage);
+});
+
+// Đăng ký 1 instance duy nhất cho cả kiểu cụ thể và kiểu AuthenticationStateProvider
+builder.Services.AddScoped<CustomAuthStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<CustomAuthStateProvider>());
+
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) };
+    var localStorage = sp.GetRequiredService<ILocalStorageService>();
+    var authStateProvider = sp.GetRequiredService<CustomAuthStateProvider>();
+    var tokenRefreshService = sp.GetRequiredService<TokenRefreshService>();
+    return new AuthService(httpClient, localStorage, authStateProvider, tokenRefreshService);
 });
 
 builder.Services.AddScoped(sp =>
