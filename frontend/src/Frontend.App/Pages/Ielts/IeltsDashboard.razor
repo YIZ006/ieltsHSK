@@ -17,11 +17,18 @@
     <h1 class="page-title">Hôm nay</h1>
     <div style="display: flex; gap: 15px; align-items: center;">
         <p class="date-subtitle">@DateTime.Now.ToString("dddd, d MMMM, yyyy", new System.Globalization.CultureInfo("vi-VN"))</p>
-        @if (!string.IsNullOrEmpty(currentLevel))
+        @if (!string.IsNullOrEmpty(currentLevel) && currentLevel != "A1")
         {
-            <span class="level-badge" style="background-color: #e8f0fe; color: #1a73e8; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">
+            <span class="level-badge" style="background-color: #e8f0fe; color: #1a73e8; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
                 Trình độ: @currentLevel
+                <a href="/ielts?change=true" title="Đổi trình độ" style="color: #1a73e8; text-decoration: underline; font-size: 0.75rem; margin-left: 4px;">(Đổi)</a>
             </span>
+        }
+        else
+        {
+            <a href="/ielts?change=true" class="level-badge" style="background-color: #fef3c7; color: #b45309; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600; text-decoration: none;">
+                🎯 Chọn trình độ
+            </a>
         }
     </div>
 </div>

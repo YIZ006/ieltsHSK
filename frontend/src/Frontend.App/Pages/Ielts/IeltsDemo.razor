@@ -101,6 +101,9 @@
     [CascadingParameter]
     private Task<AuthenticationState> AuthState { get; set; } = default!;
 
+    [SupplyParameterFromQuery(Name = "change")]
+    public bool ForceChangeLevel { get; set; }
+
     private List<CourseDto> courses = new();
     private List<WebsiteDto> websites = new();
     private bool isLoading = false;
@@ -109,22 +112,40 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var authState = await AuthState;
-        var user = authState.User;
-        if (user.Identity?.IsAuthenticated ?? false)
+        try
         {
-            var levelClaim = user.FindFirst("level")?.Value;
             var localLevel = await LocalStorage.GetItemAsync<string>("ielts_level");
-            
-            if ((!string.IsNullOrEmpty(levelClaim) && levelClaim != "A1") || !string.IsNullOrEmpty(localLevel))
+
+            var authState = await AuthState;
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated ?? false)
             {
-                if (string.IsNullOrEmpty(localLevel))
+                var levelClaim = user.FindFirst("level")?.Value;
+                if (!string.IsNullOrEmpty(levelClaim) && levelClaim != "A1")
                 {
-                    await LocalStorage.SetItemAsync("ielts_level", levelClaim);
+                    if (string.IsNullOrEmpty(localLevel))
+                    {
+                        localLevel = levelClaim;
+                        await LocalStorage.SetItemAsync("ielts_level", levelClaim);
+                    }
                 }
+            }
+
+            // Nếu người dùng (cả khách vãng lai và đã đăng nhập) đã chọn trình độ và không bấm đổi trình độ
+            if (!string.IsNullOrEmpty(localLevel) && !ForceChangeLevel)
+            {
                 NavigationManager.NavigateTo("/ielts/dashboard");
                 return;
             }
+
+            if (!string.IsNullOrEmpty(localLevel))
+            {
+                selectedLevel = localLevel;
+            }
+        }
+        catch
+        {
+            // Dự phòng khi LocalStorage bị chặn
         }
     }
 
@@ -134,11 +155,15 @@
         
         await LocalStorage.SetItemAsync("ielts_level", selectedLevel);
         
-        var authState = await AuthState;
-        if (authState.User.Identity?.IsAuthenticated ?? false)
+        try
         {
-            await IeltsService.UpdateUserLevelAsync(selectedLevel);
+            var authState = await AuthState;
+            if (authState.User.Identity?.IsAuthenticated ?? false)
+            {
+                await IeltsService.UpdateUserLevelAsync(selectedLevel);
+            }
         }
+        catch { }
 
         NavigationManager.NavigateTo("/ielts/dashboard");
     }
