@@ -385,7 +385,7 @@ public static class DependencyInjection
             if (!await dbContext.LearningSections.AnyAsync())
             {
                 dbContext.LearningSections.AddRange(
-                    new LearningSection { Name = "Luyện đề", Description = "Chưa thử — bắt đầu góc này?", Icon = "bi-journal-text", Route = "/ielts/luyen-de", Language = "IELTS", OrderIndex = 1 },
+                    new LearningSection { Name = "Phòng thi thử", Description = "Chưa thử — bắt đầu góc này?", Icon = "bi-journal-text", Route = "/ielts/mock-test", Language = "IELTS", OrderIndex = 1 },
                     new LearningSection { Name = "Nghe & điền từ", Description = "Chưa thử — bắt đầu góc này?", Icon = "bi-headphones", Route = "/ielts/nghe-dien", Language = "IELTS", OrderIndex = 2 },
                     new LearningSection { Name = "Nói theo", Description = "Chưa thử — bắt đầu góc này?", Icon = "bi-mic", Route = "/ielts/noi-theo", Language = "IELTS", OrderIndex = 3 },
                     new LearningSection { Name = "Đọc truyện", Description = "222 truyện theo trình độ đang chờ", Icon = "bi-book", Route = "/ielts/doc-truyen", Language = "IELTS", OrderIndex = 4 },
@@ -422,6 +422,49 @@ public static class DependencyInjection
             var tuVungHsk = await dbContext.LearningSections.FirstOrDefaultAsync(s => s.Language == "HSK" && s.Route == "/hsk/tu-vung");
             if (tuVungHsk != null && tuVungHsk.OrderIndex != 2) { tuVungHsk.OrderIndex = 2; }
             await dbContext.SaveChangesAsync();
+
+            // Đồng bộ mục IELTS: Đổi "Luyện đề" thành "Phòng thi thử" (/ielts/mock-test)
+            var luyenDeIelts = await dbContext.LearningSections.FirstOrDefaultAsync(s => s.Language == "IELTS" && (s.Route == "/ielts/luyen-de" || s.Route == "/ielts/phong-thi-thu" || s.Route == "/ielts/mock-test" || s.Route == "/ielts/mock-tests" || s.Name == "Luyện đề"));
+            if (luyenDeIelts != null)
+            {
+                luyenDeIelts.Name = "Phòng thi thử";
+                luyenDeIelts.Route = "/ielts/mock-test";
+                luyenDeIelts.OrderIndex = 1;
+                await dbContext.SaveChangesAsync();
+            }
+
+            // Seed IELTS MockTests
+            if (!await dbContext.MockTests.AnyAsync(m => m.Title == "Practise Test 1"))
+            {
+                dbContext.MockTests.Add(new MockTest
+                {
+                    CollectionName = "IELTS Mock Test 2025 December",
+                    Title = "Practise Test 1",
+                    ListeningUrl = "sample-data/listening-test-1.json",
+                    ReadingUrl = "sample-data/reading-test-v2.json",
+                    WritingUrl = "sample-data/writing-test-1.json",
+                    SpeakingUrl = "sample-data/speaking-test-1.json",
+                    ListeningAnswerUrl = "sample-data/IELTS_Mock_Test_2025_December_Listening_Practise_Test_1_IELTS_Online_Tests.answers.json",
+                    ReadingAnswerUrl = "sample-data/IELTS_Mock_Test_2025_December_Reading_Practise_Test_1_IELTS_Online_Tests.answers.json",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+                await dbContext.SaveChangesAsync();
+            }
+
+            if (!await dbContext.MockTests.AnyAsync(m => m.Title == "Actual Test 1" && m.CollectionName == "IELTS Recent Actual Tests Vol 1"))
+            {
+                dbContext.MockTests.Add(new MockTest
+                {
+                    CollectionName = "IELTS Recent Actual Tests Vol 1",
+                    Title = "Actual Test 1",
+                    ListeningUrl = "sample-data/listening-actual-vol1-test1.json",
+                    ListeningAnswerUrl = "sample-data/listening-actual-vol1-test1.answers.json",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+                await dbContext.SaveChangesAsync();
+            }
 
             // Seed TOEIC LearningSections
             if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "TOEIC"))
@@ -486,6 +529,18 @@ public static class DependencyInjection
             if (hasNewGames)
             {
                 await dbContext.SaveChangesAsync();
+            }
+
+            // Invalidate navigation cache so changes are immediately served
+            var cacheService = scope.ServiceProvider.GetService<Backend.Application.Abstractions.ICacheService>();
+            if (cacheService != null)
+            {
+                try
+                {
+                    await cacheService.RemoveAsync("navigation:all");
+                    await cacheService.RemoveAsync("navigation:IELTS");
+                }
+                catch { }
             }
         }
         catch (Exception ex)

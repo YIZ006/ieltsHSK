@@ -25,6 +25,7 @@ public class MockTestService
         {
             var result = await _http.GetFromJsonAsync<List<MockTestDto>>("api/mock-tests");
             _cache = result ?? new List<MockTestDto>();
+            EnsureDefaultMockTests(_cache);
             return _cache;
         }
         catch (HttpRequestException)
@@ -34,18 +35,56 @@ public class MockTestService
                 await Task.Delay(500);
                 var result = await _http.GetFromJsonAsync<List<MockTestDto>>("api/mock-tests");
                 _cache = result ?? new List<MockTestDto>();
+                EnsureDefaultMockTests(_cache);
                 return _cache;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error fetching mock tests on retry: {ex.Message}");
-                return _cache ?? new List<MockTestDto>();
+                _cache ??= new List<MockTestDto>();
+                EnsureDefaultMockTests(_cache);
+                return _cache;
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error fetching mock tests: {ex.Message}");
-            return _cache ?? new List<MockTestDto>();
+            _cache ??= new List<MockTestDto>();
+            EnsureDefaultMockTests(_cache);
+            return _cache;
+        }
+    }
+
+    private static void EnsureDefaultMockTests(List<MockTestDto> tests)
+    {
+        // 1. Practise Test 1 (IELTS Mock Test 2025 December)
+        if (!tests.Any(t => t.Title != null && t.Title.Contains("Practise Test 1", StringComparison.OrdinalIgnoreCase)))
+        {
+            tests.Add(new MockTestDto
+            {
+                Id = 1,
+                CollectionName = "IELTS Mock Test 2025 December",
+                Title = "Practise Test 1",
+                ListeningUrl = "sample-data/listening-test-1.json",
+                ReadingUrl = "sample-data/reading-test-v2.json",
+                WritingUrl = "sample-data/writing-test-1.json",
+                SpeakingUrl = "sample-data/speaking-test-1.json",
+                ListeningAnswerUrl = "sample-data/IELTS_Mock_Test_2025_December_Listening_Practise_Test_1_IELTS_Online_Tests.answers.json",
+                ReadingAnswerUrl = "sample-data/IELTS_Mock_Test_2025_December_Reading_Practise_Test_1_IELTS_Online_Tests.answers.json"
+            });
+        }
+
+        // 2. Actual Test 1 (IELTS Recent Actual Tests Vol 1)
+        if (!tests.Any(t => t.Title != null && t.Title.Contains("Actual Test 1", StringComparison.OrdinalIgnoreCase)))
+        {
+            tests.Add(new MockTestDto
+            {
+                Id = 101,
+                CollectionName = "IELTS Recent Actual Tests Vol 1",
+                Title = "Actual Test 1",
+                ListeningUrl = "sample-data/listening-actual-vol1-test1.json",
+                ListeningAnswerUrl = "sample-data/listening-actual-vol1-test1.answers.json"
+            });
         }
     }
 
@@ -86,10 +125,11 @@ public class MockTestService
     {
         using var content = new MultipartFormDataContent();
         
-        // Cấu hình stream upload (tối đa 10MB)
-        using var stream = file.OpenReadStream(10485760); 
+        // Cấu hình stream upload (tối đa 100MB hỗ trợ cả file âm thanh MP3/WAV)
+        using var stream = file.OpenReadStream(104857600); 
         var fileContent = new StreamContent(stream);
-        fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+        var ct = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(ct);
         
         content.Add(fileContent, "file", file.Name);
 

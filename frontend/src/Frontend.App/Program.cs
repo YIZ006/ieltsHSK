@@ -110,12 +110,21 @@ builder.Services.AddScoped(sp =>
     return new IeltsService(httpClient);
 });
 
+// OfflineStorageService: Quản lý tải và lưu trữ đề thi Offline với IndexedDB và CacheStorage
+builder.Services.AddScoped(sp =>
+{
+    var js = sp.GetRequiredService<IJSRuntime>();
+    var httpClient = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
+    return new OfflineStorageService(js, httpClient);
+});
+
 // ExamService: dùng BaseAddress của frontend để load được relative path (wwwroot/sample-data)
 // Khi URL là đường dẫn tuyệt đối (http/https) thì HttpClient vẫn gọi thẳng được
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
-    return new ExamService(httpClient);
+    var offlineStorage = sp.GetRequiredService<OfflineStorageService>();
+    return new ExamService(httpClient, offlineStorage);
 });
 
 builder.Services.AddScoped(sp =>
@@ -127,11 +136,12 @@ builder.Services.AddScoped(sp =>
     return new MockTestService(httpClient);
 });
 
-// AnswerKeyService: same base URL as frontend (loads .answers.json from wwwroot or absolute R2 URL)
+// AnswerKeyService: same base URL as frontend (loads .answers.json from wwwroot hoặc IndexedDB offline)
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
-    return new AnswerKeyService(httpClient);
+    var offlineStorage = sp.GetRequiredService<OfflineStorageService>();
+    return new AnswerKeyService(httpClient, offlineStorage);
 });
 
 // ToeicService: load đề thi TOEIC từ wwwroot/sample-data hoặc Cloudflare R2

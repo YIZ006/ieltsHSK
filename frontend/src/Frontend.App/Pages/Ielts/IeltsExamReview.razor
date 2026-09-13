@@ -37,7 +37,7 @@
         <!-- Breadcrumb & Top Bar -->
         <div class="review-header-card">
             <nav class="review-breadcrumb">
-                <a href="/ielts/luyen-de"><i class="bi bi-collection"></i> Kho đề thi</a>
+                <a href="/ielts/mock-test"><i class="bi bi-collection"></i> Kho đề thi</a>
                 <span>/</span>
                 <span>@(collectionName ?? "IELTS Mock Test")</span>
                 <span>/</span>
@@ -130,7 +130,7 @@
                     <!-- Reading & Listening Score Box -->
                     <div class="hero-score-box">
                         <span class="score-lbl">OVERALL BAND</span>
-                        <span class="score-val">@((submission?.BandScore ?? gradingResult?.BandScore ?? 0).ToString("0.0"))</span>
+                        <span class="score-val">@(GetCurrentBandScore().ToString("0.0"))</span>
                         <span class="score-status-badge graded"><i class="bi bi-check-circle-fill"></i> Đã hoàn thành</span>
                     </div>
 
@@ -676,7 +676,7 @@
             // Tải dữ liệu đề thi theo kỹ năng
             if (currentSkill.Equals("Reading", StringComparison.OrdinalIgnoreCase) || currentSkill.Equals("Listening", StringComparison.OrdinalIgnoreCase))
             {
-                examData = await ExamService.LoadExamAsync(examUrlToLoad);
+                examData = await ExamService.LoadExamAsync(examUrlToLoad, QueryMockTestId, currentSkill);
                 if (examData != null)
                 {
                     examTitle = examData.Title;
@@ -684,9 +684,7 @@
 
                 // Tải đáp án
                 var answerUrl = !string.IsNullOrWhiteSpace(QueryAnswerUrl) ? QueryAnswerUrl : submission?.AnswerUrl;
-                var answerKey = !string.IsNullOrWhiteSpace(answerUrl)
-                    ? await AnswerKeyService.LoadAsync(answerUrl)
-                    : await AnswerKeyService.LoadFromExamUrlAsync(examUrlToLoad);
+                var answerKey = await AnswerKeyService.LoadOfflineOrOnlineAsync(answerUrl, QueryMockTestId, currentSkill, examUrlToLoad);
 
                 if (answerKey != null && submission?.Grading?.Questions != null)
                 {
@@ -712,6 +710,13 @@
                 {
                     var emptyAnswers = new Dictionary<int, string>();
                     gradingResult = AnswerKeyService.Grade(answerKey, emptyAnswers);
+                }
+
+                if (currentSkill.Equals("Reading", StringComparison.OrdinalIgnoreCase) || currentSkill.Equals("Listening", StringComparison.OrdinalIgnoreCase))
+                {
+                    var accurateBand = AnswerKeyService.CalcBandScore(GetCorrectCount(), GetTotalCount());
+                    if (submission != null) submission.BandScore = accurateBand;
+                    if (gradingResult != null) gradingResult.BandScore = accurateBand;
                 }
             }
             else if (currentSkill.Equals("Writing", StringComparison.OrdinalIgnoreCase))
@@ -787,6 +792,15 @@
     private int GetBlankCount() => gradingResult?.Questions.Values.Count(q => q.IsBlank) ?? submission?.Grading?.Questions.Values.Count(q => q.IsBlank) ?? 0;
     private int GetWrongCount() => Math.Max(GetTotalCount() - GetCorrectCount() - GetBlankCount(), 0);
 
+    private double GetCurrentBandScore()
+    {
+        if (currentSkill.Equals("Listening", StringComparison.OrdinalIgnoreCase) || currentSkill.Equals("Reading", StringComparison.OrdinalIgnoreCase))
+        {
+            return AnswerKeyService.CalcBandScore(GetCorrectCount(), GetTotalCount());
+        }
+        return submission?.BandScore ?? gradingResult?.BandScore ?? 0;
+    }
+
     private static List<QuestionGroup> GetQuestionGroups(ExamPart part)
     {
         if (part.QuestionGroups.Count > 0) return part.QuestionGroups;
@@ -809,7 +823,7 @@
         catch { }
     }
 
-    private void GoBackToTests() => Navigation.NavigateTo("/ielts/luyen-de");
+    private void GoBackToTests() => Navigation.NavigateTo("/ielts/mock-test");
 
     private void GoToSummary()
     {
@@ -835,7 +849,7 @@
             "reading" => $"/ielts/reading/preview?ExamUrl={examUrl}{ansUrl}&CollectionName={coll}&Title={title}&Session={newSession}{mockId}",
             "writing" => $"/ielts/writing/preview?ExamUrl={examUrl}&CollectionName={coll}&Title={title}&Session={newSession}{mockId}",
             "speaking" => $"/ielts/speaking/preview?ExamUrl={examUrl}&CollectionName={coll}&Title={title}&Session={newSession}{mockId}",
-            _ => "/ielts/luyen-de"
+            _ => "/ielts/mock-test"
         };
         Navigation.NavigateTo(route);
     }

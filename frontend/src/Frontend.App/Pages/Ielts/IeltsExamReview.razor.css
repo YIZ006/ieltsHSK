@@ -580,7 +580,7 @@
 .bottom-navigator-bar {
     position: fixed;
     bottom: 0;
-    left: 0;
+    left: var(--sidebar-width, 260px);
     right: 0;
     background: #ffffff;
     border-top: 2px solid #e2e8f0;
@@ -590,6 +590,15 @@
     gap: 20px;
     box-shadow: 0 -4px 16px rgba(0,0,0,0.06);
     z-index: 99;
+    transition: left 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (max-width: 900px) {
+    .bottom-navigator-bar {
+        left: 0 !important;
+        padding: 8px 12px;
+        gap: 12px;
+    }
 }
 .nav-left {
     display: flex;

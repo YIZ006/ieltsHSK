@@ -9,20 +9,48 @@ namespace Frontend.App.Services;
 public class ExamService
 {
     private readonly HttpClient _http;
+    private readonly OfflineStorageService _offlineStorage;
     private readonly Dictionary<string, ExamData> _cache = new(); // cache tránh gọi lại
 
-    public ExamService(HttpClient http)
+    public ExamService(HttpClient http, OfflineStorageService offlineStorage)
     {
         _http = http;
+        _offlineStorage = offlineStorage;
     }
 
     /// <summary>
-    /// Load đề thi từ Cloudflare R2 URL
-    /// Ví dụ: https://pub-xxx.r2.dev/exams/cambridge-reading-test-1.json
+    /// Load đề thi từ Cloudflare R2 URL hoặc IndexedDB nếu offline
     /// </summary>
-    public async Task<ExamData?> LoadExamAsync(string dataUrl)
+    public async Task<ExamData?> LoadExamAsync(string dataUrl, int? mockTestId = null, string skill = "Reading")
     {
-        if (string.IsNullOrWhiteSpace(dataUrl)) return null;
+        // Nếu có mockTestId và offline hoặc đã tải về, ưu tiên lấy từ IndexedDB khi offline
+        if (mockTestId.HasValue)
+        {
+            var isOnline = await _offlineStorage.IsOnlineAsync();
+            if (!isOnline)
+            {
+                var offlineExam = await _offlineStorage.GetOfflineExamModelAsync(mockTestId.Value, skill);
+                if (offlineExam != null)
+                {
+                    NormalizeExam(offlineExam);
+                    return offlineExam;
+                }
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(dataUrl))
+        {
+            if (mockTestId.HasValue)
+            {
+                var offlineExam = await _offlineStorage.GetOfflineExamModelAsync(mockTestId.Value, skill);
+                if (offlineExam != null)
+                {
+                    NormalizeExam(offlineExam);
+                    return offlineExam;
+                }
+            }
+            return null;
+        }
 
         // Trả từ cache nếu đã load rồi
         if (_cache.TryGetValue(dataUrl, out var cached)) return cached;
@@ -36,7 +64,16 @@ public class ExamService
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ExamService] Lỗi load đề: {ex.Message}");
+            Console.WriteLine($"[ExamService] Lỗi load đề mạng ({ex.Message}), thử fallback offline...");
+            if (mockTestId.HasValue)
+            {
+                var offlineExam = await _offlineStorage.GetOfflineExamModelAsync(mockTestId.Value, skill);
+                if (offlineExam != null)
+                {
+                    NormalizeExam(offlineExam);
+                    return offlineExam;
+                }
+            }
             return null;
         }
     }

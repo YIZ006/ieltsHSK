@@ -13,6 +13,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Orbitron:wght@400;600;700;800;900&family=Rajdhani:wght@500;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/app.css?v=20260831b" />
     <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#1f2937" />
     <link rel="stylesheet" href="css/quantum-cipher.css?v=20260905_02" />
     <link href="Frontend.App.styles.css?v=20260905_02" rel="stylesheet" />
 </head>
@@ -148,15 +150,27 @@
             document.querySelectorAll('.ielts-input').forEach(input => {
                 if (!input.dataset.bound) {
                     input.dataset.bound = "true";
-                    input.addEventListener('input', function (e) {
+                    const handler = function (e) {
                         const qId = parseInt(e.target.dataset.q);
                         const val = e.target.value;
                         if (qId) {
                             dotNetHelper.invokeMethodAsync('OnHtmlInputChange', qId, val);
                         }
-                    });
+                    };
+                    input.addEventListener('input', handler);
+                    input.addEventListener('change', handler);
                 }
             });
+        };
+
+        window.restoreListeningInputs = function (answers) {
+            if (!answers) return;
+            for (const [qId, val] of Object.entries(answers)) {
+                const input = document.getElementById('q-' + qId) || document.querySelector(`[data-q="${qId}"]`);
+                if (input && input.value !== val) {
+                    input.value = val;
+                }
+            }
         };
     </script>
     <!-- <script src="js/guard.js"></script> -->
@@ -1299,6 +1313,17 @@
                 }
             }, 100);
         };
+    </script>
+    <script src="js/offlineStorage.js"></script>
+    <script>
+        // Đăng ký Service Worker cho PWA (offline + cài đặt Desktop)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('sw.js').catch(function (err) {
+                    console.warn('Service Worker registration failed:', err);
+                });
+            });
+        }
     </script>
 </body>
 

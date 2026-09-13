@@ -1,3 +1,6 @@
+@page "/ielts/mock-test"
+@page "/ielts/mock-tests"
+@page "/ielts/phong-thi-thu"
 @page "/ielts/luyen-de"
 @layout Frontend.App.Layout.IeltsLayout
 @using Frontend.App.Models
@@ -8,8 +11,9 @@
 @inject ExamSubmissionService SubmissionService
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
+@inject Frontend.App.Services.OfflineStorageService OfflineStorageService
 
-<PageTitle>IELTS Mock Tests - Luyện Thi Thử</PageTitle>
+<PageTitle>IELTS Mock Tests - Phòng Thi Thử</PageTitle>
 
 <div class="mocktests-container">
     <div class="main-content">
@@ -38,6 +42,26 @@
             </div>
         </div>
 
+        @if (!isOnline)
+        {
+            <div class="alert alert-warning d-flex align-items-center mb-4" role="alert" style="border-radius: 12px; font-weight: 600; background: #fffbeb; border: 1px solid #fef3c7; color: #92400e; padding: 12px 18px; margin-top: 16px;">
+                <i class="bi bi-wifi-off me-2 fs-5" style="color: #f59e0b;"></i>
+                <div>
+                    <strong>Chế độ Ngoại tuyến (Offline):</strong> Bạn đang mất kết nối Internet. Bạn có thể làm các đề thi đã tải về máy (được đánh dấu <span class="badge bg-success" style="vertical-align: middle;">Sẵn sàng Offline</span>).
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(toastMessage))
+        {
+            <div class="alert alert-info alert-dismissible fade show mb-3" role="alert" style="border-radius: 10px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; padding: 10px 16px;">
+                <div>
+                    <i class="bi bi-info-circle-fill me-2"></i> @toastMessage
+                </div>
+                <button type="button" class="btn-close" style="position: static; padding: 0;" @onclick="() => toastMessage = null" aria-label="Close"></button>
+            </div>
+        }
+
         <!-- Tests List -->
         @if (isLoading)
         {
@@ -45,7 +69,16 @@
         }
         else if (mockTests.Count == 0)
         {
-            <div class="empty-state">Chưa có đề thi nào trong hệ thống.</div>
+            <div class="empty-state">
+                @if (!isOnline)
+                {
+                    <span>Bạn chưa tải đề thi nào về máy. Hãy kết nối Internet để tải các đề thi bạn muốn luyện tập offline!</span>
+                }
+                else
+                {
+                    <span>Chưa có đề thi nào trong hệ thống.</span>
+                }
+            </div>
         }
         else
         {
@@ -60,11 +93,52 @@
 
                     <div class="test-block">
                         <div class="test-block-header">
-                            <h2>@test.Title</h2>
-                            <button class="btn-summary-link @(hasAnyAttempt ? "has-data" : "")"
-                                    @onclick="() => OpenSummary(test)">
-                                <i class="bi bi-bar-chart-fill"></i> Tổng hợp kết quả
-                            </button>
+                            <div>
+                                @if (!string.IsNullOrWhiteSpace(test.CollectionName))
+                                {
+                                    <div class="test-collection-tag">
+                                        <i class="bi bi-collection"></i> @test.CollectionName
+                                    </div>
+                                }
+                                <h2>@test.Title</h2>
+                            </div>
+                            <div class="test-header-actions" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                @if (downloadingStatus.TryGetValue(test.Id, out var dlState))
+                                {
+                                    <div class="offline-downloading-pill" style="background: #eff6ff; color: #1d4ed8; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 6px; border: 1px solid #bfdbfe;">
+                                        <span class="spinner-border spinner-border-sm" role="status" style="width: 0.85rem; height: 0.85rem;"></span>
+                                        <span>@dlState.status (@dlState.progress%)</span>
+                                    </div>
+                                }
+                                else if (downloadedTestIds.Contains(test.Id))
+                                {
+                                    <div style="display: inline-flex; align-items: center; gap: 6px;">
+                                        <span class="badge" style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 6px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                                            <i class="bi bi-check-circle-fill"></i> Sẵn sàng Offline
+                                        </span>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" title="Xóa bản tải offline của đề này" style="padding: 2px 7px; border-radius: 6px; font-size: 0.78rem;" @onclick="() => DeleteDownloadedTest(test)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                }
+                                else if (isOnline)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-primary" style="padding: 5px 12px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; display: flex; align-items: center; gap: 6px;" @onclick="() => DownloadTest(test)">
+                                        <i class="bi bi-cloud-arrow-down-fill"></i> Tải học Offline
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="badge" style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600;">
+                                        <i class="bi bi-cloud-slash me-1"></i> Chưa tải về
+                                    </span>
+                                }
+
+                                <button class="btn-summary-link @(hasAnyAttempt ? "has-data" : "")"
+                                        @onclick="() => OpenSummary(test)">
+                                    <i class="bi bi-bar-chart-fill"></i> Tổng hợp kết quả
+                                </button>
+                            </div>
                         </div>
 
                         <div class="skills-grid">
@@ -77,9 +151,12 @@
                                     </div>
                                     @if (lSub != null)
                                     {
-                                        @if (lSub.BandScore.HasValue && lSub.BandScore.Value > 0)
+                                        var lBand = (lSub.CorrectCount.HasValue || lSub.Grading != null)
+                                            ? AnswerKeyService.CalcBandScore(lSub.CorrectCount ?? lSub.Grading?.CorrectCount ?? 0, lSub.TotalQuestions ?? lSub.Grading?.TotalCount ?? 40)
+                                            : lSub.BandScore;
+                                        @if (lBand.HasValue)
                                         {
-                                            <span class="skill-score-badge">Band @lSub.BandScore.Value.ToString("0.0")</span>
+                                            <span class="skill-score-badge">Band @lBand.Value.ToString("0.0")</span>
                                         }
                                         else
                                         {
@@ -91,7 +168,7 @@
                                     <button class="btn-take-test" 
                                             disabled="@string.IsNullOrEmpty(test.ListeningUrl)"
                                             @onclick="() => TakeListeningTest(test)">
-                                        <i class="bi bi-play-circle-fill"></i> @(lSub != null ? "Làm lại" : "Làm bài")
+                                        <i class="bi bi-play-circle-fill"></i> @(string.IsNullOrEmpty(test.ListeningUrl) ? "Chưa có đề" : (lSub != null ? "Làm lại" : "Làm bài"))
                                     </button>
                                     @if (lSub != null)
                                     {
@@ -111,9 +188,12 @@
                                     </div>
                                     @if (rSub != null)
                                     {
-                                        @if (rSub.BandScore.HasValue && rSub.BandScore.Value > 0)
+                                        var rBand = (rSub.CorrectCount.HasValue || rSub.Grading != null)
+                                            ? AnswerKeyService.CalcBandScore(rSub.CorrectCount ?? rSub.Grading?.CorrectCount ?? 0, rSub.TotalQuestions ?? rSub.Grading?.TotalCount ?? 40)
+                                            : rSub.BandScore;
+                                        @if (rBand.HasValue)
                                         {
-                                            <span class="skill-score-badge">Band @rSub.BandScore.Value.ToString("0.0")</span>
+                                            <span class="skill-score-badge">Band @rBand.Value.ToString("0.0")</span>
                                         }
                                         else
                                         {
@@ -125,7 +205,7 @@
                                     <button class="btn-take-test" 
                                             disabled="@string.IsNullOrEmpty(test.ReadingUrl)"
                                             @onclick="() => TakeReadingTest(test)">
-                                        <i class="bi bi-play-circle-fill"></i> @(rSub != null ? "Làm lại" : "Làm bài")
+                                        <i class="bi bi-play-circle-fill"></i> @(string.IsNullOrEmpty(test.ReadingUrl) ? "Chưa có đề" : (rSub != null ? "Làm lại" : "Làm bài"))
                                     </button>
                                     @if (rSub != null)
                                     {
@@ -159,7 +239,7 @@
                                     <button class="btn-take-test" 
                                             disabled="@string.IsNullOrEmpty(test.WritingUrl)"
                                             @onclick="() => TakeWritingTest(test)">
-                                        <i class="bi bi-play-circle-fill"></i> @(wSub != null ? "Viết lại" : "Làm bài")
+                                        <i class="bi bi-play-circle-fill"></i> @(string.IsNullOrEmpty(test.WritingUrl) ? "Chưa có đề" : (wSub != null ? "Viết lại" : "Làm bài"))
                                     </button>
                                     @if (wSub != null)
                                     {
@@ -193,7 +273,7 @@
                                     <button class="btn-take-test"
                                             disabled="@string.IsNullOrEmpty(test.SpeakingUrl)"
                                             @onclick="() => TakeSpeakingTest(test)">
-                                        <i class="bi bi-play-circle-fill"></i> @(sSub != null ? "Thi lại" : "Làm bài")
+                                        <i class="bi bi-play-circle-fill"></i> @(string.IsNullOrEmpty(test.SpeakingUrl) ? "Chưa có đề" : (sSub != null ? "Thi lại" : "Làm bài"))
                                     </button>
                                     @if (sSub != null)
                                     {
@@ -225,6 +305,10 @@
     private List<MockTestDto> mockTests = new();
     private List<IeltsSubmissionRecord> submissions = new();
     private bool isLoading = true;
+    private bool isOnline = true;
+    private HashSet<int> downloadedTestIds = new();
+    private Dictionary<int, (string status, int progress)> downloadingStatus = new();
+    private string? toastMessage;
 
     private DotNetObjectReference<IeltsMockTests>? _dotNetRef;
     private int? _visibilityHookId;
@@ -232,30 +316,137 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var rel = NavigationManager.ToBaseRelativePath(NavigationManager.Uri).ToLowerInvariant();
+        if (rel == "ielts/luyen-de" || rel.StartsWith("ielts/luyen-de?") ||
+            rel == "ielts/phong-thi-thu" || rel.StartsWith("ielts/phong-thi-thu?") ||
+            rel == "ielts/mock-tests" || rel.StartsWith("ielts/mock-tests?"))
+        {
+            var uri = new Uri(NavigationManager.Uri);
+            NavigationManager.NavigateTo($"/ielts/mock-test{uri.Query}", replace: true);
+            return;
+        }
+
+        await OfflineStorageService.InitializeAsync();
+        isOnline = await OfflineStorageService.IsOnlineAsync();
+        OfflineStorageService.NetworkStatusChanged += HandleNetworkStatusChanged;
+
+        var dlIds = await OfflineStorageService.GetDownloadedTestIdsAsync();
+        downloadedTestIds = new HashSet<int>(dlIds);
+
+        await LoadTestsAndSubmissionsAsync();
+    }
+
+    private async Task LoadTestsAndSubmissionsAsync()
+    {
         _lastLoad = DateTimeOffset.UtcNow;
         isLoading = true;
         try
         {
-            var allTests = await MockTestService.GetMockTestsAsync();
-            mockTests = allTests.Where(t =>
-                string.IsNullOrEmpty(t.ToeicUrl) &&
-                string.IsNullOrEmpty(t.HskUrl) &&
-                !(t.Title != null && t.Title.Contains("HSK", StringComparison.OrdinalIgnoreCase)) &&
-                !(t.CollectionName != null && t.CollectionName.Contains("HSK", StringComparison.OrdinalIgnoreCase)) &&
-                !(t.Title != null && t.Title.Contains("TOEIC", StringComparison.OrdinalIgnoreCase)) &&
-                !(t.CollectionName != null && t.CollectionName.Contains("TOEIC", StringComparison.OrdinalIgnoreCase))
-            ).ToList();
+            if (isOnline)
+            {
+                var allTests = await MockTestService.GetMockTestsAsync();
+                mockTests = allTests.Where(t =>
+                    string.IsNullOrEmpty(t.ToeicUrl) &&
+                    string.IsNullOrEmpty(t.HskUrl) &&
+                    !(t.Title != null && t.Title.Contains("HSK", StringComparison.OrdinalIgnoreCase)) &&
+                    !(t.CollectionName != null && t.CollectionName.Contains("HSK", StringComparison.OrdinalIgnoreCase)) &&
+                    !(t.Title != null && t.Title.Contains("TOEIC", StringComparison.OrdinalIgnoreCase)) &&
+                    !(t.CollectionName != null && t.CollectionName.Contains("TOEIC", StringComparison.OrdinalIgnoreCase))
+                ).ToList();
 
-            submissions = await SubmissionService.GetAllAsync();
+                submissions = await SubmissionService.GetAllAsync();
+            }
+            else
+            {
+                // Ngoại tuyến: Tải từ gói dữ liệu IndexedDB
+                var offlinePackages = await OfflineStorageService.GetAllOfflinePackagesAsync();
+                mockTests = offlinePackages.Select(p => new MockTestDto
+                {
+                    Id = p.MockTestId,
+                    CollectionName = string.IsNullOrWhiteSpace(p.CollectionName) ? "IELTS Mock Test (Offline)" : p.CollectionName,
+                    Title = p.Title,
+                    ListeningUrl = !string.IsNullOrWhiteSpace(p.ListeningJson) ? $"offline://listening/{p.MockTestId}" : null,
+                    ReadingUrl = !string.IsNullOrWhiteSpace(p.ReadingJson) ? $"offline://reading/{p.MockTestId}" : null
+                }).ToList();
+
+                submissions = await SubmissionService.GetAllAsync();
+            }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading mock tests: {ex.Message}");
+            // Fallback sang các bài thi offline đã lưu
+            try
+            {
+                var offlinePackages = await OfflineStorageService.GetAllOfflinePackagesAsync();
+                if (offlinePackages.Count > 0)
+                {
+                    mockTests = offlinePackages.Select(p => new MockTestDto
+                    {
+                        Id = p.MockTestId,
+                        CollectionName = string.IsNullOrWhiteSpace(p.CollectionName) ? "IELTS Mock Test (Offline)" : p.CollectionName,
+                        Title = p.Title,
+                        ListeningUrl = !string.IsNullOrWhiteSpace(p.ListeningJson) ? $"offline://listening/{p.MockTestId}" : null,
+                        ReadingUrl = !string.IsNullOrWhiteSpace(p.ReadingJson) ? $"offline://reading/{p.MockTestId}" : null
+                    }).ToList();
+                }
+            }
+            catch { }
         }
         finally
         {
             isLoading = false;
         }
+    }
+
+    private async void HandleNetworkStatusChanged(bool online)
+    {
+        isOnline = online;
+        if (online)
+        {
+            await LoadTestsAndSubmissionsAsync();
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DownloadTest(MockTestDto test)
+    {
+        if (downloadingStatus.ContainsKey(test.Id)) return;
+
+        downloadingStatus[test.Id] = ("Bắt đầu tải...", 5);
+        await InvokeAsync(StateHasChanged);
+
+        var success = await OfflineStorageService.DownloadTestAsync(test, (status, progress) =>
+        {
+            downloadingStatus[test.Id] = (status, progress);
+            _ = InvokeAsync(StateHasChanged);
+        });
+
+        downloadingStatus.Remove(test.Id);
+        if (success)
+        {
+            downloadedTestIds.Add(test.Id);
+            toastMessage = $"Đã tải thành công đề '{test.Title}' về máy. Bạn có thể làm đề ngay cả khi không có mạng!";
+        }
+        else
+        {
+            toastMessage = $"Không thể tải đề '{test.Title}'. Vui lòng kiểm tra lại kết nối mạng.";
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DeleteDownloadedTest(MockTestDto test)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Bạn có chắc chắn muốn xóa bản tải ngoại tuyến của đề '{test.Title}'?");
+        if (!confirmed) return;
+
+        var success = await OfflineStorageService.DeleteTestDownloadAsync(test.Id);
+        if (success)
+        {
+            downloadedTestIds.Remove(test.Id);
+            toastMessage = $"Đã xóa bản tải offline của đề '{test.Title}'.";
+        }
+        await InvokeAsync(StateHasChanged);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -292,6 +483,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        OfflineStorageService.NetworkStatusChanged -= HandleNetworkStatusChanged;
         if (_visibilityHookId.HasValue)
         {
             try
@@ -331,10 +523,16 @@
 
     private void TakeReadingTest(MockTestDto test)
     {
-        if (string.IsNullOrEmpty(test.ReadingUrl)) return;
+        if (!isOnline && !downloadedTestIds.Contains(test.Id))
+        {
+            toastMessage = $"Đề thi '{test.Title}' chưa được tải về máy. Bạn cần kết nối mạng để tải hoặc chọn đề đã có huy hiệu [Sẵn sàng Offline].";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(test.ReadingUrl) && !downloadedTestIds.Contains(test.Id)) return;
         var extra = string.IsNullOrWhiteSpace(test.ReadingAnswerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(test.ReadingAnswerUrl)}";
         var coll = string.IsNullOrWhiteSpace(test.CollectionName) ? "IELTS Mock Test 2025 December" : test.CollectionName;
-        NavigationManager.NavigateTo($"/ielts/reading/preview?ExamUrl={Uri.EscapeDataString(test.ReadingUrl)}{extra}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}&{NewSessionQuery()}");
+        NavigationManager.NavigateTo($"/ielts/reading/preview?ExamUrl={Uri.EscapeDataString(test.ReadingUrl ?? "")}{extra}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}&{NewSessionQuery()}");
     }
 
     private void ReviewReading(MockTestDto test, IeltsSubmissionRecord sub)
@@ -348,10 +546,16 @@
 
     private void TakeListeningTest(MockTestDto test)
     {
-        if (string.IsNullOrEmpty(test.ListeningUrl)) return;
+        if (!isOnline && !downloadedTestIds.Contains(test.Id))
+        {
+            toastMessage = $"Đề thi '{test.Title}' chưa được tải về máy. Bạn cần kết nối mạng để tải hoặc chọn đề đã có huy hiệu [Sẵn sàng Offline].";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(test.ListeningUrl) && !downloadedTestIds.Contains(test.Id)) return;
         var extra = string.IsNullOrWhiteSpace(test.ListeningAnswerUrl) ? "" : $"&AnswerUrl={Uri.EscapeDataString(test.ListeningAnswerUrl)}";
         var coll = string.IsNullOrWhiteSpace(test.CollectionName) ? "IELTS Mock Test 2025 December" : test.CollectionName;
-        NavigationManager.NavigateTo($"/ielts/listening/preview?ExamUrl={Uri.EscapeDataString(test.ListeningUrl)}{extra}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}&{NewSessionQuery()}");
+        NavigationManager.NavigateTo($"/ielts/listening/preview?ExamUrl={Uri.EscapeDataString(test.ListeningUrl ?? "")}{extra}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}&{NewSessionQuery()}");
     }
 
     private void ReviewListening(MockTestDto test, IeltsSubmissionRecord sub)
@@ -365,6 +569,12 @@
 
     private void TakeWritingTest(MockTestDto test)
     {
+        if (!isOnline)
+        {
+            toastMessage = "Kỹ năng Writing cần kết nối mạng để chấm điểm AI / nộp bài cho Giáo viên chấm.";
+            return;
+        }
+
         if (string.IsNullOrEmpty(test.WritingUrl)) return;
         var coll = string.IsNullOrWhiteSpace(test.CollectionName) ? "IELTS Mock Test 2025 December" : test.CollectionName;
         NavigationManager.NavigateTo($"/ielts/writing/preview?ExamUrl={Uri.EscapeDataString(test.WritingUrl)}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}&{NewSessionQuery()}");
@@ -380,6 +590,12 @@
 
     private void TakeSpeakingTest(MockTestDto test)
     {
+        if (!isOnline)
+        {
+            toastMessage = "Kỹ năng Speaking cần kết nối mạng để nhận diện giọng nói và nộp file ghi âm.";
+            return;
+        }
+
         if (string.IsNullOrEmpty(test.SpeakingUrl)) return;
         var coll = string.IsNullOrWhiteSpace(test.CollectionName) ? "IELTS Mock Test 2025 December" : test.CollectionName;
         NavigationManager.NavigateTo($"/ielts/speaking/preview?ExamUrl={Uri.EscapeDataString(test.SpeakingUrl)}&MockTestId={test.Id}&CollectionName={Uri.EscapeDataString(coll)}&Title={Uri.EscapeDataString(test.Title)}&{NewSessionQuery()}");

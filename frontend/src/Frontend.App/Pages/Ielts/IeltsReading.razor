@@ -405,7 +405,7 @@ else
         string url = Uri.UnescapeDataString(actualUrl);
         _examUrlLoaded = url;
         _answerUrlLoaded = string.IsNullOrWhiteSpace(QueryAnswerUrl) ? null : Uri.UnescapeDataString(QueryAnswerUrl);
-        exam = await ExamService.LoadExamAsync(url);
+        exam = await ExamService.LoadExamAsync(url, QueryMockTestId, "Reading");
         if (exam?.Parts?.Count > 0)
             activeQuestionId = FirstQuestionId(exam.Parts[0]);
         isLoading = false;
@@ -518,9 +518,7 @@ else
     {
         try
         {
-            var answerKey = !string.IsNullOrWhiteSpace(_answerUrlLoaded)
-                ? await answerKeyService.LoadAsync(_answerUrlLoaded)
-                : await answerKeyService.LoadFromExamUrlAsync(_examUrlLoaded ?? "");
+            var answerKey = await answerKeyService.LoadOfflineOrOnlineAsync(_answerUrlLoaded, QueryMockTestId, "Reading", _examUrlLoaded);
 
             if (answerKey != null)
             {
@@ -624,9 +622,7 @@ else
                 return;
             }
 
-            var answerKey = !string.IsNullOrWhiteSpace(_answerUrlLoaded)
-                ? await answerKeyService.LoadAsync(_answerUrlLoaded)
-                : await answerKeyService.LoadFromExamUrlAsync(_examUrlLoaded);
+            var answerKey = await answerKeyService.LoadOfflineOrOnlineAsync(_answerUrlLoaded, QueryMockTestId, "Reading", _examUrlLoaded);
 
             if (answerKey == null)
             {
@@ -701,7 +697,7 @@ else
 
     private void NavigateToNextSkill()
     {
-        Navigation.NavigateTo("/ielts/luyen-de");
+        Navigation.NavigateTo("/ielts/mock-test");
     }
 
     private void RetakeExam()
@@ -757,7 +753,7 @@ else
         if (!isFinished && !await ExamSession.ConfirmLeaveAsync()) context.PreventNavigation();
     }
 
-    private void ExitExam() => Navigation.NavigateTo("/ielts/luyen-de");
+    private void ExitExam() => Navigation.NavigateTo("/ielts/mock-test");
 
     public void Dispose()
     {

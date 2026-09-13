@@ -499,15 +499,21 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
 
         if (listeningSub != null)
         {
+            int lCorrect = listeningSub.CorrectCount ?? listeningSub.Grading?.CorrectCount ?? 0;
+            int lTotal = listeningSub.TotalQuestions ?? listeningSub.Grading?.TotalCount ?? 40;
+            double lBand = listeningSub.Grading != null || listeningSub.CorrectCount.HasValue
+                ? AnswerKeyService.CalcBandScore(lCorrect, lTotal)
+                : (listeningSub.BandScore ?? listeningSub.Score?.Overall ?? 0);
+
             summary.Listening = new SkillSummaryItem
             {
                 Skill = "Listening",
                 IsCompleted = true,
                 IsGraded = true,
                 Status = listeningSub.Status,
-                BandScore = listeningSub.BandScore ?? listeningSub.Score?.Overall ?? 0,
-                CorrectCount = listeningSub.CorrectCount ?? listeningSub.Grading?.CorrectCount,
-                TotalCount = listeningSub.TotalQuestions ?? listeningSub.Grading?.TotalCount ?? 40,
+                BandScore = lBand,
+                CorrectCount = lCorrect,
+                TotalCount = lTotal,
                 DurationSeconds = listeningSub.DurationSeconds,
                 SubmittedAt = listeningSub.SubmittedAt,
                 ExamUrl = listeningSub.ExamUrl,
@@ -518,15 +524,21 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
 
         if (readingSub != null)
         {
+            int rCorrect = readingSub.CorrectCount ?? readingSub.Grading?.CorrectCount ?? 0;
+            int rTotal = readingSub.TotalQuestions ?? readingSub.Grading?.TotalCount ?? 40;
+            double rBand = readingSub.Grading != null || readingSub.CorrectCount.HasValue
+                ? AnswerKeyService.CalcBandScore(rCorrect, rTotal)
+                : (readingSub.BandScore ?? readingSub.Score?.Overall ?? 0);
+
             summary.Reading = new SkillSummaryItem
             {
                 Skill = "Reading",
                 IsCompleted = true,
                 IsGraded = true,
                 Status = readingSub.Status,
-                BandScore = readingSub.BandScore ?? readingSub.Score?.Overall ?? 0,
-                CorrectCount = readingSub.CorrectCount ?? readingSub.Grading?.CorrectCount,
-                TotalCount = readingSub.TotalQuestions ?? readingSub.Grading?.TotalCount ?? 40,
+                BandScore = rBand,
+                CorrectCount = rCorrect,
+                TotalCount = rTotal,
                 DurationSeconds = readingSub.DurationSeconds,
                 SubmittedAt = readingSub.SubmittedAt,
                 ExamUrl = readingSub.ExamUrl,

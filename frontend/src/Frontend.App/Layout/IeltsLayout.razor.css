@@ -3,12 +3,18 @@
     min-height: 100vh;
     background-color: var(--ig-bg);
     color: var(--ig-text);
+    --sidebar-width: 260px;
+}
+
+.app-shell.sidebar-collapsed,
+.sidebar-collapsed {
+    --sidebar-width: 74px;
 }
 
 .app-main {
     flex: 1;
     min-width: 0;
-    margin-left: 260px;
+    margin-left: var(--sidebar-width, 260px);
     display: flex;
     flex-direction: column;
     min-height: 100vh;
@@ -16,7 +22,7 @@
 }
 
 .sidebar-collapsed .app-main {
-    margin-left: 72px;
+    margin-left: var(--sidebar-width, 74px);
 }
 
 .no-sidebar .app-main {
@@ -77,6 +83,9 @@ article.content {
 }
 
 @media (max-width: 900px) {
+    .app-shell, .app-shell.sidebar-collapsed, .sidebar-collapsed {
+        --sidebar-width: 0px !important;
+    }
     .app-main { margin-left: 0 !important; }
     .sb-mobile-toggle { display: inline-flex; }
 }

@@ -12,6 +12,7 @@
 @inject ExamSubmissionService SubmissionService
 @inject ExamCheckpointService CheckpointService
 @inject NavigationManager Navigation
+@inject Frontend.App.Services.OfflineStorageService OfflineStorageService
 @implements IDisposable
 
 <PageTitle>@(isFinished ? "Đáp án & Chấm điểm: " : "")@(exam?.Title ?? "IELTS Listening") - IeltsHSK</PageTitle>
@@ -425,7 +426,19 @@ else
         string url = string.IsNullOrWhiteSpace(actualUrl) ? DefaultExamUrl : Uri.UnescapeDataString(actualUrl);
         _examUrlLoaded = url;
         _answerUrlLoaded = string.IsNullOrWhiteSpace(QueryAnswerUrl) ? null : Uri.UnescapeDataString(QueryAnswerUrl);
-        exam = await ExamService.LoadExamAsync(url);
+        exam = await ExamService.LoadExamAsync(url, QueryMockTestId, "Listening");
+        if (exam != null && !string.IsNullOrWhiteSpace(exam.AudioUrl))
+        {
+            var isOnline = await OfflineStorageService.IsOnlineAsync();
+            if (!isOnline)
+            {
+                var cachedBlob = await OfflineStorageService.GetOfflineAudioBlobUrlAsync(exam.AudioUrl);
+                if (!string.IsNullOrWhiteSpace(cachedBlob))
+                {
+                    exam.AudioUrl = cachedBlob;
+                }
+            }
+        }
         if (exam?.Parts?.Count > 0)
             activeQuestionId = exam.Parts[0].QuestionGroups.FirstOrDefault()?.Questions.FirstOrDefault()?.Id ?? 0;
         isLoading = false;
@@ -536,9 +549,7 @@ else
     {
         try
         {
-            var answerKey = !string.IsNullOrWhiteSpace(_answerUrlLoaded)
-                ? await answerKeyService.LoadAsync(_answerUrlLoaded)
-                : await answerKeyService.LoadFromExamUrlAsync(_examUrlLoaded ?? "");
+            var answerKey = await answerKeyService.LoadOfflineOrOnlineAsync(_answerUrlLoaded, QueryMockTestId, "Listening", _examUrlLoaded);
 
             if (answerKey != null)
             {
@@ -560,10 +571,23 @@ else
         if (exam != null && !isLoading && !string.IsNullOrEmpty(exam.AudioUrl) && _dotNetRef == null)
         {
             _dotNetRef = DotNetObjectReference.Create(this);
-            // Extract Video ID
-            string videoId = exam.AudioUrl.Split('/').Last().Split('?').First();
-            await JS.InvokeVoidAsync("initYouTubePlayer", videoId, _dotNetRef);
+            await JS.InvokeVoidAsync("initYouTubePlayer", exam.AudioUrl, _dotNetRef);
             await JS.InvokeVoidAsync("bindListeningInputs", _dotNetRef);
+        }
+        else if (_dotNetRef != null && exam != null)
+        {
+            await JS.InvokeVoidAsync("bindListeningInputs", _dotNetRef);
+            if (activePartIndex < exam.Parts.Count)
+            {
+                var dict = exam.Parts[activePartIndex].QuestionGroups
+                    .SelectMany(g => g.Questions)
+                    .Where(q => !string.IsNullOrEmpty(q.FillAnswer))
+                    .ToDictionary(q => q.Id, q => q.FillAnswer);
+                if (dict.Count > 0)
+                {
+                    await JS.InvokeVoidAsync("restoreListeningInputs", dict);
+                }
+            }
         }
     }
 
@@ -689,11 +713,9 @@ else
             await ExamSession.SetUnloadWarningAsync(false);
             await CheckpointService.ClearCheckpointAsync("Listening", _examUrlLoaded, QueryMockTestId);
 
-            if (!string.IsNullOrEmpty(_examUrlLoaded))
+            if (!string.IsNullOrEmpty(_examUrlLoaded) || QueryMockTestId.HasValue)
             {
-                var answerKey = !string.IsNullOrWhiteSpace(_answerUrlLoaded)
-                    ? await answerKeyService.LoadAsync(_answerUrlLoaded)
-                    : await answerKeyService.LoadFromExamUrlAsync(_examUrlLoaded);
+                var answerKey = await answerKeyService.LoadOfflineOrOnlineAsync(_answerUrlLoaded, QueryMockTestId, "Listening", _examUrlLoaded);
                 if (answerKey != null)
                 {
                     var studentAnswers = CollectStudentAnswers();
@@ -757,7 +779,7 @@ else
 
     private void NavigateToNextSkill()
     {
-        Navigation.NavigateTo("/ielts/luyen-de");
+        Navigation.NavigateTo("/ielts/mock-test");
     }
 
     private void RetakeExam()
@@ -795,7 +817,7 @@ else
         if (!isFinished && !await ExamSession.ConfirmLeaveAsync()) context.PreventNavigation();
     }
 
-    private void ExitExam() => Navigation.NavigateTo("/ielts/luyen-de");
+    private void ExitExam() => Navigation.NavigateTo("/ielts/mock-test");
 
     public void Dispose()
     {
@@ -803,5 +825,6 @@ else
         _dotNetRef?.Dispose();
         _navigationRegistration?.Dispose();
         _ = ExamSession.SetUnloadWarningAsync(false);
+        try { _ = JS.InvokeVoidAsync("pauseYouTube"); } catch { }
     }
 }
