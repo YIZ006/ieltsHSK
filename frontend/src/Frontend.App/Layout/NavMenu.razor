@@ -84,8 +84,8 @@
                     </li>
 
                     <li class="nav-item friends-menu">
-                        <button class="friends-btn @(FriendSvc.IsDrawerOpen ? "active" : "") @(FriendSvc.PendingIncomingCount > 0 ? "has-unread" : "")" 
-                                @onclick="ToggleFriendsDrawer" 
+                        <button class="friends-btn @(showFriendsMenu ? "active" : "") @(FriendSvc.PendingIncomingCount > 0 ? "has-unread" : "")" 
+                                @onclick="ToggleFriendsMenu" 
                                 @onclick:stopPropagation 
                                 title="Bạn bè @(FriendSvc.PendingIncomingCount > 0 ? $"({FriendSvc.PendingIncomingCount} lời mời mới)" : "")">
                             <i class="bi bi-people-fill friends-icon"></i>
@@ -94,6 +94,13 @@
                                 <span class="friends-badge">@(FriendSvc.PendingIncomingCount > 99 ? "99+" : FriendSvc.PendingIncomingCount)</span>
                             }
                         </button>
+                        @if (showFriendsMenu)
+                        {
+                            <div class="user-backdrop" @onclick="() => showFriendsMenu = false" @onclick:stopPropagation></div>
+                            <div class="friends-popover" @onclick:stopPropagation>
+                                <FriendsDropdown OnClose="() => showFriendsMenu = false" />
+                            </div>
+                        }
                     </li>
 
                     <li class="nav-item notif-menu">
@@ -357,6 +364,7 @@
     private bool showUserMenu = false;
     private bool showStreakMenu = false;
     private bool showNotifMenu = false;
+    private bool showFriendsMenu = false;
     private bool isLoadingNotifs = false;
     private List<NotificationDto> notifications = new();
     private int unreadNotifCount => notifications.Count(n => !n.IsRead);
@@ -452,7 +460,7 @@
         showUserMenu = false;
         showStreakMenu = false;
         showNotifMenu = false;
-        FriendSvc.CloseDrawer();
+        showFriendsMenu = false;
         InvokeAsync(StateHasChanged);
     }
 
@@ -504,7 +512,7 @@
         {
             showStreakMenu = false;
             showNotifMenu = false;
-            FriendSvc.CloseDrawer();
+            showFriendsMenu = false;
         }
     }
 
@@ -515,7 +523,7 @@
         {
             showUserMenu = false;
             showNotifMenu = false;
-            FriendSvc.CloseDrawer();
+            showFriendsMenu = false;
         }
     }
 
@@ -526,17 +534,20 @@
         {
             showUserMenu = false;
             showStreakMenu = false;
-            FriendSvc.CloseDrawer();
+            showFriendsMenu = false;
             await LoadNotificationsAsync();
         }
     }
 
-    private void ToggleFriendsDrawer()
+    private void ToggleFriendsMenu()
     {
-        showUserMenu = false;
-        showStreakMenu = false;
-        showNotifMenu = false;
-        FriendSvc.ToggleDrawer();
+        showFriendsMenu = !showFriendsMenu;
+        if (showFriendsMenu)
+        {
+            showUserMenu = false;
+            showStreakMenu = false;
+            showNotifMenu = false;
+        }
     }
 
     private void OnFriendSvcChanged() => InvokeAsync(StateHasChanged);
@@ -635,7 +646,7 @@
     private async Task Logout()
     {
         showUserMenu = false;
-        FriendSvc.CloseDrawer();
+        showFriendsMenu = false;
         _cachedWelcomeName = "";
         _cachedUserEmail = "";
         _cachedAvatarEmoji = "🎓";

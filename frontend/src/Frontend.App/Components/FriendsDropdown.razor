@@ -1,0 +1,1380 @@
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using System.Security.Claims
+@inject FriendshipService FriendSvc
+@inject AuthenticationStateProvider AuthStateProvider
+@implements IDisposable
+
+<div class="friends-dropdown-root">
+    @* ── HEADER ── *@
+    <div class="friends-pop-header">
+        <div class="friends-pop-header-left">
+            <div class="friends-icon-bubble">
+                <i class="bi bi-people-fill text-primary"></i>
+            </div>
+            <div class="friends-pop-titles">
+                <div class="friends-pop-title-row">
+                    <span class="friends-pop-title">Bạn bè</span>
+                    @if (summary != null)
+                    {
+                        <span class="friends-online-badge" title="Bạn bè đang online">
+                            <span class="dot-online"></span> @summary.OnlineFriends online
+                        </span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="friends-pop-header-right">
+            @if (summary != null && summary.TotalFriends > 0)
+            {
+                <span class="friends-total-chip">@summary.TotalFriends bạn</span>
+            }
+            <button type="button" class="friends-pop-close-btn" @onclick="HandleClose" title="Đóng">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    </div>
+
+    @* ── SEARCH BAR (@DisplayName) ── *@
+    <div class="friends-pop-search-bar">
+        <div class="friends-search-box">
+            <i class="bi bi-search search-icon"></i>
+            <input type="text"
+                   class="friends-search-input"
+                   placeholder="Tìm theo @@tên hiển thị (vd: cuongnane)..."
+                   value="@searchQuery"
+                   @oninput="HandleSearchInput" />
+            @if (!string.IsNullOrEmpty(searchQuery))
+            {
+                <button type="button" class="search-clear-btn" @onclick="ClearSearch" title="Xóa tìm kiếm">
+                    <i class="bi bi-x-circle-fill"></i>
+                </button>
+            }
+        </div>
+    </div>
+
+    @* ── TABS ── *@
+    <div class="friends-pop-tabs">
+        <button type="button" class="tab-btn @(activeTab == "friends" ? "active" : "")" @onclick='() => SwitchTab("friends")'>
+            <i class="bi bi-person-check-fill"></i>
+            <span>Bạn bè</span>
+            @if (summary != null && summary.TotalFriends > 0)
+            {
+                <span class="tab-pill">@summary.TotalFriends</span>
+            }
+        </button>
+
+        <button type="button" class="tab-btn @(activeTab == "requests" ? "active" : "")" @onclick='() => SwitchTab("requests")'>
+            <i class="bi bi-person-plus-fill"></i>
+            <span>Lời mời</span>
+            @if (summary != null && summary.PendingIncomingCount > 0)
+            {
+                <span class="tab-pill pill-danger">@summary.PendingIncomingCount</span>
+            }
+        </button>
+
+        @if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            <button type="button" class="tab-btn @(activeTab == "search" ? "active" : "")" @onclick='() => SwitchTab("search")'>
+                <i class="bi bi-search"></i>
+                <span>Tìm kiếm</span>
+                @if (searchResults.Count > 0)
+                {
+                    <span class="tab-pill pill-primary">@searchResults.Count</span>
+                }
+            </button>
+        }
+    </div>
+
+    @* ── BODY CONTENT ── *@
+    <div class="friends-pop-body">
+        @if (isLoading)
+        {
+            <div class="friends-loading-state">
+                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                <span>Đang tải danh sách...</span>
+            </div>
+        }
+        else if (activeTab == "search")
+        {
+            @* ── SEARCH RESULTS ── *@
+            <div class="friends-tab-section">
+                @if (isSearching)
+                {
+                    <div class="friends-loading-state">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        <span>Đang tìm kiếm "@@@searchQuery"...</span>
+                    </div>
+                }
+                else if (searchResults.Count == 0)
+                {
+                    <div class="friends-empty-state">
+                        <div class="empty-emoji">🔍</div>
+                        <div class="empty-title">Không tìm thấy người dùng nào</div>
+                        <div class="empty-desc">Hãy nhập chính xác <b>@@tên hiển thị</b> hoặc tên người bạn muốn kết nối.</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="friends-list">
+                        @foreach (var user in searchResults)
+                        {
+                            <div class="friend-card search-card">
+                                <div class="avatar-wrap">
+                                    <div class="avatar-circle" style="background: @(string.IsNullOrWhiteSpace(user.AvatarColor) ? "#3b82f6" : user.AvatarColor)">
+                                        <span>@(string.IsNullOrWhiteSpace(user.Avatar) ? "🎓" : user.Avatar)</span>
+                                    </div>
+                                    <span class="dot-status @(user.IsOnline ? "online" : "offline")" title="@(user.IsOnline ? "Đang online" : "Ngoại tuyến")"></span>
+                                </div>
+
+                                <div class="friend-info">
+                                    <div class="friend-name-row">
+                                        <span class="friend-fullname">@user.FullName</span>
+                                        <span class="friend-handle">@@@user.Username</span>
+                                    </div>
+                                    <div class="friend-meta-row">
+                                        @if (!string.IsNullOrWhiteSpace(user.TargetExam))
+                                        {
+                                            <span class="badge-exam">@user.TargetExam @user.TargetScore</span>
+                                        }
+                                        @if (user.Streak > 0)
+                                        {
+                                            <span class="badge-streak">🔥 @user.Streak</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="friend-actions">
+                                    @switch (user.Relationship)
+                                    {
+                                        case "Friends":
+                                            <span class="badge-relationship badge-is-friend" title="Đã là bạn bè">
+                                                <i class="bi bi-check2-circle"></i> Bạn bè
+                                            </span>
+                                            break;
+                                        case "PendingOutgoing":
+                                            <button type="button" class="btn-action-req btn-cancel" @onclick="() => HandleCancelRequestByFriendshipId(user.FriendshipId)" title="Thu hồi lời mời">
+                                                <span>Đã gửi (Hủy)</span>
+                                            </button>
+                                            break;
+                                        case "PendingIncoming":
+                                            <button type="button" class="btn-action-req btn-accept-pill" @onclick="() => HandleAcceptRequest(user.FriendshipId!.Value)" title="Chấp nhận lời mời">
+                                                <i class="bi bi-check-lg"></i> Đồng ý
+                                            </button>
+                                            break;
+                                        default:
+                                            <button type="button" class="btn-action-req btn-add-pill" @onclick="() => HandleSendRequest(user.Id)" title="Gửi lời mời kết bạn">
+                                                <i class="bi bi-person-plus-fill"></i> Kết bạn
+                                            </button>
+                                            break;
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        else if (activeTab == "requests")
+        {
+            @* ── REQUESTS TAB ── *@
+            <div class="friends-tab-section">
+                @if ((summary?.IncomingRequests == null || summary.IncomingRequests.Count == 0) &&
+                     (summary?.OutgoingRequests == null || summary.OutgoingRequests.Count == 0))
+                {
+                    <div class="friends-empty-state">
+                        <div class="empty-emoji">💌</div>
+                        <div class="empty-title">Chưa có lời mời kết bạn nào</div>
+                        <div class="empty-desc">Khi có ai đó gửi lời mời cho bạn hoặc bạn gửi cho người khác, chúng sẽ xuất hiện ở đây.</div>
+                    </div>
+                }
+                else
+                {
+                    @* Incoming requests *@
+                    @if (summary?.IncomingRequests != null && summary.IncomingRequests.Count > 0)
+                    {
+                        <div class="requests-sub-heading">
+                            <span>Lời mời đã nhận</span>
+                            <span class="req-count-chip">@summary.IncomingRequests.Count</span>
+                        </div>
+                        <div class="friends-list">
+                            @foreach (var req in summary.IncomingRequests)
+                            {
+                                <div class="friend-card req-card">
+                                    <div class="avatar-wrap">
+                                        <div class="avatar-circle" style="background: @(string.IsNullOrWhiteSpace(req.AvatarColor) ? "#3b82f6" : req.AvatarColor)">
+                                            <span>@(string.IsNullOrWhiteSpace(req.Avatar) ? "🎓" : req.Avatar)</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="friend-info">
+                                        <div class="friend-name-row">
+                                            <span class="friend-fullname">@req.FullName</span>
+                                            <span class="friend-handle">@@@req.Username</span>
+                                        </div>
+                                        <div class="friend-meta-row">
+                                            @if (!string.IsNullOrWhiteSpace(req.TargetExam))
+                                            {
+                                                <span class="badge-exam">@req.TargetExam</span>
+                                            }
+                                            <span class="req-time">@GetTimeAgo(req.CreatedAt)</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="req-actions">
+                                        <button type="button" class="btn-req-accept" @onclick="() => HandleAcceptRequest(req.FriendshipId)" title="Chấp nhận">
+                                            <i class="bi bi-check-lg"></i>
+                                        </button>
+                                        <button type="button" class="btn-req-decline" @onclick="() => HandleDeclineRequest(req.FriendshipId)" title="Từ chối">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @* Outgoing requests *@
+                    @if (summary?.OutgoingRequests != null && summary.OutgoingRequests.Count > 0)
+                    {
+                        <div class="requests-sub-heading outgoing-heading">
+                            <span>Đã gửi đi</span>
+                            <span class="req-count-chip chip-neutral">@summary.OutgoingRequests.Count</span>
+                        </div>
+                        <div class="friends-list">
+                            @foreach (var req in summary.OutgoingRequests)
+                            {
+                                <div class="friend-card req-card">
+                                    <div class="avatar-wrap">
+                                        <div class="avatar-circle" style="background: @(string.IsNullOrWhiteSpace(req.AvatarColor) ? "#3b82f6" : req.AvatarColor)">
+                                            <span>@(string.IsNullOrWhiteSpace(req.Avatar) ? "🎓" : req.Avatar)</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="friend-info">
+                                        <div class="friend-name-row">
+                                            <span class="friend-fullname">@req.FullName</span>
+                                            <span class="friend-handle">@@@req.Username</span>
+                                        </div>
+                                        <div class="friend-meta-row">
+                                            <span class="req-time">Đã gửi @GetTimeAgo(req.CreatedAt)</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="req-actions">
+                                        <button type="button" class="btn-action-req btn-cancel" @onclick="() => HandleCancelRequestByFriendshipId(req.FriendshipId)" title="Thu hồi lời mời">
+                                            <span>Hủy</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        }
+        else
+        {
+            @* ── FRIENDS TAB ── *@
+            <div class="friends-tab-section">
+                @if (summary?.Friends == null || summary.Friends.Count == 0)
+                {
+                    <div class="friends-empty-state">
+                        <div class="empty-emoji">🤝</div>
+                        <div class="empty-title">Bạn chưa có bạn bè nào</div>
+                        <div class="empty-desc">Hãy tìm kiếm <b>@@tên hiển thị</b> của bạn bè ở ô trên để kết nối và cùng nhau học tập nhé!</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="friends-list">
+                        @foreach (var friend in summary.Friends)
+                        {
+                            <div class="friend-card @(friend.IsFavorite ? "is-fav" : "")">
+                                <div class="avatar-wrap" @onclick="() => SelectFriendDetail(friend)">
+                                    <div class="avatar-circle" style="background: @(string.IsNullOrWhiteSpace(friend.AvatarColor) ? "#3b82f6" : friend.AvatarColor)">
+                                        <span>@(string.IsNullOrWhiteSpace(friend.Avatar) ? "🎓" : friend.Avatar)</span>
+                                    </div>
+                                    <span class="dot-status @(friend.IsOnline ? "online" : "offline")" title="@(friend.IsOnline ? "Đang online" : "Ngoại tuyến")"></span>
+                                </div>
+
+                                <div class="friend-info" @onclick="() => SelectFriendDetail(friend)">
+                                    <div class="friend-name-row">
+                                        <span class="friend-fullname">@friend.FullName</span>
+                                        <span class="friend-handle">@@@friend.Username</span>
+                                    </div>
+                                    <div class="friend-meta-row">
+                                        @if (friend.IsOnline)
+                                        {
+                                            <span class="online-label">🟢 Online</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="offline-label">Hoạt động @GetTimeAgo(friend.LastActive)</span>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(friend.TargetExam))
+                                        {
+                                            <span class="badge-exam">@friend.TargetExam @friend.TargetScore</span>
+                                        }
+                                        @if (friend.Streak > 0)
+                                        {
+                                            <span class="badge-streak">🔥 @friend.Streak</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="friend-actions">
+                                    <button type="button" class="btn-fav @(friend.IsFavorite ? "active" : "")" @onclick="() => HandleToggleFavorite(friend.Id)" title="@(friend.IsFavorite ? "Bỏ yêu thích" : "Yêu thích")">
+                                        <i class="bi @(friend.IsFavorite ? "bi-star-fill text-warning" : "bi-star text-muted")"></i>
+                                    </button>
+                                    <button type="button" class="btn-unfriend-mini" @onclick="() => ConfirmUnfriend(friend)" title="Hủy kết bạn">
+                                        <i class="bi bi-person-x"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* ── FOOTER TIP ── *@
+    <div class="friends-pop-footer">
+        <i class="bi bi-lightbulb-fill text-warning"></i>
+        <span>
+            @if (!string.IsNullOrWhiteSpace(currentUsername))
+            {
+                <span>Tên hiển thị: <b>@@@currentUsername</b>. Chia sẻ để kết bạn!</span>
+            }
+            else
+            {
+                <span>Nhập @@tên hiển thị để kết nối bạn bè cùng luyện thi!</span>
+            }
+        </span>
+    </div>
+
+    @* ── UNFRIEND CONFIRM MODAL ── *@
+    @if (unfriendTarget != null)
+    {
+        <div class="friends-modal-overlay" @onclick="() => unfriendTarget = null">
+            <div class="friends-modal-card" @onclick:stopPropagation>
+                <div class="modal-icon text-danger">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                </div>
+                <h4 class="modal-title">Hủy kết bạn?</h4>
+                <p class="modal-desc">
+                    Bạn có chắc chắn muốn hủy kết bạn với <b>@unfriendTarget.FullName</b> (@@@unfriendTarget.Username) không?
+                </p>
+                <div class="modal-buttons">
+                    <button type="button" class="btn-cancel" @onclick="() => unfriendTarget = null">Không</button>
+                    <button type="button" class="btn-confirm-delete" @onclick="ExecuteUnfriendAsync">Hủy kết bạn</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── QUICK VIEW DETAIL MODAL ── *@
+    @if (selectedDetailUser != null)
+    {
+        <div class="friends-modal-overlay" @onclick="() => selectedDetailUser = null">
+            <div class="friends-modal-card detail-modal-card" @onclick:stopPropagation>
+                <button type="button" class="modal-close-x" @onclick="() => selectedDetailUser = null">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+                
+                <div class="detail-avatar-wrap">
+                    <div class="detail-avatar" style="background: @(selectedDetailUser.AvatarColor)">
+                        <span>@selectedDetailUser.Avatar</span>
+                    </div>
+                    <span class="detail-dot @(selectedDetailUser.IsOnline ? "online" : "offline")"></span>
+                </div>
+
+                <h4 class="detail-fullname">@selectedDetailUser.FullName</h4>
+                <div class="detail-username">@@@selectedDetailUser.Username</div>
+
+                <div class="detail-badges">
+                    @if (!string.IsNullOrWhiteSpace(selectedDetailUser.TargetExam))
+                    {
+                        <span class="badge-exam">🎯 @selectedDetailUser.TargetExam @selectedDetailUser.TargetScore</span>
+                    }
+                    @if (selectedDetailUser.Streak > 0)
+                    {
+                        <span class="badge-streak">🔥 @selectedDetailUser.Streak ngày streak</span>
+                    }
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(selectedDetailUser.Bio))
+                {
+                    <div class="detail-bio">"@selectedDetailUser.Bio"</div>
+                }
+
+                <div class="detail-status-line">
+                    <i class="bi bi-circle-fill @(selectedDetailUser.IsOnline ? "text-success" : "text-secondary")"></i>
+                    <span>@(selectedDetailUser.IsOnline ? "Đang trực tuyến" : "Ngoại tuyến")</span>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    /* ── POP-OVER ROOT ── */
+    .friends-dropdown-root {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        background: #ffffff;
+        color: #1e293b;
+        font-family: inherit;
+        position: relative;
+    }
+
+    /* ── HEADER ── */
+    .friends-pop-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: #f8fafc;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+    .friends-pop-header-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .friends-icon-bubble {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: #eff6ff;
+        color: #2563eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+    }
+
+    .friends-pop-title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .friends-pop-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .friends-online-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.72rem;
+        color: #059669;
+        font-weight: 600;
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        padding: 2px 7px;
+        border-radius: 999px;
+    }
+
+    .dot-online {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 6px #10b981;
+    }
+
+    .friends-pop-header-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .friends-total-chip {
+        background: #f1f5f9;
+        color: #475569;
+        font-size: 0.74rem;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+    }
+
+    .friends-pop-close-btn {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 0.88rem;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+    }
+
+    .friends-pop-close-btn:hover {
+        color: #0f172a;
+        background: #e2e8f0;
+    }
+
+    /* ── SEARCH BAR ── */
+    .friends-pop-search-bar {
+        padding: 10px 14px;
+        background: #ffffff;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .friends-search-box {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .friends-search-box .search-icon {
+        position: absolute;
+        left: 10px;
+        color: #94a3b8;
+        font-size: 0.85rem;
+        pointer-events: none;
+    }
+
+    .friends-search-input {
+        width: 100%;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 7px 32px 7px 32px;
+        color: #0f172a;
+        font-size: 0.83rem;
+        outline: none;
+        transition: all 0.2s;
+    }
+
+    .friends-search-input:focus {
+        border-color: #3b82f6;
+        background: #ffffff;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    }
+
+    .search-clear-btn {
+        position: absolute;
+        right: 8px;
+        background: none;
+        border: none;
+        color: #94a3b8;
+        cursor: pointer;
+        padding: 2px;
+        font-size: 0.85rem;
+    }
+
+    .search-clear-btn:hover {
+        color: #64748b;
+    }
+
+    /* ── TABS ── */
+    .friends-pop-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 6px 14px;
+        background: #f8fafc;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+    .tab-btn {
+        flex: 1;
+        background: transparent;
+        border: none;
+        padding: 6px 8px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #64748b;
+        border-radius: 8px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        transition: all 0.15s;
+    }
+
+    .tab-btn:hover {
+        background: #edf2f7;
+        color: #1e293b;
+    }
+
+    .tab-btn.active {
+        background: #ffffff;
+        color: #2563eb;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .tab-pill {
+        background: #e2e8f0;
+        color: #475569;
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 999px;
+    }
+
+    .tab-pill.pill-danger {
+        background: #ef4444;
+        color: #ffffff;
+    }
+
+    .tab-pill.pill-primary {
+        background: #3b82f6;
+        color: #ffffff;
+    }
+
+    /* ── BODY ── */
+    .friends-pop-body {
+        max-height: 380px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    .friends-tab-section {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .friends-loading-state {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 36px 16px;
+        color: #64748b;
+        font-size: 0.85rem;
+    }
+
+    .friends-empty-state {
+        text-align: center;
+        padding: 32px 20px;
+    }
+
+    .empty-emoji {
+        font-size: 2rem;
+        margin-bottom: 8px;
+    }
+
+    .empty-title {
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 4px;
+    }
+
+    .empty-desc {
+        font-size: 0.78rem;
+        color: #64748b;
+        line-height: 1.4;
+        max-width: 280px;
+        margin: 0 auto;
+    }
+
+    /* ── LIST & CARDS ── */
+    .friends-list {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .friend-card {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 14px;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background-color 0.15s;
+    }
+
+    .friend-card:hover {
+        background-color: #f8fafc;
+    }
+
+    .friend-card.is-fav {
+        background-color: #fefce8;
+    }
+
+    .friend-card.is-fav:hover {
+        background-color: #fef9c3;
+    }
+
+    .avatar-wrap {
+        position: relative;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .avatar-circle {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.15rem;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+    }
+
+    .dot-status {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        border: 2px solid #ffffff;
+    }
+
+    .dot-status.online {
+        background: #10b981;
+    }
+
+    .dot-status.offline {
+        background: #cbd5e1;
+    }
+
+    .friend-info {
+        flex: 1;
+        min-width: 0;
+        cursor: pointer;
+    }
+
+    .friend-name-row {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .friend-fullname {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .friend-handle {
+        font-size: 0.74rem;
+        color: #3b82f6;
+        font-weight: 600;
+    }
+
+    .friend-meta-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 2px;
+        font-size: 0.72rem;
+        color: #64748b;
+    }
+
+    .online-label {
+        color: #059669;
+        font-weight: 600;
+    }
+
+    .offline-label {
+        color: #94a3b8;
+    }
+
+    .badge-exam {
+        background: #eff6ff;
+        color: #2563eb;
+        font-weight: 600;
+        padding: 1px 5px;
+        border-radius: 4px;
+        border: 1px solid #bfdbfe;
+        font-size: 0.7rem;
+    }
+
+    .badge-streak {
+        background: #fff7ed;
+        color: #ea580c;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 4px;
+        border: 1px solid #fed7aa;
+        font-size: 0.7rem;
+    }
+
+    .friend-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+
+    .btn-fav {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 4px 6px;
+        font-size: 0.95rem;
+        border-radius: 6px;
+        transition: transform 0.15s;
+    }
+
+    .btn-fav:hover {
+        transform: scale(1.15);
+    }
+
+    .btn-unfriend-mini {
+        background: none;
+        border: none;
+        color: #94a3b8;
+        cursor: pointer;
+        padding: 4px 6px;
+        font-size: 0.95rem;
+        border-radius: 6px;
+        transition: all 0.15s;
+    }
+
+    .btn-unfriend-mini:hover {
+        color: #ef4444;
+        background: #fee2e2;
+    }
+
+    /* ── REQUESTS ITEMS ── */
+    .requests-sub-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 14px 4px 14px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .outgoing-heading {
+        margin-top: 8px;
+        border-top: 1px dashed #e2e8f0;
+        padding-top: 10px;
+    }
+
+    .req-count-chip {
+        background: #fee2e2;
+        color: #dc2626;
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 999px;
+    }
+
+    .chip-neutral {
+        background: #f1f5f9;
+        color: #64748b;
+    }
+
+    .req-time {
+        font-size: 0.7rem;
+        color: #94a3b8;
+    }
+
+    .req-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .btn-req-accept {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #10b981;
+        color: #ffffff;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        transition: background-color 0.15s;
+    }
+
+    .btn-req-accept:hover {
+        background: #059669;
+    }
+
+    .btn-req-decline {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: #f1f5f9;
+        color: #64748b;
+        border: 1px solid #e2e8f0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        transition: all 0.15s;
+    }
+
+    .btn-req-decline:hover {
+        background: #fee2e2;
+        color: #dc2626;
+        border-color: #fca5a5;
+    }
+
+    /* ── SEARCH ACTIONS ── */
+    .btn-action-req {
+        padding: 4px 10px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        border-radius: 8px;
+        cursor: pointer;
+        border: 1px solid transparent;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.15s;
+    }
+
+    .btn-add-pill {
+        background: #2563eb;
+        color: #ffffff;
+    }
+
+    .btn-add-pill:hover {
+        background: #1d4ed8;
+    }
+
+    .btn-accept-pill {
+        background: #10b981;
+        color: #ffffff;
+    }
+
+    .btn-accept-pill:hover {
+        background: #059669;
+    }
+
+    .btn-cancel {
+        background: #f1f5f9;
+        color: #64748b;
+        border-color: #cbd5e1;
+    }
+
+    .btn-cancel:hover {
+        background: #fee2e2;
+        color: #dc2626;
+        border-color: #fca5a5;
+    }
+
+    .badge-is-friend {
+        background: #f0fdf4;
+        color: #16a34a;
+        border: 1px solid #bbf7d0;
+        padding: 3px 8px;
+        border-radius: 8px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    /* ── FOOTER TIP ── */
+    .friends-pop-footer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        background: #f8fafc;
+        border-top: 1px solid #edf2f7;
+        font-size: 0.74rem;
+        color: #64748b;
+    }
+
+    .friends-pop-footer b {
+        color: #2563eb;
+    }
+
+    /* ── MODALS (CONFIRM & DETAIL) ── */
+    .friends-modal-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.45);
+        backdrop-filter: blur(2px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1050;
+        padding: 16px;
+        animation: modal-fade-in 0.15s ease-out;
+    }
+
+    @@keyframes modal-fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .friends-modal-card {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 18px;
+        width: 100%;
+        max-width: 310px;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+        text-align: center;
+        position: relative;
+    }
+
+    .modal-icon {
+        font-size: 1.8rem;
+        margin-bottom: 8px;
+    }
+
+    .modal-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 6px;
+    }
+
+    .modal-desc {
+        font-size: 0.8rem;
+        color: #64748b;
+        margin-bottom: 14px;
+        line-height: 1.4;
+    }
+
+    .modal-buttons {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+    }
+
+    .modal-buttons .btn-cancel {
+        flex: 1;
+        padding: 7px 12px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        border-radius: 8px;
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        color: #475569;
+        cursor: pointer;
+    }
+
+    .modal-buttons .btn-confirm-delete {
+        flex: 1;
+        padding: 7px 12px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        border-radius: 8px;
+        background: #ef4444;
+        border: none;
+        color: #ffffff;
+        cursor: pointer;
+    }
+
+    .modal-buttons .btn-confirm-delete:hover {
+        background: #dc2626;
+    }
+
+    /* Detail card */
+    .detail-modal-card {
+        padding: 22px 18px 18px 18px;
+    }
+
+    .modal-close-x {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: none;
+        border: none;
+        color: #94a3b8;
+        font-size: 0.85rem;
+        cursor: pointer;
+    }
+
+    .detail-avatar-wrap {
+        position: relative;
+        display: inline-block;
+        margin-bottom: 8px;
+    }
+
+    .detail-avatar {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.6rem;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .detail-dot {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 2px solid #ffffff;
+    }
+
+    .detail-dot.online { background: #10b981; }
+    .detail-dot.offline { background: #cbd5e1; }
+
+    .detail-fullname {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+    }
+
+    .detail-username {
+        font-size: 0.8rem;
+        color: #2563eb;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .detail-badges {
+        display: flex;
+        gap: 6px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
+
+    .detail-bio {
+        font-size: 0.78rem;
+        color: #64748b;
+        font-style: italic;
+        background: #f8fafc;
+        border-radius: 8px;
+        padding: 6px 10px;
+        margin-bottom: 10px;
+    }
+
+    .detail-status-line {
+        font-size: 0.75rem;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private FriendsSummaryDto? summary;
+    private bool isLoading = true;
+    private string activeTab = "friends"; // "friends", "requests", "search"
+    private string currentUsername = "";
+
+    // Search state
+    private string searchQuery = "";
+    private bool isSearching = false;
+    private List<UserSearchResultDto> searchResults = new();
+    private CancellationTokenSource? searchCts;
+
+    // Modals
+    private FriendDto? unfriendTarget;
+    private FriendDto? selectedDetailUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        FriendSvc.OnChange += HandleFriendServiceChanged;
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            currentUsername = user.FindFirst(ClaimTypes.Name)?.Value ?? user.Identity?.Name ?? "";
+        }
+        catch { }
+
+        await LoadDataAsync();
+    }
+
+    private void HandleFriendServiceChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+        summary = await FriendSvc.GetSummaryAsync();
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void SwitchTab(string tab)
+    {
+        activeTab = tab;
+    }
+
+    private async Task HandleSearchInput(ChangeEventArgs e)
+    {
+        searchQuery = e.Value?.ToString() ?? "";
+        searchCts?.Cancel();
+
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            searchResults.Clear();
+            isSearching = false;
+            if (activeTab == "search") activeTab = "friends";
+            return;
+        }
+
+        activeTab = "search";
+        isSearching = true;
+        StateHasChanged();
+
+        searchCts = new CancellationTokenSource();
+        var token = searchCts.Token;
+
+        try
+        {
+            await Task.Delay(300, token);
+            if (!token.IsCancellationRequested)
+            {
+                searchResults = await FriendSvc.SearchUsersAsync(searchQuery);
+            }
+        }
+        catch (TaskCanceledException) { }
+        finally
+        {
+            isSearching = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearSearch()
+    {
+        searchQuery = "";
+        searchResults.Clear();
+        activeTab = "friends";
+    }
+
+    private async Task HandleSendRequest(int targetUserId)
+    {
+        var success = await FriendSvc.SendFriendRequestAsync(targetUserId);
+        if (success)
+        {
+            var item = searchResults.FirstOrDefault(u => u.Id == targetUserId);
+            if (item != null) item.Relationship = "PendingOutgoing";
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task HandleAcceptRequest(int friendshipId)
+    {
+        var success = await FriendSvc.AcceptFriendRequestAsync(friendshipId);
+        if (success)
+        {
+            await LoadDataAsync();
+            var searchItem = searchResults.FirstOrDefault(u => u.FriendshipId == friendshipId);
+            if (searchItem != null) searchItem.Relationship = "Friends";
+        }
+    }
+
+    private async Task HandleDeclineRequest(int friendshipId)
+    {
+        var success = await FriendSvc.DeclineFriendRequestAsync(friendshipId);
+        if (success)
+        {
+            await LoadDataAsync();
+            var searchItem = searchResults.FirstOrDefault(u => u.FriendshipId == friendshipId);
+            if (searchItem != null) searchItem.Relationship = "None";
+        }
+    }
+
+    private async Task HandleCancelRequestByFriendshipId(int? friendshipId)
+    {
+        if (!friendshipId.HasValue) return;
+        var success = await FriendSvc.CancelFriendRequestAsync(friendshipId.Value);
+        if (success)
+        {
+            await LoadDataAsync();
+            var searchItem = searchResults.FirstOrDefault(u => u.FriendshipId == friendshipId.Value);
+            if (searchItem != null) searchItem.Relationship = "None";
+        }
+    }
+
+    private async Task HandleToggleFavorite(int friendId)
+    {
+        var success = await FriendSvc.ToggleFavoriteAsync(friendId);
+        if (success)
+        {
+            var item = summary?.Friends.FirstOrDefault(f => f.Id == friendId);
+            if (item != null) item.IsFavorite = !item.IsFavorite;
+            StateHasChanged();
+        }
+    }
+
+    private void ConfirmUnfriend(FriendDto friend)
+    {
+        unfriendTarget = friend;
+    }
+
+    private async Task ExecuteUnfriendAsync()
+    {
+        if (unfriendTarget == null) return;
+        var targetId = unfriendTarget.Id;
+        unfriendTarget = null;
+        var success = await FriendSvc.RemoveFriendAsync(targetId);
+        if (success)
+        {
+            await LoadDataAsync();
+            var searchItem = searchResults.FirstOrDefault(u => u.Id == targetId);
+            if (searchItem != null) searchItem.Relationship = "None";
+        }
+    }
+
+    private void SelectFriendDetail(FriendDto friend)
+    {
+        selectedDetailUser = friend;
+    }
+
+    private async Task HandleClose()
+    {
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+
+    private static string GetTimeAgo(DateTime? dt)
+    {
+        if (!dt.HasValue) return "Lâu rồi";
+        var diff = DateTime.UtcNow - dt.Value;
+        if (diff.TotalMinutes < 1) return "Vừa xong";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} phút trước";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} giờ trước";
+        if (diff.TotalDays < 30) return $"{(int)diff.TotalDays} ngày trước";
+        return dt.Value.ToString("dd/MM/yyyy");
+    }
+
+    public void Dispose()
+    {
+        FriendSvc.OnChange -= HandleFriendServiceChanged;
+        searchCts?.Dispose();
+    }
+}
