@@ -9,20 +9,22 @@ using Backend.Application.DTOs;
 using Backend.Domain.Entities;
 using Backend.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Backend.Infrastructure.Services;
 
-public class AuthService(AppDbContext dbContext, IConfiguration configuration) : IAuthService
+public class AuthService(AppDbContext dbContext, IConfiguration configuration, IMemoryCache cache) : IAuthService
 {
-    // Access token (JWT) sống ngắn, phiên dài hạn được bảo đảm bởi refresh token
-    private const double AccessTokenDays = 1;
+    // Access token (JWT) sống ngắn (30 phút cho học viên, 12 giờ cho quản trị viên), phiên dài hạn được bảo đảm bởi refresh token
+    private static readonly TimeSpan AccessTokenDuration = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan AdminTokenDuration = TimeSpan.FromHours(12);
     private const int RefreshTokenDays = 30;
 
-    // Cho phép tái sử dụng refresh token đã xoay vòng trong khoảng thời gian ngắn
+    // Cho phép tái sử dụng refresh token đã xoay vòng trong khoảng thời gian ngắn (10s)
     // để các tab/cấu hình trình duyệt refresh gần như đồng thời không bị văng phiên
-    private const double ReuseGraceSeconds = 90;
+    private const double ReuseGraceSeconds = 10;
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
     {
@@ -31,6 +33,12 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
         SecuritySanitizer.ValidateSafeText(request.Username, "Tên đăng nhập");
         SecuritySanitizer.ValidateSafeText(request.Email, "Email");
         SecuritySanitizer.ValidateSafeText(request.Password, "Mật khẩu");
+
+        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8 ||
+            !request.Password.Any(char.IsLetter) || !request.Password.Any(char.IsDigit))
+        {
+            throw new Exception("Mật khẩu phải có tối thiểu 8 ký tự, bao gồm cả chữ cái và chữ số.");
+        }
 
         var normalizedEmail = request.Email.Trim().ToLowerInvariant();
 
@@ -94,14 +102,33 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
         SecuritySanitizer.ValidateSafeText(request.Email, "Email");
 
         var input = request.ResolvedUsernameOrEmail.Trim().ToLowerInvariant();
+        var lockKey = $"lockout_user_{input}";
+        if (cache.TryGetValue(lockKey, out _))
+        {
+            throw new Exception("Tài khoản tạm thời bị khóa do nhập sai mật khẩu quá 5 lần. Vui lòng thử lại sau 15 phút.");
+        }
+
         var user = await dbContext.Users.SingleOrDefaultAsync(
             u => u.Email.ToLower() == input || u.Username.ToLower() == input, 
             cancellationToken);
         
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {
+            var failKey = $"login_fail_user_{input}";
+            var count = (cache.Get<int?>(failKey) ?? 0) + 1;
+            cache.Set(failKey, count, TimeSpan.FromMinutes(15));
+            if (count >= 5)
+            {
+                cache.Set(lockKey, true, TimeSpan.FromMinutes(15));
+                cache.Remove(failKey);
+                throw new Exception("Bạn đã nhập sai mật khẩu 5 lần. Tài khoản tạm thời bị khóa trong 15 phút.");
+            }
             throw new Exception("Tên đăng nhập / Email hoặc mật khẩu không đúng.");
         }
+
+        // Đăng nhập thành công -> xóa bộ đếm thất bại
+        cache.Remove($"login_fail_user_{input}");
+        cache.Remove(lockKey);
 
         if (!user.IsActive)
         {
@@ -129,14 +156,33 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
         SecuritySanitizer.ValidateSafeText(request.Email, "Email");
 
         var input = request.ResolvedUsernameOrEmail.Trim().ToLowerInvariant();
+        var lockKey = $"lockout_admin_{input}";
+        if (cache.TryGetValue(lockKey, out _))
+        {
+            throw new Exception("Tài khoản Quản trị viên tạm thời bị khóa do nhập sai mật khẩu quá 5 lần. Vui lòng thử lại sau 15 phút.");
+        }
+
         var admin = await dbContext.Admins.SingleOrDefaultAsync(
             a => a.Email.ToLower() == input || a.Username.ToLower() == input, 
             cancellationToken);
         
         if (admin == null || !BCrypt.Net.BCrypt.Verify(request.Password, admin.PasswordHash))
         {
+            var failKey = $"login_fail_admin_{input}";
+            var count = (cache.Get<int?>(failKey) ?? 0) + 1;
+            cache.Set(failKey, count, TimeSpan.FromMinutes(15));
+            if (count >= 5)
+            {
+                cache.Set(lockKey, true, TimeSpan.FromMinutes(15));
+                cache.Remove(failKey);
+                throw new Exception("Bạn đã nhập sai mật khẩu Quản trị viên 5 lần. Tài khoản tạm thời bị khóa trong 15 phút.");
+            }
             throw new Exception("Tên đăng nhập / Email hoặc mật khẩu Quản trị viên không đúng.");
         }
+
+        // Đăng nhập thành công -> xóa bộ đếm thất bại
+        cache.Remove($"login_fail_admin_{input}");
+        cache.Remove(lockKey);
 
         if (!admin.IsActive)
         {
@@ -146,7 +192,7 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
         admin.LastLoginAt = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var token = GenerateAdminJwtToken(admin, 30);
+        var token = GenerateAdminJwtToken(admin, AdminTokenDuration);
         return new AuthResponse(token, admin.FullName, admin.Email);
     }
 
@@ -318,9 +364,10 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             throw new Exception("Invalid refresh token.");
         }
 
+        var hashed = HashRefreshToken(raw);
         var stored = await dbContext.RefreshTokens
             .Include(t => t.User)
-            .SingleOrDefaultAsync(t => t.Token == raw, cancellationToken);
+            .SingleOrDefaultAsync(t => t.Token == hashed || t.Token == raw, cancellationToken);
 
         if (stored == null || stored.ExpiresAt <= DateTime.UtcNow)
         {
@@ -343,7 +390,7 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
 
         stored.RevokedAt ??= DateTime.UtcNow;
 
-        var newRefresh = IssueRefreshToken(user.Id);
+        var (newRefresh, newRawToken) = IssueRefreshToken(user.Id);
 
         // Dọn dẹp token cũ đã hết hạn/thu hồi quá lâu của user này
         // (token hiện tại vừa được thu hồi nên không bao giờ rơi vào mốc 7 ngày)
@@ -356,8 +403,8 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var token = GenerateJwtToken(user, AccessTokenDays);
-        return new AuthResponse(token, user.FullName, user.Email, null, newRefresh.Token, newRefresh.ExpiresAt);
+        var token = GenerateJwtToken(user, AccessTokenDuration);
+        return new AuthResponse(token, user.FullName, user.Email, null, newRawToken, newRefresh.ExpiresAt);
     }
 
     public async Task RevokeRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
@@ -365,25 +412,34 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
         var raw = refreshToken?.Trim();
         if (string.IsNullOrWhiteSpace(raw)) return;
 
+        var hashed = HashRefreshToken(raw);
         var stored = await dbContext.RefreshTokens
-            .SingleOrDefaultAsync(t => t.Token == raw && t.RevokedAt == null, cancellationToken);
+            .SingleOrDefaultAsync(t => (t.Token == hashed || t.Token == raw) && t.RevokedAt == null, cancellationToken);
         if (stored == null) return;
 
         stored.RevokedAt = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    private RefreshToken IssueRefreshToken(int userId)
+    private static string HashRefreshToken(string token)
     {
+        using var sha256 = SHA256.Create();
+        var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(token));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private (RefreshToken Entity, string RawToken) IssueRefreshToken(int userId)
+    {
+        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
         var token = new RefreshToken
         {
             UserId = userId,
-            Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
+            Token = HashRefreshToken(rawToken),
             CreatedAt = DateTime.UtcNow,
             ExpiresAt = DateTime.UtcNow.AddDays(RefreshTokenDays)
         };
         dbContext.RefreshTokens.Add(token);
-        return token;
+        return (token, rawToken);
     }
 
     private async Task<AuthResponse> CreateAuthResponseAsync(
@@ -391,8 +447,8 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
         CancellationToken cancellationToken,
         string? tempPassword = null)
     {
-        var token = GenerateJwtToken(user, AccessTokenDays);
-        var refresh = IssueRefreshToken(user.Id);
+        var token = GenerateJwtToken(user, AccessTokenDuration);
+        var (refresh, rawToken) = IssueRefreshToken(user.Id);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return new AuthResponse(
@@ -400,11 +456,11 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             user.FullName,
             user.Email,
             tempPassword,
-            refresh.Token,
+            rawToken,
             refresh.ExpiresAt);
     }
 
-    private string GenerateJwtToken(User user, double expireDays = 30)
+    private string GenerateJwtToken(User user, TimeSpan? duration = null)
     {
         var jwtSettings = configuration.GetSection("Jwt");
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]!));
@@ -423,14 +479,14 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             issuer: jwtSettings["Issuer"],
             audience: jwtSettings["Audience"],
             claims: claims,
-            expires: DateTime.UtcNow.AddDays(expireDays),
+            expires: DateTime.UtcNow.Add(duration ?? AccessTokenDuration),
             signingCredentials: creds
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private string GenerateAdminJwtToken(Admin admin, double expireDays = 30)
+    private string GenerateAdminJwtToken(Admin admin, TimeSpan? duration = null)
     {
         var jwtSettings = configuration.GetSection("Jwt");
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]!));
@@ -450,15 +506,40 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             issuer: jwtSettings["Issuer"],
             audience: jwtSettings["Audience"],
             claims: claims,
-            expires: DateTime.UtcNow.AddDays(expireDays),
+            expires: DateTime.UtcNow.Add(duration ?? AdminTokenDuration),
             signingCredentials: creds
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private string GenerateRandomPassword()
+    public static string GenerateSecureRandomPassword(int length = 16)
     {
-        return Guid.NewGuid().ToString("N").Substring(0, 8) + "@1Aa";
+        const string lower = "abcdefghjkmnpqrstuvwxyz";
+        const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        const string digits = "23456789";
+        const string special = "!@#$%^&*";
+        const string all = lower + upper + digits + special;
+
+        var bytes = RandomNumberGenerator.GetBytes(length);
+        var chars = new char[length];
+        chars[0] = lower[bytes[0] % lower.Length];
+        chars[1] = upper[bytes[1] % upper.Length];
+        chars[2] = digits[bytes[2] % digits.Length];
+        chars[3] = special[bytes[3] % special.Length];
+
+        for (int i = 4; i < length; i++)
+        {
+            chars[i] = all[bytes[i] % all.Length];
+        }
+
+        var shuffleBytes = RandomNumberGenerator.GetBytes(length);
+        for (int i = length - 1; i > 0; i--)
+        {
+            int j = shuffleBytes[i] % (i + 1);
+            (chars[i], chars[j]) = (chars[j], chars[i]);
+        }
+
+        return new string(chars);
     }
 }

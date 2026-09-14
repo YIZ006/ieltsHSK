@@ -2,8 +2,10 @@
 @layout Frontend.App.Layout.IeltsLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
+@using System.Text.Json
 @inject StoryService StoryService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Đọc truyện tiếng Anh theo trình độ - IELTS</PageTitle>
 
@@ -73,6 +75,15 @@
                     <option value="Xã hội & Văn hóa">Xã hội & Văn hóa</option>
                 </select>
             </div>
+
+            <button class="btn-saved-notebook" @onclick="OpenSavedVocabModal" title="Xem sổ từ vựng đã lưu khi đọc truyện">
+                <i class="bi bi-journal-bookmark-fill text-warning"></i>
+                <span>Sổ từ đã lưu</span>
+                @if (savedVocabCount > 0)
+                {
+                    <span class="badge-count">@savedVocabCount</span>
+                }
+            </button>
         </div>
     </div>
 
@@ -111,6 +122,12 @@
                             <div class="story-badges-overlay">
                                 <span class="badge-level level-@story.Level.ToLower()">@story.Level</span>
                                 <span class="badge-band">Band @story.IeltsBand</span>
+                                @if (completedStories.Contains(story.Slug))
+                                {
+                                    <span class="badge-completed" title="Đã hoàn thành bài đọc">
+                                        <i class="bi bi-check-circle-fill"></i> Đã đọc
+                                    </span>
+                                }
                             </div>
                             <span class="story-read-time">
                                 <i class="bi bi-clock"></i> ~@story.EstimatedMinutes phút
@@ -153,6 +170,68 @@
             </div>
         }
     </div>
+
+    <!-- Modal Sổ từ vựng đã lưu -->
+    @if (showSavedVocabModal)
+    {
+        <div class="saved-vocab-backdrop" @onclick="CloseSavedVocabModal">
+            <div class="saved-vocab-modal" @onclick:stopPropagation="true">
+                <div class="saved-vocab-header">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-journal-bookmark-fill text-warning fs-4"></i>
+                        <h3 class="mb-0">Sổ Từ Vựng Đã Lưu (@savedVocabList.Count từ)</h3>
+                    </div>
+                    <button class="btn-close-notebook" @onclick="CloseSavedVocabModal"><i class="bi bi-x-lg"></i></button>
+                </div>
+                <div class="saved-vocab-body">
+                    @if (savedVocabList.Count == 0)
+                    {
+                        <div class="empty-notebook text-center p-5">
+                            <i class="bi bi-bookmark-dash text-muted" style="font-size: 3rem;"></i>
+                            <h4 class="mt-3 text-muted">Sổ từ vựng đang trống</h4>
+                            <p class="text-secondary">Trong khi đọc truyện, hãy chạm vào bất kỳ từ nào và chọn <b>"Lưu vào sổ từ vựng"</b> để tích lũy vốn từ nhé!</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="saved-cards-list">
+                            @foreach (var item in savedVocabList)
+                            {
+                                <div class="saved-card-item">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="word-text">@item.Word</span>
+                                        @if (!string.IsNullOrEmpty(item.Pos))
+                                        {
+                                            <span class="pos-badge">@item.Pos</span>
+                                        }
+                                        <button class="btn-audio-mini" @onclick="() => SpeakWord(item.Word)" title="Phát âm">
+                                            <i class="bi bi-volume-up-fill"></i>
+                                        </button>
+                                        <button class="btn-delete-mini ms-auto" @onclick="() => DeleteSavedWord(item.Word)" title="Xóa từ khỏi sổ">
+                                            <i class="bi bi-trash3"></i>
+                                        </button>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(item.Phonetic))
+                                    {
+                                        <div class="phonetic-text">@item.Phonetic</div>
+                                    }
+                                    <div class="meaning-text">@item.Meaning</div>
+                                    @if (!string.IsNullOrEmpty(item.Example))
+                                    {
+                                        <div class="example-text">"@item.Example"</div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(item.StoryTitle))
+                                    {
+                                        <div class="source-text"><i class="bi bi-book"></i> Nguồn: @item.StoryTitle</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -166,9 +245,46 @@
 
     private readonly string[] levels = { "Tất cả", "A1", "A2", "B1", "B2", "C1", "C2" };
 
+    private HashSet<string> completedStories = new();
+    private int savedVocabCount = 0;
+    private bool showSavedVocabModal = false;
+    private List<SavedStoryVocabItem> savedVocabList = new();
+
     protected override async Task OnInitializedAsync()
     {
         await LoadStories();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadSavedVocabAndProgress();
+        }
+    }
+
+    private async Task LoadSavedVocabAndProgress()
+    {
+        try
+        {
+            var savedJson = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "ieltshsk_saved_vocabulary");
+            if (!string.IsNullOrEmpty(savedJson))
+            {
+                savedVocabList = JsonSerializer.Deserialize<List<SavedStoryVocabItem>>(savedJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+                savedVocabCount = savedVocabList.Count;
+            }
+
+            foreach (var story in allStories)
+            {
+                var done = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", $"story_completed_{story.Slug}");
+                if (done == "true")
+                {
+                    completedStories.Add(story.Slug);
+                }
+            }
+            StateHasChanged();
+        }
+        catch { }
     }
 
     private async Task LoadStories()
@@ -226,5 +342,28 @@
     private void ReadStory(string slug)
     {
         NavigationManager.NavigateTo($"/ielts/doc-truyen/{slug}");
+    }
+
+    private void OpenSavedVocabModal()
+    {
+        showSavedVocabModal = true;
+    }
+
+    private void CloseSavedVocabModal()
+    {
+        showSavedVocabModal = false;
+    }
+
+    private async Task SpeakWord(string word)
+    {
+        await JSRuntime.InvokeVoidAsync("speakText", word, "en-US", 0.9);
+    }
+
+    private async Task DeleteSavedWord(string word)
+    {
+        savedVocabList.RemoveAll(x => x.Word.Equals(word, StringComparison.OrdinalIgnoreCase));
+        savedVocabCount = savedVocabList.Count;
+        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "ieltshsk_saved_vocabulary", JsonSerializer.Serialize(savedVocabList));
+        StateHasChanged();
     }
 }

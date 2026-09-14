@@ -3,8 +3,10 @@ using Backend.Application.Abstractions;
 using Backend.Application.DTOs;
 using Backend.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -21,14 +23,58 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
 });
+
+// Giới hạn kích thước body upload tối đa 50MB (audio, ảnh, excel) để chống tấn công DoS
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 50 * 1024 * 1024;
+});
+
+// Cấu hình CORS an toàn: Không dùng wildcard tự do khi bật AllowCredentials()
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(frontendCorsPolicy, policy =>
     {
-        policy.SetIsOriginAllowed(_ => true)
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
+        var allowedOriginsConfig = builder.Configuration["Cors:AllowedOrigins"] 
+            ?? builder.Configuration["Frontend:BaseUrl"];
+        var configuredOrigins = (allowedOriginsConfig ?? "")
+            .Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        policy.SetIsOriginAllowed(origin =>
+        {
+            if (string.IsNullOrWhiteSpace(origin)) return false;
+
+            // Trong môi trường Development: cho phép toàn bộ localhost và 127.0.0.1 trên mọi cổng
+            if (builder.Environment.IsDevelopment())
+            {
+                if (Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+                {
+                    if (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                        uri.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            // Kiểm tra danh sách origin được cấu hình (ví dụ domain production)
+            return configuredOrigins.Any(allowed => string.Equals(allowed, origin, StringComparison.OrdinalIgnoreCase));
+        })
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials();
+    });
+});
+
+// Rate Limiting cho các endpoint xác thực (tối đa 15 request/phút) chống brute-force và DDoS
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddFixedWindowLimiter("auth", opt =>
+    {
+        opt.PermitLimit = 15;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 0;
     });
 });
 
@@ -36,15 +82,28 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         var jwtSettings = builder.Configuration.GetSection("Jwt");
+        var jwtKey = jwtSettings["Key"] ?? Environment.GetEnvironmentVariable("JWT_SECRET");
+        if (string.IsNullOrWhiteSpace(jwtKey))
+        {
+            throw new InvalidOperationException("Cấu hình Jwt:Key không được để trống.");
+        }
+        if (!builder.Environment.IsDevelopment() && jwtKey.Contains("SuperSecretKeyThatIsAtLeast32BytesLongForHSK"))
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("[SECURITY ALERT] Jwt:Key đang sử dụng khóa mẫu mặc định trong môi trường Non-Development! Hãy thiết lập biến môi trường Jwt__Key.");
+            Console.ResetColor();
+        }
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
+            ClockSkew = TimeSpan.FromSeconds(30),
             ValidIssuer = jwtSettings["Issuer"],
             ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]!))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
         // Chặn token của tài khoản bị khoá/xoá ngay cả khi JWT còn hạn
         options.Events = new JwtBearerEvents
@@ -131,12 +190,33 @@ _ = Task.Run(async () =>
     }
 });
 
-// Enable Swagger in all environments
-app.UseSwagger();
-app.UseSwaggerUI();
+// Swagger: Chỉ bật trong môi trường Development hoặc khi có cấu hình EnableSwagger = true
+if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("EnableSwagger", false))
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+    app.UseHttpsRedirection();
+}
+
+// Security Headers Middleware: Bảo vệ chống MIME sniffing, clickjacking, và rò rỉ referrer
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-Frame-Options", "SAMEORIGIN");
+    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    context.Response.Headers.Append("X-XSS-Protection", "1; mode=block");
+    // Cho phép microphone phục vụ chức năng luyện nói IELTS Speaking, chặn các quyền không cần thiết
+    context.Response.Headers.Append("Permissions-Policy", "microphone=(self), camera=(), geolocation=()");
+    await next();
+});
 
 app.UseCors(frontendCorsPolicy);
-
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -889,14 +969,14 @@ app.MapPost("/api/auth/register", async (RegisterRequest request, IAuthService a
     {
         return Results.BadRequest(ex.Message);
     }
-});
+}).RequireRateLimiting("auth");
 
 app.MapGet("/api/auth/check-username", async (string? username, IAuthService authService, CancellationToken cancellationToken) =>
 {
     if (string.IsNullOrWhiteSpace(username)) return Results.Ok(new { isTaken = false });
     var isTaken = await authService.IsUsernameTakenAsync(username, cancellationToken);
     return Results.Ok(new { isTaken });
-});
+}).RequireRateLimiting("auth");
 
 app.MapPost("/api/auth/login", async (LoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
 {
@@ -909,7 +989,7 @@ app.MapPost("/api/auth/login", async (LoginRequest request, IAuthService authSer
     {
         return Results.BadRequest(ex.Message);
     }
-});
+}).RequireRateLimiting("auth");
 
 app.MapPost("/api/admin/auth/login", async (LoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
 {
@@ -922,7 +1002,7 @@ app.MapPost("/api/admin/auth/login", async (LoginRequest request, IAuthService a
     {
         return Results.BadRequest(ex.Message);
     }
-});
+}).RequireRateLimiting("auth");
 
 app.MapPost("/api/auth/google-login", async (GoogleLoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
 {
@@ -935,7 +1015,7 @@ app.MapPost("/api/auth/google-login", async (GoogleLoginRequest request, IAuthSe
     {
         return Results.BadRequest(ex.Message);
     }
-});
+}).RequireRateLimiting("auth");
 
 app.MapPost("/api/auth/google-register", async (GoogleLoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
 {
@@ -948,7 +1028,7 @@ app.MapPost("/api/auth/google-register", async (GoogleLoginRequest request, IAut
     {
         return Results.BadRequest(ex.Message);
     }
-});
+}).RequireRateLimiting("auth");
 
 // Gia hạn phiên đăng nhập: đổi refresh token lấy access token + refresh token mới (rotation)
 app.MapPost("/api/auth/refresh", async (RefreshRequest request, IAuthService authService, CancellationToken cancellationToken) =>
@@ -962,7 +1042,7 @@ app.MapPost("/api/auth/refresh", async (RefreshRequest request, IAuthService aut
     {
         return Results.BadRequest(ex.Message);
     }
-});
+}).RequireRateLimiting("auth");
 
 // Đăng xuất: thu hồi refresh token phía server
 app.MapPost("/api/auth/logout", async (RefreshRequest request, IAuthService authService, CancellationToken cancellationToken) =>
@@ -2849,7 +2929,168 @@ app.MapPost("/api/stories/{id}/quiz-submit", async (int id, Backend.Application.
     return Results.Ok(result);
 });
 
+// DICTIONARY LOOKUP API FOR STORIES & IELTS
+app.MapGet("/api/dictionary/lookup", async (string? word, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(word))
+    {
+        return Results.BadRequest(new { Message = "Từ tra cứu không được để trống." });
+    }
+
+    var cleanWord = word.Trim().ToLowerInvariant();
+    cleanWord = cleanWord.Trim(',', '.', '!', '?', '"', '“', '”', '\'', ':', ';', '(', ')', '-');
+    if (string.IsNullOrWhiteSpace(cleanWord))
+    {
+        return Results.BadRequest(new { Message = "Từ tra cứu không hợp lệ." });
+    }
+
+    var conn = Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.GetDbConnection(dbContext.Database);
+    if (conn.State != System.Data.ConnectionState.Open)
+    {
+        await conn.OpenAsync(cancellationToken);
+    }
+
+    async Task<Backend.Application.DTOs.StoryDictionaryLookupDto?> QueryDictAsync(string searchWord)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT word, lemma, phonetic, part_of_speech, meaning, definition_en, example, collocations
+            FROM public.story_dictionary
+            WHERE LOWER(word) = @w
+            LIMIT 1;
+        ";
+        var param = cmd.CreateParameter();
+        param.ParameterName = "@w";
+        param.Value = searchWord;
+        cmd.Parameters.Add(param);
+
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        if (await reader.ReadAsync(cancellationToken))
+        {
+            var collocations = new List<string>();
+            if (!reader.IsDBNull(7))
+            {
+                try
+                {
+                    var rawJson = reader.GetString(7);
+                    if (!string.IsNullOrEmpty(rawJson) && rawJson != "[]")
+                    {
+                        collocations = System.Text.Json.JsonSerializer.Deserialize<List<string>>(rawJson) ?? new();
+                    }
+                }
+                catch { }
+            }
+
+            return new Backend.Application.DTOs.StoryDictionaryLookupDto
+            {
+                Word = reader.IsDBNull(0) ? searchWord : reader.GetString(0),
+                Lemma = reader.IsDBNull(1) ? null : reader.GetString(1),
+                Phonetic = reader.IsDBNull(2) ? null : reader.GetString(2),
+                Pos = reader.IsDBNull(3) ? null : reader.GetString(3),
+                Meaning = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                DefinitionEn = reader.IsDBNull(5) ? null : reader.GetString(5),
+                Example = reader.IsDBNull(6) ? null : reader.GetString(6),
+                Collocations = collocations
+            };
+        }
+        return null;
+    }
+
+    // 1. Exact match lookup
+    var exact = await QueryDictAsync(cleanWord);
+    if (exact != null)
+    {
+        return Results.Ok(exact);
+    }
+
+    // 2. Lemmatization heuristics for inflected words
+    var candidates = new List<(string stem, string note)>();
+    if (cleanWord.EndsWith("ing") && cleanWord.Length > 4)
+    {
+        var raw = cleanWord[..^3];
+        candidates.Add((raw, "dạng tiếp diễn / V-ing"));
+        candidates.Add((raw + "e", "dạng tiếp diễn / V-ing"));
+        if (raw.Length > 2 && raw[^1] == raw[^2]) candidates.Add((raw[..^1], "dạng tiếp diễn / V-ing"));
+        if (raw.EndsWith("y")) candidates.Add((raw[..^1] + "ie", "dạng tiếp diễn / V-ing"));
+    }
+    if (cleanWord.EndsWith("ed") && cleanWord.Length > 3)
+    {
+        var raw = cleanWord[..^2];
+        candidates.Add((raw, "dạng quá khứ / phân từ"));
+        candidates.Add((raw + "e", "dạng quá khứ / phân từ"));
+        if (raw.EndsWith("i")) candidates.Add((raw[..^1] + "y", "dạng quá khứ / phân từ"));
+        if (raw.Length > 2 && raw[^1] == raw[^2]) candidates.Add((raw[..^1], "dạng quá khứ / phân từ"));
+    }
+    if (cleanWord.EndsWith("es") && cleanWord.Length > 3)
+    {
+        candidates.Add((cleanWord[..^2], "dạng số nhiều / ngôi thứ 3"));
+        candidates.Add((cleanWord[..^1], "dạng số nhiều / ngôi thứ 3"));
+    }
+    else if (cleanWord.EndsWith("s") && cleanWord.Length > 2)
+    {
+        candidates.Add((cleanWord[..^1], "dạng số nhiều / ngôi thứ 3"));
+    }
+    if (cleanWord.EndsWith("ly") && cleanWord.Length > 3)
+    {
+        candidates.Add((cleanWord[..^2], "phó từ"));
+        candidates.Add((cleanWord[..^2] + "e", "phó từ"));
+        if (cleanWord.EndsWith("ily")) candidates.Add((cleanWord[..^3] + "y", "phó từ"));
+    }
+
+    foreach (var (stem, note) in candidates)
+    {
+        var match = await QueryDictAsync(stem);
+        if (match != null)
+        {
+            var res = new Backend.Application.DTOs.StoryDictionaryLookupDto
+            {
+                Word = cleanWord,
+                Lemma = match.Word,
+                Phonetic = match.Phonetic,
+                Pos = match.Pos,
+                Meaning = $"{match.Meaning} ({note} của \"{match.Word}\")",
+                DefinitionEn = match.DefinitionEn,
+                Example = match.Example,
+                Collocations = match.Collocations
+            };
+
+            // Cache back into story_dictionary for 0ms lookup next time
+            try
+            {
+                using var insertCmd = conn.CreateCommand();
+                insertCmd.CommandText = @"
+                    INSERT INTO public.story_dictionary (word, lemma, phonetic, part_of_speech, meaning, example)
+                    VALUES (@w, @l, @ph, @pos, @m, @eg)
+                    ON CONFLICT (word) DO NOTHING;
+                ";
+                var pW = insertCmd.CreateParameter(); pW.ParameterName = "@w"; pW.Value = cleanWord; insertCmd.Parameters.Add(pW);
+                var pL = insertCmd.CreateParameter(); pL.ParameterName = "@l"; pL.Value = match.Word; insertCmd.Parameters.Add(pL);
+                var pPh = insertCmd.CreateParameter(); pPh.ParameterName = "@ph"; pPh.Value = (object?)match.Phonetic ?? DBNull.Value; insertCmd.Parameters.Add(pPh);
+                var pPos = insertCmd.CreateParameter(); pPos.ParameterName = "@pos"; pPos.Value = (object?)match.Pos ?? DBNull.Value; insertCmd.Parameters.Add(pPos);
+                var pM = insertCmd.CreateParameter(); pM.ParameterName = "@m"; pM.Value = res.Meaning; insertCmd.Parameters.Add(pM);
+                var pEg = insertCmd.CreateParameter(); pEg.ParameterName = "@eg"; pEg.Value = (object?)match.Example ?? DBNull.Value; insertCmd.Parameters.Add(pEg);
+                await insertCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+            catch { }
+
+            return Results.Ok(res);
+        }
+    }
+
+    // 3. Fallback
+    return Results.Ok(new Backend.Application.DTOs.StoryDictionaryLookupDto
+    {
+        Word = cleanWord,
+        Lemma = cleanWord,
+        Phonetic = "",
+        Pos = "từ vựng",
+        Meaning = $"Từ: {cleanWord} (Chạm Cambridge Dict để tra cứu chi tiết)",
+        Example = ""
+    });
+});
+
 // ADMIN STORIES API
+
 app.MapGet("/api/admin/stories",
         [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
@@ -4985,7 +5226,7 @@ app.MapPost("/api/admin/users/{id}/reset-password",
     var user = await dbContext.Users.FindAsync(new object[] { id }, cancellationToken);
     if (user == null) return Results.NotFound();
 
-    var tempPassword = Guid.NewGuid().ToString("N").Substring(0, 8) + "@1Aa";
+    var tempPassword = Backend.Infrastructure.Services.AuthService.GenerateSecureRandomPassword();
     user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(tempPassword);
     user.PasswordChangedAt = DateTime.UtcNow;
 

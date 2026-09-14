@@ -326,4 +326,35 @@ public class StoryService
         }
         catch { }
     }
+
+    private readonly Dictionary<string, StoryVocabulary> _wordLookupCache = new(StringComparer.OrdinalIgnoreCase);
+
+    public async Task<StoryVocabulary?> LookupWordAsync(string word)
+    {
+        if (string.IsNullOrWhiteSpace(word)) return null;
+
+        var clean = word.Trim().ToLowerInvariant();
+        if (_wordLookupCache.TryGetValue(clean, out var cached))
+        {
+            return cached;
+        }
+
+        try
+        {
+            var res = await _httpClient.GetFromJsonAsync<DictionaryLookupDto>($"api/dictionary/lookup?word={Uri.EscapeDataString(clean)}", JsonOptions);
+            if (res != null && !string.IsNullOrWhiteSpace(res.Meaning))
+            {
+                var vocab = res.ToStoryVocabulary();
+                _wordLookupCache[clean] = vocab;
+                return vocab;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error looking up word '{clean}': {ex.Message}");
+        }
+
+        return null;
+    }
 }
+

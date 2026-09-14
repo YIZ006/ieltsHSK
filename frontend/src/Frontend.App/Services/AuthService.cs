@@ -23,7 +23,7 @@ public class RegisterRequest
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập mật khẩu.")]
-    [MinLength(6, ErrorMessage = "Mật khẩu phải từ 6 ký tự trở lên.")]
+    [MinLength(8, ErrorMessage = "Mật khẩu phải từ 8 ký tự trở lên (bao gồm cả chữ cái và chữ số).")]
     public string Password { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng xác nhận mật khẩu.")]

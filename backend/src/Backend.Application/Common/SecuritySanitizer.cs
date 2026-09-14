@@ -10,16 +10,21 @@ public static class SecuritySanitizer
 {
     // Regex phát hiện các thẻ mã lệnh, thẻ nhúng và cấu trúc nguy hiểm
     private static readonly Regex DangerousTagsRegex = new(
-        @"<\s*(script|iframe|object|embed|applet|meta|link|style|form|input|button|svg|base|body|html)[^>]*>",
+        @"<\s*(script|iframe|object|embed|applet|meta|link|style|form|input|button|svg|base|body|html|video|audio|source|picture|template|details|dialog|marquee)[^>]*>",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex ClosingDangerousTagsRegex = new(
-        @"<\s*/\s*(script|iframe|object|embed|applet|meta|link|style|form|input|button|svg|base|body|html)[^>]*>",
+        @"<\s*/\s*(script|iframe|object|embed|applet|meta|link|style|form|input|button|svg|base|body|html|video|audio|source|picture|template|details|dialog|marquee)[^>]*>",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // Regex phát hiện các event handlers HTML (onclick=, onerror=, onload=, onmouseover=,...)
     private static readonly Regex EventHandlersRegex = new(
         @"\bon[a-zA-Z]+\s*=",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Regex phát hiện bất kỳ thẻ HTML nào kèm theo event handler (ví dụ <img src=x onerror=...>)
+    private static readonly Regex TagWithEventHandlerRegex = new(
+        @"<[a-zA-Z0-9_-]+[^>]*\bon[a-zA-Z]+\s*=",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // Regex phát hiện các URI scheme thực thi mã (javascript:, vbscript:, data:text/html)
@@ -39,20 +44,26 @@ public static class SecuritySanitizer
     {
         if (string.IsNullOrWhiteSpace(input)) return false;
 
-        // Giải mã URL-encoded và HTML entities để bắt các thủ thuật mã hóa bypass (ví dụ %3Cscript%3E hoặc &lt;script&gt;)
+        // Giải mã nhiều lớp URL-encoded và HTML entities để chống kỹ thuật bypass double encoding
         string decoded = input;
-        try
+        for (int i = 0; i < 2; i++)
         {
-            decoded = HttpUtility.HtmlDecode(HttpUtility.UrlDecode(input));
-        }
-        catch
-        {
-            decoded = input;
+            try
+            {
+                var step = HttpUtility.HtmlDecode(HttpUtility.UrlDecode(decoded));
+                if (step == decoded) break;
+                decoded = step;
+            }
+            catch
+            {
+                break;
+            }
         }
 
         return DangerousTagsRegex.IsMatch(decoded)
             || ClosingDangerousTagsRegex.IsMatch(decoded)
             || EventHandlersRegex.IsMatch(decoded)
+            || TagWithEventHandlerRegex.IsMatch(decoded)
             || ScriptSchemesRegex.IsMatch(decoded)
             || DangerousFunctionsRegex.IsMatch(decoded);
     }
@@ -81,6 +92,7 @@ public static class SecuritySanitizer
         cleaned = DangerousTagsRegex.Replace(cleaned, string.Empty);
         cleaned = ClosingDangerousTagsRegex.Replace(cleaned, string.Empty);
         cleaned = EventHandlersRegex.Replace(cleaned, string.Empty);
+        cleaned = TagWithEventHandlerRegex.Replace(cleaned, string.Empty);
         cleaned = ScriptSchemesRegex.Replace(cleaned, string.Empty);
         cleaned = DangerousFunctionsRegex.Replace(cleaned, string.Empty);
 

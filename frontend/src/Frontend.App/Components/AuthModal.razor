@@ -200,8 +200,8 @@
         if (string.IsNullOrEmpty(pwd)) return 0;
 
         int score = 0;
-        if (pwd.Length >= 6) score++;
-        if (pwd.Length >= 10) score++;
+        if (pwd.Length >= 8) score++;
+        if (pwd.Length >= 12) score++;
         if (System.Text.RegularExpressions.Regex.IsMatch(pwd, @"[a-z]") && System.Text.RegularExpressions.Regex.IsMatch(pwd, @"[A-Z]")) score++;
         if (System.Text.RegularExpressions.Regex.IsMatch(pwd, @"[0-9]")) score++;
         if (System.Text.RegularExpressions.Regex.IsMatch(pwd, @"[^a-zA-Z0-9]")) score++;

@@ -82,3 +82,41 @@ public class StoryQuizResultModel
     public List<int> CorrectIndices { get; set; } = new();
     public List<string> Explanations { get; set; } = new();
 }
+
+public class SavedStoryVocabItem
+{
+    public string Word { get; set; } = string.Empty;
+    public string Pos { get; set; } = string.Empty;
+    public string Phonetic { get; set; } = string.Empty;
+    public string Meaning { get; set; } = string.Empty;
+    public string Example { get; set; } = string.Empty;
+    public string StorySlug { get; set; } = string.Empty;
+    public string StoryTitle { get; set; } = string.Empty;
+    public DateTime SavedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class DictionaryLookupDto
+{
+    public string Word { get; set; } = string.Empty;
+    public string? Lemma { get; set; }
+    public string? Phonetic { get; set; }
+    public string? Pos { get; set; }
+    public string Meaning { get; set; } = string.Empty;
+    public string? DefinitionEn { get; set; }
+    public string? Example { get; set; }
+    public List<string> Collocations { get; set; } = new();
+
+    public StoryVocabulary ToStoryVocabulary()
+    {
+        return new StoryVocabulary
+        {
+            Word = Word,
+            Phonetic = Phonetic ?? string.Empty,
+            Pos = Pos ?? string.Empty,
+            Meaning = Meaning,
+            Example = Example ?? string.Empty,
+            Collocations = Collocations ?? new List<string>()
+        };
+    }
+}
+

@@ -750,6 +750,16 @@ public static class DependencyInjection
         }
         // Seed TOEIC Vocabulary
         await ToeicVocabSeedData.SeedToeicVocabularyAsync(dbContext);
+
+        // Seed Graded Reader Stories
+        try
+        {
+            await Persistence.StorySeedData.SeedStoriesAsync(dbContext);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SeedData] Story seeding note: {ex.Message}");
+        }
     }
 }
 
