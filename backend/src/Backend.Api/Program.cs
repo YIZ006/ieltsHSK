@@ -1256,9 +1256,11 @@ app.MapGet("/api/friends/search", [Microsoft.AspNetCore.Authorization.Authorize]
 {
     var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
                        ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    Console.WriteLine($"[Friends API Search] q='{q}', user='{userIdString}'");
     if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
 
     var results = await friendshipService.SearchUsersAsync(userId, q ?? string.Empty, cancellationToken);
+    Console.WriteLine($"[Friends API Search] Found {results.Count} results for q='{q}'");
     return Results.Ok(results);
 });
 

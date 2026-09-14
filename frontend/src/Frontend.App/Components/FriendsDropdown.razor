@@ -40,12 +40,15 @@
     @* ── SEARCH BAR (@DisplayName) ── *@
     <div class="friends-pop-search-bar">
         <div class="friends-search-box">
-            <i class="bi bi-search search-icon"></i>
+            <button type="button" class="search-icon-btn" @onclick="ExecuteSearchNowAsync" title="Nhấn để tìm kiếm">
+                <i class="bi bi-search search-icon"></i>
+            </button>
             <input type="text"
                    class="friends-search-input"
-                   placeholder="Tìm theo @@tên hiển thị (vd: cuongnane)..."
+                   placeholder="Tìm theo @@tên hiển thị, tên hoặc email..."
                    value="@searchQuery"
-                   @oninput="HandleSearchInput" />
+                   @oninput="HandleSearchInput"
+                   @onkeydown="HandleSearchKeyDown" />
             @if (!string.IsNullOrEmpty(searchQuery))
             {
                 <button type="button" class="search-clear-btn" @onclick="ClearSearch" title="Xóa tìm kiếm">
@@ -105,7 +108,15 @@
                 {
                     <div class="friends-loading-state">
                         <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                        <span>Đang tìm kiếm "@@@searchQuery"...</span>
+                        <span>Đang tìm kiếm "@searchQuery"...</span>
+                    </div>
+                }
+                else if (!string.IsNullOrEmpty(searchErrorMessage))
+                {
+                    <div class="friends-empty-state">
+                        <div class="empty-emoji">⚠️</div>
+                        <div class="empty-title text-danger">Có lỗi khi tìm kiếm</div>
+                        <div class="empty-desc">@searchErrorMessage</div>
                     </div>
                 }
                 else if (searchResults.Count == 0)
@@ -547,12 +558,30 @@
         align-items: center;
     }
 
-    .friends-search-box .search-icon {
+    .search-icon-btn {
         position: absolute;
-        left: 10px;
+        left: 8px;
+        background: transparent;
+        border: none;
+        padding: 4px;
         color: #94a3b8;
         font-size: 0.85rem;
-        pointer-events: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2;
+        border-radius: 4px;
+        transition: color 0.15s;
+    }
+
+    .search-icon-btn:hover {
+        color: #3b82f6;
+    }
+
+    .friends-search-box .search-icon {
+        color: inherit;
+        font-size: 0.85rem;
     }
 
     .friends-search-input {
@@ -1208,6 +1237,7 @@
     // Search state
     private string searchQuery = "";
     private bool isSearching = false;
+    private string? searchErrorMessage;
     private List<UserSearchResultDto> searchResults = new();
     private CancellationTokenSource? searchCts;
 
@@ -1254,45 +1284,97 @@
         activeTab = tab;
     }
 
-    private async Task HandleSearchInput(ChangeEventArgs e)
+    private void HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _ = ExecuteSearchNowAsync();
+        }
+    }
+
+    private async Task ExecuteSearchNowAsync()
+    {
+        searchCts?.Cancel();
+        searchCts = new CancellationTokenSource();
+        await PerformSearchAsync(searchQuery, searchCts.Token);
+    }
+
+    private void HandleSearchInput(ChangeEventArgs e)
     {
         searchQuery = e.Value?.ToString() ?? "";
-        searchCts?.Cancel();
+        TriggerSearchDebounced();
+    }
 
-        if (string.IsNullOrWhiteSpace(searchQuery))
+    private void TriggerSearchDebounced()
+    {
+        searchCts?.Cancel();
+        searchCts = new CancellationTokenSource();
+        var token = searchCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(350, token);
+                if (!token.IsCancellationRequested)
+                {
+                    await InvokeAsync(() => PerformSearchAsync(searchQuery, token));
+                }
+            }
+            catch (TaskCanceledException) { }
+        });
+    }
+
+    private async Task PerformSearchAsync(string query, CancellationToken token)
+    {
+        var clean = query?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(clean))
         {
             searchResults.Clear();
+            searchErrorMessage = null;
             isSearching = false;
             if (activeTab == "search") activeTab = "friends";
+            StateHasChanged();
             return;
         }
 
         activeTab = "search";
         isSearching = true;
+        searchErrorMessage = null;
         StateHasChanged();
-
-        searchCts = new CancellationTokenSource();
-        var token = searchCts.Token;
 
         try
         {
-            await Task.Delay(300, token);
+            var results = await FriendSvc.SearchUsersAsync(clean);
             if (!token.IsCancellationRequested)
             {
-                searchResults = await FriendSvc.SearchUsersAsync(searchQuery);
+                searchResults = results ?? new();
+                searchErrorMessage = null;
             }
         }
-        catch (TaskCanceledException) { }
+        catch (Exception ex)
+        {
+            if (!token.IsCancellationRequested)
+            {
+                searchErrorMessage = "Không thể tìm kiếm lúc này. Vui lòng thử lại.";
+                Console.WriteLine($"[FriendsDropdown] Search error: {ex.Message}");
+            }
+        }
         finally
         {
-            isSearching = false;
-            StateHasChanged();
+            if (!token.IsCancellationRequested)
+            {
+                isSearching = false;
+                StateHasChanged();
+            }
         }
     }
 
     private void ClearSearch()
     {
+        searchCts?.Cancel();
         searchQuery = "";
+        searchErrorMessage = null;
         searchResults.Clear();
         activeTab = "friends";
     }

@@ -136,7 +136,8 @@ public class FriendshipService(AppDbContext dbContext) : IFriendshipService
             .AsNoTracking()
             .Where(u => u.IsActive && 
                         ((u.Username != null && EF.Functions.ILike(u.Username, $"%{clean}%")) || 
-                         (u.FullName != null && EF.Functions.ILike(u.FullName, $"%{clean}%"))))
+                         (u.FullName != null && EF.Functions.ILike(u.FullName, $"%{clean}%")) ||
+                         (u.Email != null && EF.Functions.ILike(u.Email, $"%{clean}%"))))
             .OrderByDescending(u => u.Username.ToLower() == clean)
             .ThenByDescending(u => u.Username.ToLower().StartsWith(clean))
             .ThenBy(u => u.Username)
