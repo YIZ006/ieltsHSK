@@ -17,30 +17,6 @@
 
 <div class="mocktests-container">
     <div class="main-content">
-        <!-- Mock Test Collection Header -->
-        <div class="collection-header">
-            <div class="collection-image">
-                <img src="/sample-data/mocktest-cover.png" alt="IELTS Mock Test" onerror="this.src='https://placehold.co/400x400/1e1e1e/FFF?text=IELTS+MOCK+TEST'" />
-            </div>
-            <div class="collection-info">
-                <h1>IELTS Mock Test 2025 December</h1>
-                <div class="rating">
-                    <span class="score">4.8</span>
-                    <span class="stars">
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-fill"></i>
-                        <i class="bi bi-star-half"></i>
-                    </span>
-                    <span class="votes">(1,420 votes)</span>
-                </div>
-                <div class="meta">
-                    <p><i class="bi bi-calendar"></i> Xuất bản: <strong>Tháng 12/2025 - 2026</strong></p>
-                    <p><i class="bi bi-lightning-charge"></i> Lượt thi: <strong>130,816</strong></p>
-                </div>
-            </div>
-        </div>
 
         @if (!isOnline)
         {
@@ -82,211 +58,229 @@
         }
         else
         {
-            <div class="tests-grid">
-                @foreach (var test in mockTests)
-                {
-                    var lSub = GetLatestSub("Listening", test.ListeningUrl, test);
-                    var rSub = GetLatestSub("Reading", test.ReadingUrl, test);
-                    var wSub = GetLatestSub("Writing", test.WritingUrl, test);
-                    var sSub = GetLatestSub("Speaking", test.SpeakingUrl, test);
-                    bool hasAnyAttempt = lSub != null || rSub != null || wSub != null || sSub != null;
+            @* Group tests by CollectionName and render one section per collection *@
+            var groups = mockTests
+                .GroupBy(t => string.IsNullOrWhiteSpace(t.CollectionName) ? "Bộ đề khác" : t.CollectionName)
+                .OrderBy(g => mockTests.FindIndex(t => (string.IsNullOrWhiteSpace(t.CollectionName) ? "Bộ đề khác" : t.CollectionName) == g.Key));
 
-                    <div class="test-block">
-                        <div class="test-block-header">
-                            <div>
-                                @if (!string.IsNullOrWhiteSpace(test.CollectionName))
-                                {
-                                    <div class="test-collection-tag">
-                                        <i class="bi bi-collection"></i> @test.CollectionName
-                                    </div>
-                                }
-                                <h2>@test.Title</h2>
-                            </div>
-                            <div class="test-header-actions" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                @if (downloadingStatus.TryGetValue(test.Id, out var dlState))
-                                {
-                                    <div class="offline-downloading-pill" style="background: #eff6ff; color: #1d4ed8; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 6px; border: 1px solid #bfdbfe;">
-                                        <span class="spinner-border spinner-border-sm" role="status" style="width: 0.85rem; height: 0.85rem;"></span>
-                                        <span>@dlState.status (@dlState.progress%)</span>
-                                    </div>
-                                }
-                                else if (downloadedTestIds.Contains(test.Id))
-                                {
-                                    <div style="display: inline-flex; align-items: center; gap: 6px;">
-                                        <span class="badge" style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 6px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 4px;">
-                                            <i class="bi bi-check-circle-fill"></i> Sẵn sàng Offline
-                                        </span>
-                                        <button type="button" class="btn btn-sm btn-outline-danger" title="Xóa bản tải offline của đề này" style="padding: 2px 7px; border-radius: 6px; font-size: 0.78rem;" @onclick="() => DeleteDownloadedTest(test)">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </div>
-                                }
-                                else if (isOnline)
-                                {
-                                    <button type="button" class="btn btn-sm btn-outline-primary" style="padding: 5px 12px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; display: flex; align-items: center; gap: 6px;" @onclick="() => DownloadTest(test)">
-                                        <i class="bi bi-cloud-arrow-down-fill"></i> Tải học Offline
-                                    </button>
-                                }
-                                else
-                                {
-                                    <span class="badge" style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600;">
-                                        <i class="bi bi-cloud-slash me-1"></i> Chưa tải về
-                                    </span>
-                                }
-
-                                <button class="btn-summary-link @(hasAnyAttempt ? "has-data" : "")"
-                                        @onclick="() => OpenSummary(test)">
-                                    <i class="bi bi-bar-chart-fill"></i> Tổng hợp kết quả
-                                </button>
-                            </div>
+            @foreach (var group in groups)
+            {
+                <div class="collection-section">
+                    <!-- Dynamic Collection Header -->
+                    <div class="collection-header">
+                        <div class="collection-image">
+                            <img src="/sample-data/mocktest-cover.png" alt="@group.Key"
+                                 onerror="this.src='https://placehold.co/300x300/1e1e1e/FFF?text=MOCK+TEST'" />
                         </div>
-
-                        <div class="skills-grid">
-                            <!-- Listening -->
-                            <div class="skill-card listening @(lSub != null ? "attempted" : "")">
-                                <div class="skill-header">
-                                    <div class="sh-left">
-                                        <i class="bi bi-headphones"></i>
-                                        <span>Listening</span>
-                                    </div>
-                                    @if (lSub != null)
-                                    {
-                                        var lBand = (lSub.CorrectCount.HasValue || lSub.Grading != null)
-                                            ? AnswerKeyService.CalcBandScore(lSub.CorrectCount ?? lSub.Grading?.CorrectCount ?? 0, lSub.TotalQuestions ?? lSub.Grading?.TotalCount ?? 40)
-                                            : lSub.BandScore;
-                                        @if (lBand.HasValue)
-                                        {
-                                            <span class="skill-score-badge">Band @lBand.Value.ToString("0.0")</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="skill-score-badge pending"><i class="bi bi-check-circle"></i> Đã làm</span>
-                                        }
-                                    }
-                                </div>
-                                <div class="skill-btn-group">
-                                    <button class="btn-take-test" 
-                                            disabled="@string.IsNullOrEmpty(test.ListeningUrl)"
-                                            @onclick="() => TakeListeningTest(test)">
-                                        <i class="bi bi-play-circle-fill"></i> @(string.IsNullOrEmpty(test.ListeningUrl) ? "Chưa có đề" : (lSub != null ? "Làm lại" : "Làm bài"))
-                                    </button>
-                                    @if (lSub != null)
-                                    {
-                                        <button class="btn-review-mini" @onclick="() => ReviewListening(test, lSub)">
-                                            <i class="bi bi-search"></i> Xem đáp án
-                                        </button>
-                                    }
-                                </div>
-                            </div>
-                            
-                            <!-- Reading -->
-                            <div class="skill-card reading @(rSub != null ? "attempted" : "")">
-                                <div class="skill-header">
-                                    <div class="sh-left">
-                                        <i class="bi bi-file-text"></i>
-                                        <span>Reading</span>
-                                    </div>
-                                    @if (rSub != null)
-                                    {
-                                        var rBand = (rSub.CorrectCount.HasValue || rSub.Grading != null)
-                                            ? AnswerKeyService.CalcBandScore(rSub.CorrectCount ?? rSub.Grading?.CorrectCount ?? 0, rSub.TotalQuestions ?? rSub.Grading?.TotalCount ?? 40)
-                                            : rSub.BandScore;
-                                        @if (rBand.HasValue)
-                                        {
-                                            <span class="skill-score-badge">Band @rBand.Value.ToString("0.0")</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="skill-score-badge pending"><i class="bi bi-check-circle"></i> Đã làm</span>
-                                        }
-                                    }
-                                </div>
-                                <div class="skill-btn-group">
-                                    <button class="btn-take-test" 
-                                            disabled="@string.IsNullOrEmpty(test.ReadingUrl)"
-                                            @onclick="() => TakeReadingTest(test)">
-                                        <i class="bi bi-play-circle-fill"></i> @(string.IsNullOrEmpty(test.ReadingUrl) ? "Chưa có đề" : (rSub != null ? "Làm lại" : "Làm bài"))
-                                    </button>
-                                    @if (rSub != null)
-                                    {
-                                        <button class="btn-review-mini" @onclick="() => ReviewReading(test, rSub)">
-                                            <i class="bi bi-search"></i> Xem đáp án
-                                        </button>
-                                    }
-                                </div>
-                            </div>
-
-                            <!-- Writing -->
-                            <div class="skill-card writing @(wSub != null ? "attempted" : "")">
-                                <div class="skill-header">
-                                    <div class="sh-left">
-                                        <i class="bi bi-pen"></i>
-                                        <span>Writing</span>
-                                    </div>
-                                    @if (wSub != null)
-                                    {
-                                        @if ((wSub.Status == "Graded" || wSub.Status == "Scored") && (wSub.BandScore.HasValue || wSub.Score?.Overall > 0))
-                                        {
-                                            <span class="skill-score-badge">Band @((wSub.BandScore ?? wSub.Score?.Overall ?? 0).ToString("0.0"))</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="skill-score-badge pending"><i class="bi bi-hourglass-split"></i> Chờ chấm</span>
-                                        }
-                                    }
-                                </div>
-                                <div class="skill-btn-group">
-                                    <button class="btn-take-test" 
-                                            disabled="@string.IsNullOrEmpty(test.WritingUrl)"
-                                            @onclick="() => TakeWritingTest(test)">
-                                        <i class="bi bi-play-circle-fill"></i> @(string.IsNullOrEmpty(test.WritingUrl) ? "Chưa có đề" : (wSub != null ? "Viết lại" : "Làm bài"))
-                                    </button>
-                                    @if (wSub != null)
-                                    {
-                                        <button class="btn-review-mini" @onclick="() => ReviewWriting(test, wSub)">
-                                            <i class="bi bi-file-text"></i> Xem bài viết
-                                        </button>
-                                    }
-                                </div>
-                            </div>
-
-                            <!-- Speaking -->
-                            <div class="skill-card speaking @(sSub != null ? "attempted" : "")">
-                                <div class="skill-header">
-                                    <div class="sh-left">
-                                        <i class="bi bi-mic"></i>
-                                        <span>Speaking</span>
-                                    </div>
-                                    @if (sSub != null)
-                                    {
-                                        @if ((sSub.Status == "Graded" || sSub.Status == "Scored") && (sSub.BandScore.HasValue || sSub.Score?.Overall > 0))
-                                        {
-                                            <span class="skill-score-badge">Band @((sSub.BandScore ?? sSub.Score?.Overall ?? 0).ToString("0.0"))</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="skill-score-badge pending"><i class="bi bi-hourglass-split"></i> Chờ chấm</span>
-                                        }
-                                    }
-                                </div>
-                                <div class="skill-btn-group">
-                                    <button class="btn-take-test"
-                                            disabled="@string.IsNullOrEmpty(test.SpeakingUrl)"
-                                            @onclick="() => TakeSpeakingTest(test)">
-                                        <i class="bi bi-play-circle-fill"></i> @(string.IsNullOrEmpty(test.SpeakingUrl) ? "Chưa có đề" : (sSub != null ? "Thi lại" : "Làm bài"))
-                                    </button>
-                                    @if (sSub != null)
-                                    {
-                                        <button class="btn-review-mini" @onclick="() => ReviewSpeaking(test, sSub)">
-                                            <i class="bi bi-soundwave"></i> Xem bài nói
-                                        </button>
-                                    }
-                                </div>
+                        <div class="collection-info">
+                            <h1>@group.Key</h1>
+                            <div class="meta">
+                                <p><i class="bi bi-journal-check"></i> <strong>@group.Count() đề thi</strong> trong bộ này</p>
                             </div>
                         </div>
                     </div>
-                }
-            </div>
+
+                    <div class="tests-grid">
+                        @foreach (var test in group)
+                        {
+                            var lSub = GetLatestSub("Listening", test.ListeningUrl, test);
+                            var rSub = GetLatestSub("Reading", test.ReadingUrl, test);
+                            var wSub = GetLatestSub("Writing", test.WritingUrl, test);
+                            var sSub = GetLatestSub("Speaking", test.SpeakingUrl, test);
+                            bool hasAnyAttempt = lSub != null || rSub != null || wSub != null || sSub != null;
+
+                            <div class="test-block">
+                                <div class="test-block-header">
+                                    <div>
+                                        <h2>@test.Title</h2>
+                                    </div>
+                                    <div class="test-header-actions" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                        @if (downloadingStatus.TryGetValue(test.Id, out var dlState))
+                                        {
+                                            <div class="offline-downloading-pill" style="background: #eff6ff; color: #1d4ed8; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 6px; border: 1px solid #bfdbfe;">
+                                                <span class="spinner-border spinner-border-sm" role="status" style="width: 0.85rem; height: 0.85rem;"></span>
+                                                <span>@dlState.status (@dlState.progress%)</span>
+                                            </div>
+                                        }
+                                        else if (downloadedTestIds.Contains(test.Id))
+                                        {
+                                            <div style="display: inline-flex; align-items: center; gap: 6px;">
+                                                <span class="badge" style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 6px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                                                    <i class="bi bi-check-circle-fill"></i> Sẵn sàng Offline
+                                                </span>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" title="Xóa bản tải offline của đề này" style="padding: 2px 7px; border-radius: 6px; font-size: 0.78rem;" @onclick="() => DeleteDownloadedTest(test)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        }
+                                        else if (isOnline)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-outline-primary" style="padding: 5px 12px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; display: flex; align-items: center; gap: 6px;" @onclick="() => DownloadTest(test)">
+                                                <i class="bi bi-cloud-arrow-down-fill"></i> Tải học Offline
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge" style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600;">
+                                                <i class="bi bi-cloud-slash me-1"></i> Chưa tải về
+                                            </span>
+                                        }
+
+                                        <button class="btn-summary-link @(hasAnyAttempt ? "has-data" : "")"
+                                                @onclick="() => OpenSummary(test)">
+                                            <i class="bi bi-bar-chart-fill"></i> Tổng hợp kết quả
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="skills-grid">
+                                    <!-- Listening -->
+                                    <div class="skill-card listening @(lSub != null ? "attempted" : "")">
+                                        <div class="skill-header">
+                                            <div class="sh-left">
+                                                <i class="bi bi-headphones"></i>
+                                                <span>Listening</span>
+                                            </div>
+                                            @if (lSub != null)
+                                            {
+                                                var lBand = (lSub.CorrectCount.HasValue || lSub.Grading != null)
+                                                    ? AnswerKeyService.CalcBandScore(lSub.CorrectCount ?? lSub.Grading?.CorrectCount ?? 0, lSub.TotalQuestions ?? lSub.Grading?.TotalCount ?? 40)
+                                                    : lSub.BandScore;
+                                                @if (lBand.HasValue)
+                                                {
+                                                    <span class="skill-score-badge">Band @lBand.Value.ToString("0.0")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="skill-score-badge pending"><i class="bi bi-check-circle"></i> Đã làm</span>
+                                                }
+                                            }
+                                        </div>
+                                        <div class="skill-btn-group">
+                                            <button class="btn-take-test" 
+                                                    disabled="@string.IsNullOrEmpty(test.ListeningUrl)"
+                                                    @onclick="() => TakeListeningTest(test)">
+                                                <i class="bi bi-play-circle-fill"></i> @(string.IsNullOrEmpty(test.ListeningUrl) ? "Chưa có đề" : (lSub != null ? "Làm lại" : "Làm bài"))
+                                            </button>
+                                            @if (lSub != null)
+                                            {
+                                                <button class="btn-review-mini" @onclick="() => ReviewListening(test, lSub)">
+                                                    <i class="bi bi-search"></i> Xem đáp án
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Reading -->
+                                    <div class="skill-card reading @(rSub != null ? "attempted" : "")">
+                                        <div class="skill-header">
+                                            <div class="sh-left">
+                                                <i class="bi bi-file-text"></i>
+                                                <span>Reading</span>
+                                            </div>
+                                            @if (rSub != null)
+                                            {
+                                                var rBand = (rSub.CorrectCount.HasValue || rSub.Grading != null)
+                                                    ? AnswerKeyService.CalcBandScore(rSub.CorrectCount ?? rSub.Grading?.CorrectCount ?? 0, rSub.TotalQuestions ?? rSub.Grading?.TotalCount ?? 40)
+                                                    : rSub.BandScore;
+                                                @if (rBand.HasValue)
+                                                {
+                                                    <span class="skill-score-badge">Band @rBand.Value.ToString("0.0")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="skill-score-badge pending"><i class="bi bi-check-circle"></i> Đã làm</span>
+                                                }
+                                            }
+                                        </div>
+                                        <div class="skill-btn-group">
+                                            <button class="btn-take-test" 
+                                                    disabled="@string.IsNullOrEmpty(test.ReadingUrl)"
+                                                    @onclick="() => TakeReadingTest(test)">
+                                                <i class="bi bi-play-circle-fill"></i> @(string.IsNullOrEmpty(test.ReadingUrl) ? "Chưa có đề" : (rSub != null ? "Làm lại" : "Làm bài"))
+                                            </button>
+                                            @if (rSub != null)
+                                            {
+                                                <button class="btn-review-mini" @onclick="() => ReviewReading(test, rSub)">
+                                                    <i class="bi bi-search"></i> Xem đáp án
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <!-- Writing -->
+                                    <div class="skill-card writing @(wSub != null ? "attempted" : "")">
+                                        <div class="skill-header">
+                                            <div class="sh-left">
+                                                <i class="bi bi-pen"></i>
+                                                <span>Writing</span>
+                                            </div>
+                                            @if (wSub != null)
+                                            {
+                                                @if ((wSub.Status == "Graded" || wSub.Status == "Scored") && (wSub.BandScore.HasValue || wSub.Score?.Overall > 0))
+                                                {
+                                                    <span class="skill-score-badge">Band @((wSub.BandScore ?? wSub.Score?.Overall ?? 0).ToString("0.0"))</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="skill-score-badge pending"><i class="bi bi-hourglass-split"></i> Chờ chấm</span>
+                                                }
+                                            }
+                                        </div>
+                                        <div class="skill-btn-group">
+                                            <button class="btn-take-test" 
+                                                    disabled="@string.IsNullOrEmpty(test.WritingUrl)"
+                                                    @onclick="() => TakeWritingTest(test)">
+                                                <i class="bi bi-play-circle-fill"></i> @(string.IsNullOrEmpty(test.WritingUrl) ? "Chưa có đề" : (wSub != null ? "Viết lại" : "Làm bài"))
+                                            </button>
+                                            @if (wSub != null)
+                                            {
+                                                <button class="btn-review-mini" @onclick="() => ReviewWriting(test, wSub)">
+                                                    <i class="bi bi-file-text"></i> Xem bài viết
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <!-- Speaking -->
+                                    <div class="skill-card speaking @(sSub != null ? "attempted" : "")">
+                                        <div class="skill-header">
+                                            <div class="sh-left">
+                                                <i class="bi bi-mic"></i>
+                                                <span>Speaking</span>
+                                            </div>
+                                            @if (sSub != null)
+                                            {
+                                                @if ((sSub.Status == "Graded" || sSub.Status == "Scored") && (sSub.BandScore.HasValue || sSub.Score?.Overall > 0))
+                                                {
+                                                    <span class="skill-score-badge">Band @((sSub.BandScore ?? sSub.Score?.Overall ?? 0).ToString("0.0"))</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="skill-score-badge pending"><i class="bi bi-hourglass-split"></i> Chờ chấm</span>
+                                                }
+                                            }
+                                        </div>
+                                        <div class="skill-btn-group">
+                                            <button class="btn-take-test"
+                                                    disabled="@string.IsNullOrEmpty(test.SpeakingUrl)"
+                                                    @onclick="() => TakeSpeakingTest(test)">
+                                                <i class="bi bi-play-circle-fill"></i> @(string.IsNullOrEmpty(test.SpeakingUrl) ? "Chưa có đề" : (sSub != null ? "Thi lại" : "Làm bài"))
+                                            </button>
+                                            @if (sSub != null)
+                                            {
+                                                <button class="btn-review-mini" @onclick="() => ReviewSpeaking(test, sSub)">
+                                                    <i class="bi bi-soundwave"></i> Xem bài nói
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
         }
     </div>
 
