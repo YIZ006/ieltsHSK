@@ -724,6 +724,70 @@
     line-height: 1.4;
 }
 
+/* ── FRIENDS MENU & BUTTON ── */
+.friends-menu {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.friends-btn {
+    position: relative;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    outline: none;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.friends-btn:hover,
+.friends-btn.active {
+    background: #ffffff;
+    border-color: #3b82f6;
+    color: #2563eb;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.14);
+    transform: translateY(-1px);
+}
+
+.friends-icon {
+    font-size: 1.15rem;
+    transition: transform 0.2s ease;
+}
+
+.friends-btn:hover .friends-icon,
+.friends-btn.active .friends-icon {
+    transform: scale(1.1);
+}
+
+.friends-badge {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #ffffff;
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+    line-height: 1;
+    animation: badge-pulse 2s infinite ease-in-out;
+}
+
 /* ── NOTIFICATION BELL & POPOVER ── */
 .notif-menu {
     position: relative;

@@ -41,7 +41,13 @@ builder.Services.AddScoped(_ =>
 });
 
 builder.Services.AddBlazoredLocalStorage();
-builder.Services.AddTransient<AuthHeaderHandler>();
+builder.Services.AddScoped<CookieStorageService>();
+builder.Services.AddTransient(sp =>
+{
+    var tokenService = sp.GetRequiredService<TokenRefreshService>();
+    var cookieStorage = sp.GetRequiredService<CookieStorageService>();
+    return new AuthHeaderHandler(tokenService, cookieStorage);
+});
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
@@ -69,6 +75,14 @@ builder.Services.AddScoped(sp =>
         BaseAddress = new Uri(backendApiBaseUrl)
     };
     return new NavigationService(httpClient);
+});
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    return new FriendshipService(httpClient);
 });
 builder.Services.AddScoped(sp =>
 {
@@ -133,19 +147,20 @@ builder.Services.AddScoped(sp =>
         BaseAddress = new Uri(backendApiBaseUrl)
     };
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
-    return new ExamSubmissionService(localStorage, httpClient);
+    var cookieStorage = sp.GetRequiredService<CookieStorageService>();
+    return new ExamSubmissionService(localStorage, httpClient, cookieStorage);
 });
 builder.Services.AddScoped<GrammarStructureService>();
 
 builder.Services.AddAuthorizationCore();
 
-// TokenRefreshService: quản lý access token + refresh token, tự gia hạn phiên đăng nhập.
+// TokenRefreshService: quản lý access token + refresh token qua Cookie, tự gia hạn phiên đăng nhập.
 // Dùng HttpClient "trần" (không qua AuthHeaderHandler) để tránh vòng lặp refresh.
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient { BaseAddress = new Uri(backendApiBaseUrl) };
-    var localStorage = sp.GetRequiredService<ILocalStorageService>();
-    return new TokenRefreshService(httpClient, localStorage);
+    var cookieStorage = sp.GetRequiredService<CookieStorageService>();
+    return new TokenRefreshService(httpClient, cookieStorage);
 });
 
 // Đăng ký 1 instance duy nhất cho cả kiểu cụ thể và kiểu AuthenticationStateProvider
@@ -158,7 +173,8 @@ builder.Services.AddScoped(sp =>
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
     var authStateProvider = sp.GetRequiredService<CustomAuthStateProvider>();
     var tokenRefreshService = sp.GetRequiredService<TokenRefreshService>();
-    return new AuthService(httpClient, localStorage, authStateProvider, tokenRefreshService);
+    var cookieStorage = sp.GetRequiredService<CookieStorageService>();
+    return new AuthService(httpClient, localStorage, authStateProvider, tokenRefreshService, cookieStorage);
 });
 
 builder.Services.AddScoped(sp =>

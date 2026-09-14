@@ -60,7 +60,7 @@ public class CheckUsernameResult
     public bool IsTaken { get; set; }
 }
 
-public class AuthService(HttpClient httpClient, ILocalStorageService localStorage, CustomAuthStateProvider authStateProvider, TokenRefreshService tokenRefreshService)
+public class AuthService(HttpClient httpClient, ILocalStorageService localStorage, CustomAuthStateProvider authStateProvider, TokenRefreshService tokenRefreshService, CookieStorageService cookieStorage)
 {
     // Tất cả các key localStorage liên quan đến user – phải xóa khi đổi tài khoản
     private static readonly string[] UserStorageKeys =
@@ -92,15 +92,17 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
 
     private async Task ClearUserDataAsync()
     {
+        await cookieStorage.RemoveItemAsync(TokenRefreshService.AccessTokenKey);
+        await cookieStorage.RemoveItemAsync(TokenRefreshService.RefreshTokenKey);
         foreach (var key in UserStorageKeys)
             await localStorage.RemoveItemAsync(key);
     }
 
     private async Task SaveTokensAsync(AuthResponse result)
     {
-        await localStorage.SetItemAsync(TokenRefreshService.AccessTokenKey, result.Token);
+        await cookieStorage.SetItemAsync(TokenRefreshService.AccessTokenKey, result.Token, days: 1);
         if (!string.IsNullOrWhiteSpace(result.RefreshToken))
-            await localStorage.SetItemAsync(TokenRefreshService.RefreshTokenKey, result.RefreshToken);
+            await cookieStorage.SetItemAsync(TokenRefreshService.RefreshTokenKey, result.RefreshToken, days: 30);
     }
 
     public async Task<(bool Success, string ErrorMessage)> RegisterAsync(RegisterRequest request)
@@ -198,8 +200,8 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
                 return (false, false, "Tài khoản của bạn không có quyền Quản trị viên (Admin). Vui lòng sử dụng tài khoản được cấp phép.");
             }
 
-            // Lưu token riêng cho Admin, KHÔNG xóa dữ liệu học tập của học viên
-            await localStorage.SetItemAsync("admin_authToken", result.Token);
+            // Lưu token riêng cho Admin vào Cookie, KHÔNG xóa dữ liệu học tập của học viên
+            await cookieStorage.SetItemAsync("admin_authToken", result.Token, days: 30);
             if (!string.IsNullOrWhiteSpace(result.FullName) || !string.IsNullOrWhiteSpace(result.Email))
             {
                 var adminProfile = new { FullName = result.FullName ?? "", Email = result.Email ?? "" };
@@ -217,7 +219,7 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
     {
         try
         {
-            await localStorage.RemoveItemAsync("admin_authToken");
+            await cookieStorage.RemoveItemAsync("admin_authToken");
             await localStorage.RemoveItemAsync("admin_profile");
         }
         catch (Exception ex)
@@ -230,7 +232,7 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
     {
         try
         {
-            return await localStorage.GetItemAsync<string>("admin_authToken");
+            return await cookieStorage.GetItemAsync("admin_authToken");
         }
         catch
         {

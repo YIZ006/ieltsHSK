@@ -1,0 +1,732 @@
+@using Frontend.App.Services
+@inject CookieStorageService CookieStorage
+
+@if (isVisible)
+{
+    @* ── FLOATING COOKIE CONSENT BANNER ── *@
+    <div class="cookie-banner-wrapper @(isClosing ? "cookie-banner-fade-out" : "cookie-banner-slide-up")">
+        <div class="cookie-banner-card">
+            <div class="cookie-icon-col">
+                <div class="cookie-icon-bubble">
+                    <span class="cookie-emoji">🍪</span>
+                </div>
+            </div>
+
+            <div class="cookie-body-col">
+                <div class="cookie-title-row">
+                    <h4 class="cookie-title">Thông báo Chính sách Lưu trữ Cookie</h4>
+                    <span class="cookie-badge-essential"><i class="bi bi-shield-check"></i> Bảo mật & Thiết yếu</span>
+                </div>
+                <p class="cookie-desc">
+                    Hệ thống sử dụng Cookie thiết yếu để duy trì phiên đăng nhập an toàn, bảo vệ tài khoản và đồng bộ tiến trình học tập của bạn qua các lần truy cập. Chúng tôi <b>không</b> sử dụng cookie theo dõi quảng cáo hay chia sẻ cho bên thứ ba.
+                </p>
+                <div class="cookie-actions-row">
+                    <button type="button" class="btn-cookie-accept" @onclick="AcceptConsentAsync">
+                        <i class="bi bi-check2-circle"></i>
+                        <span>Đã hiểu & Chấp nhận</span>
+                    </button>
+                    <button type="button" class="btn-cookie-details" @onclick="OpenPolicyDetails">
+                        <i class="bi bi-info-circle"></i>
+                        <span>Xem chi tiết chính sách</span>
+                    </button>
+                </div>
+            </div>
+
+            <button type="button" class="cookie-btn-dismiss" @onclick="DismissBanner" title="Đóng thông báo">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    </div>
+}
+
+@* ── MODAL CHI TIẾT CHÍNH SÁCH COOKIE ── *@
+@if (showDetailsModal)
+{
+    <div class="cookie-modal-backdrop" @onclick="ClosePolicyDetails">
+        <div class="cookie-modal-content" @onclick:stopPropagation>
+            <div class="cookie-modal-header">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="modal-icon-bubble">
+                        <i class="bi bi-shield-lock-fill text-primary"></i>
+                    </div>
+                    <div>
+                        <h3 class="modal-title">Chính sách Lưu trữ & Quản lý Cookie</h3>
+                        <p class="modal-subtitle">Minh bạch về các dữ liệu phiên làm việc được lưu trên trình duyệt của bạn</p>
+                    </div>
+                </div>
+                <button type="button" class="modal-btn-close" @onclick="ClosePolicyDetails" title="Đóng">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="cookie-modal-body">
+                @* Phần 1: Giới thiệu *@
+                <section class="policy-section">
+                    <h5 class="section-title"><i class="bi bi-patch-question-fill text-info"></i> 1. Cookie là gì và tại sao chúng tôi sử dụng?</h5>
+                    <p class="section-text">
+                        Cookie là các tệp văn bản nhỏ được lưu trữ an toàn trong trình duyệt web của bạn khi bạn sử dụng nền tảng. Nền tảng học tập IELTS / TOEIC / HSK sử dụng cookie nhằm mục đích duy nhất là <b>duy trì phiên đăng nhập</b>, bảo vệ tính toàn vẹn của tài khoản và đảm bảo tiến trình làm bài thi, lưu điểm số không bị gián đoạn khi bạn tải lại trang hoặc đóng trình duyệt.
+                    </p>
+                </section>
+
+                @* Phần 2: Bảng kê chi tiết cookie *@
+                <section class="policy-section">
+                    <h5 class="section-title"><i class="bi bi-list-check text-success"></i> 2. Danh mục các Cookie thiết yếu</h5>
+                    <div class="cookie-table-responsive">
+                        <table class="cookie-table">
+                            <thead>
+                                <tr>
+                                    <th>Tên Cookie</th>
+                                    <th>Mục đích sử dụng</th>
+                                    <th>Thời hạn</th>
+                                    <th>Phân loại</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>authToken</code></td>
+                                    <td>Lưu JWT Access Token mã hóa để xác thực danh tính và cấp quyền truy cập các tính năng học tập, làm bài thi.</td>
+                                    <td>1 ngày</td>
+                                    <td><span class="badge-type essential">Bắt buộc</span></td>
+                                </tr>
+                                <tr>
+                                    <td><code>authRefreshToken</code></td>
+                                    <td>Mã khóa làm mới ngầm, giúp bạn tiếp tục phiên học tập mà không phải nhập lại mật khẩu sau mỗi phiên.</td>
+                                    <td>30 ngày</td>
+                                    <td><span class="badge-type essential">Bắt buộc</span></td>
+                                </tr>
+                                <tr>
+                                    <td><code>admin_authToken</code></td>
+                                    <td>Lưu phiên quản trị viên riêng biệt cho các tác vụ quản trị nội dung đề thi, người dùng và hệ thống.</td>
+                                    <td>30 ngày</td>
+                                    <td><span class="badge-type admin">Quản trị</span></td>
+                                </tr>
+                                <tr>
+                                    <td><code>cookie_consent_accepted</code></td>
+                                    <td>Ghi nhận trạng thái bạn đã đọc và đồng ý với Thông báo Chính sách Cookie.</td>
+                                    <td>365 ngày</td>
+                                    <td><span class="badge-type preference">Tùy chọn</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                @* Phần 3: Cam kết quyền riêng tư *@
+                <section class="policy-section">
+                    <h5 class="section-title"><i class="bi bi-shield-shaded text-warning"></i> 3. Cam kết Bảo mật & Quyền riêng tư</h5>
+                    <ul class="policy-feature-list">
+                        <li>
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            <span><b>Không quảng cáo:</b> Không sử dụng bất kỳ cookie theo dõi quảng cáo của bên thứ ba nào (như Google Ads, Facebook Pixel).</span>
+                        </li>
+                        <li>
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            <span><b>Mã hóa an toàn:</b> Dữ liệu token phiên đăng nhập được mã hóa theo chuẩn JWT an toàn và chuyển tải qua kênh bảo mật.</span>
+                        </li>
+                        <li>
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                            <span><b>Xóa tức thì khi Đăng xuất:</b> Khi bạn chọn "Đăng xuất", toàn bộ cookie xác thực nêu trên sẽ được máy chủ và trình duyệt xóa sạch ngay lập tức.</span>
+                        </li>
+                    </ul>
+                </section>
+
+                @* Phần 4: Quyền kiểm soát *@
+                <section class="policy-section">
+                    <h5 class="section-title"><i class="bi bi-gear-fill text-primary"></i> 4. Quyền kiểm soát của bạn</h5>
+                    <p class="section-text">
+                        Bạn có thể tùy ý xem, xóa hoặc chặn cookie bất kỳ lúc nào thông qua phần Cài đặt (Settings) của trình duyệt (Chrome, Safari, Edge, Firefox). Xin lưu ý rằng nếu bạn chặn các cookie thiết yếu (<code>authToken</code>, <code>authRefreshToken</code>), hệ thống sẽ không thể duy trì phiên đăng nhập và bạn sẽ không thể sử dụng các chức năng yêu cầu tài khoản.
+                    </p>
+                </section>
+            </div>
+
+            <div class="cookie-modal-footer">
+                <button type="button" class="btn-modal-accept" @onclick="AcceptConsentAsync">
+                    <i class="bi bi-check-lg"></i>
+                    <span>Đã hiểu & Đồng ý chính sách</span>
+                </button>
+                <button type="button" class="btn-modal-close" @onclick="ClosePolicyDetails">
+                    <span>Đóng</span>
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /* ─── BANNER WRAPPER & CARD ─── */
+    .cookie-banner-wrapper {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc(100% - 32px);
+        max-width: 860px;
+        z-index: 99990;
+        pointer-events: none;
+    }
+
+    .cookie-banner-card {
+        pointer-events: auto;
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        background: rgba(15, 23, 42, 0.94);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 18px;
+        padding: 20px 24px;
+        color: #f8fafc;
+        box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+        position: relative;
+    }
+
+    .cookie-banner-slide-up {
+        animation: cookieSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .cookie-banner-fade-out {
+        animation: cookieFadeOut 0.3s ease-out forwards;
+    }
+
+    @@keyframes cookieSlideUp {
+        from {
+            opacity: 0;
+            transform: translate(-50%, 40px);
+        }
+        to {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+    }
+
+    @@keyframes cookieFadeOut {
+        from {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+        to {
+            opacity: 0;
+            transform: translate(-50%, 20px);
+        }
+    }
+
+    /* ─── ICON COLUMN ─── */
+    .cookie-icon-col {
+        flex-shrink: 0;
+    }
+
+    .cookie-icon-bubble {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.1));
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cookie-emoji {
+        font-size: 26px;
+        line-height: 1;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+    }
+
+    /* ─── BODY COLUMN ─── */
+    .cookie-body-col {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .cookie-title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+    }
+
+    .cookie-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin: 0;
+        color: #ffffff;
+        letter-spacing: -0.01em;
+    }
+
+    .cookie-badge-essential {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: #34d399;
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 20px;
+        padding: 2px 9px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .cookie-desc {
+        font-size: 0.88rem;
+        line-height: 1.55;
+        color: #cbd5e1;
+        margin: 0 0 14px 0;
+    }
+
+    .cookie-desc b {
+        color: #ffffff;
+    }
+
+    /* ─── ACTION BUTTONS ─── */
+    .cookie-actions-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .btn-cookie-accept {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 20px;
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        color: #ffffff;
+        font-size: 0.88rem;
+        font-weight: 600;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-cookie-accept:hover {
+        background: linear-gradient(135deg, #047857 0%, #059669 100%);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-cookie-details {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #e2e8f0;
+        font-size: 0.88rem;
+        font-weight: 500;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-cookie-details:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    .cookie-btn-dismiss {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 1rem;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+    }
+
+    .cookie-btn-dismiss:hover {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* ─── MODAL STYLES ─── */
+    .cookie-modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        z-index: 99995;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        animation: fadeIn 0.2s ease;
+    }
+
+    .cookie-modal-content {
+        background: #0f172a;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 20px;
+        width: 100%;
+        max-width: 760px;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+        color: #f8fafc;
+        box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7);
+        animation: modalZoomIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        overflow: hidden;
+    }
+
+    @@keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    @@keyframes modalZoomIn {
+        from {
+            opacity: 0;
+            transform: scale(0.96);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    .cookie-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 24px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(30, 41, 59, 0.6);
+    }
+
+    .modal-icon-bubble {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: rgba(59, 130, 246, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        flex-shrink: 0;
+    }
+
+    .modal-title {
+        font-size: 1.15rem;
+        font-weight: 700;
+        margin: 0;
+        color: #ffffff;
+    }
+
+    .modal-subtitle {
+        font-size: 0.82rem;
+        color: #94a3b8;
+        margin: 2px 0 0 0;
+    }
+
+    .modal-btn-close {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 8px;
+        transition: all 0.2s;
+    }
+
+    .modal-btn-close:hover {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .cookie-modal-body {
+        padding: 24px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .policy-section {
+        background: rgba(30, 41, 59, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 14px;
+        padding: 16px 20px;
+    }
+
+    .section-title {
+        font-size: 0.96rem;
+        font-weight: 700;
+        color: #e2e8f0;
+        margin: 0 0 10px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .section-text {
+        font-size: 0.88rem;
+        color: #cbd5e1;
+        line-height: 1.6;
+        margin: 0;
+    }
+
+    /* ─── TABLE ─── */
+    .cookie-table-responsive {
+        overflow-x: auto;
+        margin-top: 8px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .cookie-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.85rem;
+        text-align: left;
+    }
+
+    .cookie-table th {
+        background: rgba(30, 41, 59, 0.8);
+        color: #94a3b8;
+        font-weight: 600;
+        padding: 10px 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .cookie-table td {
+        padding: 10px 14px;
+        color: #cbd5e1;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        vertical-align: middle;
+    }
+
+    .cookie-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .cookie-table code {
+        background: rgba(59, 130, 246, 0.15);
+        color: #60a5fa;
+        padding: 2px 6px;
+        border-radius: 6px;
+        font-size: 0.82rem;
+    }
+
+    .badge-type {
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 12px;
+        display: inline-block;
+    }
+
+    .badge-type.essential {
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-type.admin {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .badge-type.preference {
+        background: rgba(59, 130, 246, 0.15);
+        color: #60a5fa;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    /* ─── FEATURE LIST ─── */
+    .policy-feature-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .policy-feature-list li {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 0.88rem;
+        color: #cbd5e1;
+        line-height: 1.5;
+    }
+
+    .policy-feature-list li i {
+        font-size: 1rem;
+        margin-top: 2px;
+        flex-shrink: 0;
+    }
+
+    .policy-feature-list li b {
+        color: #ffffff;
+    }
+
+    /* ─── MODAL FOOTER ─── */
+    .cookie-modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 12px;
+        padding: 16px 24px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(30, 41, 59, 0.6);
+    }
+
+    .btn-modal-accept {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 20px;
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        color: #ffffff;
+        font-size: 0.9rem;
+        font-weight: 600;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-modal-accept:hover {
+        background: linear-gradient(135deg, #047857 0%, #059669 100%);
+        transform: translateY(-1px);
+    }
+
+    .btn-modal-close {
+        padding: 9px 18px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #cbd5e1;
+        font-size: 0.9rem;
+        font-weight: 500;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-modal-close:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+    }
+
+    /* ─── RESPONSIVE ─── */
+    @@media (max-width: 640px) {
+        .cookie-banner-wrapper {
+            bottom: 12px;
+            width: calc(100% - 24px);
+        }
+
+        .cookie-banner-card {
+            padding: 16px;
+            gap: 12px;
+        }
+
+        .cookie-icon-bubble {
+            width: 40px;
+            height: 40px;
+        }
+
+        .cookie-emoji {
+            font-size: 22px;
+        }
+
+        .cookie-actions-row {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .btn-cookie-accept,
+        .btn-cookie-details {
+            justify-content: center;
+            width: 100%;
+        }
+
+        .cookie-modal-content {
+            max-height: 92vh;
+        }
+
+        .cookie-modal-header,
+        .cookie-modal-body,
+        .cookie-modal-footer {
+            padding: 16px;
+        }
+    }
+</style>
+
+@code {
+    public const string ConsentCookieKey = "cookie_consent_accepted";
+
+    private bool isVisible = false;
+    private bool isClosing = false;
+    private bool showDetailsModal = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var consent = await CookieStorage.GetItemAsync(ConsentCookieKey);
+            if (string.IsNullOrWhiteSpace(consent))
+            {
+                isVisible = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CookieConsentBanner] Init error: {ex.Message}");
+        }
+    }
+
+    private async Task AcceptConsentAsync()
+    {
+        try
+        {
+            await CookieStorage.SetItemAsync(ConsentCookieKey, "true", days: 365);
+        }
+        catch { }
+
+        showDetailsModal = false;
+        isClosing = true;
+        StateHasChanged();
+        await Task.Delay(300);
+        isVisible = false;
+        isClosing = false;
+    }
+
+    private void OpenPolicyDetails()
+    {
+        showDetailsModal = true;
+    }
+
+    private void ClosePolicyDetails()
+    {
+        showDetailsModal = false;
+    }
+
+    private async Task DismissBanner()
+    {
+        isClosing = true;
+        StateHasChanged();
+        await Task.Delay(300);
+        isVisible = false;
+        isClosing = false;
+    }
+}

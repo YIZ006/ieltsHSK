@@ -40,7 +40,7 @@ else
                 <span class="logo-icon">
                     @if (activeDomain == "TOEIC") { <span>🏆</span> }
                     else if (activeDomain == "HSK") { <span>🇨🇳</span> }
-                    else if (activeDomain == "USERS") { <span>👥</span> }
+                    else if (activeDomain == "COMMON") { <span>🌐</span> }
                     else { <span>🇬🇧</span> }
                 </span>
                 <span class="logo-text">Admin Hub</span>
@@ -56,8 +56,8 @@ else
                 <button class="nav-tab tab-hsk @(activeDomain == "HSK" ? "active" : "")" @onclick='() => SwitchDomain("HSK")'>
                     <span class="tab-icon">🇨🇳</span> HSK
                 </button>
-                <button class="nav-tab tab-users @(activeDomain == "USERS" ? "active" : "")" @onclick='() => SwitchDomain("USERS")'>
-                    <span class="tab-icon">👥</span> Học viên & Users
+                <button class="nav-tab tab-common @(activeDomain == "COMMON" ? "active" : "")" @onclick='() => SwitchDomain("COMMON")'>
+                    <span class="tab-icon">🌐</span> Quản trị chung
                 </button>
                 <a href="http://localhost:5101/swagger" target="_blank" class="nav-tab tab-swagger" style="text-decoration: none;">
                     <span class="tab-icon">⚙️</span> Swagger API
@@ -68,7 +68,7 @@ else
                 <span class="user-avatar">@(string.IsNullOrWhiteSpace(adminName) ? "A" : adminName.Substring(0, 1).ToUpper())</span>
                 <div class="user-info-text">
                     <span class="user-name" title="@adminEmail">@(string.IsNullOrWhiteSpace(adminName) ? "Quản trị viên" : adminName)</span>
-                    <span class="domain-tag domain-tag-@activeDomain.ToLower()">@activeDomain</span>
+                    <span class="domain-tag domain-tag-@activeDomain.ToLower()">@(activeDomain == "COMMON" ? "HỆ THỐNG" : activeDomain)</span>
                 </div>
                 <button type="button" class="btn-admin-logout" @onclick="HandleLogout" title="Đăng xuất khỏi Admin Hub">
                     <i class="bi bi-box-arrow-right"></i>
@@ -81,9 +81,9 @@ else
             <aside class="admin-sidebar">
                 <div class="sidebar-header">
                     <h3>
-                        @if (activeDomain == "USERS")
+                        @if (activeDomain == "COMMON")
                         {
-                            <span>Quản lý Tài khoản</span>
+                            <span>Quản trị Hệ thống</span>
                         }
                         else
                         {
@@ -93,12 +93,35 @@ else
                 </div>
 
                 <ul class="sidebar-menu">
-                    <li class="menu-item @(currentUrl == "portal-hub" || currentUrl == "admin" || currentUrl == "" ? "active" : "")">
-                        <a href="/portal-hub">
-                            <i class="bi bi-speedometer2"></i> Dashboard Tổng quan
-                        </a>
-                    </li>
-                    @if (activeDomain == "IELTS")
+                    @if (activeDomain == "COMMON")
+                    {
+                        <li class="menu-item @(currentUrl == "portal-hub" || currentUrl == "admin" || currentUrl == "" ? "active" : "")">
+                            <a href="/portal-hub">
+                                <i class="bi bi-speedometer2"></i> Dashboard Tổng quan
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/users") ? "active" : "")">
+                            <a href="/portal-hub/users">
+                                <i class="bi bi-people-fill"></i> Quản lý Học viên & Users
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/notifications") ? "active" : "")">
+                            <a href="/portal-hub/notifications">
+                                <i class="bi bi-bell-fill text-info"></i> Quản lý Thông báo
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/navigation") ? "active" : "")">
+                            <a href="/portal-hub/navigation">
+                                <i class="bi bi-list-nested"></i> Cấu hình Menu Sidebar
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/api-keys") || IsActive("/portal-hub/ai-settings") ? "active" : "")">
+                            <a href="/portal-hub/api-keys">
+                                <i class="bi bi-key-fill text-warning"></i> Cấu hình API & AI
+                            </a>
+                        </li>
+                    }
+                    else if (activeDomain == "IELTS")
                     {
                         <li class="menu-item @(IsActive("/portal-hub/mock-tests") ? "active" : "")">
                             <a href="/portal-hub/mock-tests">
@@ -135,16 +158,6 @@ else
                                 <i class="bi bi-mic-fill"></i> Quản lý Nói Theo (Shadowing)
                             </a>
                         </li>
-                        <li class="menu-item @(IsActive("/portal-hub/navigation") ? "active" : "")">
-                            <a href="/portal-hub/navigation">
-                                <i class="bi bi-list-nested"></i> Cấu hình Menu (Navigation)
-                            </a>
-                        </li>
-                        <li class="menu-item @(IsActive("/portal-hub/users") && (NavigationManager.Uri.Contains("ielts") || !NavigationManager.Uri.Contains("domain")) ? "active" : "")">
-                            <a href="/portal-hub/users?domain=ielts">
-                                <i class="bi bi-people-fill"></i> Học viên IELTS
-                            </a>
-                        </li>
                     }
                     else if (activeDomain == "TOEIC")
                     {
@@ -156,16 +169,6 @@ else
                         <li class="menu-item @(IsActive("/portal-hub/toeic-builder") ? "active" : "")">
                             <a href="/portal-hub/toeic-builder">
                                 <i class="bi bi-pencil-square"></i> Tạo & Sửa đề TOEIC
-                            </a>
-                        </li>
-                        <li class="menu-item @(IsActive("/portal-hub/navigation") ? "active" : "")">
-                            <a href="/portal-hub/navigation">
-                                <i class="bi bi-list-nested"></i> Cấu hình Menu (Navigation)
-                            </a>
-                        </li>
-                        <li class="menu-item @(IsActive("/portal-hub/users") && NavigationManager.Uri.Contains("toeic") ? "active" : "")">
-                            <a href="/portal-hub/users?domain=toeic">
-                                <i class="bi bi-people-fill"></i> Học viên TOEIC
                             </a>
                         </li>
                     }
@@ -181,57 +184,7 @@ else
                                 <i class="bi bi-translate"></i> Ngân hàng Từ vựng HSK
                             </a>
                         </li>
-                        <li class="menu-item @(IsActive("/portal-hub/navigation") ? "active" : "")">
-                            <a href="/portal-hub/navigation">
-                                <i class="bi bi-list-nested"></i> Cấu hình Menu (Navigation)
-                            </a>
-                        </li>
-                        <li class="menu-item @(IsActive("/portal-hub/users") && NavigationManager.Uri.Contains("hsk") ? "active" : "")">
-                            <a href="/portal-hub/users?domain=hsk">
-                                <i class="bi bi-people-fill"></i> Học viên HSK
-                            </a>
-                        </li>
                     }
-                    else if (activeDomain == "USERS")
-                    {
-                        <li class="menu-item @(IsActive("/portal-hub/users") && !NavigationManager.Uri.Contains("domain=") ? "active" : "")">
-                            <a href="/portal-hub/users">
-                                <i class="bi bi-people-fill"></i> Tất cả người dùng
-                            </a>
-                        </li>
-                        <li class="menu-item @(NavigationManager.Uri.Contains("domain=ielts") ? "active" : "")">
-                            <a href="/portal-hub/users?domain=ielts">
-                                <i class="bi bi-mortarboard-fill text-primary"></i> Học viên IELTS
-                            </a>
-                        </li>
-                        <li class="menu-item @(NavigationManager.Uri.Contains("domain=toeic") ? "active" : "")">
-                            <a href="/portal-hub/users?domain=toeic">
-                                <i class="bi bi-trophy-fill text-warning"></i> Học viên TOEIC
-                            </a>
-                        </li>
-                        <li class="menu-item @(NavigationManager.Uri.Contains("domain=hsk") ? "active" : "")">
-                            <a href="/portal-hub/users?domain=hsk">
-                                <i class="bi bi-translate text-danger"></i> Học viên HSK
-                            </a>
-                        </li>
-                        <li class="menu-item @(NavigationManager.Uri.Contains("domain=admin") ? "active" : "")">
-                            <a href="/portal-hub/users?domain=admin">
-                                <i class="bi bi-shield-lock-fill text-danger"></i> Ban Quản trị (Admin)
-                            </a>
-                        </li>
-                    }
-
-                    <li class="sidebar-divider my-2"></li>
-                    <li class="menu-item @(IsActive("/portal-hub/notifications") ? "active" : "")">
-                        <a href="/portal-hub/notifications">
-                            <i class="bi bi-bell-fill text-info"></i> Quản lý Thông báo
-                        </a>
-                    </li>
-                    <li class="menu-item @(IsActive("/portal-hub/api-keys") || IsActive("/portal-hub/ai-settings") ? "active" : "")">
-                        <a href="/portal-hub/api-keys">
-                            <i class="bi bi-key-fill text-warning"></i> Cấu hình API & AI
-                        </a>
-                    </li>
                 </ul>
             </aside>
 
@@ -244,7 +197,7 @@ else
 }
 
 @code {
-    private string activeDomain = "IELTS";
+    private string activeDomain = "COMMON";
     private string currentUrl = "";
     private bool isCheckingAuth = true;
     private bool isAdminAuthenticated = false;
@@ -346,29 +299,55 @@ else
 
     private void UpdateActiveDomain(string url)
     {
-        if (url.Contains("users", StringComparison.OrdinalIgnoreCase))
+        var path = url.ToLowerInvariant();
+        
+        // 1. Tính năng dùng chung toàn hệ thống -> COMMON
+        if (path.StartsWith("portal-hub/users") 
+            || path.StartsWith("admin/users")
+            || path.Contains("notifications")
+            || path.Contains("navigation")
+            || path.Contains("api-keys")
+            || path.Contains("ai-settings")
+            || path == "portal-hub" 
+            || path == "portal-hub/" 
+            || path == "admin" 
+            || path == "admin/" 
+            || string.IsNullOrWhiteSpace(path))
         {
-            if (NavigationManager.Uri.Contains("domain=toeic", StringComparison.OrdinalIgnoreCase))
-                activeDomain = "TOEIC";
-            else if (NavigationManager.Uri.Contains("domain=hsk", StringComparison.OrdinalIgnoreCase))
-                activeDomain = "HSK";
-            else if (NavigationManager.Uri.Contains("domain=ielts", StringComparison.OrdinalIgnoreCase))
-                activeDomain = "IELTS";
-            else
-                activeDomain = "USERS";
+            activeDomain = "COMMON";
+            return;
         }
-        else if (url.Contains("hsk", StringComparison.OrdinalIgnoreCase))
-        {
-            activeDomain = "HSK";
-        }
-        else if (url.Contains("toeic", StringComparison.OrdinalIgnoreCase))
+
+        // 2. TOEIC
+        if (path.Contains("toeic"))
         {
             activeDomain = "TOEIC";
+            return;
         }
-        else
+
+        // 3. HSK
+        if (path.Contains("hsk"))
+        {
+            activeDomain = "HSK";
+            return;
+        }
+
+        // 4. IELTS
+        if (path.Contains("mock-tests")
+            || path.Contains("grading")
+            || path.Contains("listen-videos")
+            || path.Contains("stories")
+            || path.Contains("ielts-vocab")
+            || path.Contains("grammar")
+            || path.Contains("speak-along")
+            || path.Contains("reading-tool")
+            || path.Contains("ielts"))
         {
             activeDomain = "IELTS";
+            return;
         }
+
+        activeDomain = "COMMON";
     }
 
     private void SwitchDomain(string domain)
@@ -381,7 +360,7 @@ else
         else if (domain == "HSK")
             NavigationManager.NavigateTo("/portal-hub/hsk-mock-tests");
         else
-            NavigationManager.NavigateTo("/portal-hub/users");
+            NavigationManager.NavigateTo("/portal-hub");
     }
 
     private void NavigateToLogin()

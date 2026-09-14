@@ -5,7 +5,7 @@ using System.Net.Http.Json;
 
 namespace Frontend.App.Services;
 
-public sealed class ExamSubmissionService(ILocalStorageService localStorage, HttpClient httpClient)
+public sealed class ExamSubmissionService(ILocalStorageService localStorage, HttpClient httpClient, CookieStorageService? cookieStorage = null)
 {
     private const string StorageKey = "ielts-exam-submissions";
 
@@ -80,7 +80,9 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
         try
         {
             var queryParams = new List<string>();
-            var token = await localStorage.GetItemAsync<string>("authToken");
+            var token = cookieStorage != null 
+                ? await cookieStorage.GetItemAsync("authToken") 
+                : await localStorage.GetItemAsync<string>("authToken");
             int? userId = null;
             if (!string.IsNullOrWhiteSpace(token))
             {

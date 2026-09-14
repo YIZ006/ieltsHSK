@@ -1,0 +1,1491 @@
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject FriendshipService FriendSvc
+@inject IJSRuntime JS
+@implements IDisposable
+
+@if (FriendSvc.IsDrawerOpen)
+{
+    @* ── BACKDROP OVERLAY ── *@
+    <div class="friends-backdrop" @onclick="CloseDrawer"></div>
+
+    @* ── RIGHT SLIDE-OUT DRAWER ── *@
+    <div class="friends-drawer @(isClosing ? "slide-out" : "slide-in")" @onclick:stopPropagation>
+        @* ── DRAWER HEADER ── *@
+        <div class="drawer-header">
+            <div class="header-title-box">
+                <div class="header-icon-bubble">
+                    <i class="bi bi-people-fill text-primary"></i>
+                </div>
+                <div>
+                    <h3 class="drawer-title">Bạn bè</h3>
+                    <div class="drawer-stats">
+                        @if (summary != null)
+                        {
+                            <span class="online-chip"><span class="dot-online"></span> @summary.OnlineFriends online</span>
+                            <span class="dot-separator">•</span>
+                            <span>@summary.TotalFriends bạn bè</span>
+                        }
+                        else
+                        {
+                            <span>Đang nạp dữ liệu...</span>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <button type="button" class="btn-drawer-close" @onclick="CloseDrawer" title="Đóng (ESC)">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+
+        @* ── SEARCH BAR (@DisplayName) ── *@
+        <div class="drawer-search-wrap">
+            <div class="search-input-box">
+                <i class="bi bi-search search-icon"></i>
+                <input type="text"
+                       class="search-input"
+                       placeholder="Tìm theo @@tên hiển thị (vd: cuongnane)..."
+                       value="@searchQuery"
+                       @oninput="HandleSearchInput" />
+                @if (!string.IsNullOrEmpty(searchQuery))
+                {
+                    <button type="button" class="btn-clear-search" @onclick="ClearSearch" title="Xóa tìm kiếm">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                }
+            </div>
+        </div>
+
+        @* ── DRAWER TABS ── *@
+        <div class="drawer-tabs">
+            <button type="button" class="tab-item @(activeTab == "friends" ? "active" : "")" @onclick='() => SwitchTab("friends")'>
+                <i class="bi bi-people-fill"></i>
+                <span>Bạn bè</span>
+                @if (summary != null && summary.TotalFriends > 0)
+                {
+                    <span class="tab-badge">@summary.TotalFriends</span>
+                }
+            </button>
+            <button type="button" class="tab-item @(activeTab == "requests" ? "active" : "")" @onclick='() => SwitchTab("requests")'>
+                <i class="bi bi-envelope-paper-heart-fill"></i>
+                <span>Lời mời</span>
+                @if (summary != null && summary.PendingIncomingCount > 0)
+                {
+                    <span class="tab-badge badge-danger">@summary.PendingIncomingCount</span>
+                }
+            </button>
+            @if (!string.IsNullOrWhiteSpace(searchQuery))
+            {
+                <button type="button" class="tab-item @(activeTab == "search" ? "active" : "")" @onclick='() => SwitchTab("search")'>
+                    <i class="bi bi-person-plus-fill"></i>
+                    <span>Tìm bạn</span>
+                    @if (searchResults.Count > 0)
+                    {
+                        <span class="tab-badge badge-primary">@searchResults.Count</span>
+                    }
+                </button>
+            }
+        </div>
+
+        @* ── DRAWER BODY ── *@
+        <div class="drawer-body">
+            @if (isLoading)
+            {
+                <div class="state-loading">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                    <span>Đang tải danh sách...</span>
+                </div>
+            }
+            else if (activeTab == "search")
+            {
+                @* ── TAB: SEARCH RESULTS ── *@
+                <div class="section-container">
+                    <div class="section-label">
+                        <span>Kết quả tìm kiếm cho "@searchQuery"</span>
+                        <span class="count-chip">@searchResults.Count</span>
+                    </div>
+
+                    @if (isSearching)
+                    {
+                        <div class="state-loading">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                            <span>Đang tra cứu người dùng...</span>
+                        </div>
+                    }
+                    else if (searchResults.Count == 0)
+                    {
+                        <div class="state-empty">
+                            <div class="empty-icon">🔍</div>
+                            <div class="empty-title">Không tìm thấy người dùng nào</div>
+                            <div class="empty-sub">Hãy thử nhập chính xác <b>@@tên hiển thị</b> hoặc tên của người bạn muốn tìm.</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="user-list">
+                            @foreach (var user in searchResults)
+                            {
+                                <div class="user-card" @onclick="() => SelectUserForDetail(user.Id, user.Username, user.FullName, user.Avatar, user.AvatarColor, user.TargetExam, user.TargetScore, user.Level, user.Streak, user.IsOnline, null)">
+                                    <div class="avatar-wrap">
+                                        <div class="avatar-bubble" style="background: @(string.IsNullOrWhiteSpace(user.AvatarColor) ? "#4f46e5" : user.AvatarColor)">
+                                            <span class="avatar-emoji">@(string.IsNullOrWhiteSpace(user.Avatar) ? "🎓" : user.Avatar)</span>
+                                        </div>
+                                        <span class="status-dot @(user.IsOnline ? "online" : "offline")" title="@(user.IsOnline ? "Đang online" : "Ngoại tuyến")"></span>
+                                    </div>
+
+                                    <div class="user-info">
+                                        <div class="user-handle-row">
+                                            <span class="user-handle">@@@user.Username</span>
+                                            @if (user.Streak > 0)
+                                            {
+                                                <span class="user-streak-chip">🔥 @user.Streak</span>
+                                            }
+                                        </div>
+                                        <div class="user-fullname">@user.FullName</div>
+                                        <div class="user-meta-tags">
+                                            @if (!string.IsNullOrWhiteSpace(user.TargetExam))
+                                            {
+                                                <span class="badge-exam">@user.TargetExam @user.TargetScore</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(user.Level))
+                                            {
+                                                <span class="badge-level">@user.Level</span>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <div class="user-action-cell" @onclick:stopPropagation>
+                                        @if (user.Relationship == "Friends")
+                                        {
+                                            <span class="btn-status-friends"><i class="bi bi-check2"></i> Bạn bè</span>
+                                        }
+                                        else if (user.Relationship == "PendingOutgoing")
+                                        {
+                                            <button type="button" class="btn-action-cancel-req" @onclick="() => HandleCancelRequestByFriendshipId(user.FriendshipId)" title="Hủy lời mời đã gửi">
+                                                <span>Đã gửi</span> <i class="bi bi-x"></i>
+                                            </button>
+                                        }
+                                        else if (user.Relationship == "PendingIncoming")
+                                        {
+                                            <button type="button" class="btn-action-accept" @onclick="() => HandleAcceptRequest(user.FriendshipId!.Value)" title="Chấp nhận kết bạn">
+                                                <i class="bi bi-check2"></i> Đồng ý
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn-action-add" @onclick="() => HandleSendRequest(user.Id)" title="Gửi lời mời kết bạn">
+                                                <i class="bi bi-person-plus-fill"></i> Kết bạn
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else if (activeTab == "requests")
+            {
+                @* ── TAB: FRIEND REQUESTS ── *@
+                <div class="section-container">
+                    @* 1. Lời mời nhận được *@
+                    <div class="section-label">
+                        <span>Lời mời kết bạn nhận được</span>
+                        <span class="count-chip badge-danger">@(summary?.IncomingRequests.Count ?? 0)</span>
+                    </div>
+
+                    @if (summary == null || summary.IncomingRequests.Count == 0)
+                    {
+                        <div class="state-empty-sub">
+                            <span>Không có lời mời kết bạn nào đang chờ.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="user-list mb-3">
+                            @foreach (var req in summary.IncomingRequests)
+                            {
+                                <div class="user-card request-card">
+                                    <div class="avatar-wrap">
+                                        <div class="avatar-bubble" style="background: @(string.IsNullOrWhiteSpace(req.AvatarColor) ? "#4f46e5" : req.AvatarColor)">
+                                            <span class="avatar-emoji">@(string.IsNullOrWhiteSpace(req.Avatar) ? "🎓" : req.Avatar)</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="user-info">
+                                        <div class="user-handle-row">
+                                            <span class="user-handle">@@@req.Username</span>
+                                            @if (req.Streak > 0)
+                                            {
+                                                <span class="user-streak-chip">🔥 @req.Streak</span>
+                                            }
+                                        </div>
+                                        <div class="user-fullname">@req.FullName</div>
+                                        @if (!string.IsNullOrWhiteSpace(req.TargetExam))
+                                        {
+                                            <div class="user-meta-tags">
+                                                <span class="badge-exam">@req.TargetExam @req.TargetScore</span>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <div class="request-actions">
+                                        <button type="button" class="btn-req-accept" @onclick="() => HandleAcceptRequest(req.FriendshipId)" title="Chấp nhận kết bạn">
+                                            <i class="bi bi-check2"></i>
+                                        </button>
+                                        <button type="button" class="btn-req-decline" @onclick="() => HandleDeclineRequest(req.FriendshipId)" title="Từ chối">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @* 2. Lời mời đã gửi *@
+                    @if (summary != null && summary.OutgoingRequests.Count > 0)
+                    {
+                        <div class="section-label mt-4">
+                            <span>Lời mời bạn đã gửi</span>
+                            <span class="count-chip">@summary.OutgoingRequests.Count</span>
+                        </div>
+                        <div class="user-list">
+                            @foreach (var outReq in summary.OutgoingRequests)
+                            {
+                                <div class="user-card request-card">
+                                    <div class="avatar-wrap">
+                                        <div class="avatar-bubble" style="background: @(string.IsNullOrWhiteSpace(outReq.AvatarColor) ? "#4f46e5" : outReq.AvatarColor)">
+                                            <span class="avatar-emoji">@(string.IsNullOrWhiteSpace(outReq.Avatar) ? "🎓" : outReq.Avatar)</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="user-info">
+                                        <div class="user-handle-row">
+                                            <span class="user-handle">@@@outReq.Username</span>
+                                        </div>
+                                        <div class="user-fullname">@outReq.FullName</div>
+                                        <span class="text-muted-status">Đang chờ đối phương chấp nhận...</span>
+                                    </div>
+
+                                    <div class="request-actions">
+                                        <button type="button" class="btn-action-cancel-req" @onclick="() => HandleCancelRequestByFriendshipId(outReq.FriendshipId)" title="Thu hồi lời mời">
+                                            <span>Hủy</span> <i class="bi bi-x"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                @* ── TAB: ALL FRIENDS (WOLVESVILLE STYLE) ── *@
+                <div class="section-container">
+                    @if (summary == null || summary.Friends.Count == 0)
+                    {
+                        <div class="state-empty">
+                            <div class="empty-icon">🤝</div>
+                            <div class="empty-title">Bạn chưa có bạn bè nào</div>
+                            <div class="empty-sub">Hãy tìm kiếm <b>@@tên hiển thị</b> của bạn bè ở ô trên để kết nối và cùng nhau chinh phục mục tiêu học tập!</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="user-list">
+                            @foreach (var friend in summary.Friends)
+                            {
+                                <div class="user-card @(friend.IsFavorite ? "card-favorite" : "")" @onclick="() => SelectUserForDetail(friend.Id, friend.Username, friend.FullName, friend.Avatar, friend.AvatarColor, friend.TargetExam, friend.TargetScore, friend.Level, friend.Streak, friend.IsOnline, friend.Bio)">
+                                    <div class="avatar-wrap">
+                                        <div class="avatar-bubble" style="background: @(string.IsNullOrWhiteSpace(friend.AvatarColor) ? "#4f46e5" : friend.AvatarColor)">
+                                            <span class="avatar-emoji">@(string.IsNullOrWhiteSpace(friend.Avatar) ? "🎓" : friend.Avatar)</span>
+                                        </div>
+                                        <span class="status-dot @(friend.IsOnline ? "online pulse" : "offline")" title="@(friend.IsOnline ? "Đang online" : $"Hoạt động {GetTimeAgo(friend.LastActive)}")"></span>
+                                    </div>
+
+                                    <div class="user-info">
+                                        <div class="user-handle-row">
+                                            <span class="user-handle">@@@friend.Username</span>
+                                            @if (friend.IsFavorite)
+                                            {
+                                                <span class="badge-star" title="Bạn thân / Yêu thích">⭐</span>
+                                            }
+                                            @if (friend.Streak > 0)
+                                            {
+                                                <span class="user-streak-chip">🔥 @friend.Streak</span>
+                                            }
+                                        </div>
+                                        <div class="user-fullname">@friend.FullName</div>
+                                        <div class="user-meta-tags">
+                                            @if (!string.IsNullOrWhiteSpace(friend.TargetExam))
+                                            {
+                                                <span class="badge-exam">@friend.TargetExam @friend.TargetScore</span>
+                                            }
+                                            @if (friend.IsOnline)
+                                            {
+                                                <span class="text-online-status">🟢 Đang online</span>
+                                            }
+                                            else if (friend.LastActive.HasValue)
+                                            {
+                                                <span class="text-offline-status">@GetTimeAgo(friend.LastActive)</span>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <div class="friend-actions" @onclick:stopPropagation>
+                                        <button type="button" class="btn-star @(friend.IsFavorite ? "active" : "")" @onclick="() => HandleToggleFavorite(friend.Id)" title="@(friend.IsFavorite ? "Bỏ ghim bạn thân" : "Ghim bạn thân lên đầu")">
+                                            <i class="bi @(friend.IsFavorite ? "bi-star-fill" : "bi-star")"></i>
+                                        </button>
+                                        <button type="button" class="btn-unfriend" @onclick="() => ConfirmUnfriend(friend)" title="Hủy kết bạn">
+                                            <i class="bi bi-person-x-fill"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        @* ── DRAWER FOOTER ── *@
+        <div class="drawer-footer">
+            <div class="footer-tip">
+                <i class="bi bi-lightbulb text-warning"></i>
+                <span>Mẹo: Bạn có thể sao chép <b>@@tên hiển thị</b> trong hồ sơ cá nhân gửi cho bạn bè để họ tìm thấy bạn ngay lập tức!</span>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── POPUP XÁC NHẬN HỦY KẾT BẠN ── *@
+@if (unfriendTarget != null)
+{
+    <div class="friends-modal-backdrop" @onclick="() => unfriendTarget = null">
+        <div class="confirm-modal-box" @onclick:stopPropagation>
+            <div class="confirm-icon-bubble">
+                <i class="bi bi-person-x-fill text-danger"></i>
+            </div>
+            <h4 class="confirm-title">Hủy kết bạn?</h4>
+            <p class="confirm-text">
+                Bạn có chắc chắn muốn hủy kết bạn với <b>@@@unfriendTarget.Username</b> (@unfriendTarget.FullName)?
+            </p>
+            <div class="confirm-actions">
+                <button type="button" class="btn-confirm-delete" @onclick="ExecuteUnfriendAsync">
+                    Hủy kết bạn
+                </button>
+                <button type="button" class="btn-confirm-cancel" @onclick="() => unfriendTarget = null">
+                    Giữ lại
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── POPUP XEM HỒ SƠ BẠN BÈ ── *@
+@if (selectedDetailUser != null)
+{
+    <div class="friends-modal-backdrop" @onclick="() => selectedDetailUser = null">
+        <div class="profile-card-modal" @onclick:stopPropagation>
+            <div class="profile-cover">
+                <button type="button" class="btn-close-profile" @onclick="() => selectedDetailUser = null">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="profile-avatar-wrap">
+                <div class="profile-avatar" style="background: @selectedDetailUser.AvatarColor;">
+                    <span>@selectedDetailUser.AvatarEmoji</span>
+                </div>
+                <span class="profile-status-badge @(selectedDetailUser.IsOnline ? "online" : "offline")">
+                    @(selectedDetailUser.IsOnline ? "🟢 Đang trực tuyến" : "⚪ Ngoại tuyến")
+                </span>
+            </div>
+
+            <div class="profile-body">
+                <h4 class="profile-name">@selectedDetailUser.FullName</h4>
+                <div class="profile-handle">@@@selectedDetailUser.Username</div>
+
+                @if (!string.IsNullOrWhiteSpace(selectedDetailUser.Bio))
+                {
+                    <p class="profile-bio">"@selectedDetailUser.Bio"</p>
+                }
+
+                <div class="profile-stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-label">Mục tiêu</div>
+                        <div class="stat-val text-primary">@(string.IsNullOrWhiteSpace(selectedDetailUser.TargetExam) ? "Chưa đặt" : $"{selectedDetailUser.TargetExam} {selectedDetailUser.TargetScore}")</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Chuỗi học</div>
+                        <div class="stat-val text-warning">🔥 @selectedDetailUser.Streak ngày</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Trình độ</div>
+                        <div class="stat-val text-success">@(string.IsNullOrWhiteSpace(selectedDetailUser.Level) ? "A1" : selectedDetailUser.Level)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /* ─── BACKDROP & DRAWER CONTAINER ─── */
+    .friends-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        z-index: 99980;
+        animation: fadeIn 0.2s ease;
+    }
+
+    .friends-drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 400px;
+        max-width: 100vw;
+        height: 100vh;
+        background: #0f172a;
+        border-left: 1px solid rgba(255, 255, 255, 0.12);
+        z-index: 99985;
+        display: flex;
+        flex-direction: column;
+        color: #f8fafc;
+        box-shadow: -15px 0 45px rgba(0, 0, 0, 0.7);
+    }
+
+    .slide-in {
+        animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .slide-out {
+        animation: slideOutRight 0.25s ease-out forwards;
+    }
+
+    @@keyframes slideInRight {
+        from { transform: translateX(100%); }
+        to { transform: translateX(0); }
+    }
+
+    @@keyframes slideOutRight {
+        from { transform: translateX(0); }
+        to { transform: translateX(100%); }
+    }
+
+    /* ─── HEADER ─── */
+    .drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(30, 41, 59, 0.5);
+    }
+
+    .header-title-box {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .header-icon-bubble {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: rgba(59, 130, 246, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+
+    .drawer-title {
+        font-size: 1.12rem;
+        font-weight: 700;
+        margin: 0;
+        color: #ffffff;
+    }
+
+    .drawer-stats {
+        font-size: 0.78rem;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 2px;
+    }
+
+    .online-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: #34d399;
+        font-weight: 600;
+    }
+
+    .dot-online {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 8px #10b981;
+    }
+
+    .dot-separator {
+        color: #64748b;
+    }
+
+    .btn-drawer-close {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 1.15rem;
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 8px;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-drawer-close:hover {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* ─── SEARCH INPUT ─── */
+    .drawer-search-wrap {
+        padding: 14px 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .search-input-box {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 12px;
+        color: #64748b;
+        font-size: 0.95rem;
+        pointer-events: none;
+    }
+
+    .search-input {
+        width: 100%;
+        background: rgba(30, 41, 59, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 9px 36px 9px 36px;
+        color: #ffffff;
+        font-size: 0.88rem;
+        outline: none;
+        transition: all 0.2s;
+    }
+
+    .search-input:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        background: rgba(30, 41, 59, 0.95);
+    }
+
+    .btn-clear-search {
+        position: absolute;
+        right: 10px;
+        background: transparent;
+        border: none;
+        color: #64748b;
+        font-size: 0.95rem;
+        cursor: pointer;
+        padding: 2px;
+    }
+
+    .btn-clear-search:hover {
+        color: #94a3b8;
+    }
+
+    /* ─── TABS ─── */
+    .drawer-tabs {
+        display: flex;
+        padding: 8px 20px 0 20px;
+        gap: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 23, 42, 0.4);
+    }
+
+    .tab-item {
+        flex: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 9px 6px;
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: #94a3b8;
+        font-size: 0.84rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .tab-item:hover {
+        color: #e2e8f0;
+    }
+
+    .tab-item.active {
+        color: #38bdf8;
+        border-bottom-color: #38bdf8;
+    }
+
+    .tab-badge {
+        font-size: 0.7rem;
+        padding: 1px 6px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.12);
+        color: #e2e8f0;
+    }
+
+    .tab-badge.badge-danger {
+        background: #ef4444;
+        color: #ffffff;
+    }
+
+    .tab-badge.badge-primary {
+        background: #3b82f6;
+        color: #ffffff;
+    }
+
+    /* ─── DRAWER BODY & LISTS ─── */
+    .drawer-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 20px;
+    }
+
+    .section-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 700;
+        color: #94a3b8;
+        margin-bottom: 12px;
+    }
+
+    .count-chip {
+        font-size: 0.7rem;
+        padding: 2px 7px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.1);
+        color: #cbd5e1;
+    }
+
+    .user-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    /* ─── USER CARD ─── */
+    .user-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        background: rgba(30, 41, 59, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .user-card:hover {
+        background: rgba(30, 41, 59, 0.85);
+        border-color: rgba(255, 255, 255, 0.12);
+        transform: translateY(-1px);
+    }
+
+    .user-card.card-favorite {
+        border-color: rgba(245, 158, 11, 0.3);
+        background: rgba(245, 158, 11, 0.05);
+    }
+
+    .avatar-wrap {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .avatar-bubble {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .status-dot {
+        position: absolute;
+        bottom: -2px;
+        right: -2px;
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        border: 2px solid #0f172a;
+    }
+
+    .status-dot.online {
+        background: #10b981;
+    }
+
+    .status-dot.offline {
+        background: #64748b;
+    }
+
+    .user-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .user-handle-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .user-handle {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #ffffff;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .badge-star {
+        font-size: 0.8rem;
+    }
+
+    .user-streak-chip {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #f59e0b;
+        background: rgba(245, 158, 11, 0.15);
+        padding: 1px 6px;
+        border-radius: 8px;
+    }
+
+    .user-fullname {
+        font-size: 0.78rem;
+        color: #94a3b8;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .user-meta-tags {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 3px;
+        flex-wrap: wrap;
+    }
+
+    .badge-exam {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.12);
+        padding: 1px 6px;
+        border-radius: 6px;
+    }
+
+    .badge-level {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: #a855f7;
+        background: rgba(168, 85, 247, 0.12);
+        padding: 1px 6px;
+        border-radius: 6px;
+    }
+
+    .text-online-status {
+        font-size: 0.7rem;
+        color: #34d399;
+        font-weight: 500;
+    }
+
+    .text-offline-status {
+        font-size: 0.7rem;
+        color: #64748b;
+    }
+
+    .text-muted-status {
+        font-size: 0.72rem;
+        color: #94a3b8;
+        font-style: italic;
+    }
+
+    /* ─── BUTTONS & ACTIONS ─── */
+    .friend-actions,
+    .request-actions,
+    .user-action-cell {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+    }
+
+    .btn-star {
+        background: transparent;
+        border: none;
+        color: #64748b;
+        font-size: 1.1rem;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 6px;
+        transition: all 0.2s;
+    }
+
+    .btn-star:hover {
+        color: #f59e0b;
+        transform: scale(1.15);
+    }
+
+    .btn-star.active {
+        color: #f59e0b;
+    }
+
+    .btn-unfriend {
+        background: transparent;
+        border: none;
+        color: #64748b;
+        font-size: 1rem;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 6px;
+        transition: all 0.2s;
+    }
+
+    .btn-unfriend:hover {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.1);
+    }
+
+    .btn-action-add {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 12px;
+        background: linear-gradient(135deg, #2563eb, #3b82f6);
+        color: #ffffff;
+        font-size: 0.78rem;
+        font-weight: 600;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-action-add:hover {
+        background: linear-gradient(135deg, #1d4ed8, #2563eb);
+        transform: translateY(-1px);
+    }
+
+    .btn-status-friends {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #34d399;
+        background: rgba(16, 185, 129, 0.12);
+        padding: 5px 10px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .btn-action-cancel-req {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 10px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #94a3b8;
+        font-size: 0.78rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-action-cancel-req:hover {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-action-accept,
+    .btn-req-accept {
+        background: #10b981;
+        color: #ffffff;
+        border: none;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.2s;
+    }
+
+    .btn-action-accept:hover,
+    .btn-req-accept:hover {
+        background: #059669;
+    }
+
+    .btn-req-decline {
+        background: rgba(255, 255, 255, 0.08);
+        color: #94a3b8;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-req-decline:hover {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.12);
+    }
+
+    /* ─── STATES (EMPTY, LOADING) ─── */
+    .state-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 40px 20px;
+        color: #94a3b8;
+        font-size: 0.88rem;
+    }
+
+    .state-empty {
+        text-align: center;
+        padding: 45px 20px;
+        color: #94a3b8;
+    }
+
+    .empty-icon {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+    }
+
+    .empty-title {
+        font-size: 0.98rem;
+        font-weight: 700;
+        color: #ffffff;
+        margin-bottom: 6px;
+    }
+
+    .empty-sub {
+        font-size: 0.82rem;
+        line-height: 1.5;
+        color: #94a3b8;
+    }
+
+    .state-empty-sub {
+        padding: 16px 12px;
+        text-align: center;
+        font-size: 0.82rem;
+        color: #64748b;
+        background: rgba(30, 41, 59, 0.3);
+        border-radius: 10px;
+    }
+
+    /* ─── FOOTER ─── */
+    .drawer-footer {
+        padding: 14px 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(30, 41, 59, 0.4);
+    }
+
+    .footer-tip {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 0.76rem;
+        color: #94a3b8;
+        line-height: 1.45;
+    }
+
+    .footer-tip b {
+        color: #38bdf8;
+    }
+
+    /* ─── CONFIRM & DETAIL MODAL ─── */
+    .friends-modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(5px);
+        -webkit-backdrop-filter: blur(5px);
+        z-index: 99990;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        animation: fadeIn 0.15s ease;
+    }
+
+    .confirm-modal-box {
+        background: #0f172a;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 18px;
+        width: 100%;
+        max-width: 360px;
+        padding: 24px;
+        text-align: center;
+        box-shadow: 0 20px 45px rgba(0, 0, 0, 0.8);
+    }
+
+    .confirm-icon-bubble {
+        width: 50px;
+        height: 50px;
+        border-radius: 14px;
+        background: rgba(239, 68, 68, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin: 0 auto 14px auto;
+    }
+
+    .confirm-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #ffffff;
+        margin-bottom: 8px;
+    }
+
+    .confirm-text {
+        font-size: 0.88rem;
+        color: #cbd5e1;
+        line-height: 1.5;
+        margin-bottom: 20px;
+    }
+
+    .confirm-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn-confirm-delete {
+        flex: 1;
+        padding: 10px;
+        background: #ef4444;
+        color: #ffffff;
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .btn-confirm-delete:hover {
+        background: #dc2626;
+    }
+
+    .btn-confirm-cancel {
+        flex: 1;
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #cbd5e1;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    /* ─── PROFILE CARD MODAL ─── */
+    .profile-card-modal {
+        background: #0f172a;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 20px;
+        width: 100%;
+        max-width: 380px;
+        overflow: hidden;
+        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8);
+    }
+
+    .profile-cover {
+        height: 70px;
+        background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+        position: relative;
+    }
+
+    .btn-close-profile {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.3);
+        border: none;
+        color: #ffffff;
+        font-size: 0.95rem;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .profile-avatar-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: -36px;
+    }
+
+    .profile-avatar {
+        width: 72px;
+        height: 72px;
+        border-radius: 20px;
+        border: 4px solid #0f172a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.2rem;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .profile-status-badge {
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 2px 10px;
+        border-radius: 12px;
+        margin-top: 8px;
+    }
+
+    .profile-status-badge.online {
+        color: #34d399;
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .profile-status-badge.offline {
+        color: #94a3b8;
+        background: rgba(100, 116, 139, 0.15);
+        border: 1px solid rgba(100, 116, 139, 0.3);
+    }
+
+    .profile-body {
+        padding: 16px 20px 24px 20px;
+        text-align: center;
+    }
+
+    .profile-name {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #ffffff;
+        margin: 0;
+    }
+
+    .profile-handle {
+        font-size: 0.88rem;
+        color: #38bdf8;
+        font-weight: 600;
+        margin-top: 2px;
+    }
+
+    .profile-bio {
+        font-size: 0.82rem;
+        color: #cbd5e1;
+        font-style: italic;
+        margin: 10px 0 0 0;
+    }
+
+    .profile-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 18px;
+    }
+
+    .stat-box {
+        background: rgba(30, 41, 59, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 12px;
+        padding: 10px 6px;
+    }
+
+    .stat-label {
+        font-size: 0.7rem;
+        color: #94a3b8;
+        margin-bottom: 2px;
+    }
+
+    .stat-val {
+        font-size: 0.88rem;
+        font-weight: 700;
+    }
+
+    @@keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+</style>
+
+@code {
+    private FriendsSummaryDto? summary;
+    private bool isLoading = true;
+    private bool isClosing = false;
+    private string activeTab = "friends"; // "friends", "requests", "search"
+
+    // Search state
+    private string searchQuery = "";
+    private bool isSearching = false;
+    private List<UserSearchResultDto> searchResults = new();
+    private CancellationTokenSource? searchCts;
+
+    // Modals
+    private FriendDto? unfriendTarget;
+    private UserDetailViewModel? selectedDetailUser;
+
+    private class UserDetailViewModel
+    {
+        public int Id { get; set; }
+        public string Username { get; set; } = "";
+        public string FullName { get; set; } = "";
+        public string AvatarEmoji { get; set; } = "🎓";
+        public string AvatarColor { get; set; } = "#4f46e5";
+        public string? TargetExam { get; set; }
+        public string? TargetScore { get; set; }
+        public string? Level { get; set; }
+        public int Streak { get; set; }
+        public bool IsOnline { get; set; }
+        public string? Bio { get; set; }
+    }
+
+    protected override void OnInitialized()
+    {
+        FriendSvc.OnDrawerStateChanged += HandleDrawerStateChanged;
+        FriendSvc.OnChange += HandleFriendServiceChanged;
+    }
+
+    private void HandleDrawerStateChanged()
+    {
+        if (FriendSvc.IsDrawerOpen)
+        {
+            isClosing = false;
+            _ = LoadDataAsync();
+        }
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleFriendServiceChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+        summary = await FriendSvc.GetSummaryAsync();
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void SwitchTab(string tab)
+    {
+        activeTab = tab;
+    }
+
+    private async Task HandleSearchInput(ChangeEventArgs e)
+    {
+        searchQuery = e.Value?.ToString() ?? "";
+        searchCts?.Cancel();
+
+        if (string.IsNullOrWhiteSpace(searchQuery))
+        {
+            searchResults.Clear();
+            isSearching = false;
+            if (activeTab == "search") activeTab = "friends";
+            return;
+        }
+
+        activeTab = "search";
+        isSearching = true;
+        StateHasChanged();
+
+        searchCts = new CancellationTokenSource();
+        var token = searchCts.Token;
+
+        try
+        {
+            await Task.Delay(300, token);
+            if (!token.IsCancellationRequested)
+            {
+                searchResults = await FriendSvc.SearchUsersAsync(searchQuery);
+            }
+        }
+        catch (TaskCanceledException) { }
+        finally
+        {
+            isSearching = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearSearch()
+    {
+        searchQuery = "";
+        searchResults.Clear();
+        activeTab = "friends";
+    }
+
+    private async Task HandleSendRequest(int targetUserId)
+    {
+        var success = await FriendSvc.SendFriendRequestAsync(targetUserId);
+        if (success)
+        {
+            // Cập nhật trạng thái item tìm kiếm
+            var item = searchResults.FirstOrDefault(u => u.Id == targetUserId);
+            if (item != null) item.Relationship = "PendingOutgoing";
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task HandleAcceptRequest(int friendshipId)
+    {
+        var success = await FriendSvc.AcceptFriendRequestAsync(friendshipId);
+        if (success)
+        {
+            await LoadDataAsync();
+            // Cập nhật lại search result nếu có
+            var searchItem = searchResults.FirstOrDefault(u => u.FriendshipId == friendshipId);
+            if (searchItem != null) searchItem.Relationship = "Friends";
+        }
+    }
+
+    private async Task HandleDeclineRequest(int friendshipId)
+    {
+        var success = await FriendSvc.DeclineFriendRequestAsync(friendshipId);
+        if (success)
+        {
+            await LoadDataAsync();
+            var searchItem = searchResults.FirstOrDefault(u => u.FriendshipId == friendshipId);
+            if (searchItem != null) searchItem.Relationship = "None";
+        }
+    }
+
+    private async Task HandleCancelRequestByFriendshipId(int? friendshipId)
+    {
+        if (!friendshipId.HasValue) return;
+        var success = await FriendSvc.CancelFriendRequestAsync(friendshipId.Value);
+        if (success)
+        {
+            await LoadDataAsync();
+            var searchItem = searchResults.FirstOrDefault(u => u.FriendshipId == friendshipId.Value);
+            if (searchItem != null) searchItem.Relationship = "None";
+        }
+    }
+
+    private async Task HandleToggleFavorite(int friendId)
+    {
+        var success = await FriendSvc.ToggleFavoriteAsync(friendId);
+        if (success)
+        {
+            var item = summary?.Friends.FirstOrDefault(f => f.Id == friendId);
+            if (item != null) item.IsFavorite = !item.IsFavorite;
+            StateHasChanged();
+        }
+    }
+
+    private void ConfirmUnfriend(FriendDto friend)
+    {
+        unfriendTarget = friend;
+    }
+
+    private async Task ExecuteUnfriendAsync()
+    {
+        if (unfriendTarget == null) return;
+        var targetId = unfriendTarget.Id;
+        unfriendTarget = null;
+        var success = await FriendSvc.RemoveFriendAsync(targetId);
+        if (success)
+        {
+            await LoadDataAsync();
+            var searchItem = searchResults.FirstOrDefault(u => u.Id == targetId);
+            if (searchItem != null) searchItem.Relationship = "None";
+        }
+    }
+
+    private void SelectUserForDetail(int id, string username, string fullname, string? avatar, string? color, string? exam, string? score, string? lvl, int streak, bool online, string? bio)
+    {
+        selectedDetailUser = new UserDetailViewModel
+        {
+            Id = id,
+            Username = username,
+            FullName = fullname,
+            AvatarEmoji = string.IsNullOrWhiteSpace(avatar) ? "🎓" : avatar,
+            AvatarColor = string.IsNullOrWhiteSpace(color) ? "#4f46e5" : color,
+            TargetExam = exam,
+            TargetScore = score,
+            Level = lvl,
+            Streak = streak,
+            IsOnline = online,
+            Bio = bio
+        };
+    }
+
+    private async Task CloseDrawer()
+    {
+        isClosing = true;
+        StateHasChanged();
+        await Task.Delay(250);
+        isClosing = false;
+        FriendSvc.CloseDrawer();
+    }
+
+    private static string GetTimeAgo(DateTime? dt)
+    {
+        if (!dt.HasValue) return "Lâu rồi";
+        var diff = DateTime.UtcNow - dt.Value;
+        if (diff.TotalMinutes < 1) return "Vừa xong";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} phút trước";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} giờ trước";
+        if (diff.TotalDays < 30) return $"{(int)diff.TotalDays} ngày trước";
+        return dt.Value.ToString("dd/MM/yyyy");
+    }
+
+    public void Dispose()
+    {
+        FriendSvc.OnDrawerStateChanged -= HandleDrawerStateChanged;
+        FriendSvc.OnChange -= HandleFriendServiceChanged;
+        searchCts?.Dispose();
+    }
+}

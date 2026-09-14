@@ -167,6 +167,36 @@
     <script src="js/speak-along-interop.js"></script>
     <script src="js/toeicAudio.js"></script>
     <script>
+        window.cookieStorage = {
+            getItem: function (name) {
+                if (!name) return null;
+                var encodedName = encodeURIComponent(name) + "=";
+                var cookies = document.cookie ? document.cookie.split(';') : [];
+                for (var i = 0; i < cookies.length; i++) {
+                    var c = cookies[i].trim();
+                    if (c.indexOf(encodedName) === 0) {
+                        return decodeURIComponent(c.substring(encodedName.length));
+                    }
+                }
+                return null;
+            },
+            setItem: function (name, value, days) {
+                if (!name) return;
+                var expires = "";
+                if (days && typeof days === 'number') {
+                    var date = new Date();
+                    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                    expires = "; expires=" + date.toUTCString();
+                }
+                document.cookie = encodeURIComponent(name) + "=" + encodeURIComponent(value || "") + expires + "; path=/; SameSite=Lax";
+            },
+            removeItem: function (name) {
+                if (!name) return;
+                document.cookie = encodeURIComponent(name) + "=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax";
+            }
+        };
+    </script>
+    <script>
         window.scrollBuilderToTop = () => {
             const el = document.getElementById('builder-main');
             if (el) el.scrollTop = 0;

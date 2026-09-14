@@ -106,6 +106,7 @@ public static class DependencyInjection
         services.AddSingleton<ICacheService, Backend.Infrastructure.Services.RedisCacheService>();
 
         services.AddScoped<IAuthService, Backend.Infrastructure.Services.AuthService>();
+        services.AddScoped<IFriendshipService, Backend.Infrastructure.Services.FriendshipService>();
         services.AddScoped<Backend.Application.Abstractions.IR2StorageService, Backend.Infrastructure.Services.R2StorageService>();
         services.AddScoped<Backend.Application.Abstractions.IAiGradingService, Backend.Infrastructure.Services.AiGradingService>();
         services.AddScoped<Backend.Infrastructure.Services.YoutubeTranscriptService>();
@@ -359,6 +360,22 @@ public static class DependencyInjection
                         CONSTRAINT uq_user_notif_read UNIQUE (user_id, notification_id)
                     );
                     CREATE INDEX IF NOT EXISTS ix_user_notif_reads_user ON user_notification_reads (user_id);
+
+                    -- 11. Bảng friendships
+                    CREATE TABLE IF NOT EXISTS friendships (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        friend_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        status INTEGER NOT NULL DEFAULT 0,
+                        action_user_id INTEGER NOT NULL,
+                        is_favorite BOOLEAN NOT NULL DEFAULT FALSE,
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ,
+                        CONSTRAINT uq_friendships_user_friend UNIQUE (user_id, friend_id)
+                    );
+                    CREATE INDEX IF NOT EXISTS ix_friendships_user_id ON friendships (user_id);
+                    CREATE INDEX IF NOT EXISTS ix_friendships_friend_id ON friendships (friend_id);
+                    CREATE INDEX IF NOT EXISTS ix_friendships_status ON friendships (status);
                 END $$;
 
                 -- Tạo bảng admins riêng biệt không chung với users

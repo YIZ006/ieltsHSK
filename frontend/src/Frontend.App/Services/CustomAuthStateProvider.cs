@@ -7,14 +7,14 @@ namespace Frontend.App.Services;
 
 public class CustomAuthStateProvider : AuthenticationStateProvider
 {
-    private readonly ILocalStorageService _localStorage;
+    private readonly CookieStorageService _cookieStorage;
     private readonly TokenRefreshService _tokenRefreshService;
 
     private static readonly AuthenticationState AnonymousState = new(new ClaimsPrincipal(new ClaimsIdentity()));
 
-    public CustomAuthStateProvider(ILocalStorageService localStorage, TokenRefreshService tokenRefreshService)
+    public CustomAuthStateProvider(CookieStorageService cookieStorage, TokenRefreshService tokenRefreshService)
     {
-        _localStorage = localStorage;
+        _cookieStorage = cookieStorage;
         _tokenRefreshService = tokenRefreshService;
         // Token được gia hạn ngầm / phiên chết ở bất kỳ đâu -> cập nhật trạng thái đăng nhập ngay lập tức
         _tokenRefreshService.TokensRefreshed += NotifyUserAuthentication;
@@ -25,7 +25,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
     {
         try
         {
-            var token = await _localStorage.GetItemAsync<string>(TokenRefreshService.AccessTokenKey);
+            var token = await _cookieStorage.GetItemAsync(TokenRefreshService.AccessTokenKey);
 
             if (string.IsNullOrWhiteSpace(token))
             {
@@ -49,7 +49,7 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
                 return AnonymousState;
             }
 
-            var newToken = await _localStorage.GetItemAsync<string>(TokenRefreshService.AccessTokenKey);
+            var newToken = await _cookieStorage.GetItemAsync(TokenRefreshService.AccessTokenKey);
             if (string.IsNullOrWhiteSpace(newToken))
             {
                 return AnonymousState;

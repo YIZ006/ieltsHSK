@@ -1,29 +1,32 @@
 using System.Net;
 using System.Net.Http.Headers;
-using Blazored.LocalStorage;
+using Microsoft.AspNetCore.Components.WebAssembly.Http;
 
 namespace Frontend.App.Services;
 
 /// <summary>
-/// Tự động gắn Authorization: Bearer token vào mọi request gọi backend.
-/// - Lấy token qua TokenRefreshService (tự refresh ngầm nếu token hết hạn).
+/// Tự động gắn Authorization: Bearer token và cookie credentials vào mọi request gọi backend.
+/// - Lấy token qua TokenRefreshService (tự refresh ngầm nếu token hết hạn) và CookieStorageService.
 /// - Khi gặp 401 (token bị thu hồi/hết hạn giữa chừng): refresh một lần rồi gửi lại request.
 /// </summary>
 public class AuthHeaderHandler : DelegatingHandler
 {
     private readonly TokenRefreshService _tokenService;
-    private readonly ILocalStorageService _localStorage;
+    private readonly CookieStorageService _cookieStorage;
 
-    public AuthHeaderHandler(TokenRefreshService tokenService, ILocalStorageService localStorage)
+    public AuthHeaderHandler(TokenRefreshService tokenService, CookieStorageService cookieStorage)
     {
         _tokenService = tokenService;
-        _localStorage = localStorage;
+        _cookieStorage = cookieStorage;
         // Bắt buộc: DelegatingHandler phải có handler bên trong để gửi request đi tiếp
         InnerHandler = new HttpClientHandler();
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, System.Threading.CancellationToken cancellationToken)
     {
+        // Tự động đính kèm cookie trong request HTTP
+        request.SetBrowserRequestCredentials(BrowserRequestCredentials.Include);
+
         await AttachTokenAsync(request);
 
         var response = await base.SendAsync(request, cancellationToken);
@@ -45,6 +48,7 @@ public class AuthHeaderHandler : DelegatingHandler
         response.Dispose();
 
         using var retryRequest = await CloneRequestAsync(request);
+        retryRequest.SetBrowserRequestCredentials(BrowserRequestCredentials.Include);
         await AttachTokenAsync(retryRequest);
         return await base.SendAsync(retryRequest, cancellationToken);
     }
@@ -59,7 +63,7 @@ public class AuthHeaderHandler : DelegatingHandler
             if (path.Contains("/api/admin"))
             {
                 // Ưu tiên token riêng của Admin
-                token = await _localStorage.GetItemAsync<string>("admin_authToken");
+                token = await _cookieStorage.GetItemAsync("admin_authToken");
                 if (string.IsNullOrWhiteSpace(token))
                 {
                     token = await _tokenService.GetAccessTokenAsync();

@@ -6,11 +6,11 @@ namespace Frontend.App.Services;
 
 /// <summary>
 /// Hệ thống token ghi nhớ tài khoản:
-/// - Access token (JWT) + refresh token được lưu trong localStorage, phiên sống dai qua nhiều lần đóng/mở trình duyệt.
+/// - Access token (JWT) + refresh token được lưu trong Cookie, phiên sống dai qua nhiều lần đóng/mở trình duyệt.
 /// - Khi access token hết hạn, tự động gọi /api/auth/refresh để gia hạn ngầm (silent refresh) mà không cần đăng nhập lại.
 /// - Các request song song chia sẻ chung một lần refresh (semaphore) để tránh xoay vòng token loạn.
 /// </summary>
-public class TokenRefreshService(HttpClient httpClient, ILocalStorageService localStorage)
+public class TokenRefreshService(HttpClient httpClient, CookieStorageService cookieStorage)
 {
     public const string AccessTokenKey = "authToken";
     public const string RefreshTokenKey = "authRefreshToken";
@@ -36,13 +36,13 @@ public class TokenRefreshService(HttpClient httpClient, ILocalStorageService loc
     /// </summary>
     public async Task<string?> GetAccessTokenAsync()
     {
-        var token = await localStorage.GetItemAsync<string>(AccessTokenKey);
+        var token = await cookieStorage.GetItemAsync(AccessTokenKey);
         if (string.IsNullOrWhiteSpace(token)) return null;
 
         if (IsTokenExpired(token))
         {
             if (!await RefreshAsync()) return null;
-            token = await localStorage.GetItemAsync<string>(AccessTokenKey);
+            token = await cookieStorage.GetItemAsync(AccessTokenKey);
         }
 
         return string.IsNullOrWhiteSpace(token) ? null : token;
@@ -61,11 +61,11 @@ public class TokenRefreshService(HttpClient httpClient, ILocalStorageService loc
             if (DateTimeOffset.UtcNow.UtcTicks - _lastRefreshSuccessTicks < RefreshDedupeWindow.Ticks)
                 return true;
 
-            var current = await localStorage.GetItemAsync<string>(AccessTokenKey);
+            var current = await cookieStorage.GetItemAsync(AccessTokenKey);
             if (!force && !string.IsNullOrWhiteSpace(current) && !IsTokenExpired(current))
                 return true;
 
-            var refreshToken = await localStorage.GetItemAsync<string>(RefreshTokenKey);
+            var refreshToken = await cookieStorage.GetItemAsync(RefreshTokenKey);
             if (string.IsNullOrWhiteSpace(refreshToken)) return false;
 
             try
@@ -87,8 +87,8 @@ public class TokenRefreshService(HttpClient httpClient, ILocalStorageService loc
                     return false;
                 }
 
-                await localStorage.SetItemAsync(AccessTokenKey, result.Token);
-                await localStorage.SetItemAsync(RefreshTokenKey, result.RefreshToken);
+                await cookieStorage.SetItemAsync(AccessTokenKey, result.Token, days: 1);
+                await cookieStorage.SetItemAsync(RefreshTokenKey, result.RefreshToken, days: 30);
                 _lastRefreshSuccessTicks = DateTimeOffset.UtcNow.UtcTicks;
                 TokensRefreshed?.Invoke(result.Token);
                 return true;
@@ -110,7 +110,7 @@ public class TokenRefreshService(HttpClient httpClient, ILocalStorageService loc
     {
         try
         {
-            var refreshToken = await localStorage.GetItemAsync<string>(RefreshTokenKey);
+            var refreshToken = await cookieStorage.GetItemAsync(RefreshTokenKey);
             if (!string.IsNullOrWhiteSpace(refreshToken))
             {
                 await httpClient.PostAsJsonAsync("api/auth/logout", new { RefreshToken = refreshToken });
@@ -124,8 +124,8 @@ public class TokenRefreshService(HttpClient httpClient, ILocalStorageService loc
 
     private async Task ClearSessionAsync()
     {
-        await localStorage.RemoveItemAsync(AccessTokenKey);
-        await localStorage.RemoveItemAsync(RefreshTokenKey);
+        await cookieStorage.RemoveItemAsync(AccessTokenKey);
+        await cookieStorage.RemoveItemAsync(RefreshTokenKey);
     }
 
     public static bool IsTokenExpired(string jwt)

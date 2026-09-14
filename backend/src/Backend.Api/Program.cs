@@ -46,9 +46,25 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtSettings["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]!))
         };
-        // Chặn token của tài khoản bị khoá/xoá ngay cả khi JWT còn hạn
+        // Chặn token của tài khoản bị khoá/xoá ngay cả khi JWT còn hạn và hỗ trợ đọc token từ Cookie
         options.Events = new JwtBearerEvents
         {
+            OnMessageReceived = context =>
+            {
+                if (string.IsNullOrEmpty(context.Token))
+                {
+                    var path = context.Request.Path.Value?.ToLowerInvariant() ?? "";
+                    if (path.StartsWith("/api/admin") && context.Request.Cookies.TryGetValue("admin_authToken", out var adminToken) && !string.IsNullOrWhiteSpace(adminToken))
+                    {
+                        context.Token = adminToken;
+                    }
+                    else if (context.Request.Cookies.TryGetValue("authToken", out var token) && !string.IsNullOrWhiteSpace(token))
+                    {
+                        context.Token = token;
+                    }
+                }
+                return Task.CompletedTask;
+            },
             OnTokenValidated = async context =>
             {
                 var userIdClaim = context.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
@@ -878,11 +894,74 @@ app.MapPost("/api/ielts/audio-shadowing/upload-lesson", async (
     return Results.Ok(new { Success = true, LessonId = safeId, R2Url = jsonUrl });
 }).DisableAntiforgery();
 
-app.MapPost("/api/auth/register", async (RegisterRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+void SetAuthCookies(HttpContext httpContext, Backend.Application.DTOs.AuthResponse result)
+{
+    var isHttps = httpContext.Request.IsHttps;
+    var sameSite = isHttps ? SameSiteMode.None : SameSiteMode.Lax;
+    var secure = isHttps;
+
+    httpContext.Response.Cookies.Append("authToken", result.Token, new CookieOptions
+    {
+        HttpOnly = false,
+        Secure = secure,
+        SameSite = sameSite,
+        Expires = DateTimeOffset.UtcNow.AddDays(1),
+        Path = "/"
+    });
+
+    if (!string.IsNullOrWhiteSpace(result.RefreshToken))
+    {
+        httpContext.Response.Cookies.Append("authRefreshToken", result.RefreshToken, new CookieOptions
+        {
+            HttpOnly = false,
+            Secure = secure,
+            SameSite = sameSite,
+            Expires = DateTimeOffset.UtcNow.AddDays(30),
+            Path = "/"
+        });
+    }
+}
+
+void SetAdminAuthCookie(HttpContext httpContext, Backend.Application.DTOs.AuthResponse result)
+{
+    var isHttps = httpContext.Request.IsHttps;
+    var sameSite = isHttps ? SameSiteMode.None : SameSiteMode.Lax;
+    var secure = isHttps;
+
+    httpContext.Response.Cookies.Append("admin_authToken", result.Token, new CookieOptions
+    {
+        HttpOnly = false,
+        Secure = secure,
+        SameSite = sameSite,
+        Expires = DateTimeOffset.UtcNow.AddDays(30),
+        Path = "/"
+    });
+}
+
+void ClearAuthCookies(HttpContext httpContext)
+{
+    var isHttps = httpContext.Request.IsHttps;
+    var sameSite = isHttps ? SameSiteMode.None : SameSiteMode.Lax;
+    var secure = isHttps;
+
+    var cookieOptions = new CookieOptions
+    {
+        HttpOnly = false,
+        Secure = secure,
+        SameSite = sameSite,
+        Path = "/"
+    };
+    httpContext.Response.Cookies.Delete("authToken", cookieOptions);
+    httpContext.Response.Cookies.Delete("authRefreshToken", cookieOptions);
+    httpContext.Response.Cookies.Delete("admin_authToken", cookieOptions);
+}
+
+app.MapPost("/api/auth/register", async (RegisterRequest request, IAuthService authService, HttpContext httpContext, CancellationToken cancellationToken) =>
 {
     try
     {
         var result = await authService.RegisterAsync(request, cancellationToken);
+        SetAuthCookies(httpContext, result);
         return Results.Ok(result);
     }
     catch (Exception ex)
@@ -898,11 +977,12 @@ app.MapGet("/api/auth/check-username", async (string? username, IAuthService aut
     return Results.Ok(new { isTaken });
 });
 
-app.MapPost("/api/auth/login", async (LoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+app.MapPost("/api/auth/login", async (LoginRequest request, IAuthService authService, HttpContext httpContext, CancellationToken cancellationToken) =>
 {
     try
     {
         var result = await authService.LoginAsync(request, cancellationToken);
+        SetAuthCookies(httpContext, result);
         return Results.Ok(result);
     }
     catch (Exception ex)
@@ -911,11 +991,12 @@ app.MapPost("/api/auth/login", async (LoginRequest request, IAuthService authSer
     }
 });
 
-app.MapPost("/api/admin/auth/login", async (LoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+app.MapPost("/api/admin/auth/login", async (LoginRequest request, IAuthService authService, HttpContext httpContext, CancellationToken cancellationToken) =>
 {
     try
     {
         var result = await authService.AdminLoginAsync(request, cancellationToken);
+        SetAdminAuthCookie(httpContext, result);
         return Results.Ok(result);
     }
     catch (Exception ex)
@@ -924,11 +1005,12 @@ app.MapPost("/api/admin/auth/login", async (LoginRequest request, IAuthService a
     }
 });
 
-app.MapPost("/api/auth/google-login", async (GoogleLoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+app.MapPost("/api/auth/google-login", async (GoogleLoginRequest request, IAuthService authService, HttpContext httpContext, CancellationToken cancellationToken) =>
 {
     try
     {
         var result = await authService.LoginWithGoogleAsync(request, cancellationToken);
+        SetAuthCookies(httpContext, result);
         return Results.Ok(result);
     }
     catch (Exception ex)
@@ -937,11 +1019,12 @@ app.MapPost("/api/auth/google-login", async (GoogleLoginRequest request, IAuthSe
     }
 });
 
-app.MapPost("/api/auth/google-register", async (GoogleLoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+app.MapPost("/api/auth/google-register", async (GoogleLoginRequest request, IAuthService authService, HttpContext httpContext, CancellationToken cancellationToken) =>
 {
     try
     {
         var result = await authService.RegisterWithGoogleAsync(request, cancellationToken);
+        SetAuthCookies(httpContext, result);
         return Results.Ok(result);
     }
     catch (Exception ex)
@@ -951,11 +1034,18 @@ app.MapPost("/api/auth/google-register", async (GoogleLoginRequest request, IAut
 });
 
 // Gia hạn phiên đăng nhập: đổi refresh token lấy access token + refresh token mới (rotation)
-app.MapPost("/api/auth/refresh", async (RefreshRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+app.MapPost("/api/auth/refresh", async (RefreshRequest? request, IAuthService authService, HttpContext httpContext, CancellationToken cancellationToken) =>
 {
     try
     {
-        var result = await authService.RefreshAsync(request, cancellationToken);
+        var refreshToken = request?.RefreshToken;
+        if (string.IsNullOrWhiteSpace(refreshToken) && httpContext.Request.Cookies.TryGetValue("authRefreshToken", out var cookieRefresh))
+        {
+            refreshToken = cookieRefresh;
+        }
+
+        var result = await authService.RefreshAsync(new RefreshRequest(refreshToken ?? string.Empty), cancellationToken);
+        SetAuthCookies(httpContext, result);
         return Results.Ok(result);
     }
     catch (Exception ex)
@@ -964,10 +1054,20 @@ app.MapPost("/api/auth/refresh", async (RefreshRequest request, IAuthService aut
     }
 });
 
-// Đăng xuất: thu hồi refresh token phía server
-app.MapPost("/api/auth/logout", async (RefreshRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+// Đăng xuất: thu hồi refresh token phía server & xóa cookie phiên
+app.MapPost("/api/auth/logout", async (RefreshRequest? request, IAuthService authService, HttpContext httpContext, CancellationToken cancellationToken) =>
 {
-    await authService.RevokeRefreshTokenAsync(request.RefreshToken, cancellationToken);
+    var refreshToken = request?.RefreshToken;
+    if (string.IsNullOrWhiteSpace(refreshToken) && httpContext.Request.Cookies.TryGetValue("authRefreshToken", out var cookieRefresh))
+    {
+        refreshToken = cookieRefresh;
+    }
+
+    if (!string.IsNullOrWhiteSpace(refreshToken))
+    {
+        await authService.RevokeRefreshTokenAsync(refreshToken, cancellationToken);
+    }
+    ClearAuthCookies(httpContext);
     return Results.Ok(new { Message = "Logged out" });
 });
 
@@ -1126,6 +1226,117 @@ app.MapPost("/api/user/streak", [Microsoft.AspNetCore.Authorization.Authorize] a
         }
     }
     return Results.Unauthorized();
+});
+
+// ==================== FRIENDS API ====================
+
+app.MapGet("/api/friends/summary", [Microsoft.AspNetCore.Authorization.Authorize] async (System.Security.Claims.ClaimsPrincipal user, IFriendshipService friendshipService, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    await friendshipService.HeartbeatAsync(userId, cancellationToken);
+    var summary = await friendshipService.GetSummaryAsync(userId, cancellationToken);
+    return Results.Ok(summary);
+});
+
+app.MapGet("/api/friends", [Microsoft.AspNetCore.Authorization.Authorize] async (System.Security.Claims.ClaimsPrincipal user, IFriendshipService friendshipService, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    await friendshipService.HeartbeatAsync(userId, cancellationToken);
+    var friends = await friendshipService.GetFriendsAsync(userId, cancellationToken);
+    return Results.Ok(friends);
+});
+
+app.MapGet("/api/friends/search", [Microsoft.AspNetCore.Authorization.Authorize] async (string? q, System.Security.Claims.ClaimsPrincipal user, IFriendshipService friendshipService, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var results = await friendshipService.SearchUsersAsync(userId, q ?? string.Empty, cancellationToken);
+    return Results.Ok(results);
+});
+
+app.MapPost("/api/friends/request/{targetUserId:int}", [Microsoft.AspNetCore.Authorization.Authorize] async (int targetUserId, System.Security.Claims.ClaimsPrincipal user, IFriendshipService friendshipService, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var success = await friendshipService.SendFriendRequestAsync(userId, targetUserId, cancellationToken);
+    if (!success) return Results.BadRequest(new { message = "Không thể gửi lời mời kết bạn." });
+    return Results.Ok(new { message = "Đã gửi lời mời kết bạn thành công." });
+});
+
+app.MapPost("/api/friends/accept/{friendshipId:int}", [Microsoft.AspNetCore.Authorization.Authorize] async (int friendshipId, System.Security.Claims.ClaimsPrincipal user, IFriendshipService friendshipService, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var success = await friendshipService.AcceptFriendRequestAsync(userId, friendshipId, cancellationToken);
+    if (!success) return Results.BadRequest(new { message = "Không thể chấp nhận lời mời." });
+    return Results.Ok(new { message = "Đã chấp nhận lời mời kết bạn." });
+});
+
+app.MapPost("/api/friends/decline/{friendshipId:int}", [Microsoft.AspNetCore.Authorization.Authorize] async (int friendshipId, System.Security.Claims.ClaimsPrincipal user, IFriendshipService friendshipService, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var success = await friendshipService.DeclineFriendRequestAsync(userId, friendshipId, cancellationToken);
+    if (!success) return Results.BadRequest(new { message = "Không thể từ chối lời mời." });
+    return Results.Ok(new { message = "Đã từ chối lời mời kết bạn." });
+});
+
+app.MapDelete("/api/friends/cancel/{friendshipId:int}", [Microsoft.AspNetCore.Authorization.Authorize] async (int friendshipId, System.Security.Claims.ClaimsPrincipal user, IFriendshipService friendshipService, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var success = await friendshipService.CancelFriendRequestAsync(userId, friendshipId, cancellationToken);
+    if (!success) return Results.BadRequest(new { message = "Không thể hủy lời mời." });
+    return Results.Ok(new { message = "Đã hủy lời mời kết bạn." });
+});
+
+app.MapDelete("/api/friends/{friendId:int}", [Microsoft.AspNetCore.Authorization.Authorize] async (int friendId, System.Security.Claims.ClaimsPrincipal user, IFriendshipService friendshipService, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var success = await friendshipService.RemoveFriendAsync(userId, friendId, cancellationToken);
+    if (!success) return Results.BadRequest(new { message = "Không thể hủy kết bạn." });
+    return Results.Ok(new { message = "Đã hủy kết bạn thành công." });
+});
+
+app.MapPost("/api/friends/favorite/{friendId:int}", [Microsoft.AspNetCore.Authorization.Authorize] async (int friendId, System.Security.Claims.ClaimsPrincipal user, IFriendshipService friendshipService, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+    var success = await friendshipService.ToggleFavoriteAsync(userId, friendId, cancellationToken);
+    if (!success) return Results.BadRequest(new { message = "Không thể cập nhật trạng thái yêu thích." });
+    return Results.Ok(new { message = "Đã cập nhật trạng thái yêu thích." });
+});
+
+app.MapPost("/api/friends/heartbeat", [Microsoft.AspNetCore.Authorization.Authorize] async (System.Security.Claims.ClaimsPrincipal user, IFriendshipService friendshipService, CancellationToken cancellationToken) =>
+{
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (int.TryParse(userIdString, out int userId))
+    {
+        await friendshipService.HeartbeatAsync(userId, cancellationToken);
+    }
+    return Results.Ok();
 });
 
 app.MapPut("/api/user/level", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.UpdateLevelRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>

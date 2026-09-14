@@ -39,10 +39,31 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<GrammarStructure> GrammarStructures { get; set; }
     public DbSet<Notification> Notifications { get; set; }
     public DbSet<UserNotificationRead> UserNotificationReads { get; set; }
+    public DbSet<Friendship> Friendships { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // Friendship
+        modelBuilder.Entity<Friendship>(entity =>
+        {
+            entity.ToTable("friendships");
+            entity.HasIndex(f => new { f.UserId, f.FriendId }).IsUnique();
+            entity.HasIndex(f => f.UserId);
+            entity.HasIndex(f => f.FriendId);
+            entity.HasIndex(f => f.Status);
+
+            entity.HasOne(f => f.User)
+                .WithMany()
+                .HasForeignKey(f => f.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(f => f.Friend)
+                .WithMany()
+                .HasForeignKey(f => f.FriendId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
 
         // Admin
         modelBuilder.Entity<Admin>(entity =>
