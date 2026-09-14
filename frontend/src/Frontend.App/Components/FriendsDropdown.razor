@@ -2,6 +2,7 @@
 @using Frontend.App.Services
 @using System.Security.Claims
 @inject FriendshipService FriendSvc
+@inject ProfileService ProfileSvc
 @inject AuthenticationStateProvider AuthStateProvider
 @implements IDisposable
 
@@ -148,6 +149,11 @@
                                 <div class="friend-actions">
                                     @switch (user.Relationship)
                                     {
+                                        case "Self":
+                                            <span class="badge-relationship badge-self" title="Tài khoản hiện tại của bạn">
+                                                <i class="bi bi-person-fill"></i> Bạn
+                                            </span>
+                                            break;
                                         case "Friends":
                                             <span class="badge-relationship badge-is-friend" title="Đã là bạn bè">
                                                 <i class="bi bi-check2-circle"></i> Bạn bè
@@ -347,7 +353,7 @@
         <span>
             @if (!string.IsNullOrWhiteSpace(currentUsername))
             {
-                <span>Tên hiển thị: <b>@@@currentUsername</b>. Chia sẻ để kết bạn!</span>
+                <span>Tên hiển thị: <b>@@@(currentUsername.TrimStart('@'))</b>. Chia sẻ để kết bạn!</span>
             }
             else
             {
@@ -990,6 +996,19 @@
         gap: 4px;
     }
 
+    .badge-self {
+        background: #f1f5f9;
+        color: #475569;
+        border: 1px solid #cbd5e1;
+        padding: 3px 8px;
+        border-radius: 8px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
     /* ── FOOTER TIP ── */
     .friends-pop-footer {
         display: flex;
@@ -1204,7 +1223,12 @@
         {
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
             var user = authState.User;
-            currentUsername = user.FindFirst(ClaimTypes.Name)?.Value ?? user.Identity?.Name ?? "";
+            currentUsername = user.FindFirst("username")?.Value ?? "";
+            if (string.IsNullOrWhiteSpace(currentUsername))
+            {
+                var profile = await ProfileSvc.GetAsync();
+                currentUsername = !string.IsNullOrWhiteSpace(profile.DisplayName) ? profile.DisplayName : (profile.FullName ?? "");
+            }
         }
         catch { }
 

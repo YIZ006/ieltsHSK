@@ -134,8 +134,12 @@ public class FriendshipService(AppDbContext dbContext) : IFriendshipService
 
         var users = await dbContext.Users
             .AsNoTracking()
-            .Where(u => u.Id != currentUserId && u.IsActive && 
-                        (u.Username.ToLower().Contains(clean) || u.FullName.ToLower().Contains(clean)))
+            .Where(u => u.IsActive && 
+                        ((u.Username != null && EF.Functions.ILike(u.Username, $"%{clean}%")) || 
+                         (u.FullName != null && EF.Functions.ILike(u.FullName, $"%{clean}%"))))
+            .OrderByDescending(u => u.Username.ToLower() == clean)
+            .ThenByDescending(u => u.Username.ToLower().StartsWith(clean))
+            .ThenBy(u => u.Username)
             .Take(25)
             .ToListAsync(cancellationToken);
 
@@ -159,7 +163,11 @@ public class FriendshipService(AppDbContext dbContext) : IFriendshipService
             string status = "None";
             int? friendshipId = null;
 
-            if (rel != null)
+            if (u.Id == currentUserId)
+            {
+                status = "Self";
+            }
+            else if (rel != null)
             {
                 friendshipId = rel.Id;
                 if (rel.Status == FriendshipStatus.Accepted)

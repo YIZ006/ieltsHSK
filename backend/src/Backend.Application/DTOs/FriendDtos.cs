@@ -46,7 +46,7 @@ public class UserSearchResultDto
     public string? Level { get; set; }
     public int Streak { get; set; }
     public bool IsOnline { get; set; }
-    public string Relationship { get; set; } = "None"; // "None", "PendingIncoming", "PendingOutgoing", "Friends"
+    public string Relationship { get; set; } = "None"; // "None", "PendingIncoming", "PendingOutgoing", "Friends", "Self"
     public int? FriendshipId { get; set; }
 }
 

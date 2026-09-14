@@ -415,6 +415,7 @@ public class AuthService(AppDbContext dbContext, IConfiguration configuration) :
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.UniqueName, user.FullName),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
+            new Claim("username", user.Username),
             new Claim("level", user.Level ?? "A1"),
             new Claim(ClaimTypes.Role, "user")
         };
