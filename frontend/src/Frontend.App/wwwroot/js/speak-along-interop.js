@@ -138,19 +138,27 @@ window.SpeakAlongInterop = {
         this._isRecording = true;
         this._audioChunks = [];
         this._finalTranscript = '';
+        this._lastFullTranscript = '';
+        this._voiceDetected = false;
+        this._voiceEnergySum = 0;
+        this._voiceFrameCount = 0;
+        this._speechError = null;
         this._startTime = Date.now();
 
         // Stop any ongoing TTS
         this.stopSpeaking();
 
         return new Promise((resolve) => {
-            // 1. Initialize SpeechRecognition
+            // 1. Initialize SpeechRecognition (Web Speech API)
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (SpeechRecognition) {
                 try {
+                    if (this._recognition) {
+                        try { this._recognition.abort(); } catch (e) { }
+                    }
                     this._recognition = new SpeechRecognition();
                     this._recognition.lang = 'en-US';
-                    this._recognition.continuous = true;
+                    this._recognition.continuous = false; // Fast, responsive for single shadowing sentence
                     this._recognition.interimResults = true;
                     this._recognition.maxAlternatives = 1;
 
@@ -175,24 +183,30 @@ window.SpeakAlongInterop = {
                             this._finalTranscript += currentFinal;
                         }
                         const liveText = (this._finalTranscript + ' ' + interim).trim();
-                        this._lastFullTranscript = liveText;
+                        if (liveText) {
+                            this._lastFullTranscript = liveText;
+                        }
                         if (confidenceCount > 0) {
                             this._lastConfidence = totalConfidence / confidenceCount;
                         }
 
-                        if (this._dotNetRef) {
+                        if (this._dotNetRef && liveText) {
                             this._dotNetRef.invokeMethodAsync('OnSpeechRecognized', liveText);
                         }
                     };
 
                     this._recognition.onerror = (e) => {
-                        console.warn('SpeechRecognition error:', e.error);
+                        console.warn('SpeechRecognition note:', e.error);
+                        this._speechError = e.error;
                     };
 
                     this._recognition.start();
                 } catch (e) {
                     console.warn('SpeechRecognition failed to start:', e);
+                    this._speechError = 'not-supported';
                 }
+            } else {
+                this._speechError = 'not-supported';
             }
 
             // 2. Initialize MediaRecorder & Live Sound Waveform Visualizer
@@ -208,7 +222,14 @@ window.SpeakAlongInterop = {
 
                 navigator.mediaDevices.getUserMedia({ audio: constraints })
                     .then((stream) => {
-                        this._mediaRecorder = new MediaRecorder(stream);
+                        this._activeStream = stream;
+
+                        let mimeType = 'audio/webm;codecs=opus';
+                        if (!window.MediaRecorder || !MediaRecorder.isTypeSupported(mimeType)) {
+                            mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
+                        }
+                        this._mediaRecorderMime = mimeType;
+                        this._mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
                         this._mediaRecorder.ondataavailable = (event) => {
                             if (event.data && event.data.size > 0) {
                                 this._audioChunks.push(event.data);
@@ -241,6 +262,7 @@ window.SpeakAlongInterop = {
             const source = this._audioCtx.createMediaStreamSource(stream);
             this._analyser = this._audioCtx.createAnalyser();
             this._analyser.fftSize = 256;
+            this._analyser.smoothingTimeConstant = 0.75;
             source.connect(this._analyser);
 
             const bufferLength = this._analyser.frequencyBinCount;
@@ -255,18 +277,34 @@ window.SpeakAlongInterop = {
                 const h = this._waveformCanvas.height;
                 ctx.clearRect(0, 0, w, h);
 
+                let sum = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    sum += dataArray[i];
+                }
+                const avg = sum / bufferLength;
+
+                // Voice Activity Detection (VAD)
+                if (avg > 7) {
+                    this._voiceDetected = true;
+                    this._voiceEnergySum += avg;
+                    this._voiceFrameCount++;
+                }
+
                 const barWidth = (w / bufferLength) * 2.2;
                 let x = 0;
                 for (let i = 0; i < bufferLength; i++) {
                     const barH = (dataArray[i] / 255) * h;
-                    // Gradient: Blue to Cyan/Emerald
                     const gradient = ctx.createLinearGradient(0, h, 0, 0);
                     gradient.addColorStop(0, '#0284c7');
                     gradient.addColorStop(1, '#06b6d4');
 
                     ctx.fillStyle = gradient;
                     ctx.beginPath();
-                    ctx.roundRect(x, h - barH, barWidth, barH, [4, 4, 0, 0]);
+                    if (ctx.roundRect) {
+                        ctx.roundRect(x, h - barH, barWidth, barH, [3, 3, 0, 0]);
+                    } else {
+                        ctx.rect(x, h - barH, barWidth, barH);
+                    }
                     ctx.fill();
 
                     x += barWidth + 2;
@@ -280,7 +318,7 @@ window.SpeakAlongInterop = {
 
     stopLiveWaveform: function () {
         if (this._animFrame) cancelAnimationFrame(this._animFrame);
-        if (this._audioCtx) {
+        if (this._audioCtx && this._audioCtx.state !== 'closed') {
             try { this._audioCtx.close(); } catch (e) { }
             this._audioCtx = null;
         }
@@ -290,56 +328,79 @@ window.SpeakAlongInterop = {
         }
     },
 
-    // Stop recording and return payload: transcript + audio playback url + duration
+    // Stop recording and return payload: transcript + audio playback url + duration + voice activity
     stopRecording: function () {
         return new Promise((resolve) => {
-            const durationSec = (Date.now() - this._startTime) / 1000.0;
-            this.stopLiveWaveform();
+            const durationSec = Math.max(0.5, (Date.now() - this._startTime) / 1000.0);
 
-            // Stop SpeechRecognition
+            // Stop SpeechRecognition safely
             if (this._recognition) {
                 try {
                     this._recognition.stop();
                 } catch (e) { }
             }
 
-            // Stop MediaRecorder and build Audio URL
-            const resultText = (this._lastFullTranscript || this._finalTranscript).trim();
+            const resultText = (this._lastFullTranscript || this._finalTranscript || '').trim();
             const confidence = this._lastConfidence || 0.85;
+            const hasVoice = (this._voiceFrameCount >= 5) || (this._voiceEnergySum > 60);
 
-            if (this._mediaRecorder && this._mediaRecorder.state !== 'inactive') {
+            const finalizePayload = (audioUrl) => {
+                this.stopLiveWaveform();
+                this.stopMicStream();
+
+                resolve(JSON.stringify({
+                    transcript: resultText,
+                    audioUrl: audioUrl || '',
+                    durationSeconds: durationSec,
+                    confidence: confidence,
+                    voiceDetected: hasVoice,
+                    voiceDurationSec: Math.round((this._voiceFrameCount * 0.02) * 10) / 10,
+                    speechApiError: this._speechError
+                }));
+            };
+
+            if (this._mediaRecorder && this._mediaRecorder.state === 'recording') {
+                try {
+                    this._mediaRecorder.requestData();
+                } catch (e) { }
+
                 this._mediaRecorder.onstop = () => {
                     let audioUrl = '';
                     if (this._audioChunks.length > 0) {
-                        const audioBlob = new Blob(this._audioChunks, { type: 'audio/webm' });
-                        audioUrl = URL.createObjectURL(audioBlob);
+                        try {
+                            const audioBlob = new Blob(this._audioChunks, { type: this._mediaRecorderMime || 'audio/webm' });
+                            if (audioBlob.size > 0) {
+                                audioUrl = URL.createObjectURL(audioBlob);
+                            }
+                        } catch (e) {
+                            console.warn('Audio blob creation error:', e);
+                        }
                     }
-                    this.stopMicStream();
-
-                    resolve(JSON.stringify({
-                        transcript: resultText,
-                        audioUrl: audioUrl,
-                        durationSeconds: durationSec,
-                        confidence: confidence
-                    }));
+                    finalizePayload(audioUrl);
                 };
-                this._mediaRecorder.stop();
+                try {
+                    this._mediaRecorder.stop();
+                } catch (e) {
+                    finalizePayload('');
+                }
             } else {
-                this.stopMicStream();
-                resolve(JSON.stringify({
-                    transcript: resultText,
-                    audioUrl: '',
-                    durationSeconds: durationSec,
-                    confidence: confidence
-                }));
+                finalizePayload('');
             }
         });
     },
 
     stopMicStream: function () {
+        if (this._activeStream) {
+            try {
+                this._activeStream.getTracks().forEach(track => track.stop());
+            } catch (e) { }
+            this._activeStream = null;
+        }
         if (this._mediaRecorder && this._mediaRecorder.stream) {
-            this._mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            try {
+                this._mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            } catch (e) { }
         }
         this._isRecording = false;
     }
-};
+};
