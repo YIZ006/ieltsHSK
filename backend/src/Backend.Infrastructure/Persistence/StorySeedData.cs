@@ -7,9 +7,7 @@ public static class StorySeedData
 {
     public static async Task SeedStoriesAsync(AppDbContext dbContext, Backend.Application.Abstractions.IR2StorageService? r2Storage = null)
     {
-        if (!dbContext.Stories.Any())
-        {
-            var seedStories = new List<Story>
+        var seedStories = new List<Story>
         {
             new Story
             {
@@ -384,10 +382,396 @@ public static class StorySeedData
                 }),
                 IsPublished = true,
                 CreatedAt = DateTime.UtcNow
+            },
+            new Story
+            {
+                Title = "The Secret of the Willow Garden",
+                Slug = "the-secret-of-the-willow-garden",
+                Level = "A2",
+                IeltsBand = "4.0 - 4.5",
+                Category = "Phiêu lưu",
+                Summary = "Một buổi chiều ấm áp, Lily và chú mèo Oliver bất ngờ tìm thấy chiếc chìa khóa cũ mở ra cánh cổng khu vườn bí mật.",
+                ThumbnailUrl = "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?w=800&auto=format&fit=crop&q=80",
+                WordCount = 175,
+                EstimatedMinutes = 4,
+                ContentJson = JsonSerializer.Serialize(new[]
+                {
+                    new {
+                        en = "Behind grandfather's house, there was an ancient wooden fence covered with thick green ivy. Lily often played there with her mischievous cat, Oliver.",
+                        vi = "Phía sau ngôi nhà của ông nội có một hàng rào gỗ cổ kính phủ đầy dây thường xuân xanh mướt. Lily thường chơi ở đó cùng chú mèo tinh nghịch Oliver."
+                    },
+                    new {
+                        en = "One sunny afternoon, Oliver chased a bright butterfly and disappeared into a narrow gap in the fence. Lily called his name, but the cat did not return.",
+                        vi = "Vào một buổi chiều đầy nắng, Oliver đuổi theo một chú bướm rực rỡ và biến mất vào khe hẹp của hàng rào. Lily gọi tên nó, nhưng chú mèo không quay lại."
+                    },
+                    new {
+                        en = "She gently pushed the old planks aside and crawled through the opening. To her great surprise, she discovered a peaceful hidden garden full of colorful wild roses and singing birds.",
+                        vi = "Cô bé nhẹ nhàng đẩy những thanh gỗ cũ sang một bên và bò qua lối mở. Thật ngạc nhiên, cô phát hiện ra một khu vườn bí mật yên bình tràn ngập hoa hồng dại rực rỡ và tiếng chim hót líu lo."
+                    },
+                    new {
+                        en = "In the center of the garden, next to an old stone fountain, sat Oliver, purring softly. Near his paws lay a rusty bronze key half-buried in the soil.",
+                        vi = "Ở trung tâm khu vườn, cạnh một đài phun nước bằng đá cũ, Oliver đang ngồi và kêu grừ grừ êm ái. Gần bàn chân nó là một chiếc chìa khóa đồng rỉ sét bị chôn vùi một nửa dưới đất."
+                    },
+                    new {
+                        en = "Lily picked up the mysterious key with excitement. She knew that another wonderful adventure was waiting for them tomorrow.",
+                        vi = "Lily háo hức nhặt chiếc chìa khóa bí ẩn lên. Cô biết rằng một chuyến phiêu lưu tuyệt vời khác đang chờ đợi họ vào ngày mai."
+                    }
+                }),
+                VocabularyJson = JsonSerializer.Serialize(new[]
+                {
+                    new {
+                        word = "ancient",
+                        phonetic = "/ˈeɪn.ʃənt/",
+                        pos = "adjective",
+                        meaning = "cổ xưa, lâu đời",
+                        example = "There was an ancient wooden fence.",
+                        collocations = new[] { "ancient times", "ancient building" }
+                    },
+                    new {
+                        word = "mischievous",
+                        phonetic = "/ˈmɪs.tʃɪ.vəs/",
+                        pos = "adjective",
+                        meaning = "tinh nghịch, lém lỉnh",
+                        example = "Lily played with her mischievous cat.",
+                        collocations = new[] { "mischievous smile", "mischievous child" }
+                    },
+                    new {
+                        word = "surprise",
+                        phonetic = "/səˈpraɪz/",
+                        pos = "noun / verb",
+                        meaning = "sự ngạc nhiên, bất ngờ",
+                        example = "To her great surprise, she discovered a garden.",
+                        collocations = new[] { "pleasant surprise", "in surprise" }
+                    },
+                    new {
+                        word = "mysterious",
+                        phonetic = "/mɪˈstɪə.ri.əs/",
+                        pos = "adjective",
+                        meaning = "bí ẩn, khó hiểu",
+                        example = "Lily picked up the mysterious key.",
+                        collocations = new[] { "mysterious stranger", "mysterious sound" }
+                    }
+                }),
+                QuestionsJson = JsonSerializer.Serialize(new[]
+                {
+                    new {
+                        question = "Why did Oliver run into the fence?",
+                        options = new[] { "He was scared of a dog", "He chased a bright butterfly", "He wanted to take a nap", "He heard a loud thunder" },
+                        correctIndex = 1,
+                        explanation = "Trong bài nêu: 'Oliver chased a bright butterfly and disappeared into a narrow gap in the fence'."
+                    },
+                    new {
+                        question = "What did Lily find behind the wooden fence?",
+                        options = new[] { "A busy highway", "A large swimming pool", "A peaceful hidden garden with flowers and birds", "A dark deep cave" },
+                        correctIndex = 2,
+                        explanation = "Lily đã tìm thấy một khu vườn bí mật ngập tràn hoa hồng dại và tiếng chim hót ('a peaceful hidden garden full of colorful wild roses')."
+                    },
+                    new {
+                        question = "What object was found near Oliver's paws?",
+                        options = new[] { "A rusty bronze key", "A gold coin", "A glass bottle", "A silver ring" },
+                        correctIndex = 0,
+                        explanation = "Gần bàn chân của Oliver là một chiếc chìa khóa đồng rỉ sét ('a rusty bronze key half-buried in the soil')."
+                    }
+                }),
+                IsPublished = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Story
+            {
+                Title = "The Global Journey of a Coffee Bean",
+                Slug = "the-global-journey-of-a-coffee-bean",
+                Level = "B1",
+                IeltsBand = "5.0 - 5.5",
+                Category = "Xã hội & Văn hóa",
+                Summary = "Khám phá chuỗi cung ứng kỳ diệu từ những đồi cà phê bạt ngàn tại cao nguyên nhiệt đới đến ly espresso thơm lừng khắp năm châu.",
+                ThumbnailUrl = "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800&auto=format&fit=crop&q=80",
+                WordCount = 225,
+                EstimatedMinutes = 4,
+                ContentJson = JsonSerializer.Serialize(new[]
+                {
+                    new {
+                        en = "Long before dawn breaks over the mist-covered volcanic hills of the Central Highlands, local farmers are already walking among rows of lush coffee shrubs. They carefully select only the ripest crimson cherries by hand.",
+                        vi = "Trước khi bình minh ló rạng trên những ngọn đồi núi lửa phủ đầy sương của vùng Tây Nguyên, những người nông dân địa phương đã tản bộ giữa các hàng cây cà phê xanh mướt. Họ cẩn thận dùng tay hái chọn những trái cà phê chín đỏ mọng nhất."
+                    },
+                    new {
+                        en = "Once harvested, the outer fruit pulp is washed away, leaving the precious raw beans to dry under the radiant tropical sun for days until they reach optimal moisture.",
+                        vi = "Sau khi thu hoạch, lớp thịt quả bên ngoài được rửa sạch, để lại những hạt thô quý giá phơi dưới ánh nắng nhiệt đới rực rỡ trong nhiều ngày cho đến khi đạt độ ẩm tối ưu."
+                    },
+                    new {
+                        en = "The dried beans are graded, packed into burlap sacks, and transported across oceans in international cargo vessels to specialty roasteries around the globe.",
+                        vi = "Những hạt cà phê khô được phân loại, đóng vào bao tải gai và vận chuyển xuyên đại dương trên các tàu chở hàng quốc tế tới các xưởng rang xay chuyên dụng trên khắp toàn cầu."
+                    },
+                    new {
+                        en = "Master roasters carefully calibrate heat and airflow to unlock rich aromas of chocolate, caramel, and floral notes. Finally, barista steam whips the dark extract into an invigorating cup that powers millions of morning routines.",
+                        vi = "Các nghệ nhân rang xay chuyên nghiệp điều chỉnh nhiệt độ và luồng khí một cách tỉ mỉ để giải phóng những tầng hương phong phú của sô cô la, caramel và hoa quả. Cuối cùng, barista đánh bọt sữa và chiết xuất để tạo nên tách cà phê đậm đà tràn đầy năng lượng cho hàng triệu người mỗi sớm mai."
+                    }
+                }),
+                VocabularyJson = JsonSerializer.Serialize(new[]
+                {
+                    new {
+                        word = "harvest",
+                        phonetic = "/ˈhɑː.vɪst/",
+                        pos = "verb / noun",
+                        meaning = "thu hoạch, vụ mùa",
+                        example = "Once harvested, the outer fruit pulp is washed away.",
+                        collocations = new[] { "harvest crops", "bountiful harvest" }
+                    },
+                    new {
+                        word = "optimal",
+                        phonetic = "/ˈɒp.tɪ.məl/",
+                        pos = "adjective",
+                        meaning = "tối ưu, tốt nhất",
+                        example = "They dry until they reach optimal moisture.",
+                        collocations = new[] { "optimal conditions", "optimal performance" }
+                    },
+                    new {
+                        word = "calibrate",
+                        phonetic = "/ˈkæl.ɪ.breɪt/",
+                        pos = "verb",
+                        meaning = "hiệu chỉnh, căn chỉnh chính xác",
+                        example = "Roasters carefully calibrate heat and airflow.",
+                        collocations = new[] { "carefully calibrate", "calibrate equipment" }
+                    },
+                    new {
+                        word = "invigorating",
+                        phonetic = "/ɪnˈvɪɡ.ər.eɪ.tɪŋ/",
+                        pos = "adjective",
+                        meaning = "làm hồi sức, tiếp thêm sinh lực",
+                        example = "An invigorating cup that powers millions of routines.",
+                        collocations = new[] { "invigorating breeze", "invigorating effect" }
+                    }
+                }),
+                QuestionsJson = JsonSerializer.Serialize(new[]
+                {
+                    new {
+                        question = "Which cherries do farmers handpick to ensure quality?",
+                        options = new[] { "Only green cherries", "Only the ripest crimson cherries", "Fallen cherries on the ground", "Dried brown leaves" },
+                        correctIndex = 1,
+                        explanation = "Nông dân chỉ hái bằng tay những trái cà phê đỏ chín mọng nhất ('only the ripest crimson cherries by hand')."
+                    },
+                    new {
+                        question = "What is the primary role of master roasters?",
+                        options = new[] { "To water the trees", "To pack sacks onto ships", "To calibrate heat and airflow to develop rich flavor profiles", "To design coffee cup logos" },
+                        correctIndex = 2,
+                        explanation = "Thợ rang xay điều chỉnh nhiệt độ và luồng khí để giải phóng hương vị sô cô la, caramel ('calibrate heat and airflow to unlock rich aromas')."
+                    },
+                    new {
+                        question = "How are the raw beans dried after pulp removal?",
+                        options = new[] { "In microwave ovens", "Under the tropical sun", "In freezers", "Inside underground cellars" },
+                        correctIndex = 1,
+                        explanation = "Hạt được phơi dưới ánh nắng mặt trời nhiệt đới ('dry under the radiant tropical sun for days')."
+                    }
+                }),
+                IsPublished = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Story
+            {
+                Title = "Smart Cities: Reimagining Urban Life",
+                Slug = "smart-cities-reimagining-urban-life",
+                Level = "B2",
+                IeltsBand = "6.5 - 7.0",
+                Category = "Công nghệ & Tương lai",
+                Summary = "Cách các siêu đô thị hiện đại ứng dụng Internet vạn vật (IoT) và thuật toán AI để giảm khí thải, tối ưu giao thông và tiết kiệm năng lượng.",
+                ThumbnailUrl = "https://images.unsplash.com/photo-1477959858617-67f30bc75b82?w=800&auto=format&fit=crop&q=80",
+                WordCount = 285,
+                EstimatedMinutes = 5,
+                ContentJson = JsonSerializer.Serialize(new[]
+                {
+                    new {
+                        en = "Rapid urbanization poses unprecedented ecological and infrastructure challenges across metropolitan centers worldwide. In response, municipal planners are turning toward digital innovation to engineer the next generation of sustainable smart cities.",
+                        vi = "Quá trình đô thị hóa nhanh chóng đang đặt ra những thách thức chưa từng có về sinh thái và cơ sở hạ tầng tại các trung tâm siêu đô thị trên thế giới. Để đối phó, các nhà quy hoạch đô thị đang hướng tới đổi mới kỹ thuật số để thiết kế thế hệ thành phố thông minh bền vững tiếp theo."
+                    },
+                    new {
+                        en = "Central to this transformation is an intricate network of Internet of Things (IoT) sensors embedded throughout public utilities. These sensors continuously monitor traffic flow, air quality index, and electrical grid consumption in real time.",
+                        vi = "Trọng tâm của sự chuyển đổi này là một mạng lưới cảm biến Internet vạn vật (IoT) phức tạp được tích hợp trong toàn bộ các tiện ích công cộng. Những cảm biến này liên tục theo dõi lưu lượng giao thông, chỉ số chất lượng không khí và mức tiêu thụ lưới điện theo thời gian thực."
+                    },
+                    new {
+                        en = "Machine learning algorithms analyze these massive data streams, automatically adjusting traffic signals to dissolve congestion and rerouting surplus solar power to neighborhoods experiencing peak demand.",
+                        vi = "Các thuật toán học máy phân tích những luồng dữ liệu khổng lồ này, tự động điều chỉnh tín hiệu đèn giao thông để giải tỏa ùn tắc và điều hướng lượng điện mặt trời dư thừa tới các khu dân cư đang có nhu cầu cao điểm."
+                    },
+                    new {
+                        en = "Furthermore, autonomous public transit vehicles synchronized with intelligent pedestrian pathways drastically reduce carbon footprints while enhancing civic livability for generations to come.",
+                        vi = "Hơn thế nữa, các phương tiện giao thông công cộng tự hành được đồng bộ hóa với lối đi bộ thông minh giúp giảm đáng kể lượng khí thải carbon, đồng thời nâng cao chất lượng đáng sống cho cư dân trong nhiều thế hệ tương lai."
+                    }
+                }),
+                VocabularyJson = JsonSerializer.Serialize(new[]
+                {
+                    new {
+                        word = "urbanization",
+                        phonetic = "/ˌɜː.bən.aɪˈzeɪ.ʃən/",
+                        pos = "noun",
+                        meaning = "đô thị hóa",
+                        example = "Rapid urbanization poses unprecedented ecological challenges.",
+                        collocations = new[] { "rapid urbanization", "urbanization process" }
+                    },
+                    new {
+                        word = "infrastructure",
+                        phonetic = "/ˈɪn.frəˌstrʌk.tʃər/",
+                        pos = "noun",
+                        meaning = "cơ sở hạ tầng",
+                        example = "Sensors are embedded in public infrastructure.",
+                        collocations = new[] { "critical infrastructure", "transport infrastructure" }
+                    },
+                    new {
+                        word = "congestion",
+                        phonetic = "/kənˈdʒes.tʃən/",
+                        pos = "noun",
+                        meaning = "sự tắc nghẽn, ùn ứ (giao thông)",
+                        example = "Adjust signals to dissolve congestion.",
+                        collocations = new[] { "traffic congestion", "ease congestion" }
+                    },
+                    new {
+                        word = "autonomous",
+                        phonetic = "/ɔːˈtɒn.ə.məs/",
+                        pos = "adjective",
+                        meaning = "tự hành, tự chủ",
+                        example = "Autonomous public transit vehicles reduce emissions.",
+                        collocations = new[] { "autonomous vehicle", "autonomous system" }
+                    },
+                    new {
+                        word = "livability",
+                        phonetic = "/ˌlɪv.əˈbɪl.ə.ti/",
+                        pos = "noun",
+                        meaning = "mức độ đáng sống, chất lượng sống",
+                        example = "Enhancing civic livability for generations to come.",
+                        collocations = new[] { "urban livability", "livability index" }
+                    }
+                }),
+                QuestionsJson = JsonSerializer.Serialize(new[]
+                {
+                    new {
+                        question = "What is the primary function of IoT sensors in smart cities?",
+                        options = new[] { "To sell commercial advertisements", "To track real-time traffic, air quality, and grid power usage", "To replace traffic police completely", "To build underground parking spaces" },
+                        correctIndex = 1,
+                        explanation = "Cảm biến IoT liên tục giám sát lưu lượng giao thông, chất lượng không khí và điện năng ('monitor traffic flow, air quality index, and electrical grid consumption in real time')."
+                    },
+                    new {
+                        question = "How do machine learning algorithms help manage clean energy?",
+                        options = new[] { "By turning off electricity during peak hours", "By rerouting surplus solar power to areas with high demand", "By banning fossil fuel vehicles completely", "By building coal plants" },
+                        correctIndex = 1,
+                        explanation = "Thuật toán tự động điều phối điện mặt trời dư thừa tới các khu vực có nhu cầu tiêu thụ cao điểm ('rerouting surplus solar power to neighborhoods experiencing peak demand')."
+                    },
+                    new {
+                        question = "What environmental benefit is mentioned regarding autonomous transit?",
+                        options = new[] { "Drastic reduction in carbon footprint", "Complete elimination of bicycles", "Free electricity for all residents", "Faster highway speed limits" },
+                        correctIndex = 0,
+                        explanation = "Phương tiện công cộng tự hành giúp giảm mạnh phát thải carbon ('drastically reduce carbon footprints')."
+                    }
+                }),
+                IsPublished = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Story
+            {
+                Title = "The Architecture of Human Consciousness",
+                Slug = "the-architecture-of-human-consciousness",
+                Level = "C2",
+                IeltsBand = "8.5 - 9.0",
+                Category = "Khoa học & Tự nhiên",
+                Summary = "Một bài luận học thuật kinh điển về 'Vấn đề nan giải của Ý thức' (The Hard Problem of Consciousness), giao thoa giữa thần kinh học và triết học hiện đại.",
+                ThumbnailUrl = "https://images.unsplash.com/photo-1507413245164-6160d8298b31?w=800&auto=format&fit=crop&q=80",
+                WordCount = 330,
+                EstimatedMinutes = 6,
+                ContentJson = JsonSerializer.Serialize(new[]
+                {
+                    new {
+                        en = "For centuries, the enigmatic genesis of subjective awareness has stood as an insurmountable bastion defying reductive neurobiological explanations. Known colloquially as 'the hard problem of consciousness', it probes why electrochemical impulses through neural synapses give rise to qualitative perceptual experiences—the rich redness of a rose or the poignant sting of nostalgia.",
+                        vi = "Trong nhiều thế kỷ, nguồn gốc bí ẩn của nhận thức chủ quan đã sừng sững như một thành trì bất khả xâm phạm thách thức các giải thích giản lược mang tính sinh học thần kinh. Thường được gọi là 'vấn đề nan giải của ý thức', nó truy vấn lý do tại sao các xung điện hóa qua các khớp thần kinh synapse lại tạo ra các trải nghiệm cảm giác định tính—sắc đỏ rực rỡ của một đóa hồng hay cảm giác nhói lòng đầy hoài niệm."
+                    },
+                    new {
+                        en = "Contemporary cognitive theorists remain divided along entrenched ontological boundaries. Physicalists postulate that phenomenal consciousness is merely an emergent epiphenomenon, arising inevitably once computational complexity surpasses a deterministic threshold within cerebral circuitry.",
+                        vi = "Các nhà lý thuyết nhận thức đương đại vẫn bị chia rẽ sâu sắc theo các ranh giới bản thể học cố hữu. Phái duy vật mặc định rằng ý thức cảm tính chỉ đơn thuần là một hiện tượng phụ phát sinh, tất yếu xuất hiện khi độ phức tạp tính toán vượt qua một ngưỡng tiền định bên trong các mạch não bộ."
+                    },
+                    new {
+                        en = "Conversely, panpsychists advocate that consciousness is not an incidental byproduct of evolutionary mechanics, but rather an intrinsic, immutable fabric of spacetime itself, akin to mass or electromagnetic charge.",
+                        vi = "Ngược lại, các nhà thuyết phiếm tâm cho rằng ý thức không phải là một sản phẩm phụ ngẫu nhiên của các cơ chế tiến hóa, mà là một cấu trúc nội tại, bất biến của chính không-thời gian, tương tự như khối lượng hay điện tích."
+                    },
+                    new {
+                        en = "As quantum decoherence experiments advance and neuroimaging attains sub-millisecond fidelity, science edges closer to elucidating this ultimate frontier of the human condition.",
+                        vi = "Khi các thí nghiệm về sự mất kết hợp lượng tử tiến bộ và kỹ thuật chẩn đoán hình ảnh thần kinh đạt được độ chính xác dưới một phần nghìn giây, khoa học đang dần tiệm cận việc làm sáng tỏ ranh giới tối thượng này của thân phận con người."
+                    }
+                }),
+                VocabularyJson = JsonSerializer.Serialize(new[]
+                {
+                    new {
+                        word = "enigmatic",
+                        phonetic = "/ˌen.ɪɡˈmæt.ɪk/",
+                        pos = "adjective",
+                        meaning = "bí ẩn, khó hiểu, đầy câu đố",
+                        example = "The enigmatic genesis of subjective awareness.",
+                        collocations = new[] { "enigmatic smile", "enigmatic figure" }
+                    },
+                    new {
+                        word = "insurmountable",
+                        phonetic = "/ˌɪn.səˈmaʊn.tə.bəl/",
+                        pos = "adjective",
+                        meaning = "không thể vượt qua, nan giải",
+                        example = "Stood as an insurmountable bastion.",
+                        collocations = new[] { "insurmountable obstacle", "insurmountable difficulty" }
+                    },
+                    new {
+                        word = "epiphenomenon",
+                        phonetic = "/ˌep.ɪ.fɪˈnɒm.ɪ.nən/",
+                        pos = "noun",
+                        meaning = "hiện tượng phụ sinh, hệ quả kèm theo",
+                        example = "Consciousness is merely an emergent epiphenomenon.",
+                        collocations = new[] { "mere epiphenomenon", "biological epiphenomenon" }
+                    },
+                    new {
+                        word = "intrinsic",
+                        phonetic = "/ɪnˈtrɪn.zɪk/",
+                        pos = "adjective",
+                        meaning = "nội tại, vốn có",
+                        example = "An intrinsic, immutable fabric of spacetime.",
+                        collocations = new[] { "intrinsic value", "intrinsic quality" }
+                    },
+                    new {
+                        word = "elucidate",
+                        phonetic = "/iˈluː.sɪ.deɪt/",
+                        pos = "verb",
+                        meaning = "làm sáng tỏ, giải thích tường tận",
+                        example = "Edges closer to elucidating this ultimate frontier.",
+                        collocations = new[] { "elucidate the mystery", "elucidate mechanisms" }
+                    }
+                }),
+                QuestionsJson = JsonSerializer.Serialize(new[]
+                {
+                    new {
+                        question = "What does the 'hard problem of consciousness' primarily investigate?",
+                        options = new[] { "How sleep deprivation affects brain reflexes", "Why electrochemical brain signals translate into subjective, qualitative experiences", "How artificial intelligence will replace human labor", "The mathematical equations of brain mass" },
+                        correctIndex = 1,
+                        explanation = "Vấn đề nan giải điều tra lý do tại sao các xung điện hóa qua khớp thần kinh lại tạo ra trải nghiệm chủ quan định tính ('why electrochemical impulses through neural synapses give rise to qualitative perceptual experiences')."
+                    },
+                    new {
+                        question = "According to panpsychism, what is consciousness?",
+                        options = new[] { "An accidental side effect of computer software", "A human illusion fabricated by social language", "A fundamental and intrinsic property of the universe, like mass or charge", "A medical disease curable by pharmaceuticals" },
+                        correctIndex = 2,
+                        explanation = "Thuyết phiếm tâm cho rằng ý thức là một cấu trúc nội tại bất biến của không-thời gian, giống như khối lượng hay điện tích ('an intrinsic, immutable fabric of spacetime itself, akin to mass or electromagnetic charge')."
+                    },
+                    new {
+                        question = "What technological advancements are bringing science closer to understanding consciousness?",
+                        options = new[] { "Steam engine locomotives and telegraphs", "Sub-millisecond neuroimaging and quantum experiments", "Standard laboratory blood tests", "Satellite weather forecasting" },
+                        correctIndex = 1,
+                        explanation = "Các thí nghiệm mất kết hợp lượng tử và kỹ thuật chụp ảnh thần kinh có độ chuẩn xác dưới một phần nghìn giây ('sub-millisecond fidelity neuroimaging')."
+                    }
+                }),
+                IsPublished = true,
+                CreatedAt = DateTime.UtcNow
             }
         };
 
-            dbContext.Stories.AddRange(seedStories);
+        bool hasNewStories = false;
+        foreach (var s in seedStories)
+        {
+            if (!dbContext.Stories.Any(existing => existing.Slug == s.Slug))
+            {
+                dbContext.Stories.Add(s);
+                hasNewStories = true;
+            }
+        }
+        if (hasNewStories)
+        {
             await dbContext.SaveChangesAsync();
         }
 

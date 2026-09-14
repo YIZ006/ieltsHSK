@@ -84,3 +84,15 @@ public class ImportStoryJsonRequest
     public string JsonContent { get; set; } = string.Empty;
 }
 
+public class StoryDictionaryLookupDto
+{
+    public string Word { get; set; } = string.Empty;
+    public string? Lemma { get; set; }
+    public string? Phonetic { get; set; }
+    public string? Pos { get; set; }
+    public string Meaning { get; set; } = string.Empty;
+    public string? DefinitionEn { get; set; }
+    public string? Example { get; set; }
+    public List<string> Collocations { get; set; } = new();
+}
+

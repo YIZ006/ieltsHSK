@@ -481,3 +481,219 @@
         flex: 1;
     }
 }
+
+/* Notebook Button & Completed Badge */
+.btn-saved-notebook {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 12px;
+    color: #1e293b;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-saved-notebook:hover {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    color: #b45309;
+}
+
+.btn-saved-notebook .badge-count {
+    background: #f59e0b;
+    color: #ffffff;
+    font-size: 0.75rem;
+    padding: 2px 7px;
+    border-radius: 20px;
+    font-weight: 800;
+}
+
+.badge-completed {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    background: #10b981;
+    color: #ffffff;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+}
+
+/* Saved Vocabulary Modal */
+.saved-vocab-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(6px);
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.saved-vocab-modal {
+    background: #ffffff;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 680px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalPop {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.saved-vocab-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.saved-vocab-header h3 {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.btn-close-notebook {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 1.1rem;
+    padding: 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-close-notebook:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.saved-vocab-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.saved-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.saved-card-item {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 14px 18px;
+    transition: all 0.2s ease;
+}
+
+.saved-card-item:hover {
+    border-color: #cbd5e1;
+    background: #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.word-text {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #0284c7;
+}
+
+.pos-badge {
+    font-size: 0.72rem;
+    background: #e0f2fe;
+    color: #0369a1;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-weight: 700;
+}
+
+.phonetic-text {
+    font-size: 0.85rem;
+    color: #64748b;
+    font-family: 'Consolas', 'Courier New', monospace;
+    margin: 2px 0 6px;
+}
+
+.meaning-text {
+    font-size: 0.95rem;
+    color: #1e293b;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.example-text {
+    font-size: 0.88rem;
+    color: #475569;
+    font-style: italic;
+    background: #f1f5f9;
+    padding: 6px 12px;
+    border-radius: 8px;
+    margin: 6px 0;
+}
+
+.source-text {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    margin-top: 4px;
+}
+
+.btn-audio-mini {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    color: #0284c7;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.btn-audio-mini:hover {
+    background: #0284c7;
+    color: #ffffff;
+}
+
+.btn-delete-mini {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 6px;
+    font-size: 0.95rem;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.btn-delete-mini:hover {
+    color: #ef4444;
+    background: #fee2e2;
+}
+
