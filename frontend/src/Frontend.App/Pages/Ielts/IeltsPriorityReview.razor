@@ -3,10 +3,12 @@
 @using Frontend.App.Models
 @using Frontend.App.Services
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @inject ExamSubmissionService SubmissionService
 @inject IeltsService IeltsService
 @inject NavigationManager Navigation
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Ưu Tiên Ôn Tập - IeltsHSK</PageTitle>
 
@@ -16,6 +18,34 @@
         <div class="priority-loading">
             <div class="spinner"></div>
             <p>Đang phân tích dữ liệu luyện tập của bạn...</p>
+        </div>
+    }
+    else if (isGuest)
+    {
+        @* Guest: No login → no history → show login prompt *@
+        <div class="priority-header">
+            <div>
+                <h1>Ưu Tiên Ôn Tập</h1>
+                <p class="header-sub">Hệ thống phân tích điểm yếu và đề xuất kỹ năng cần cải thiện dựa trên lịch sử làm bài của bạn.</p>
+            </div>
+        </div>
+        <div class="priority-empty">
+            <div class="empty-icon">🔒</div>
+            <h3>Đăng nhập để theo dõi tiến độ</h3>
+            <p>
+                Bạn đang dùng tài khoản khách — kết quả làm bài <strong>không được lưu</strong> sau khi thoát.<br/>
+                Đăng ký miễn phí để hệ thống ghi nhớ lịch sử, phân tích điểm yếu và gợi ý ôn tập cá nhân hoá.
+            </p>
+            <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:16px;">
+                <button class="btn-go-test" style="background:#2563eb;"
+                        @onclick='() => Navigation.NavigateTo("/register")'>
+                    <i class="bi bi-person-plus-fill"></i> Đăng ký miễn phí
+                </button>
+                <button class="btn-go-test" style="background:#374151;"
+                        @onclick='() => Navigation.NavigateTo("/login")'>
+                    <i class="bi bi-box-arrow-in-right"></i> Đăng nhập
+                </button>
+            </div>
         </div>
     }
     else
@@ -276,6 +306,7 @@
 
 @code {
     private bool isLoading = true;
+    private bool isGuest = false;
     private string? currentLevel;
     private int totalAttempts = 0;
     private double overallBand = 0;
@@ -293,6 +324,17 @@
     protected override async Task OnInitializedAsync()
     {
         isLoading = true;
+
+        // Check if user is authenticated; guests see a login prompt and skip API calls
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        isGuest = !(authState.User.Identity?.IsAuthenticated ?? false);
+
+        if (isGuest)
+        {
+            isLoading = false;
+            return;
+        }
+
         currentLevel = await LocalStorage.GetItemAsync<string>("ielts_level");
 
         try
