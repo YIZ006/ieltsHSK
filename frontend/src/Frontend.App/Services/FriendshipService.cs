@@ -73,11 +73,14 @@ public class FriendshipService(HttpClient httpClient)
         try
         {
             var encoded = Uri.EscapeDataString(query.Trim());
-            return await httpClient.GetFromJsonAsync<List<UserSearchResultDto>>($"api/friends/search?q={encoded}") 
+            var results = await httpClient.GetFromJsonAsync<List<UserSearchResultDto>>($"api/friends/search?q={encoded}") 
                    ?? new List<UserSearchResultDto>();
+            Console.WriteLine($"[FriendshipService] Search '{query}' returned {results.Count} user(s)");
+            return results;
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"[FriendshipService] Search error for '{query}': {ex.Message}");
             return new List<UserSearchResultDto>();
         }
     }
