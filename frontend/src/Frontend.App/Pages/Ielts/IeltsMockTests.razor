@@ -197,29 +197,26 @@
                     var groupDone = mockTests.Count(t => GetCollectionKey(t) == group.Key && HasAnyAttempt(t));
 
                     <div class="collection-section">
-                        <!-- Dynamic Collection Header -->
-                        <div class="collection-header">
-                            <div class="collection-image">
-                                <img src="/sample-data/mocktest-cover.png" alt="@group.Key"
-                                     onerror="this.src='https://placehold.co/300x300/1e1e1e/FFF?text=MOCK+TEST'" />
-                            </div>
-                            <div class="collection-info" style="flex: 1;">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
-                                    <div>
-                                        <h1>@group.Key</h1>
-                                        <div class="meta">
-                                            <p><i class="bi bi-journal-check"></i> <strong>@group.Count() đề hiển thị</strong> (tổng @groupTotal đề trong bộ này)</p>
-                                        </div>
-                                    </div>
-                                    @if (groupDone > 0)
-                                    {
-                                        <div style="background: #ecfdf5; border: 1px solid #a7f3d0; padding: 6px 14px; border-radius: 12px; text-align: right;">
-                                            <span style="font-size: 0.78rem; font-weight: 700; color: #047857; text-transform: uppercase;">Tiến độ bộ đề</span>
-                                            <div style="font-size: 1.1rem; font-weight: 800; color: #065f46;">@groupDone/@groupTotal <span style="font-size: 0.8rem; font-weight: 600;">đã làm</span></div>
-                                        </div>
-                                    }
+                        <!-- Streamlined Collection Title Bar -->
+                        <div class="collection-title-bar">
+                            <div class="ct-left">
+                                <div class="ct-icon-wrap">
+                                    <i class="bi bi-folder2-open"></i>
+                                </div>
+                                <div class="ct-info">
+                                    <h2 class="ct-title">@group.Key</h2>
+                                    <span class="ct-meta">
+                                        <i class="bi bi-journal-text me-1"></i> @group.Count() đề hiển thị (Tổng @groupTotal đề trong bộ này)
+                                    </span>
                                 </div>
                             </div>
+                            @if (groupDone > 0)
+                            {
+                                <div class="ct-progress-badge">
+                                    <i class="bi bi-check-circle-fill text-success"></i>
+                                    <span>Đã làm: <strong>@groupDone/@groupTotal</strong> đề</span>
+                                </div>
+                            }
                         </div>
 
                         <div class="tests-grid">
@@ -440,16 +437,6 @@
                 }
             }
         }
-    </div>
-
-    <!-- Sidebar Banner -->
-    <div class="sidebar">
-        <div class="ad-banner">
-            <h3>Luyện Thi IELTS<br/><span class="highlight">Đạt Target Band</span></h3>
-            <p>Hệ thống chấm điểm thông minh 4 kỹ năng chuẩn Cambridge.</p>
-            <button class="btn-learn-more" @onclick="@(() => NavigationManager.NavigateTo("/ielts/vocab"))">Học từ vựng IELTS</button>
-            <img src="https://placehold.co/300x200/1e1e1e/FFF?text=IELTS+Preparation" alt="IELTS Prep" />
-        </div>
     </div>
 </div>
 
