@@ -327,7 +327,6 @@
                                         </div>
                                         <div class="score-sub">
                                             <span class="score-sub-item">⚡ <strong>@evaluationResult.Wpm WPM</strong></span>
-                                            <span class="score-sub-item">🎯 <strong>@GetBandEstimate(evaluationResult.SimilarityScore)</strong></span>
                                         </div>
                                     </div>
 
@@ -1358,77 +1357,95 @@
         }
 
         // Trường hợp 2: Có transcript từ Web Speech API -> Đối chiếu chi tiết từng từ
-        var normUserWords = CleanWords(NormalizeSpokenEnglish(userTranscript));
-        var normModelWords = CleanWords(NormalizeSpokenEnglish(modelAnswer));
+        var modelTokens = CleanWords(modelAnswer);
+        var userTokens = CleanWords(userTranscript);
+        var userWords = userTokens.Select(StripPunctuation).Where(w => !string.IsNullOrEmpty(w)).ToList();
 
         int matchedScoreTotal = 0;
-        int searchWindowStart = 0;
+        int windowStart = 0;
         var usedUserIndices = new HashSet<int>();
 
-        for (int i = 0; i < modelWords.Count; i++)
+        for (int i = 0; i < modelTokens.Count; i++)
         {
-            var originalWord = modelWords[i];
-            var normWord = i < normModelWords.Count ? normModelWords[i] : originalWord.ToLowerInvariant();
+            var rawToken = modelTokens[i];
+            var mWord = StripPunctuation(rawToken);
 
+            bool matched = false;
             MatchQuality matchQuality = MatchQuality.Missed;
-            int foundIdx = -1;
 
-            // 1. Quét ưu tiên trong cửa sổ từ lân cận phía trước (lookahead window 8 từ)
-            int windowEnd = Math.Min(normUserWords.Count, searchWindowStart + 8);
-            for (int u = searchWindowStart; u < windowEnd; u++)
+            // Giới hạn cửa sổ dò từ lân cận (tối đa 4 từ kế tiếp).
+            // Tuyệt đối không nhảy cóc qua cả câu (tránh ăn nhầm từ giống nhau ở cuối câu làm đứt đoạn cả câu).
+            int limit = Math.Min(userWords.Count, windowStart + 4);
+
+            // A. Kiểm tra dạng rút gọn mở rộng 2 từ (ví dụ: "it's" -> người dùng đọc "it is")
+            if (CommonContractions.TryGetValue(mWord, out var cInfo))
             {
-                if (usedUserIndices.Contains(u)) continue;
-
-                if (string.Equals(normUserWords[u], normWord, StringComparison.OrdinalIgnoreCase))
+                for (int u = windowStart; u < Math.Min(userWords.Count - 1, limit); u++)
                 {
-                    matchQuality = MatchQuality.Exact;
-                    foundIdx = u;
-                    break;
-                }
-                if (IsPhoneticOrFuzzyMatch(normUserWords[u], normWord))
-                {
-                    matchQuality = MatchQuality.Partial;
-                    foundIdx = u;
-                    break;
+                    if (!usedUserIndices.Contains(u) && !usedUserIndices.Contains(u + 1))
+                    {
+                        if (string.Equals(userWords[u], cInfo.Word1, StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(userWords[u + 1], cInfo.Word2, StringComparison.OrdinalIgnoreCase))
+                        {
+                            usedUserIndices.Add(u);
+                            usedUserIndices.Add(u + 1);
+                            matched = true;
+                            matchQuality = MatchQuality.Exact;
+                            windowStart = u + 2;
+                            break;
+                        }
+                    }
                 }
             }
 
-            // 2. Nếu chưa thấy trong cửa sổ gần, quét tiếp các từ còn lại phía sau (tránh tuyệt đối kẹt do tạp âm bỏ qua 1-2 từ)
-            if (foundIdx < 0)
+            // B. Quét khớp chính xác / từ tương đương trong cửa sổ lân cận
+            if (!matched)
             {
-                for (int u = windowEnd; u < normUserWords.Count; u++)
+                for (int u = windowStart; u < limit; u++)
                 {
                     if (usedUserIndices.Contains(u)) continue;
-
-                    if (string.Equals(normUserWords[u], normWord, StringComparison.OrdinalIgnoreCase))
+                    var (isOk, quality) = CheckWordMatch(userWords[u], mWord);
+                    if (isOk && quality == MatchQuality.Exact)
                     {
+                        usedUserIndices.Add(u);
+                        matched = true;
                         matchQuality = MatchQuality.Exact;
-                        foundIdx = u;
-                        break;
-                    }
-                    if (IsPhoneticOrFuzzyMatch(normUserWords[u], normWord))
-                    {
-                        matchQuality = MatchQuality.Partial;
-                        foundIdx = u;
+                        windowStart = u + 1;
                         break;
                     }
                 }
             }
 
-            if (foundIdx >= 0)
+            // C. Quét khớp phát âm gần đúng / mờ (partial/fuzzy) trong cửa sổ lân cận
+            if (!matched)
             {
-                usedUserIndices.Add(foundIdx);
-                matchedScoreTotal += (matchQuality == MatchQuality.Exact) ? 100 : 85;
-                // Chỉ tịnh tiến về phía trước, không bao giờ thụt lùi gây kẹt từ
-                searchWindowStart = Math.Max(searchWindowStart, foundIdx + 1);
+                for (int u = windowStart; u < limit; u++)
+                {
+                    if (usedUserIndices.Contains(u)) continue;
+                    var (isOk, quality) = CheckWordMatch(userWords[u], mWord);
+                    if (isOk)
+                    {
+                        usedUserIndices.Add(u);
+                        matched = true;
+                        matchQuality = quality;
+                        windowStart = u + 1;
+                        break;
+                    }
+                }
             }
 
-            wordMatches.Add(new WordMatch { Word = originalWord, MatchLevel = matchQuality });
+            if (matched)
+            {
+                matchedScoreTotal += (matchQuality == MatchQuality.Exact) ? 100 : 85;
+            }
+            // Nếu không khớp từ này: KHÔNG dịch chuyển windowStart, từ mục tiêu tiếp theo vẫn được tìm từ vị trí hiện tại!
+
+            wordMatches.Add(new WordMatch { Word = rawToken, MatchLevel = matchQuality });
         }
 
-        int totalModelWords = Math.Max(1, modelWords.Count);
+        int totalModelWords = Math.Max(1, modelTokens.Count);
         int accuracyScore = Math.Clamp((int)Math.Round(((double)matchedScoreTotal / (totalModelWords * 100)) * 100), 0, 100);
-        int wordCount = normUserWords.Count;
+        int wordCount = userWords.Count;
         int wpm = durationSec > 0 ? (int)Math.Round((wordCount / durationSec) * 60) : 0;
         if (wpm > 220) wpm = 150;
 
@@ -1441,6 +1458,78 @@
             Wpm = wpm
         };
     }
+
+    private static string StripPunctuation(string word)
+    {
+        if (string.IsNullOrWhiteSpace(word)) return "";
+        var trimmed = word.Trim();
+        int start = 0;
+        while (start < trimmed.Length && !char.IsLetterOrDigit(trimmed[start])) start++;
+        int end = trimmed.Length - 1;
+        while (end >= start && !char.IsLetterOrDigit(trimmed[end])) end--;
+        if (start > end) return "";
+        return trimmed.Substring(start, end - start + 1).ToLowerInvariant();
+    }
+
+    private static readonly Dictionary<string, (string[] SingleEquivalents, string Word1, string Word2)> CommonContractions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "it's", (new[] { "its", "it's", "it" }, "it", "is") },
+        { "i'm", (new[] { "im", "i'm" }, "i", "am") },
+        { "don't", (new[] { "dont", "don't" }, "do", "not") },
+        { "can't", (new[] { "cant", "can't", "cannot" }, "can", "not") },
+        { "won't", (new[] { "wont", "won't" }, "will", "not") },
+        { "that's", (new[] { "thats", "that's", "that" }, "that", "is") },
+        { "there's", (new[] { "theres", "there's", "there" }, "there", "is") },
+        { "what's", (new[] { "whats", "what's", "what" }, "what", "is") },
+        { "you're", (new[] { "youre", "you're", "your" }, "you", "are") },
+        { "they're", (new[] { "theyre", "they're", "their", "there" }, "they", "are") },
+        { "we're", (new[] { "were", "we're" }, "we", "are") },
+        { "didn't", (new[] { "didnt", "didn't" }, "did", "not") },
+        { "isn't", (new[] { "isnt", "isn't" }, "is", "not") },
+        { "aren't", (new[] { "arent", "aren't" }, "are", "not") },
+        { "wasn't", (new[] { "wasnt", "wasn't" }, "was", "not") },
+        { "weren't", (new[] { "werent", "weren't" }, "were", "not") },
+        { "haven't", (new[] { "havent", "haven't" }, "have", "not") },
+        { "hasn't", (new[] { "hasnt", "hasn't" }, "has", "not") },
+        { "hadn't", (new[] { "hadnt", "hadn't" }, "had", "not") },
+        { "couldn't", (new[] { "couldnt", "couldn't" }, "could", "not") },
+        { "wouldn't", (new[] { "wouldnt", "wouldn't" }, "would", "not") },
+        { "shouldn't", (new[] { "shouldnt", "shouldn't" }, "should", "not") },
+        { "let's", (new[] { "lets", "let's" }, "let", "us") }
+    };
+
+    private static readonly Dictionary<string, HashSet<string>> CommonHomophones = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "to", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "to", "too", "two" } },
+        { "too", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "to", "too", "two" } },
+        { "two", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "to", "too", "two" } },
+        { "for", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "for", "four", "fore" } },
+        { "four", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "for", "four", "fore" } },
+        { "one", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "one", "won" } },
+        { "won", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "one", "won" } },
+        { "there", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "there", "their", "they're" } },
+        { "their", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "there", "their", "they're" } },
+        { "they're", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "there", "their", "they're" } },
+        { "here", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "here", "hear" } },
+        { "hear", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "here", "hear" } },
+        { "no", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "no", "know" } },
+        { "know", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "no", "know" } },
+        { "right", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "right", "write" } },
+        { "write", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "right", "write" } },
+        { "buy", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "buy", "by", "bye" } },
+        { "by", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "buy", "by", "bye" } },
+        { "bye", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "buy", "by", "bye" } },
+        { "sea", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "sea", "see" } },
+        { "see", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "sea", "see" } },
+        { "weather", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "weather", "whether" } },
+        { "whether", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "weather", "whether" } },
+        { "week", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "week", "weak" } },
+        { "weak", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "week", "weak" } },
+        { "meet", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "meet", "meat" } },
+        { "meat", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "meet", "meat" } },
+        { "peace", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "peace", "piece" } },
+        { "piece", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "peace", "piece" } }
+    };
 
     private static readonly Dictionary<string, string> NumberWordToDigit = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -1464,50 +1553,50 @@
         { "80", "eighty" }, { "90", "ninety" }, { "100", "hundred" }, { "1000", "thousand" }
     };
 
-    private string NormalizeSpokenEnglish(string text)
+    private (bool IsMatch, MatchQuality Quality) CheckWordMatch(string u, string m)
     {
-        if (string.IsNullOrWhiteSpace(text)) return "";
-        var t = text.ToLowerInvariant()
-            .Replace("'s", "")
-            .Replace("’s", "")
-            .Replace("don't", "do not")
-            .Replace("i'm", "i am")
-            .Replace("it's", "it is")
-            .Replace("can't", "cannot")
-            .Replace("won't", "will not")
-            .Replace("hand writing", "handwriting");
+        if (string.IsNullOrEmpty(u) || string.IsNullOrEmpty(m)) return (false, MatchQuality.Missed);
+        if (string.Equals(u, m, StringComparison.OrdinalIgnoreCase)) return (true, MatchQuality.Exact);
 
-        // Chuẩn hóa toàn bộ số dạng chữ số sang chữ tiếng Anh chuẩn (0 -> 100)
-        foreach (var kvp in DigitToNumberWord)
+        // 1. Dạng viết tắt tương đương (ví dụ "it's" <-> "its", "it")
+        if (CommonContractions.TryGetValue(m, out var cInfo) && cInfo.SingleEquivalents.Contains(u, StringComparer.OrdinalIgnoreCase))
+            return (true, MatchQuality.Exact);
+        if (CommonContractions.TryGetValue(u, out var uInfo) && uInfo.SingleEquivalents.Contains(m, StringComparer.OrdinalIgnoreCase))
+            return (true, MatchQuality.Exact);
+
+        // 2. Chữ số <-> Chữ tiếng Anh (vd: 11 <-> eleven, 16 <-> sixteen)
+        if (NumberWordToDigit.TryGetValue(u, out var d1) && (d1 == m || (NumberWordToDigit.TryGetValue(m, out var md1) && d1 == md1))) return (true, MatchQuality.Exact);
+        if (DigitToNumberWord.TryGetValue(u, out var w1) && (w1 == m || (DigitToNumberWord.TryGetValue(m, out var mw1) && w1 == mw1))) return (true, MatchQuality.Exact);
+        if (NumberWordToDigit.TryGetValue(m, out var d2) && d2 == u) return (true, MatchQuality.Exact);
+        if (DigitToNumberWord.TryGetValue(m, out var w2) && w2 == u) return (true, MatchQuality.Exact);
+
+        // 3. Đồng âm phổ biến
+        if (CommonHomophones.TryGetValue(m, out var hSet) && hSet.Contains(u)) return (true, MatchQuality.Exact);
+
+        // 4. Biến thể ngữ pháp đuôi (s, es, ed, ing, d)
+        var uTrim = System.Text.RegularExpressions.Regex.Replace(u, @"(s|es|ed|ing|d)$", "");
+        var mTrim = System.Text.RegularExpressions.Regex.Replace(m, @"(s|es|ed|ing|d)$", "");
+        if (uTrim.Length >= 3 && string.Equals(uTrim, mTrim, StringComparison.OrdinalIgnoreCase))
         {
-            t = System.Text.RegularExpressions.Regex.Replace(t, $@"\b{kvp.Key}\b", kvp.Value);
+            return (true, Math.Abs(u.Length - m.Length) <= 1 ? MatchQuality.Exact : MatchQuality.Partial);
         }
 
-        return t;
-    }
+        // 5. Fuzzy Levenshtein theo độ dài từ
+        int dist = LevenshteinDistance(u, m);
+        if (m.Length <= 3)
+        {
+            return (false, MatchQuality.Missed);
+        }
+        if (m.Length <= 6 && dist <= 1)
+        {
+            return (true, MatchQuality.Partial);
+        }
+        if (m.Length >= 7 && dist <= 2)
+        {
+            return (true, MatchQuality.Partial);
+        }
 
-    private bool IsPhoneticOrFuzzyMatch(string uWord, string mWord)
-    {
-        if (string.IsNullOrEmpty(uWord) || string.IsNullOrEmpty(mWord)) return false;
-        if (string.Equals(uWord, mWord, StringComparison.OrdinalIgnoreCase)) return true;
-
-        // Khớp số hai chiều (vd: 11 <-> eleven, 16 <-> sixteen)
-        if (NumberWordToDigit.TryGetValue(uWord, out var d1) && (d1 == mWord || (NumberWordToDigit.TryGetValue(mWord, out var md1) && d1 == md1))) return true;
-        if (DigitToNumberWord.TryGetValue(uWord, out var w1) && (w1 == mWord || (DigitToNumberWord.TryGetValue(mWord, out var mw1) && w1 == mw1))) return true;
-        if (NumberWordToDigit.TryGetValue(mWord, out var d2) && d2 == uWord) return true;
-        if (DigitToNumberWord.TryGetValue(mWord, out var w2) && w2 == uWord) return true;
-
-        // Đồng âm phổ biến trong IELTS
-        if ((uWord == "to" || uWord == "too" || uWord == "two") && (mWord == "to" || mWord == "too" || mWord == "two")) return true;
-        if ((uWord == "for" || uWord == "four") && (mWord == "for" || mWord == "four")) return true;
-        if ((uWord == "won" || uWord == "one") && (mWord == "won" || mWord == "one")) return true;
-
-        // Bỏ đuôi s/es/ed/ing khi đối chiếu phát âm
-        var uTrim = uWord.TrimEnd('s', 'd');
-        var mTrim = mWord.TrimEnd('s', 'd');
-        if (!string.IsNullOrEmpty(uTrim) && uTrim == mTrim) return true;
-
-        return Math.Abs(uWord.Length - mWord.Length) <= 2 && LevenshteinDistance(uWord, mWord) <= 2;
+        return (false, MatchQuality.Missed);
     }
 
     private string GetWordMatchClass(MatchQuality quality) => quality switch
@@ -1525,16 +1614,6 @@
     };
 
     private string GetScoreColorClass(int score) => score >= 80 ? "score-excellent" : (score >= 60 ? "score-good" : "score-needs-work");
-
-    private string GetBandEstimate(int score)
-    {
-        if (score >= 92) return "Band 8.5 - 9.0 (Expert)";
-        if (score >= 84) return "Band 8.0 (Very Good)";
-        if (score >= 75) return "Band 7.5 (Good / Fluent)";
-        if (score >= 67) return "Band 7.0 (Competent)";
-        if (score >= 55) return "Band 6.0 - 6.5";
-        return "Band 5.0 - 5.5";
-    }
 
     private void ToggleMockInterviewMode()
     {

@@ -132,94 +132,139 @@ window.SpeakAlongInterop = {
         }
     },
 
+    _startSpeechRecognition: function () {
+        if (!this._isRecording) return;
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            this._speechError = 'not-supported';
+            return;
+        }
+
+        if (this._recognition) {
+            try {
+                this._recognition.onend = null;
+                this._recognition.onerror = null;
+                this._recognition.onresult = null;
+                this._recognition.abort();
+            } catch (e) { }
+            this._recognition = null;
+        }
+
+        try {
+            const rec = new SpeechRecognition();
+            rec.lang = 'en-US';
+            rec.continuous = true;
+            rec.interimResults = true;
+            rec.maxAlternatives = 1;
+
+            rec.onresult = (event) => {
+                let sessionFinal = '';
+                let sessionInterim = '';
+                let totalConfidence = 0;
+                let confCount = 0;
+
+                for (let i = 0; i < event.results.length; ++i) {
+                    const res = event.results[i];
+                    if (res && res[0]) {
+                        if (res[0].confidence > 0) {
+                            totalConfidence += res[0].confidence;
+                            confCount++;
+                        }
+                        if (res.isFinal) {
+                            sessionFinal += res[0].transcript + ' ';
+                        } else {
+                            sessionInterim += res[0].transcript;
+                        }
+                    }
+                }
+
+                if (confCount > 0) {
+                    this._lastConfidence = totalConfidence / confCount;
+                }
+
+                this._currentSessionFinal = sessionFinal;
+                const fullText = (this._completedSessionsText + ' ' + sessionFinal + ' ' + sessionInterim).replace(/\s+/g, ' ').trim();
+                if (fullText) {
+                    this._lastFullTranscript = fullText;
+                    this._throttleNotifyDotNet(fullText);
+                }
+            };
+
+            rec.onerror = (e) => {
+                if (e.error !== 'no-speech' && e.error !== 'aborted') {
+                    console.warn('SpeechRecognition error:', e.error);
+                    this._speechError = e.error;
+                }
+            };
+
+            rec.onend = () => {
+                // Lưu lại phần chữ đã được finalize trong session này
+                if (this._currentSessionFinal) {
+                    this._completedSessionsText = (this._completedSessionsText + ' ' + this._currentSessionFinal).replace(/\s+/g, ' ').trim();
+                    this._currentSessionFinal = '';
+                }
+
+                // Nếu người dùng vẫn đang bật micro (chỉ là tạm dừng lấy hơi hoặc có tạp âm), tự động khởi động lại sau 100ms
+                if (this._isRecording) {
+                    this._restartTimer = setTimeout(() => {
+                        if (this._isRecording) {
+                            this._startSpeechRecognition();
+                        }
+                    }, 100);
+                }
+            };
+
+            this._recognition = rec;
+            rec.start();
+        } catch (e) {
+            console.warn('SpeechRecognition start failed:', e);
+            this._speechError = 'start-failed';
+        }
+    },
+
+    _throttleNotifyDotNet: function (text) {
+        if (!this._dotNetRef || !text) return;
+        const now = Date.now();
+        if (!this._lastNotifyTime || now - this._lastNotifyTime >= 70) {
+            this._lastNotifyTime = now;
+            try {
+                this._dotNetRef.invokeMethodAsync('OnSpeechRecognized', text);
+            } catch (e) { }
+        } else {
+            if (this._notifyTimeout) clearTimeout(this._notifyTimeout);
+            this._notifyTimeout = setTimeout(() => {
+                if (this._isRecording && this._dotNetRef) {
+                    try {
+                        this._dotNetRef.invokeMethodAsync('OnSpeechRecognized', text);
+                    } catch (e) { }
+                }
+            }, 70);
+        }
+    },
+
     // Start recording audio + real-time speech recognition + live wave visualizer
     startRecording: function (dotNetRef, deviceId, canvasId) {
         this._dotNetRef = dotNetRef;
         this._isRecording = true;
         this._audioChunks = [];
-        this._finalTranscript = '';
+        this._completedSessionsText = '';
+        this._currentSessionFinal = '';
         this._lastFullTranscript = '';
+        this._finalTranscript = '';
         this._voiceDetected = false;
         this._voiceEnergySum = 0;
         this._voiceFrameCount = 0;
         this._speechError = null;
         this._startTime = Date.now();
+        if (this._restartTimer) clearTimeout(this._restartTimer);
+        if (this._notifyTimeout) clearTimeout(this._notifyTimeout);
 
         // Stop any ongoing TTS
         this.stopSpeaking();
 
         return new Promise((resolve) => {
             // 1. Initialize SpeechRecognition (Web Speech API)
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (SpeechRecognition) {
-                try {
-                    if (this._recognition) {
-                        try { this._recognition.abort(); } catch (e) { }
-                    }
-                    this._recognition = new SpeechRecognition();
-                    this._recognition.lang = 'en-US';
-                    this._recognition.continuous = true; // Cho phép nói liên tục trọn vẹn cả câu mà không bị ngắt quãng bởi tạp âm
-                    this._recognition.interimResults = true;
-                    this._recognition.maxAlternatives = 1;
-
-                    this._recognition.onresult = (event) => {
-                        let interim = '';
-                        let currentFinal = '';
-                        let totalConfidence = 0;
-                        let confidenceCount = 0;
-
-                        for (let i = event.resultIndex; i < event.results.length; ++i) {
-                            if (event.results[i][0].confidence > 0) {
-                                totalConfidence += event.results[i][0].confidence;
-                                confidenceCount++;
-                            }
-                            if (event.results[i].isFinal) {
-                                currentFinal += event.results[i][0].transcript + ' ';
-                            } else {
-                                interim += event.results[i][0].transcript;
-                            }
-                        }
-                        if (currentFinal) {
-                            this._finalTranscript += currentFinal;
-                        }
-                        const liveText = (this._finalTranscript + ' ' + interim).trim();
-                        if (liveText) {
-                            this._lastFullTranscript = liveText;
-                        }
-                        if (confidenceCount > 0) {
-                            this._lastConfidence = totalConfidence / confidenceCount;
-                        }
-
-                        if (this._dotNetRef && liveText) {
-                            this._dotNetRef.invokeMethodAsync('OnSpeechRecognized', liveText);
-                        }
-                    };
-
-                    this._recognition.onerror = (e) => {
-                        // Bỏ qua lỗi no-speech tạm thời nếu người dùng đang dừng lấy hơi
-                        if (e.error !== 'no-speech') {
-                            console.warn('SpeechRecognition note:', e.error);
-                            this._speechError = e.error;
-                        }
-                    };
-
-                    this._recognition.onend = () => {
-                        // Tự động khởi động lại nếu người dùng vẫn đang nói (tránh Chrome tự ngắt giữa chừng khi có khoảng lặng/tạp âm)
-                        if (this._isRecording && this._recognition) {
-                            try {
-                                this._recognition.start();
-                            } catch (e) { }
-                        }
-                    };
-
-                    this._recognition.start();
-                } catch (e) {
-                    console.warn('SpeechRecognition failed to start:', e);
-                    this._speechError = 'not-supported';
-                }
-            } else {
-                this._speechError = 'not-supported';
-            }
+            this._startSpeechRecognition();
 
             // 2. Initialize MediaRecorder & Live Sound Waveform Visualizer
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -343,16 +388,33 @@ window.SpeakAlongInterop = {
     // Stop recording and return payload: transcript + audio playback url + duration + voice activity
     stopRecording: function () {
         return new Promise((resolve) => {
+            this._isRecording = false;
+            if (this._restartTimer) {
+                clearTimeout(this._restartTimer);
+                this._restartTimer = null;
+            }
+            if (this._notifyTimeout) {
+                clearTimeout(this._notifyTimeout);
+                this._notifyTimeout = null;
+            }
+
             const durationSec = Math.max(0.5, (Date.now() - this._startTime) / 1000.0);
 
             // Stop SpeechRecognition safely
             if (this._recognition) {
                 try {
+                    this._recognition.onend = null;
+                    this._recognition.onerror = null;
                     this._recognition.stop();
                 } catch (e) { }
             }
 
-            const resultText = (this._lastFullTranscript || this._finalTranscript || '').trim();
+            if (this._currentSessionFinal) {
+                this._completedSessionsText = (this._completedSessionsText + ' ' + this._currentSessionFinal).replace(/\s+/g, ' ').trim();
+                this._currentSessionFinal = '';
+            }
+
+            const resultText = (this._lastFullTranscript || this._completedSessionsText || '').trim();
             const confidence = this._lastConfidence || 0.85;
             const hasVoice = (this._voiceFrameCount >= 5) || (this._voiceEnergySum > 60);
 
