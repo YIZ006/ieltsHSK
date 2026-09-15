@@ -568,6 +568,72 @@
             };
         })();
 
+        // ─── Global Capture-Phase Keyboard Dispatcher for Quantum Cipher ───
+        // Bắt sự kiện phím ở Capture Phase (useCapture = true) để các Extension (như Google Translate, Vimium)
+        // không thể nuốt phím hoặc làm mất focus khi người dùng đang chơi game.
+        window.QuantumCipherKeyboard = (function () {
+            let _dotNetRef = null;
+            let _isActive = false;
+
+            window.addEventListener('keydown', function (e) {
+                if (!_isActive || !_dotNetRef) return;
+
+                // Không can thiệp vào các tổ hợp phím hệ thống (Ctrl+C, Ctrl+V, F5, F12, v.v.)
+                if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+                // Nếu đang mở bảng hướng dẫn tutorial thì để tutorial xử lý phím
+                const tut = document.getElementById('tutorialOverlay');
+                if (tut && tut.classList.contains('show')) return;
+
+                // Không can thiệp nếu người dùng đang thực sự gõ trong ô input/textarea thông thường
+                const activeTag = document.activeElement ? document.activeElement.tagName.toUpperCase() : '';
+                if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+
+                const key = e.key;
+                const code = e.code || '';
+
+                const isLetter = key.length === 1 && /^[a-zA-Z]$/.test(key);
+                const isAction = key === 'Enter' || key === 'Backspace' || key === '1' || key === '2' || key === 'Escape' || key === ' ' || code === 'Space';
+
+                if (isLetter || isAction) {
+                    // Chặn phím không để browser cuộn trang hay extension bên thứ 3 can thiệp
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+
+                    // Chủ động giữ focus cho overlay game
+                    const overlay = document.querySelector('.quantum-game-overlay');
+                    if (overlay && document.activeElement !== overlay) {
+                        try { overlay.focus(); } catch (err) { }
+                    }
+
+                    try {
+                        _dotNetRef.invokeMethodAsync('HandleGlobalKeyDown', key, code);
+                    } catch (err) {
+                        console.warn('QuantumCipherKeyboard invoke error:', err);
+                    }
+                }
+            }, true); // useCapture = true: Ưu tiên bắt trước mọi extension
+
+            return {
+                init: function (dotNetRef) {
+                    _dotNetRef = dotNetRef;
+                    _isActive = true;
+                    // Lập tức focus overlay khi kích hoạt
+                    setTimeout(function () {
+                        const overlay = document.querySelector('.quantum-game-overlay');
+                        if (overlay) {
+                            try { overlay.focus(); } catch (e) { }
+                        }
+                    }, 50);
+                },
+                destroy: function () {
+                    _isActive = false;
+                    _dotNetRef = null;
+                }
+            };
+        })();
+
         // ─── Keyboard Sound Effects (Web Audio API — không cần file âm thanh) ───
         window.WordleSfx = (function () {
             let _ctx = null;

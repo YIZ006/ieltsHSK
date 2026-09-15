@@ -1363,6 +1363,7 @@
 
         int matchedScoreTotal = 0;
         int searchWindowStart = 0;
+        var usedUserIndices = new HashSet<int>();
 
         for (int i = 0; i < modelWords.Count; i++)
         {
@@ -1372,9 +1373,12 @@
             MatchQuality matchQuality = MatchQuality.Missed;
             int foundIdx = -1;
 
-            int windowEnd = Math.Min(normUserWords.Count, searchWindowStart + 6);
+            // 1. Quét ưu tiên trong cửa sổ từ lân cận phía trước (lookahead window 8 từ)
+            int windowEnd = Math.Min(normUserWords.Count, searchWindowStart + 8);
             for (int u = searchWindowStart; u < windowEnd; u++)
             {
+                if (usedUserIndices.Contains(u)) continue;
+
                 if (string.Equals(normUserWords[u], normWord, StringComparison.OrdinalIgnoreCase))
                 {
                     matchQuality = MatchQuality.Exact;
@@ -1389,10 +1393,13 @@
                 }
             }
 
+            // 2. Nếu chưa thấy trong cửa sổ gần, quét tiếp các từ còn lại phía sau (tránh tuyệt đối kẹt do tạp âm bỏ qua 1-2 từ)
             if (foundIdx < 0)
             {
-                for (int u = 0; u < normUserWords.Count; u++)
+                for (int u = windowEnd; u < normUserWords.Count; u++)
                 {
+                    if (usedUserIndices.Contains(u)) continue;
+
                     if (string.Equals(normUserWords[u], normWord, StringComparison.OrdinalIgnoreCase))
                     {
                         matchQuality = MatchQuality.Exact;
@@ -1410,8 +1417,10 @@
 
             if (foundIdx >= 0)
             {
-                matchedScoreTotal += (matchQuality == MatchQuality.Exact) ? 100 : 80;
-                searchWindowStart = Math.Min(foundIdx + 1, normUserWords.Count);
+                usedUserIndices.Add(foundIdx);
+                matchedScoreTotal += (matchQuality == MatchQuality.Exact) ? 100 : 85;
+                // Chỉ tịnh tiến về phía trước, không bao giờ thụt lùi gây kẹt từ
+                searchWindowStart = Math.Max(searchWindowStart, foundIdx + 1);
             }
 
             wordMatches.Add(new WordMatch { Word = originalWord, MatchLevel = matchQuality });
@@ -1433,6 +1442,28 @@
         };
     }
 
+    private static readonly Dictionary<string, string> NumberWordToDigit = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "zero", "0" }, { "one", "1" }, { "two", "2" }, { "three", "3" }, { "four", "4" },
+        { "five", "5" }, { "six", "6" }, { "seven", "7" }, { "eight", "8" }, { "nine", "9" },
+        { "ten", "10" }, { "eleven", "11" }, { "twelve", "12" }, { "thirteen", "13" }, { "fourteen", "14" },
+        { "fifteen", "15" }, { "sixteen", "16" }, { "seventeen", "17" }, { "eighteen", "18" }, { "nineteen", "19" },
+        { "twenty", "20" }, { "thirty", "30" }, { "forty", "40" }, { "fifty", "50" }, { "sixty", "60" },
+        { "seventy", "70" }, { "eighty", "80" }, { "ninety", "90" }, { "hundred", "100" }, { "thousand", "1000" }
+    };
+
+    private static readonly Dictionary<string, string> DigitToNumberWord = new()
+    {
+        { "0", "zero" }, { "1", "one" }, { "2", "two" }, { "3", "three" }, { "4", "four" },
+        { "5", "five" }, { "6", "six" }, { "7", "seven" }, { "8", "eight" }, { "9", "nine" },
+        { "10", "ten" }, { "11", "eleven" }, { "12", "twelve" }, { "13", "thirteen" }, { "14", "fourteen" },
+        { "15", "fifteen" }, { "16", "sixteen" }, { "17", "seventeen" }, { "18", "eighteen" }, { "19", "nineteen" },
+        { "20", "twenty" }, { "21", "twenty-one" }, { "22", "twenty-two" }, { "23", "twenty-three" }, { "24", "twenty-four" },
+        { "25", "twenty-five" }, { "26", "twenty-six" }, { "27", "twenty-seven" }, { "28", "twenty-eight" }, { "29", "twenty-nine" },
+        { "30", "thirty" }, { "40", "forty" }, { "50", "fifty" }, { "60", "sixty" }, { "70", "seventy" },
+        { "80", "eighty" }, { "90", "ninety" }, { "100", "hundred" }, { "1000", "thousand" }
+    };
+
     private string NormalizeSpokenEnglish(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return "";
@@ -1444,37 +1475,38 @@
             .Replace("it's", "it is")
             .Replace("can't", "cannot")
             .Replace("won't", "will not")
-            .Replace("hand writing", "handwriting")
-            .Replace(" 0 ", " zero ")
-            .Replace(" 1 ", " one ")
-            .Replace(" 2 ", " two ")
-            .Replace(" 3 ", " three ")
-            .Replace(" 4 ", " four ")
-            .Replace(" 5 ", " five ")
-            .Replace(" 6 ", " six ")
-            .Replace(" 7 ", " seven ")
-            .Replace(" 8 ", " eight ")
-            .Replace(" 9 ", " nine ")
-            .Replace(" 10 ", " ten ");
+            .Replace("hand writing", "handwriting");
 
-        if (t.StartsWith("2 ")) t = "two " + t[2..];
-        if (t.StartsWith("1 ")) t = "one " + t[2..];
-        if (t.StartsWith("3 ")) t = "three " + t[2..];
+        // Chuẩn hóa toàn bộ số dạng chữ số sang chữ tiếng Anh chuẩn (0 -> 100)
+        foreach (var kvp in DigitToNumberWord)
+        {
+            t = System.Text.RegularExpressions.Regex.Replace(t, $@"\b{kvp.Key}\b", kvp.Value);
+        }
+
         return t;
     }
 
     private bool IsPhoneticOrFuzzyMatch(string uWord, string mWord)
     {
         if (string.IsNullOrEmpty(uWord) || string.IsNullOrEmpty(mWord)) return false;
-        if (uWord == mWord) return true;
-        // Khớp số với chữ
-        if (uWord == "2" && mWord == "two") return true;
-        if (uWord == "1" && mWord == "one") return true;
-        if (uWord == "3" && mWord == "three") return true;
-        if (uWord == "4" && mWord == "four") return true;
+        if (string.Equals(uWord, mWord, StringComparison.OrdinalIgnoreCase)) return true;
+
+        // Khớp số hai chiều (vd: 11 <-> eleven, 16 <-> sixteen)
+        if (NumberWordToDigit.TryGetValue(uWord, out var d1) && (d1 == mWord || (NumberWordToDigit.TryGetValue(mWord, out var md1) && d1 == md1))) return true;
+        if (DigitToNumberWord.TryGetValue(uWord, out var w1) && (w1 == mWord || (DigitToNumberWord.TryGetValue(mWord, out var mw1) && w1 == mw1))) return true;
+        if (NumberWordToDigit.TryGetValue(mWord, out var d2) && d2 == uWord) return true;
+        if (DigitToNumberWord.TryGetValue(mWord, out var w2) && w2 == uWord) return true;
+
+        // Đồng âm phổ biến trong IELTS
+        if ((uWord == "to" || uWord == "too" || uWord == "two") && (mWord == "to" || mWord == "too" || mWord == "two")) return true;
+        if ((uWord == "for" || uWord == "four") && (mWord == "for" || mWord == "four")) return true;
+        if ((uWord == "won" || uWord == "one") && (mWord == "won" || mWord == "one")) return true;
+
         // Bỏ đuôi s/es/ed/ing khi đối chiếu phát âm
-        if (uWord.TrimEnd('s') == mWord.TrimEnd('s')) return true;
-        if (uWord.TrimEnd('d') == mWord.TrimEnd('d')) return true;
+        var uTrim = uWord.TrimEnd('s', 'd');
+        var mTrim = mWord.TrimEnd('s', 'd');
+        if (!string.IsNullOrEmpty(uTrim) && uTrim == mTrim) return true;
+
         return Math.Abs(uWord.Length - mWord.Length) <= 2 && LevenshteinDistance(uWord, mWord) <= 2;
     }
 
