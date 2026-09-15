@@ -158,7 +158,7 @@ window.SpeakAlongInterop = {
                     }
                     this._recognition = new SpeechRecognition();
                     this._recognition.lang = 'en-US';
-                    this._recognition.continuous = false; // Fast, responsive for single shadowing sentence
+                    this._recognition.continuous = true; // Cho phép nói liên tục trọn vẹn cả câu mà không bị ngắt quãng bởi tạp âm
                     this._recognition.interimResults = true;
                     this._recognition.maxAlternatives = 1;
 
@@ -196,8 +196,20 @@ window.SpeakAlongInterop = {
                     };
 
                     this._recognition.onerror = (e) => {
-                        console.warn('SpeechRecognition note:', e.error);
-                        this._speechError = e.error;
+                        // Bỏ qua lỗi no-speech tạm thời nếu người dùng đang dừng lấy hơi
+                        if (e.error !== 'no-speech') {
+                            console.warn('SpeechRecognition note:', e.error);
+                            this._speechError = e.error;
+                        }
+                    };
+
+                    this._recognition.onend = () => {
+                        // Tự động khởi động lại nếu người dùng vẫn đang nói (tránh Chrome tự ngắt giữa chừng khi có khoảng lặng/tạp âm)
+                        if (this._isRecording && this._recognition) {
+                            try {
+                                this._recognition.start();
+                            } catch (e) { }
+                        }
                     };
 
                     this._recognition.start();
