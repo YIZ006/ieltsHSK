@@ -74,9 +74,20 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
                     if (!string.IsNullOrWhiteSpace(srvUser.TargetExam)) local.TargetExam = srvUser.TargetExam;
                     if (!string.IsNullOrWhiteSpace(srvUser.TargetScore)) local.TargetScore = srvUser.TargetScore;
                     if (srvUser.TargetDeadline.HasValue) local.TargetDeadline = srvUser.TargetDeadline;
-                    if (!string.IsNullOrWhiteSpace(srvUser.IeltsLevel)) local.IeltsLevel = srvUser.IeltsLevel;
+                    if (!string.IsNullOrWhiteSpace(srvUser.IeltsLevel))
+                    {
+                        local.IeltsLevel = srvUser.IeltsLevel;
+                        await localStorage.SetItemAsync("ielts_level", srvUser.IeltsLevel);
+                    }
                     if (!string.IsNullOrWhiteSpace(srvUser.HskLevel)) local.HskLevel = srvUser.HskLevel;
-                    if (!string.IsNullOrWhiteSpace(srvUser.Level)) local.StudyLevel = srvUser.Level;
+                    if (!string.IsNullOrWhiteSpace(srvUser.Level))
+                    {
+                        local.StudyLevel = srvUser.Level;
+                        if (srvUser.Level != "A1" && string.IsNullOrWhiteSpace(local.IeltsLevel))
+                        {
+                            await localStorage.SetItemAsync("ielts_level", srvUser.Level);
+                        }
+                    }
                     local.Streak = srvUser.Streak;
 
                     // Migrate local customizations to server if server doesn't have them yet

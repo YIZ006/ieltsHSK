@@ -11,18 +11,18 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Orbitron:wght@400;600;700;800;900&family=Rajdhani:wght@500;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/app.css?v=20260831b" />
+    <link rel="stylesheet" href="css/app.css?v=20260917_05" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="manifest" href="manifest.json" />
     <meta name="theme-color" content="#1f2937" />
     <link rel="stylesheet" href="css/quantum-cipher.css?v=20260905_02" />
-    <link href="Frontend.App.styles.css?v=20260914_01" rel="stylesheet" />
+    <link href="Frontend.App.styles.css?v=20260917_05" rel="stylesheet" />
 </head>
 
 <body>
     <div id="app"></div>
 
-    <!-- PET LOADER OVERLAY (Tách biệt khỏi #app để không bị unmount đột ngột/tàng hình khi Blazor nạp xong) -->
+    <!-- PET LOADER OVERLAY (Khởi động ứng dụng cùng Pet Runner trên thanh tiến trình) -->
     <div id="app-loader" class="pet-loader">
         <div class="pet-track">
             <div class="pet-fill" id="pet-fill"></div>
@@ -41,9 +41,51 @@
     </div>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="js/googleAuth.js"></script>
+    <!-- Mascot Manager Early Stub & Auto-Loader: Chống lỗi undefined khi script đang tải hoặc trễ mạng -->
+    <script>
+        (function () {
+            if (!window.MascotManager) {
+                var _q = [];
+                function _loadCore() {
+                    if (document.querySelector('script[data-mascot-core]')) return;
+                    var s = document.createElement('script');
+                    s.src = 'js/mascot-interop.js?v=20260917_05';
+                    s.setAttribute('data-mascot-core', 'true');
+                    document.head.appendChild(s);
+                }
+                window.MascotManager = {
+                    _isStub: true,
+                    init: function (el) { _q.push(['init', el]); _loadCore(); },
+                    boop: function () { _q.push(['boop']); _loadCore(); },
+                    setCharacter: function (c) { _q.push(['setCharacter', c]); _loadCore(); },
+                    setSize: function (s) { _q.push(['setSize', s]); _loadCore(); },
+                    toggleMinimize: function () { _q.push(['toggleMinimize']); _loadCore(); },
+                    toggleBubble: function () { _q.push(['toggleBubble']); _loadCore(); },
+                    toggleSound: function () { _q.push(['toggleSound']); _loadCore(); },
+                    gameSay: function (t, a, b, c) { _q.push(['gameSay', t, a, b, c]); _loadCore(); },
+                    setGameMode: function (m, g) { _q.push(['setGameMode', m, g]); _loadCore(); },
+                    onPageNavigated: function (u) { _q.push(['onPageNavigated', u]); _loadCore(); },
+                    getState: function () {
+                        return { character: 'wolf', size: 104, minimized: false, showBubble: true, soundEnabled: true, isGameMode: false };
+                    },
+                    _flush: function (real) {
+                        _q.forEach(function (call) {
+                            try {
+                                if (typeof real[call[0]] === 'function') {
+                                    real[call[0]].apply(real, call.slice(1));
+                                }
+                            } catch (e) { }
+                        });
+                        _q = [];
+                    }
+                };
+            }
+        })();
+    </script>
+    <script data-mascot-core="true" src="js/mascot-interop.js?v=20260917_02"></script>
     <script src="_framework/blazor.webassembly.js" autostart="false"></script>
     <script>
-        // Điều phối tiến trình tải mượt mà: Chạy thoăn thoắt -> Bật nhảy rướn cao -> Tiếp đất nén lực -> Fade-out êm ái
+        // Điều phối tiến trình tải mượt mà cùng Pet Runner
         (function () {
             const loader = document.getElementById('app-loader');
             const fill = document.getElementById('pet-fill');
@@ -59,15 +101,15 @@
 
             function updateUI(p) {
                 const rounded = Math.min(100, Math.round(p));
-                fill.style.width = p + '%';
-                runnerWrapper.style.left = p + '%';
-                percentText.textContent = rounded + '%';
+                if (fill) fill.style.width = p + '%';
+                if (runnerWrapper) runnerWrapper.style.left = p + '%';
+                if (percentText) percentText.textContent = rounded + '%';
 
                 // Khi tiến độ >= 75%: Pet chuyển sang rướn người và bật vọt lên đỉnh
-                if (p >= 75 && !isJumping) {
+                if (p >= 75 && !isJumping && runner) {
                     isJumping = true;
                     runner.classList.add('jumping');
-                } else if (p < 75 && isJumping) {
+                } else if (p < 75 && isJumping && runner) {
                     isJumping = false;
                     runner.classList.remove('jumping');
                 }
@@ -76,10 +118,12 @@
                 if (p >= 99.5 && !isComplete) {
                     isComplete = true;
                     setTimeout(() => {
-                        loader.classList.add('fade-out');
-                        setTimeout(() => {
-                            loader.style.display = 'none';
-                        }, 500);
+                        if (loader) {
+                            loader.classList.add('fade-out');
+                            setTimeout(() => {
+                                loader.style.display = 'none';
+                            }, 500);
+                        }
                     }, 300);
                 }
             }
@@ -225,6 +269,25 @@
                 dotNetRef.invokeMethodAsync('UpdateReadingProgress', progress);
             };
             window.addEventListener('scroll', onScroll, { passive: true });
+        };
+        window.locateAndHighlightParagraph = function (paraIndex) {
+            const el = document.getElementById('para-' + paraIndex);
+            if (!el) return;
+            const pane = document.querySelector('.ielts-passage-pane');
+            if (pane) {
+                const paneRect = pane.getBoundingClientRect();
+                const elRect = el.getBoundingClientRect();
+                const scrollTop = pane.scrollTop + (elRect.top - paneRect.top) - (pane.clientHeight / 2) + (el.clientHeight / 2);
+                pane.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' });
+            } else {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            el.classList.remove('passage-pulse-highlight');
+            void el.offsetWidth;
+            el.classList.add('passage-pulse-highlight');
+            setTimeout(function () {
+                el.classList.remove('passage-pulse-highlight');
+            }, 3000);
         };
 
         // Auto-focus game input (dùng cho HskVocabShooter popup)

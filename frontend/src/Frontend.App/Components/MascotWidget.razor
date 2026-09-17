@@ -1,0 +1,207 @@
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components.Routing
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavManager
+@implements IAsyncDisposable
+
+<div @ref="containerRef" class="mascot-widget-wrapper @(isMenuOpen ? "menu-open" : "")" id="mascotCompanionWidget">
+    <!-- Hộp thoại động viên (Speech Bubble) -->
+    <div class="mascot-speech-bubble" @onclick="OnBubbleClick" title="Nhấp để đổi câu nói động viên!">
+        <div class="mascot-bubble-content">
+            <span class="mascot-bubble-text">Cố lên bạn ơi! Chúc bạn học tốt hôm nay! 🌟</span>
+            <small class="mascot-bubble-sub">IELTS & HSK Companion</small>
+        </div>
+        <div class="mascot-bubble-arrow"></div>
+    </div>
+
+    <!-- Khung chính hiển thị Mascot -->
+    <div class="mascot-main-area">
+        <!-- Thanh công cụ nhanh (Quick Control Bar) -->
+        <div class="mascot-toolbar @(isMenuOpen ? "visible" : "")">
+            <button type="button" class="btn-mascot-tool" 
+                    @onclick="ToggleSound" title="@(isSoundEnabled ? "Tắt âm thanh giọt nước" : "Bật âm thanh giọt nước")">
+                <i class="bi @(isSoundEnabled ? "bi-volume-up-fill" : "bi-volume-mute-fill")"></i>
+            </button>
+            <button type="button" class="btn-mascot-tool" 
+                    @onclick="ToggleBubble" title="@(isBubbleEnabled ? "Tắt bóng thoại" : "Bật bóng thoại")">
+                <i class="bi @(isBubbleEnabled ? "bi-chat-quote-fill" : "bi-chat-quote")"></i>
+            </button>
+            <button type="button" class="btn-mascot-tool btn-close-mascot" 
+                    @onclick="MinimizeMascot" title="Thu nhỏ linh vật">
+                <i class="bi bi-dash-lg"></i>
+            </button>
+        </div>
+
+        <!-- Nút kích hoạt mở menu tùy chọn nhỏ -->
+        <button type="button" class="btn-mascot-menu-toggle" @onclick="ToggleMenu" title="Cài đặt bạn đồng hành">
+            <i class="bi @(isMenuOpen ? "bi-x-lg" : "bi-gear-fill")"></i>
+        </button>
+
+        <!-- Thẻ chứa nhân vật tương tác Sprite (Mascot Actor) -->
+        <div class="mascot-viewport">
+            <!-- Vòng hào quang tròn mềm mại (Circular Backdrop Halo) -->
+            <div class="mascot-halo-backdrop"></div>
+
+            <button type="button" class="mascot-actor-btn" @onclick="OnMascotClick" aria-label="Boop the mascot companion">
+                <span class="mascot-squash-span">
+                    <span class="mascot-layer mascot-layer-directions"></span>
+                    <span class="mascot-layer mascot-layer-reactions"></span>
+                </span>
+            </button>
+
+            <!-- Bóng tiếp đất mềm mại -->
+            <div class="mascot-ground-shadow"></div>
+        </div>
+    </div>
+
+    <!-- Huy hiệu thu nhỏ khi ẩn mascot (Mini Restore Badge) -->
+    <button type="button" class="mascot-minimized-pill" @onclick="RestoreMascot" title="Mở bạn đồng hành Mascot (Sói Tuyết)">
+        <span class="pill-icon">🐺</span>
+        <span class="pill-label">Sói Tuyết</span>
+    </button>
+</div>
+
+@code {
+    private ElementReference containerRef;
+    private bool isInitialized = false;
+    private bool isMenuOpen = false;
+    private bool isBubbleEnabled = true;
+    private bool isSoundEnabled = true;
+    private string currentCharacter = "wolf";
+
+    protected override void OnInitialized()
+    {
+        NavManager.LocationChanged += OnLocationChanged;
+    }
+
+    private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        await SafeInvokeVoidAsync("MascotManager.onPageNavigated", e.Location);
+    }
+
+    private async Task EnsureMascotScriptAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("eval", @"
+                (function() {
+                    if (!window.MascotManager || window.MascotManager._isStub || typeof window.MascotManager.toggleSound !== 'function') {
+                        var existing = document.querySelector('script[data-mascot-core]');
+                        if (existing) existing.remove();
+                        var s = document.createElement('script');
+                        s.setAttribute('data-mascot-core', 'true');
+                        s.src = 'js/mascot-interop.js?t=' + Date.now();
+                        document.head.appendChild(s);
+                    }
+                })()
+            ");
+        }
+        catch
+        {
+            // Bỏ qua nếu môi trường không cho phép eval
+        }
+    }
+
+    private async Task SafeInvokeVoidAsync(string identifier, params object?[]? args)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync(identifier, args ?? Array.Empty<object?>());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MascotWidget] Notice ({identifier}): {ex.Message}");
+            await EnsureMascotScriptAsync();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            await EnsureMascotScriptAsync();
+            await JSRuntime.InvokeVoidAsync("MascotManager.init", containerRef);
+            if (firstRender && !isInitialized)
+            {
+                isInitialized = true;
+                try
+                {
+                    var state = await JSRuntime.InvokeAsync<MascotStateDto>("MascotManager.getState");
+                    if (state != null)
+                    {
+                        currentCharacter = state.Character ?? "wolf";
+                        isBubbleEnabled = state.ShowBubble;
+                        isSoundEnabled = state.SoundEnabled;
+                    }
+                }
+                catch { }
+
+                await SafeInvokeVoidAsync("MascotManager.onPageNavigated", NavManager.Uri);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MascotWidget] Init notice: {ex.Message}");
+        }
+    }
+
+    private async Task ChangeCharacter(string charId)
+    {
+        currentCharacter = charId;
+        isMenuOpen = false;
+        await SafeInvokeVoidAsync("MascotManager.setCharacter", charId);
+    }
+
+    private async Task ToggleMenu()
+    {
+        isMenuOpen = !isMenuOpen;
+    }
+
+    private async Task ToggleBubble()
+    {
+        isBubbleEnabled = !isBubbleEnabled;
+        await SafeInvokeVoidAsync("MascotManager.toggleBubble");
+    }
+
+    private async Task ToggleSound()
+    {
+        isSoundEnabled = !isSoundEnabled;
+        await SafeInvokeVoidAsync("MascotManager.toggleSound");
+    }
+
+    private async Task MinimizeMascot()
+    {
+        isMenuOpen = false;
+        await SafeInvokeVoidAsync("MascotManager.toggleMinimize");
+    }
+
+    private async Task RestoreMascot()
+    {
+        await SafeInvokeVoidAsync("MascotManager.toggleMinimize");
+    }
+
+    private async Task OnMascotClick()
+    {
+        await SafeInvokeVoidAsync("MascotManager.boop");
+    }
+
+    private async Task OnBubbleClick()
+    {
+        await SafeInvokeVoidAsync("MascotManager.boop");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        NavManager.LocationChanged -= OnLocationChanged;
+        await Task.CompletedTask;
+    }
+
+    public class MascotStateDto
+    {
+        public string? Character { get; set; }
+        public int Size { get; set; }
+        public bool Minimized { get; set; }
+        public bool ShowBubble { get; set; }
+        public bool SoundEnabled { get; set; } = true;
+    }
+}

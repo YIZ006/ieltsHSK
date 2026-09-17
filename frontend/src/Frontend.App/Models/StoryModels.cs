@@ -62,6 +62,9 @@ public class StoryVocabulary
     public string Meaning { get; set; } = string.Empty;
     public string Example { get; set; } = string.Empty;
     public List<string> Collocations { get; set; } = new();
+    public string? Level { get; set; } // e.g. "C1 (IELTS 7.5)"
+    public string? Synonyms { get; set; } // e.g. "small rural village, isolated settlement"
+    public string? ContextNote { get; set; } // e.g. "Đoạn 1 - Miêu tả bối cảnh"
 }
 
 public class StoryQuestion
@@ -90,6 +93,8 @@ public class SavedStoryVocabItem
     public string Phonetic { get; set; } = string.Empty;
     public string Meaning { get; set; } = string.Empty;
     public string Example { get; set; } = string.Empty;
+    public string? Level { get; set; }
+    public string? Synonyms { get; set; }
     public string StorySlug { get; set; } = string.Empty;
     public string StoryTitle { get; set; } = string.Empty;
     public DateTime SavedAt { get; set; } = DateTime.UtcNow;

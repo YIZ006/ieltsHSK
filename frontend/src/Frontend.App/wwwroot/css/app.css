@@ -899,4 +899,79 @@ code {
     color: #64748b !important;
 }
 
+/* =========================================================
+   GLOBAL MASCOT COMPANION FALLBACK STYLES
+   ========================================================= */
+#mascotCompanionWidget,
+.mascot-widget-wrapper {
+    position: fixed !important;
+    bottom: 22px !important;
+    right: 22px !important;
+    z-index: 10005 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    pointer-events: none !important;
+}
+
+#mascotCompanionWidget .mascot-main-area,
+#mascotCompanionWidget .mascot-speech-bubble,
+#mascotCompanionWidget .mascot-minimized-pill,
+#mascotCompanionWidget .mascot-actor-btn,
+#mascotCompanionWidget .btn-mascot-tool,
+#mascotCompanionWidget .btn-mascot-menu-toggle {
+    pointer-events: auto !important;
+}
+
+/* Luôn đảm bảo khung hiển thị Mascot là hình tròn mềm mại, trong suốt, không bao giờ lộ khung vuông */
+#mascotCompanionWidget .mascot-viewport {
+    border-radius: 50% !important;
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+#mascotCompanionWidget .mascot-halo-backdrop {
+    border-radius: 50% !important;
+}
+
+#mascotCompanionWidget .mascot-actor-btn {
+    border-radius: 50% !important;
+    overflow: hidden !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+#mascotCompanionWidget .mascot-actor-btn:focus,
+#mascotCompanionWidget .mascot-actor-btn:active,
+#mascotCompanionWidget .mascot-actor-btn:hover {
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+#mascotCompanionWidget .mascot-squash-span,
+#mascotCompanionWidget .mascot-layer {
+    border-radius: 50% !important;
+    overflow: hidden !important;
+    background-color: transparent !important;
+}
+
+/* Tuyệt đối không cho phép Mascot xuất hiện khi đang ở màn hình Loading (Pet Runner) */
+body:has(#app-loader:not(.fade-out):not([style*="display: none"])) #mascotCompanionWidget,
+body:has(#app-loader:not(.fade-out):not([style*="display: none"])) .mascot-widget-wrapper {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+
 

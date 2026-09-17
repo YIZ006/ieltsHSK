@@ -6,6 +6,7 @@
 @inject IeltsService IeltsService
 @inject NavigationManager NavigationManager
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject ProfileService ProfileSvc
 
 <PageTitle>IELTS Master - Resources</PageTitle>
 
@@ -116,6 +117,26 @@
         {
             var localLevel = await LocalStorage.GetItemAsync<string>("ielts_level");
 
+            // Kiểm tra thông tin trong hồ sơ người dùng
+            if (string.IsNullOrEmpty(localLevel))
+            {
+                try
+                {
+                    var profile = await ProfileSvc.GetAsync();
+                    if (!string.IsNullOrWhiteSpace(profile?.IeltsLevel))
+                    {
+                        localLevel = profile.IeltsLevel;
+                        await LocalStorage.SetItemAsync("ielts_level", localLevel);
+                    }
+                    else if (!string.IsNullOrWhiteSpace(profile?.StudyLevel) && profile.StudyLevel != "A1")
+                    {
+                        localLevel = profile.StudyLevel;
+                        await LocalStorage.SetItemAsync("ielts_level", localLevel);
+                    }
+                }
+                catch { }
+            }
+
             var authState = await AuthState;
             var user = authState.User;
             if (user.Identity?.IsAuthenticated ?? false)
@@ -131,9 +152,15 @@
                 }
             }
 
-            // Nếu người dùng (cả khách vãng lai và đã đăng nhập) đã chọn trình độ và không bấm đổi trình độ
-            if (!string.IsNullOrEmpty(localLevel) && !ForceChangeLevel)
+            // Nếu người dùng không yêu cầu đổi trình độ (không có ?change=true),
+            // luôn đưa thẳng vào Dashboard, không bao giờ chặn hay bắt chọn lặp đi lặp lại
+            if (!ForceChangeLevel)
             {
+                if (string.IsNullOrEmpty(localLevel))
+                {
+                    localLevel = "IELTS 5.0 - 6.0";
+                    await LocalStorage.SetItemAsync("ielts_level", localLevel);
+                }
                 NavigationManager.NavigateTo("/ielts/dashboard");
                 return;
             }
@@ -142,19 +169,35 @@
             {
                 selectedLevel = localLevel;
             }
+            else
+            {
+                selectedLevel = "IELTS 5.0 - 6.0";
+            }
         }
         catch
         {
-            // Dự phòng khi LocalStorage bị chặn
+            if (!ForceChangeLevel)
+            {
+                NavigationManager.NavigateTo("/ielts/dashboard");
+            }
         }
     }
 
     private async Task StartLearning()
     {
-        if (string.IsNullOrEmpty(selectedLevel)) return;
+        if (string.IsNullOrEmpty(selectedLevel)) selectedLevel = "IELTS 5.0 - 6.0";
         
         await LocalStorage.SetItemAsync("ielts_level", selectedLevel);
         
+        try
+        {
+            var profile = await ProfileSvc.GetAsync();
+            profile.IeltsLevel = selectedLevel;
+            profile.StudyLevel = selectedLevel;
+            await ProfileSvc.SaveAsync(profile);
+        }
+        catch { }
+
         try
         {
             var authState = await AuthState;

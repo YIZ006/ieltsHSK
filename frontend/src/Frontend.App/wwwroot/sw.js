@@ -1,5 +1,5 @@
 // PWA Service Worker — cache-first cho file tĩnh, network-first cho navigation Blazor WASM
-const CACHE = 'app-v3';
+const CACHE = 'app-v7-mascot-circle-fix';
 
 const ASSETS = [
   './',
@@ -35,8 +35,12 @@ self.addEventListener('fetch', e => {
   // Bỏ qua request cross-origin (Google Fonts, CDN, GSI, Cloudflare R2...)
   if (url.origin !== location.origin) return;
 
-  // Tuyệt đối không can thiệp API request và file biên dịch Blazor WASM
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/_framework/')) return;
+  // Tuyệt đối không can thiệp API request, file biên dịch Blazor WASM, mascot script, và các file CSS cập nhật
+  if (url.pathname.startsWith('/api/') || 
+      url.pathname.startsWith('/_framework/') || 
+      url.pathname.includes('mascot-interop') ||
+      url.pathname.includes('Frontend.App.styles.css') ||
+      url.pathname.includes('app.css')) return;
 
   // Với request navigation (đổi trang Blazor WASM), dùng Network-first
   if (req.mode === 'navigate') {

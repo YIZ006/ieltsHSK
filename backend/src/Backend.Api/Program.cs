@@ -1210,13 +1210,15 @@ app.MapPost("/api/user/streak", [Microsoft.AspNetCore.Authorization.Authorize] a
 
 app.MapPut("/api/user/level", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.UpdateLevelRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
 {
-    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
     if (int.TryParse(userIdString, out int userId))
     {
         var dbUser = await dbContext.Users.FindAsync(new object[] { userId }, cancellationToken);
         if (dbUser != null)
         {
             dbUser.Level = request.Level;
+            dbUser.IeltsLevel = request.Level;
             await dbContext.SaveChangesAsync(cancellationToken);
             return Results.Ok();
         }
@@ -5316,7 +5318,8 @@ app.MapGet("/api/hsk/vocab/progress", [Microsoft.AspNetCore.Authorization.Author
         Backend.Infrastructure.Persistence.AppDbContext dbContext,
         CancellationToken cancellationToken) =>
 {
-    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
     if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
 
     var ids = await dbContext.HskVocabularyProgresses
@@ -5333,7 +5336,8 @@ app.MapPost("/api/hsk/vocab/progress/migrate", [Microsoft.AspNetCore.Authorizati
         Backend.Infrastructure.Persistence.AppDbContext dbContext,
         CancellationToken cancellationToken) =>
 {
-    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
     if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
 
     if (req.VocabularyIds == null || req.VocabularyIds.Count == 0)
@@ -5374,7 +5378,8 @@ app.MapPost("/api/hsk/vocab/progress/{vocabularyId:int}", [Microsoft.AspNetCore.
         Backend.Infrastructure.Persistence.AppDbContext dbContext,
         CancellationToken cancellationToken) =>
 {
-    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+    var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                       ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
     if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
 
     bool vocabExists = await dbContext.HskVocabularies.AnyAsync(v => v.Id == vocabularyId, cancellationToken);
