@@ -348,6 +348,10 @@
                         <label class="form-label">Tags (Từ khóa lọc)</label>
                         <input type="text" class="form-control" placeholder="VD: inversion, emphasis, task2" @bind="editModel.Tags" />
                     </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Nguồn Tham Khảo Học Thuật</label>
+                        <input type="text" class="form-control" placeholder="VD: Cambridge Grammar for IELTS (Hopkins & Cullen)" @bind="editModel.ReferenceSource" />
+                    </div>
                 </div>
             </div>
             <div class="modal-footer-custom">
@@ -638,10 +642,11 @@
         editModel = new CreateGrammarStructureDto
         {
             StructureCode = $"W_STR_{DateTime.UtcNow.Ticks % 10000:D4}",
-            BandLevel = "7.5 - 8.5",
+            BandLevel = "Band 7.5 - 8.0",
             Category = "Writing Task 2",
             GrammarTopic = "Đảo ngữ (Inversion)",
             UsageFunction = "Nhấn mạnh tác động kép, nâng cao điểm GRA",
+            ReferenceSource = "Cambridge Grammar for IELTS",
             IsActive = true
         };
         showEditModal = true;
@@ -665,6 +670,7 @@
             CommonMistakes = item.CommonMistakes,
             PracticeExercise = item.PracticeExercise,
             Tags = item.Tags,
+            ReferenceSource = item.ReferenceSource,
             DisplayOrder = item.DisplayOrder,
             IsActive = item.IsActive
         };
@@ -723,6 +729,7 @@
                     CommonMistakes = editModel.CommonMistakes,
                     PracticeExercise = editModel.PracticeExercise,
                     Tags = editModel.Tags,
+                    ReferenceSource = editModel.ReferenceSource,
                     DisplayOrder = editModel.DisplayOrder,
                     IsActive = editModel.IsActive
                 });

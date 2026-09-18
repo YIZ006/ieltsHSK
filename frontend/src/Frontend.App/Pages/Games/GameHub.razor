@@ -709,11 +709,22 @@ else if (selectedGameForInfo == "hsk-shooter")
                     @(_isBgmOn ? "Nhạc: BẬT" : "Nhạc: TẮT")
                     <span class="kbd-badge-sm">1</span>
                 </button>
-                <button class="btn-pinyin-toggle @(!_showPinyin ? "pinyin-off" : "")" @onclick="TogglePinyin" title="Bật/Tắt hiển thị Pinyin gợi ý (Phím 2)">
-                    <i class="bi @(_showPinyin ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
-                    @(_showPinyin ? "Ẩn Pinyin" : "Hiện Pinyin")
-                    <span class="kbd-badge-sm">2</span>
-                </button>
+                @if (!IsCurrentStageCleared())
+                {
+                    <button type="button" class="btn-pinyin-toggle pinyin-locked" @onclick="TogglePinyin" title="Tầng này chưa vượt qua nên Pinyin bị khóa! (Phím 2)">
+                        <i class="bi bi-lock-fill text-warning"></i>
+                        <span>Khóa Pinyin</span>
+                        <span class="kbd-badge-sm">2</span>
+                    </button>
+                }
+                else
+                {
+                    <button type="button" class="btn-pinyin-toggle @(!_showPinyin ? "pinyin-off" : "")" @onclick="TogglePinyin" title="Bật/Tắt hiển thị Pinyin gợi ý (Phím 2)">
+                        <i class="bi @(_showPinyin ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
+                        @(_showPinyin ? "Ẩn Pinyin" : "Hiện Pinyin")
+                        <span class="kbd-badge-sm">2</span>
+                    </button>
+                }
                 <button class="btn-fs-tool" @onclick="ToggleHskPause" title="Tạm dừng / Tiếp tục (Phím 3)">
                     <i class="bi @(hskShooterState == HskGameState.Paused ? "bi-play-fill" : "bi-pause-fill")"></i>
                     @(hskShooterState == HskGameState.Paused ? "Tiếp tục" : "Tạm dừng")
@@ -1226,8 +1237,8 @@ else if (selectedGameForInfo == "hsk-shooter")
                             var isBoss = stageIdx == _totalStages - 1;
                             var isCurrent = stageIdx == _currentStageIndex;
                             var isActive = isCurrent && !_showStageComplete;
-                            var isDone = stageIdx < _currentStageIndex || stageIdx < _maxUnlockedStageIndex;
-                            var isUnlocked = _isAllStagesUnlocked || stageIdx <= _maxUnlockedStageIndex;
+                            var isDone = _clearedStageIndices.Contains(stageIdx) || stageIdx < _highestClearedStageIndex;
+                            var isUnlocked = _isAllStagesUnlocked || stageIdx <= _maxUnlockedStageIndex || isDone;
                             var isLocked = !isUnlocked;
                             var reverseIdx = _totalStages - 1 - stageIdx;
                             var isLeft = reverseIdx % 2 == 0;
@@ -1309,6 +1320,7 @@ else if (selectedGameForInfo == "hsk-shooter")
 
     private int wordleScore = 0;
     private int wordleStreak = 0;
+    private int wordleMaxStreak = 0;
     // ponytail: hub-level HSK stats read from localStorage at init; upgrade to server-side profile when backend supports cross-device sync
     private int _hubHskBestStage = 0;
     private int _hubHskTotalCleared = 0;
@@ -1324,13 +1336,16 @@ else if (selectedGameForInfo == "hsk-shooter")
     private int wordleTimerSeconds = 120;
     private Timer? wordleTimer;
 
-    private void StartWordleTimer()
+    private void StartWordleTimer(bool resetTime = false)
     {
         wordleTimer?.Dispose();
-        wordleTimerSeconds = 120;
+        if (resetTime || wordleTimerSeconds <= 0)
+        {
+            wordleTimerSeconds = 120;
+        }
         wordleTimer = new Timer(async _ =>
         {
-            if (!isPlayingWordle || isGameOver) return;
+            if (!isPlayingWordle || isGameOver || isWordleTutorialActive || showWordleTutorialPrompt) return;
             wordleTimerSeconds--;
             if (wordleTimerSeconds <= 0)
             {
@@ -1338,6 +1353,7 @@ else if (selectedGameForInfo == "hsk-shooter")
                 isGameOver = true;
                 isGameWon = false;
                 wordleStreak = 0;
+                _ = SaveWordleProgressAsync();
                 _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.lose()");
                 _ = Task.Delay(300).ContinueWith(_ => InvokeAsync(PronounceWord));
                 _ = Task.Delay(500).ContinueWith(_ => InvokeAsync(async () =>
@@ -1662,6 +1678,31 @@ else if (selectedGameForInfo == "hsk-shooter")
         _ = LoadVocabularyFromApiAsync();
         _ = LoadUserProfileAsync();
         _ = LoadHubHskStatsAsync();
+        _ = LoadHubWordleStatsAsync();
+    }
+
+    private async Task LoadHubWordleStatsAsync()
+    {
+        try
+        {
+            var (streak, maxStreak, score) = await GameProgressService.LoadProgressAsync("wordle", "all");
+            wordleStreak = streak;
+            wordleMaxStreak = maxStreak;
+            wordleScore = score;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { }
+    }
+
+    private async Task SaveWordleProgressAsync()
+    {
+        try
+        {
+            wordleMaxStreak = Math.Max(wordleMaxStreak, wordleStreak);
+            await GameProgressService.SaveProgressAsync("wordle", "all", wordleStreak, wordleMaxStreak, wordleScore);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { }
     }
 
     private async Task LoadHubHskStatsAsync()
@@ -1724,7 +1765,7 @@ else if (selectedGameForInfo == "hsk-shooter")
         }
         else
         {
-            StartWordleTimer();
+            StartWordleTimer(resetTime: false);
         }
 
         await Task.Delay(50);
@@ -1745,6 +1786,7 @@ else if (selectedGameForInfo == "hsk-shooter")
 
     private async Task OpenQuantumTutorial()
     {
+        if (isWordleTutorialActive) return;
         showWordleTutorialPrompt = false;
         isWordleTutorialActive = true;
         StopWordleTimer();
@@ -1757,7 +1799,7 @@ else if (selectedGameForInfo == "hsk-shooter")
     {
         showWordleTutorialPrompt = false;
         hasSeenWordleTutorial = true;
-        StartWordleTimer();
+        StartWordleTimer(resetTime: false);
         await FocusWordle();
     }
 
@@ -1787,7 +1829,7 @@ else if (selectedGameForInfo == "hsk-shooter")
         hasSeenWordleTutorial = true;
         if (!isGameOver && isPlayingWordle)
         {
-            StartWordleTimer();
+            StartWordleTimer(resetTime: false);
             _ = FocusWordle();
         }
         StateHasChanged();
@@ -1938,9 +1980,10 @@ else if (selectedGameForInfo == "hsk-shooter")
         showSentenceTranslation = false;
         hintLetterIndices.Clear();
         hasUsedHintThisRound = false;
+        wordleTimerSeconds = 120;
         if (!showWordleTutorialPrompt && !isWordleTutorialActive)
         {
-            StartWordleTimer();
+            StartWordleTimer(resetTime: true);
         }
         _ = JS.InvokeVoidAsync("initQuantumBriefcase");
     }
@@ -2137,6 +2180,7 @@ else if (selectedGameForInfo == "hsk-shooter")
             isGameWon = true;
             wordleScore += 30;
             wordleStreak++;
+            _ = SaveWordleProgressAsync();
             _ = JS.InvokeVoidAsync("MascotManager.gameSay", "win", "Đoán chuẩn xác rồi! 🌟", "+30 điểm!");
             _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.win()");
             _ = Task.Delay(300).ContinueWith(_ => InvokeAsync(PronounceWord));
@@ -2155,6 +2199,7 @@ else if (selectedGameForInfo == "hsk-shooter")
             isGameOver = true;
             isGameWon = false;
             wordleStreak = 0;
+            _ = SaveWordleProgressAsync();
             _ = JS.InvokeVoidAsync("MascotManager.gameSay", "game_over", "Hết lượt đoán rồi! Đừng nản nhé! 💪", "Thử lại nào!");
             _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.lose()");
             _ = Task.Delay(300).ContinueWith(_ => InvokeAsync(PronounceWord));
@@ -2237,6 +2282,8 @@ else if (selectedGameForInfo == "hsk-shooter")
     // === HSK SHOOTER ACTIONS & LOGIC ===
     private const int WordsPerStage = 20;
     private bool _showPinyin = false;
+    private int _highestClearedStageIndex = 0;
+    private HashSet<int> _clearedStageIndices = new();
     private int _currentStageIndex = 0;
     private int _totalStages = 1;
     private int _savedStageIndex = 0;
@@ -2245,6 +2292,9 @@ else if (selectedGameForInfo == "hsk-shooter")
     private bool _showResumeDialog = false;
     private bool _showStageComplete = false;
     private bool _isAllStagesUnlocked = true; // Mặc định mở khóa full bàn để test mọi bàn chơi theo yêu cầu
+
+    private bool IsCurrentStageCleared() =>
+        _clearedStageIndices.Contains(_currentStageIndex) || _currentStageIndex < _highestClearedStageIndex;
 
     // Boss Stage Variables (Tầng 25 / Tầng cuối)
     private bool _isBossStage => _totalStages > 0 && _currentStageIndex == _totalStages - 1;
@@ -2311,7 +2361,31 @@ else if (selectedGameForInfo == "hsk-shooter")
     private bool _wasPausedByMap = false;
     private bool IsHskGamePaused => hskShooterState == HskGameState.Paused || _showStageMap;
 
-    private void TogglePinyin() => _showPinyin = !_showPinyin;
+    private async Task TogglePinyin()
+    {
+        if (!IsCurrentStageCleared())
+        {
+            _showPinyin = false;
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.keyEnterError?.()");
+            await JS.InvokeVoidAsync("MascotManager.gameSay", "pinyin_locked",
+                $"Tầng {_currentStageIndex + 1} chưa vượt qua! 🔒",
+                "Phải vượt qua tầng này trước mới mở được Pinyin trợ giúp nhé! 🦊",
+                "surprised");
+            StateHasChanged();
+            if (isPlayingHskShooter && hskShooterState == HskGameState.Playing)
+            {
+                _ = FocusHskInput();
+            }
+            return;
+        }
+
+        _showPinyin = !_showPinyin;
+        StateHasChanged();
+        if (isPlayingHskShooter && hskShooterState == HskGameState.Playing)
+        {
+            _ = FocusHskInput();
+        }
+    }
 
     private void OpenStageMap()
     {
@@ -2408,6 +2482,34 @@ else if (selectedGameForInfo == "hsk-shooter")
 
             var (savedStage, maxUnlocked, _) = await GameProgressService.LoadProgressAsync("hsk_shooter", hskShooterSelectedLevel);
 
+            _clearedStageIndices.Clear();
+            _highestClearedStageIndex = Math.Max(0, maxUnlocked);
+            for (int i = 0; i < _highestClearedStageIndex; i++)
+            {
+                _clearedStageIndices.Add(i);
+            }
+
+            try
+            {
+                var clearedStr = await JS.InvokeAsync<string>("localStorage.getItem", $"hsk_cleared_stages_{hskShooterSelectedLevel}");
+                if (!string.IsNullOrWhiteSpace(clearedStr))
+                {
+                    var parts = clearedStr.Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var p in parts)
+                    {
+                        if (int.TryParse(p, out int sIdx))
+                        {
+                            _clearedStageIndices.Add(sIdx);
+                            if (sIdx + 1 > _highestClearedStageIndex)
+                            {
+                                _highestClearedStageIndex = sIdx + 1;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
             if (_isAllStagesUnlocked)
             {
                 _maxUnlockedStageIndex = Math.Max(0, _totalStages - 1);
@@ -2484,12 +2586,12 @@ else if (selectedGameForInfo == "hsk-shooter")
             try
             {
                 await JS.InvokeVoidAsync("localStorage.setItem", "hsk_unlock_all_stages", "true");
-                await JS.InvokeVoidAsync("localStorage.setItem", $"hsk_max_unlocked_{hskShooterSelectedLevel}", (_totalStages - 1).ToString());
             }
             catch { }
         }
         else
         {
+            _maxUnlockedStageIndex = _clearedStageIndices.Count > 0 ? Math.Min(_totalStages - 1, _clearedStageIndices.Max() + 1) : 0;
             try
             {
                 await JS.InvokeVoidAsync("localStorage.setItem", "hsk_unlock_all_stages", "false");
@@ -2518,6 +2620,12 @@ else if (selectedGameForInfo == "hsk-shooter")
         _lastHskSpawnTime = DateTime.MinValue;
         hskBullets.Clear();
         hskImpacts.Clear();
+
+        // Tầng chưa vượt qua thì luôn khóa và ẩn Pinyin
+        if (!IsCurrentStageCleared())
+        {
+            _showPinyin = false;
+        }
 
         // Reset Boss State
         _showBossWarning = false;
@@ -3041,8 +3149,19 @@ else if (selectedGameForInfo == "hsk-shooter")
         hskTimer?.Dispose();
         _showStageComplete = true;
         _stageCountdown = 3;
+
+        _clearedStageIndices.Add(_currentStageIndex);
+        _highestClearedStageIndex = Math.Max(_highestClearedStageIndex, _currentStageIndex + 1);
         _maxUnlockedStageIndex = Math.Max(_maxUnlockedStageIndex, Math.Min(_currentStageIndex + 1, _totalStages - 1));
-        _ = GameProgressService.SaveProgressAsync("hsk_shooter", hskShooterSelectedLevel, _currentStageIndex, _maxUnlockedStageIndex, hskScore);
+
+        try
+        {
+            var clearedStr = string.Join(",", _clearedStageIndices);
+            _ = JS.InvokeVoidAsync("localStorage.setItem", $"hsk_cleared_stages_{hskShooterSelectedLevel}", clearedStr);
+        }
+        catch { }
+
+        _ = GameProgressService.SaveProgressAsync("hsk_shooter", hskShooterSelectedLevel, _currentStageIndex, _highestClearedStageIndex, hskScore);
         _ = JS.InvokeVoidAsync("MascotManager.gameSay", "stage_clear");
         StateHasChanged();
         _ = FocusHskOverlay();
@@ -3487,7 +3606,7 @@ else if (selectedGameForInfo == "hsk-shooter")
         // 2. Phím 2: Ẩn/Hiện Pinyin
         if (key == "2" || e.Code == "Digit2" || e.Code == "Numpad2")
         {
-            TogglePinyin();
+            await TogglePinyin();
             return;
         }
 
@@ -3624,7 +3743,7 @@ else if (selectedGameForInfo == "hsk-shooter")
             // Phím 2: Ẩn/Hiện Pinyin
             if (key == "2" || e.Code == "Digit2" || e.Code == "Numpad2")
             {
-                TogglePinyin();
+                await TogglePinyin();
                 return;
             }
 

@@ -32,6 +32,7 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
     private const string StorageKey = "user_profile";
     private static UserProfile? _inMemoryProfile;
 
+    public static event Action? OnProfileChanged;
     public static UserProfile? CachedProfile => _inMemoryProfile;
 
     public async Task<UserProfile> GetAsync(bool forceRefresh = false)
@@ -161,12 +162,14 @@ public sealed class ProfileService(ILocalStorageService localStorage, HttpClient
 
         _inMemoryProfile = profile;
         await localStorage.SetItemAsync(StorageKey, profile);
+        OnProfileChanged?.Invoke();
         return (true, null);
     }
 
     public static void InvalidateCache()
     {
         _inMemoryProfile = null;
+        OnProfileChanged?.Invoke();
     }
 
     private sealed record BackendErrorDto(string? Message);

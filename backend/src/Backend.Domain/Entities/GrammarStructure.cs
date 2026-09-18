@@ -17,6 +17,7 @@ public class GrammarStructure
     public string? PracticeExercise { get; set; }             // Bài tập viết lại câu
     public string? Tags { get; set; }                         // Từ khóa lọc
     public int DisplayOrder { get; set; } = 0;
+    public string? ReferenceSource { get; set; }             // Nguồn tham khảo (Cambridge Grammar, Oxford...)
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }

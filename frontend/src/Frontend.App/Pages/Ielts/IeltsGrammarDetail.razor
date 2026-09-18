@@ -1,0 +1,624 @@
+@page "/ielts/grammar/{Slug}"
+@page "/ielts/ngu-phap/{Slug}"
+@layout Frontend.App.Layout.IeltsLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+
+<PageTitle>@(topic != null ? $"{topic.Title} ({topic.EnglishTitle}) - Cẩm Nang Ngữ Pháp IELTS" : "Bài Học Ngữ Pháp - ieltsHSK")</PageTitle>
+
+<div class="grammar-detail-page">
+    @if (topic == null)
+    {
+        <div class="empty-state-card">
+            <div class="empty-icon"><i class="bi bi-journal-x"></i></div>
+            <h2>Không tìm thấy bài học ngữ pháp</h2>
+            <p class="text-muted">Chủ điểm ngữ pháp bạn đang tìm kiếm không tồn tại hoặc đã được cập nhật.</p>
+            <a href="/ielts/grammar" class="btn btn-primary mt-3">
+                <i class="bi bi-arrow-left me-1"></i> Quay lại Cẩm Nang Ngữ Pháp
+            </a>
+        </div>
+    }
+    else
+    {
+        <!-- Breadcrumb & Top Bar -->
+        <div class="detail-top-nav">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="/ielts/dashboard">IELTS</a></li>
+                    <li class="breadcrumb-item"><a href="/ielts/grammar">Ngữ Pháp</a></li>
+                    <li class="breadcrumb-item"><span>@topic.SectionTitle</span></li>
+                    <li class="breadcrumb-item active" aria-current="page">@topic.Title</li>
+                </ol>
+            </nav>
+            <a href="/ielts/grammar" class="btn-back-hub">
+                <i class="bi bi-grid me-1"></i> Tất cả bài học
+            </a>
+        </div>
+
+        <!-- Compact Unified Hero Header (Gọn gàng, loại bỏ khoảng trắng thừa) -->
+        <div class="lesson-hero-compact">
+            <div class="hero-top-row">
+                <div class="hero-badges">
+                    <span class="section-pill" style="background-color: @(topic.IconBgColor)18; color: @topic.IconBgColor;">
+                        <i class="bi @topic.Icon me-1"></i> @topic.SectionTitle
+                    </span>
+                    <span class="difficulty-pill @GetDifficultyClass(topic.DifficultyLevel)">
+                        <i class="bi bi-bar-chart-fill me-1"></i> @topic.DifficultyLevel
+                    </span>
+                    <span class="time-pill">
+                        <i class="bi bi-clock me-1"></i> ~@topic.ReadTimeMinutes phút
+                    </span>
+                    @if (!string.IsNullOrEmpty(topic.SkillTarget))
+                    {
+                        <span class="target-pill">
+                            <i class="bi bi-crosshair me-1"></i> @topic.SkillTarget
+                        </span>
+                    }
+                </div>
+                <div class="hero-actions-quick">
+                    <button class="btn-quick-quiz-action @(activeTab == "quiz" ? "active" : "")" @onclick='() => SetTab("quiz")'>
+                        <i class="bi bi-lightning-charge-fill me-1"></i> Luyện tập ngay (@TotalExercises câu)
+                    </button>
+                </div>
+            </div>
+
+            <div class="hero-body-row">
+                <div class="hero-title-wrap">
+                    <h1 class="hero-main-title">@topic.Title</h1>
+                    <span class="hero-sub-title">@topic.EnglishTitle</span>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(topic.ConceptExplanation))
+                {
+                    <div class="hero-concept-inline">
+                        <i class="bi bi-info-circle-fill me-2 text-primary"></i>
+                        <span>@topic.ConceptExplanation</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Modern Sub-Nav Tabs (Chuyển chế độ xem thông minh, không cần lướt chuột) -->
+        <div class="lesson-subnav-tabs">
+            <button class="subnav-tab @(activeTab == "all" ? "active" : "")" @onclick='() => SetTab("all")'>
+                <i class="bi bi-view-stacked me-1"></i> Toàn bộ bài học
+            </button>
+            <button class="subnav-tab @(activeTab == "formulas" ? "active" : "")" @onclick='() => SetTab("formulas")'>
+                <i class="bi bi-code-square me-1"></i> Công thức & Quy tắc (@topic.Formulas.Count)
+            </button>
+            <button class="subnav-tab @(activeTab == "usages" ? "active" : "")" @onclick='() => SetTab("usages")'>
+                <i class="bi bi-card-checklist me-1"></i> Cách dùng (@topic.Usages.Count)
+            </button>
+            <button class="subnav-tab @(activeTab == "mistakes" ? "active" : "")" @onclick='() => SetTab("mistakes")'>
+                <i class="bi bi-exclamation-triangle-fill me-1"></i> Bẫy & Lỗi sai (@topic.CommonMistakes.Count)
+            </button>
+            @if (topic.IrregularList != null && topic.IrregularList.Any())
+            {
+                <button class="subnav-tab @(activeTab == "irregular" ? "active" : "")" @onclick='() => SetTab("irregular")'>
+                    <i class="bi bi-table me-1"></i> Tra cứu (@topic.IrregularList.Count từ)
+                </button>
+            }
+            <button class="subnav-tab tab-quiz-highlight @(activeTab == "quiz" ? "active" : "")" @onclick='() => SetTab("quiz")'>
+                <i class="bi bi-patch-question-fill me-1"></i> Bài tập trắc nghiệm (@TotalExercises câu)
+                @if (CompletedExercises > 0)
+                {
+                    <span class="mini-score-pill">@CompletedExercises/@TotalExercises</span>
+                }
+            </button>
+        </div>
+
+        <!-- Main Content Layout -->
+        <div class="lesson-main-layout">
+            <div class="lesson-content-column">
+                
+                <!-- 1. Công Thức (Formulas) - 3 Cột Ngang Compact -->
+                @if (topic.Formulas.Any() && (activeTab == "all" || activeTab == "formulas"))
+                {
+                    <section class="lesson-section">
+                        <div class="section-title-bar">
+                            <i class="bi bi-code-square text-success me-2"></i>
+                            <h3>1. Cấu Trúc & Công Thức Chuẩn</h3>
+                        </div>
+                        <div class="formulas-grid">
+                            @foreach (var f in topic.Formulas)
+                            {
+                                <div class="formula-card variant-@f.ColorVariant">
+                                    <div class="formula-type-header">
+                                        <span class="type-name">@f.Type</span>
+                                        <button class="btn-copy-formula" @onclick="() => CopyFormula(f.Formula)" title="Sao chép công thức">
+                                            <i class="bi bi-clipboard me-1"></i> Sao chép
+                                        </button>
+                                    </div>
+                                    <div class="formula-code">
+                                        <code>@f.Formula</code>
+                                    </div>
+                                    @if (f.Breakdown.Any())
+                                    {
+                                        <ul class="formula-breakdown">
+                                            @foreach (var b in f.Breakdown)
+                                            {
+                                                <li>@b</li>
+                                            }
+                                        </ul>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+
+                <!-- 2. Bảng Quy Tắc Biến Đổi (Rule Tables) -->
+                @if (topic.RuleTables.Any() && (activeTab == "all" || activeTab == "formulas"))
+                {
+                    <section class="lesson-section">
+                        <div class="section-title-bar">
+                            <i class="bi bi-table text-info me-2"></i>
+                            <h3>2. Bảng Quy Tắc Ngữ Pháp Cần Nhớ</h3>
+                        </div>
+                        <div class="rules-table-wrapper">
+                            <table class="rules-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 35%">Quy tắc</th>
+                                        <th style="width: 40%">Ví dụ minh họa</th>
+                                        <th style="width: 25%">Ghi chú</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var r in topic.RuleTables)
+                                    {
+                                        <tr>
+                                            <td class="rule-col"><strong>@r.Rule</strong></td>
+                                            <td class="example-col"><code>@r.Example</code></td>
+                                            <td class="note-col"><small class="text-muted">@r.Note</small></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                }
+
+                <!-- 3. Từ Tín Hiệu & Dấu Hiệu Nhận Biết (Signals) -->
+                @if (topic.SignalWords.Any() && (activeTab == "all" || activeTab == "formulas"))
+                {
+                    <section class="lesson-section">
+                        <div class="section-title-bar">
+                            <i class="bi bi-bell-fill text-warning me-2"></i>
+                            <h3>3. Từ Tín Hiệu & Dấu Hiệu Nhận Biết</h3>
+                        </div>
+                        <div class="signal-words-box">
+                            <div class="chips-list">
+                                @foreach (var sw in topic.SignalWords)
+                                {
+                                    <span class="signal-chip">@sw</span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(topic.SignalWordPlacementRule))
+                            {
+                                <div class="placement-note">
+                                    <i class="bi bi-pin-angle-fill me-1 text-primary"></i>
+                                    <span><strong>Vị trí:</strong> @topic.SignalWordPlacementRule</span>
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+
+                <!-- 4. Cách Sử Dụng & Ví Dụ Song Ngữ (Usages) - 2 Cột Ngang Compact -->
+                @if (topic.Usages.Any() && (activeTab == "all" || activeTab == "usages"))
+                {
+                    <section class="lesson-section">
+                        <div class="section-title-bar">
+                            <i class="bi bi-card-checklist text-primary me-2"></i>
+                            <h3>4. Cách Sử Dụng & Ví Dụ Trong Ngữ Cảnh</h3>
+                        </div>
+                        <div class="usages-list">
+                            @foreach (var u in topic.Usages)
+                            {
+                                <div class="usage-item-card">
+                                    <div class="usage-item-header">
+                                        <span class="usage-num">@u.Order</span>
+                                        <h4 class="usage-heading">@u.Title</h4>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(u.Explanation))
+                                    {
+                                        <p class="usage-expl">@u.Explanation</p>
+                                    }
+                                    <div class="usage-examples">
+                                        @foreach (var ex in u.Examples)
+                                        {
+                                            <div class="example-dual-row">
+                                                <div class="en-text"><i class="bi bi-chat-left-quote-fill me-2 text-primary"></i>@ex.English</div>
+                                                <div class="vi-text">🇻🇳 @ex.Vietnamese</div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+
+                <!-- 5. Lỗi Thường Gặp (Common Mistakes) - 2 Cột Song Song Compact -->
+                @if (topic.CommonMistakes.Any() && (activeTab == "all" || activeTab == "mistakes"))
+                {
+                    <section class="lesson-section">
+                        <div class="section-title-bar">
+                            <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>
+                            <h3>5. Lỗi Sai Kinh Điển Cần Tránh</h3>
+                        </div>
+                        <div class="pitfalls-list">
+                            @foreach (var m in topic.CommonMistakes)
+                            {
+                                <div class="pitfall-card">
+                                    <div class="pitfall-title">
+                                        <i class="bi bi-x-octagon-fill text-danger me-2"></i>
+                                        <strong>@m.Title</strong>
+                                    </div>
+                                    <div class="comparison-row">
+                                        <div class="wrong-box">
+                                            <span class="lbl-wrong">SAI:</span>
+                                            <span class="code-wrong">@m.WrongExample</span>
+                                        </div>
+                                        <div class="correct-box">
+                                            <span class="lbl-correct">ĐÚNG:</span>
+                                            <span class="code-correct">@m.CorrectExample</span>
+                                        </div>
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(m.Explanation))
+                                    {
+                                        <p class="pitfall-expl"><i class="bi bi-arrow-right-short text-primary"></i> @m.Explanation</p>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+
+                <!-- 6. Bảng Bất Quy Tắc Tra Cứu Tương Tác -->
+                @if (topic.IrregularList != null && topic.IrregularList.Any() && (activeTab == "all" || activeTab == "irregular"))
+                {
+                    <section class="lesson-section">
+                        <div class="section-title-bar">
+                            <i class="bi bi-table text-indigo me-2"></i>
+                            <h3>Bảng Tra Cứu Tương Tác (@topic.IrregularList.Count từ)</h3>
+                        </div>
+                        <div class="irregular-search-box mb-3">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" class="form-control" placeholder="Tra nhanh từ nguyên thể, quá khứ hoặc nghĩa tiếng Việt..." @bind="irregularSearchTerm" @bind:event="oninput" />
+                            </div>
+                        </div>
+                        <div class="irregular-table-wrapper">
+                            <table class="irregular-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nguyên thể (V1)</th>
+                                        <th>Quá khứ (V2)</th>
+                                        @if (topic.Slug.Contains("dong-tu"))
+                                        {
+                                            <th>Quá khứ phân từ (V3)</th>
+                                        }
+                                        <th>Nghĩa Tiếng Việt</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var word in FilteredIrregularWords)
+                                    {
+                                        <tr>
+                                            <td class="td-base">
+                                                <strong>@word.Base</strong>
+                                                @if (!string.IsNullOrEmpty(word.Pronunciation))
+                                                {
+                                                    <small class="text-muted ms-1">@word.Pronunciation</small>
+                                                }
+                                            </td>
+                                            <td class="td-past text-primary">@word.PastSimple</td>
+                                            @if (topic.Slug.Contains("dong-tu"))
+                                            {
+                                                <td class="td-part text-success">@word.PastParticiple</td>
+                                            }
+                                            <td class="td-meaning">@word.Meaning</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                }
+
+                <!-- 7. Bài Tập Tương Tác Chuyên Sâu (Interactive Practice Exercises) -->
+                @if (topic.Exercises.Any() && (activeTab == "all" || activeTab == "quiz"))
+                {
+                    <section class="lesson-section exercise-section-enhanced">
+                        <div class="exercise-section-header">
+                            <div class="exercise-header-title">
+                                <i class="bi bi-patch-question-fill text-primary me-2"></i>
+                                <h3>Bài Tập Thực Hành Ứng Dụng IELTS (@topic.Exercises.Count câu)</h3>
+                            </div>
+                            <div class="exercise-header-actions">
+                                @if (exerciseSubmitted.Any())
+                                {
+                                    <button class="btn-reset-quiz" @onclick="ResetExercises" title="Làm lại tất cả câu hỏi">
+                                        <i class="bi bi-arrow-counterclockwise me-1"></i> Làm lại bài
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Progress & Score Tracker Bar -->
+                        <div class="quiz-tracker-bar">
+                            <div class="tracker-item">
+                                <span class="tracker-label">Tiến độ:</span>
+                                <span class="tracker-val">@CompletedExercises / @TotalExercises câu</span>
+                            </div>
+                            <div class="tracker-progress-track">
+                                <div class="tracker-progress-fill" style="width: @(TotalExercises > 0 ? (CompletedExercises * 100 / TotalExercises) : 0)%"></div>
+                            </div>
+                            @if (CompletedExercises > 0)
+                            {
+                                <div class="tracker-score-chip @(CorrectExercises == CompletedExercises ? "score-perfect" : "")">
+                                    <i class="bi bi-award-fill me-1"></i> Đúng: @CorrectExercises/@CompletedExercises câu
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Questions List -->
+                        <div class="exercises-container">
+                            @foreach (var ex in topic.Exercises)
+                            {
+                                var isSubmitted = exerciseSubmitted.Contains(ex.Id);
+                                var selectedAns = userAnswers.ContainsKey(ex.Id) ? userAnswers[ex.Id] : -1;
+                                var isCorrect = selectedAns == ex.CorrectOptionIndex;
+
+                                <div class="exercise-card @(isSubmitted ? (isCorrect ? "card-correct" : "card-wrong") : "")">
+                                    <div class="exercise-card-header">
+                                        <div class="exercise-q-badge">
+                                            <i class="bi bi-question-diamond me-1"></i> Câu hỏi @ex.Id
+                                        </div>
+                                        @if (isSubmitted)
+                                        {
+                                            <span class="q-status-pill @(isCorrect ? "pill-correct" : "pill-wrong")">
+                                                <i class="bi @(isCorrect ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>
+                                                @(isCorrect ? "Chính xác" : "Chưa chính xác")
+                                            </span>
+                                        }
+                                    </div>
+
+                                    <div class="exercise-q-text">@ex.Question</div>
+                                    
+                                    <div class="exercise-options-grid">
+                                        @for (int i = 0; i < ex.Options.Count; i++)
+                                        {
+                                            var optIndex = i;
+                                            var optText = ex.Options[i];
+                                            var isSelected = selectedAns == optIndex;
+                                            var optionLetter = (char)('A' + i);
+                                            var isRightAnswer = optIndex == ex.CorrectOptionIndex;
+
+                                            <div class="enhanced-option @(isSelected ? "selected" : "") @(isSubmitted && isRightAnswer ? "correct-answer-pill" : "") @(isSubmitted && isSelected && !isCorrect ? "wrong-selection-pill" : "")"
+                                                 @onclick="() => { if (!isSubmitted) SelectAnswer(ex.Id, optIndex); }">
+                                                <span class="opt-letter">@optionLetter</span>
+                                                <span class="opt-text">@optText</span>
+                                                @if (isSubmitted && isRightAnswer)
+                                                {
+                                                    <i class="bi bi-check-circle-fill opt-feedback-icon text-success"></i>
+                                                }
+                                                else if (isSubmitted && isSelected && !isCorrect)
+                                                {
+                                                    <i class="bi bi-x-circle-fill opt-feedback-icon text-danger"></i>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+
+                                    @if (!isSubmitted)
+                                    {
+                                        <div class="exercise-actions-row">
+                                            <button class="btn-check-answer" @onclick="() => CheckAnswer(ex.Id)" disabled="@(selectedAns == -1)">
+                                                <i class="bi bi-check2-circle me-1"></i> Kiểm tra đáp án
+                                            </button>
+                                            @if (selectedAns == -1)
+                                            {
+                                                <span class="text-muted hint-select"><small>Vui lòng chọn 1 đáp án để kiểm tra</small></span>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="exercise-result-box mt-3 @(isCorrect ? "result-correct" : "result-wrong")">
+                                            <div class="result-header">
+                                                <i class="bi @(isCorrect ? "bi-check-circle-fill text-success" : "bi-exclamation-triangle-fill text-danger") me-2"></i>
+                                                <strong>@(isCorrect ? "Chính xác! Làm rất tốt!" : $"Đáp án đúng là: {ex.CorrectAnswer}")</strong>
+                                            </div>
+                                            <div class="result-explanation">
+                                                <strong><i class="bi bi-lightbulb-fill text-warning me-1"></i> Phân tích học thuật:</strong>
+                                                <p class="mb-0 mt-1">@ex.Explanation</p>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Completion Summary Card -->
+                        @if (TotalExercises > 0 && CompletedExercises == TotalExercises)
+                        {
+                            <div class="quiz-completion-banner">
+                                <div class="completion-trophy">
+                                    <i class="bi @(CorrectExercises == TotalExercises ? "bi-trophy-fill text-warning" : "bi-patch-check-fill text-info")"></i>
+                                </div>
+                                <div class="completion-body">
+                                    <h4>@(CorrectExercises == TotalExercises ? "Xuất Sắc! Bạn Đã Đạt Điểm Tối Đa!" : "Hoàn Thành Luyện Tập!")</h4>
+                                    <p>
+                                        Bạn trả lời đúng <strong>@CorrectExercises / @TotalExercises câu</strong> (@(CorrectExercises * 100 / TotalExercises)%).
+                                        @(CorrectExercises == TotalExercises ? "Bạn đã làm chủ hoàn toàn kiến thức của chuyên đề này!" : "Hãy xem lại giải thích của các câu sai hoặc bấm nút làm lại để củng cố phản xạ nhé.")
+                                    </p>
+                                    <div class="completion-actions">
+                                        <button class="btn btn-outline-primary btn-sm" @onclick="ResetExercises">
+                                            <i class="bi bi-arrow-counterclockwise me-1"></i> Luyện tập lại
+                                        </button>
+                                        @if (nextTopic != null)
+                                        {
+                                            <a href="/ielts/grammar/@nextTopic.Slug" class="btn btn-primary btn-sm">
+                                                Học tiếp: @nextTopic.Title <i class="bi bi-arrow-right ms-1"></i>
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </section>
+                }
+
+                <!-- 8. Cầu Nối Sang IELTS Band Nâng Cao -->
+                @if (topic.RelatedBandStructureCodes != null && topic.RelatedBandStructureCodes.Any() && (activeTab == "all" || activeTab == "quiz"))
+                {
+                    <div class="ielts-bridge-card">
+                        <div class="bridge-icon"><i class="bi bi-award-fill"></i></div>
+                        <div class="bridge-content">
+                            <h4>Ứng Dụng Trong Bài Thi IELTS Writing & Speaking</h4>
+                            <p>Khám phá các cấu trúc nâng cao Band 7.0 – 8.5+ khai thác trực tiếp từ chuyên đề <strong>@topic.Title</strong> để nâng điểm tiêu chí Grammatical Range & Accuracy.</p>
+                            <a href="/ielts/grammar?tab=band" class="btn-bridge-link">
+                                <i class="bi bi-arrow-right-circle me-1"></i> Xem Kho Cấu Trúc Theo Band
+                            </a>
+                        </div>
+                    </div>
+                }
+
+                <!-- Previous & Next Navigation -->
+                <div class="topic-navigation-footer">
+                    @if (prevTopic != null)
+                    {
+                        <a href="/ielts/grammar/@prevTopic.Slug" class="nav-topic-card nav-prev">
+                            <span class="nav-direction"><i class="bi bi-chevron-left me-1"></i> Bài trước</span>
+                            <span class="nav-topic-name">@prevTopic.Title</span>
+                        </a>
+                    }
+                    else
+                    {
+                        <div></div>
+                    }
+
+                    @if (nextTopic != null)
+                    {
+                        <a href="/ielts/grammar/@nextTopic.Slug" class="nav-topic-card nav-next text-end">
+                            <span class="nav-direction">Bài tiếp theo <i class="bi bi-chevron-right ms-1"></i></span>
+                            <span class="nav-topic-name">@nextTopic.Title</span>
+                        </a>
+                    }
+                </div>
+
+            </div>
+        </div>
+    }
+</div>
+
+@if (!string.IsNullOrEmpty(toastMessage))
+{
+    <div class="copy-toast">
+        <i class="bi bi-check-circle-fill me-2"></i>
+        <span>@toastMessage</span>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string Slug { get; set; } = string.Empty;
+
+    private GrammarGuideTopicDto? topic;
+    private GrammarGuideTopicDto? prevTopic;
+    private GrammarGuideTopicDto? nextTopic;
+
+    private string? toastMessage;
+    private string irregularSearchTerm = "";
+    private string activeTab = "all"; // all, formulas, usages, mistakes, irregular, quiz
+
+    private Dictionary<int, int> userAnswers = new();
+    private HashSet<int> exerciseSubmitted = new();
+
+    protected override void OnParametersSet()
+    {
+        topic = GrammarGuideCatalog.GetTopicBySlug(Slug);
+        if (topic != null)
+        {
+            var adj = GrammarGuideCatalog.GetAdjacentTopics(topic.Slug);
+            prevTopic = adj.Prev;
+            nextTopic = adj.Next;
+            userAnswers.Clear();
+            exerciseSubmitted.Clear();
+            irregularSearchTerm = "";
+            activeTab = "all";
+        }
+    }
+
+    private void SetTab(string tab)
+    {
+        activeTab = tab;
+    }
+
+    private IEnumerable<IrregularWordItem> FilteredIrregularWords
+    {
+        get
+        {
+            if (topic?.IrregularList == null) return Enumerable.Empty<IrregularWordItem>();
+            if (string.IsNullOrWhiteSpace(irregularSearchTerm)) return topic.IrregularList;
+            var term = irregularSearchTerm.Trim().ToLower();
+            return topic.IrregularList.Where(w =>
+                w.Base.ToLower().Contains(term) ||
+                w.PastSimple.ToLower().Contains(term) ||
+                w.PastParticiple.ToLower().Contains(term) ||
+                w.Meaning.ToLower().Contains(term)
+            );
+        }
+    }
+
+    private int TotalExercises => topic?.Exercises.Count ?? 0;
+    private int CompletedExercises => exerciseSubmitted.Count;
+    private int CorrectExercises => topic?.Exercises.Count(ex => exerciseSubmitted.Contains(ex.Id) && userAnswers.GetValueOrDefault(ex.Id, -1) == ex.CorrectOptionIndex) ?? 0;
+
+    private void ResetExercises()
+    {
+        userAnswers.Clear();
+        exerciseSubmitted.Clear();
+    }
+
+    private void SelectAnswer(int exerciseId, int optionIndex)
+    {
+        userAnswers[exerciseId] = optionIndex;
+    }
+
+    private void CheckAnswer(int exerciseId)
+    {
+        if (userAnswers.ContainsKey(exerciseId))
+        {
+            exerciseSubmitted.Add(exerciseId);
+        }
+    }
+
+    private async Task CopyFormula(string formula)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", formula);
+            toastMessage = "Đã sao chép công thức vào clipboard!";
+            StateHasChanged();
+            _ = Task.Delay(2500).ContinueWith(_ =>
+            {
+                toastMessage = null;
+                InvokeAsync(StateHasChanged);
+            });
+        }
+        catch { }
+    }
+
+    private string GetDifficultyClass(string level) => level switch
+    {
+        "Cơ bản" => "badge-basic",
+        "Trung cấp" => "badge-intermediate",
+        "Nâng cao" => "badge-advanced",
+        _ => "badge-general"
+    };
+}

@@ -5858,6 +5858,7 @@ app.MapGet("/api/grammar-structures", async (
             CommonMistakes = g.CommonMistakes,
             PracticeExercise = g.PracticeExercise,
             Tags = g.Tags,
+            ReferenceSource = g.ReferenceSource,
             DisplayOrder = g.DisplayOrder,
             IsActive = g.IsActive,
             CreatedAt = g.CreatedAt,
@@ -5892,6 +5893,7 @@ app.MapGet("/api/grammar-structures/{id:int}", async (
         CommonMistakes = g.CommonMistakes,
         PracticeExercise = g.PracticeExercise,
         Tags = g.Tags,
+        ReferenceSource = g.ReferenceSource,
         DisplayOrder = g.DisplayOrder,
         IsActive = g.IsActive,
         CreatedAt = g.CreatedAt,
@@ -5925,6 +5927,7 @@ app.MapPost("/api/admin/grammar-structures", async (
         CommonMistakes = req.CommonMistakes?.Trim(),
         PracticeExercise = req.PracticeExercise?.Trim(),
         Tags = req.Tags?.Trim(),
+        ReferenceSource = req.ReferenceSource?.Trim(),
         DisplayOrder = req.DisplayOrder,
         IsActive = req.IsActive,
         CreatedAt = DateTime.UtcNow
@@ -5958,6 +5961,7 @@ app.MapPut("/api/admin/grammar-structures/{id:int}", async (
     entity.CommonMistakes = req.CommonMistakes?.Trim();
     entity.PracticeExercise = req.PracticeExercise?.Trim();
     entity.Tags = req.Tags?.Trim();
+    entity.ReferenceSource = req.ReferenceSource?.Trim();
     entity.DisplayOrder = req.DisplayOrder;
     entity.IsActive = req.IsActive;
     entity.UpdatedAt = DateTime.UtcNow;
@@ -6073,6 +6077,7 @@ app.MapPost("/api/admin/grammar-structures/import-multiple", async (
             int colExercise = GetCol(new[] { "PracticeExercise", "Bài tập", "Exercise", "Luyện tập" }, 10);
             int colTags = GetCol(new[] { "Tags", "Tag", "Từ khóa lọc" }, 11);
             int colColloc = GetCol(new[] { "KeyCollocations", "Collocations", "Từ vựng", "Từ khóa" }, -1);
+            int colRefSource = GetCol(new[] { "ReferenceSource", "Nguồn tham khảo", "Nguồn", "Reference", "Source" }, -1);
 
             for (int r = 2; r <= lastRow; r++)
             {
@@ -6106,6 +6111,7 @@ app.MapPost("/api/admin/grammar-structures/import-multiple", async (
                 string mistakes = row.Cell(colMistakes).GetString()?.Trim() ?? "";
                 string exercise = row.Cell(colExercise).GetString()?.Trim() ?? "";
                 string tags = row.Cell(colTags).GetString()?.Trim() ?? "";
+                string refSource = (colRefSource > 0 ? row.Cell(colRefSource).GetString()?.Trim() : "") ?? "";
 
                 if (string.IsNullOrWhiteSpace(meaning)) meaning = topic;
 
@@ -6125,6 +6131,7 @@ app.MapPost("/api/admin/grammar-structures/import-multiple", async (
                         existing.CommonMistakes = string.IsNullOrWhiteSpace(mistakes) ? null : mistakes;
                         existing.PracticeExercise = string.IsNullOrWhiteSpace(exercise) ? null : exercise;
                         existing.Tags = string.IsNullOrWhiteSpace(tags) ? null : tags;
+                        if (!string.IsNullOrWhiteSpace(refSource)) existing.ReferenceSource = refSource;
                         existing.UpdatedAt = DateTime.UtcNow;
                         updated++;
                     }
@@ -6150,6 +6157,7 @@ app.MapPost("/api/admin/grammar-structures/import-multiple", async (
                         CommonMistakes = string.IsNullOrWhiteSpace(mistakes) ? null : mistakes,
                         PracticeExercise = string.IsNullOrWhiteSpace(exercise) ? null : exercise,
                         Tags = string.IsNullOrWhiteSpace(tags) ? null : tags,
+                        ReferenceSource = string.IsNullOrWhiteSpace(refSource) ? null : refSource,
                         CreatedAt = DateTime.UtcNow
                     };
                     dbContext.GrammarStructures.Add(newStructure);
@@ -6285,7 +6293,7 @@ app.MapGet("/api/admin/grammar-structures/export", async (
     {
         "StructureCode", "BandLevel", "Category", "GrammarTopic",
         "Formula", "UsageFunction", "Example",
-        "VietnameseMeaning", "CommonMistakes", "PracticeExercise", "Tags"
+        "VietnameseMeaning", "CommonMistakes", "PracticeExercise", "Tags", "ReferenceSource"
     };
 
     for (int i = 0; i < headers.Length; i++)
@@ -6313,6 +6321,7 @@ app.MapGet("/api/admin/grammar-structures/export", async (
         ws.Cell(r + 2, 9).Value = item.CommonMistakes ?? "";
         ws.Cell(r + 2, 10).Value = item.PracticeExercise ?? "";
         ws.Cell(r + 2, 11).Value = item.Tags ?? "";
+        ws.Cell(r + 2, 12).Value = item.ReferenceSource ?? "";
     }
 
     ws.Columns().AdjustToContents();

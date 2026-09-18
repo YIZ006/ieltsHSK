@@ -90,8 +90,8 @@
             @* ── Tab Navigation ── *@
             <div class="modal-tabs">
                 <button class="tab-btn @(activeTab == "info" ? "active" : "")" @onclick='() => activeTab = "info"'>
-                    <i class="bi bi-person-lines-fill"></i>
-                    <span>Thông tin & Mục tiêu</span>
+                    <i class="bi bi-person-badge-fill"></i>
+                    <span>Thông tin cá nhân</span>
                 </button>
                 <button class="tab-btn @(activeTab == "stats" ? "active" : "")" @onclick='() => activeTab = "stats"'>
                     <i class="bi bi-trophy-fill"></i>
@@ -120,9 +120,9 @@
                             <div class="form-field">
                                 <label class="field-label">
                                     Họ và tên
-                                    <span class="field-badge-readonly"><i class="bi bi-lock-fill"></i> Cố định từ tài khoản</span>
+                                    <span class="field-badge-tip">Hiển thị trong hệ thống</span>
                                 </label>
-                                <input class="form-control-custom readonly-field" value="@ResolvedFullName" readonly title="Họ và tên tự động từ hồ sơ, không thể thay đổi" />
+                                <input class="form-control-custom" @bind="profile.FullName" placeholder="Nhập họ và tên của bạn..." maxlength="50" />
                             </div>
 
                             <div class="form-field">
@@ -137,51 +137,71 @@
                                 {
                                     <input class="form-control-custom readonly-field" value="@profile.DisplayName" readonly title="Bạn chỉ có thể đổi tên hiển thị 30 ngày một lần" />
                                     <span class="field-hint-notice notice-cooldown">
-                                        <i class="bi bi-lock-fill"></i> Bạn đã đổi tên hiển thị vào <b>@(profile.UsernameChangedAt?.ToLocalTime().ToString("dd/MM/yyyy"))</b>. Bạn có thể đổi lại sau <b>@profile.UsernameDaysRemaining ngày</b> (ngày @(profile.UsernameNextChangeAllowedAt?.ToLocalTime().ToString("dd/MM/yyyy"))).
+                                        <i class="bi bi-lock-fill"></i> Đổi lại sau <b>@profile.UsernameDaysRemaining ngày</b> (@(profile.UsernameNextChangeAllowedAt?.ToLocalTime().ToString("dd/MM/yyyy"))).
                                     </span>
                                 }
                                 else
                                 {
                                     <input class="form-control-custom" value="@profile.DisplayName" @oninput="OnDisplayNameInput" placeholder="Ví dụ: cuongnane, anhnhi..." maxlength="30" />
                                     <span class="field-hint-notice">
-                                        <i class="bi bi-info-circle-fill"></i> Lưu ý: Bạn chỉ có thể đổi tên hiển thị <b>mỗi 30 ngày một lần</b>. Không dùng tiếng Việt có dấu.
+                                        <i class="bi bi-info-circle"></i> Tên người dùng duy nhất (chữ thường, số, dấu chấm/gạch).
                                     </span>
                                 }
                             </div>
 
-                            <div class="form-field full-width">
-                                <label class="field-label">Giới thiệu (Bio)</label>
-                                <textarea class="form-control-custom textarea-custom" @bind="profile.Bio" placeholder="Mục tiêu học tập của bạn..." rows="2" maxlength="160"></textarea>
+                            <div class="form-field">
+                                <label class="field-label">
+                                    Email tài khoản
+                                    <span class="field-badge-verified"><i class="bi bi-shield-check"></i> Đã bảo vệ</span>
+                                </label>
+                                <input class="form-control-custom readonly-field" value="@userEmail" readonly title="Email đăng nhập của tài khoản" />
                             </div>
 
                             <div class="form-field">
-                                <label class="field-label">Chương trình thi mục tiêu</label>
-                                <div class="exam-select-pills">
-                                    @foreach (var ex in new[] { "HSK", "IELTS", "TOEIC" })
+                                <label class="field-label">
+                                    Vai trò tài khoản
+                                </label>
+                                <div class="role-display-box">
+                                    @if (isAdmin)
                                     {
-                                        <button class="pill-btn @(profile.TargetExam == ex ? "active" : "")"
-                                                @onclick="() => profile.TargetExam = ex">
-                                            @ex
-                                        </button>
+                                        <span class="role-badge role-admin"><i class="bi bi-shield-shaded"></i> Quản trị viên (Admin)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="role-badge role-user"><i class="bi bi-mortarboard-fill"></i> Học viên chính thức</span>
                                     }
                                 </div>
                             </div>
+                        </div>
 
-                            <div class="form-field">
-                                <label class="field-label">Điểm mục tiêu</label>
-                                <input class="form-control-custom" @bind="profile.TargetScore" placeholder="VD: HSK5, 7.5, 850..." maxlength="20" />
+                        @* ── Quick Stats Summary ── *@
+                        <div class="profile-quick-stats">
+                            <div class="quick-stat-item">
+                                <div class="quick-stat-icon stat-fire">🔥</div>
+                                <div class="quick-stat-info">
+                                    <span class="quick-stat-val">@currentStreak ngày</span>
+                                    <span class="quick-stat-lbl">Chuỗi học tập</span>
+                                </div>
                             </div>
-
-                            <div class="form-field full-width">
-                                <label class="field-label">Trình độ hiện tại</label>
-                                <div class="level-select-pills">
-                                    @foreach (var lvl in new[] { "Beginner", "Elementary", "Intermediate", "Upper-Intermediate", "Advanced" })
-                                    {
-                                        <button class="pill-btn @(profile.StudyLevel == lvl ? "active" : "")"
-                                                @onclick="() => profile.StudyLevel = lvl">
-                                            @lvl
-                                        </button>
-                                    }
+                            <div class="quick-stat-item">
+                                <div class="quick-stat-icon stat-tests">📝</div>
+                                <div class="quick-stat-info">
+                                    <span class="quick-stat-val">@recentSubmissions.Count bài</span>
+                                    <span class="quick-stat-lbl">Đã luyện thi</span>
+                                </div>
+                            </div>
+                            <div class="quick-stat-item">
+                                <div class="quick-stat-icon stat-ielts">🏆</div>
+                                <div class="quick-stat-info">
+                                    <span class="quick-stat-val">@(GetBestScore("IELTS") != "--" ? GetBestScore("IELTS") : "Chưa thi")</span>
+                                    <span class="quick-stat-lbl">Kỷ lục IELTS</span>
+                                </div>
+                            </div>
+                            <div class="quick-stat-item">
+                                <div class="quick-stat-icon stat-toeic">🎯</div>
+                                <div class="quick-stat-info">
+                                    <span class="quick-stat-val">@(GetBestScore("TOEIC") != "--" ? GetBestScore("TOEIC") : "Chưa thi")</span>
+                                    <span class="quick-stat-lbl">Kỷ lục TOEIC</span>
                                 </div>
                             </div>
                         </div>
@@ -437,9 +457,9 @@
                              ?? "";
 
             profile = await ProfileSvc.GetAsync();
-            if (string.IsNullOrWhiteSpace(profile.FullName) && !string.IsNullOrWhiteSpace(userFullNameClaim))
+            if (string.IsNullOrWhiteSpace(profile.FullName))
             {
-                profile.FullName = userFullNameClaim;
+                profile.FullName = !string.IsNullOrWhiteSpace(userFullNameClaim) ? userFullNameClaim : "Học viên";
             }
 
             // If DisplayName had spaces or was not set, clean and populate properly
@@ -514,6 +534,16 @@
 
     private async Task SaveProfileAsync()
     {
+        if (string.IsNullOrWhiteSpace(profile.FullName))
+        {
+            isToastError = true;
+            toastMessage = "Họ và tên không được để trống!";
+            showToast = true;
+            return;
+        }
+
+        profile.FullName = profile.FullName.Trim();
+
         isSaving = true;
         showToast = false;
         StateHasChanged();

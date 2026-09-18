@@ -105,6 +105,11 @@ window.MascotManager = (function () {
         win: [
             { text: "Chiến thắng vẻ vang! 🌟", sub: "Trí tuệ đỉnh cao!", reaction: "heart" },
             { text: "Đoán chuẩn xác 100%! 🏆", sub: "Chúc mừng bạn!", reaction: "delighted" }
+        ],
+        pinyin_locked: [
+            { text: "Chưa vượt qua tầng này! 🔒", sub: "Phải tự vượt ải trước mới mở được Pinyin trợ giúp nhé!", reaction: "surprised" },
+            { text: "Tầng này đang bị khóa Pinyin! 🦊", sub: "Hãy thử sức với Hán tự trước nào!", reaction: "dizzy" },
+            { text: "Chưa thể mở Pinyin đâu! 🔒", sub: "Vượt qua tầng này để mở khóa tính năng trợ giúp nhé!", reaction: "surprised" }
         ]
     };
 
@@ -545,12 +550,15 @@ window.MascotManager = (function () {
     }
 
     function gameSay(type, customText = null, customSub = null, customReaction = null) {
+        const isPriority = ['damage', 'boss', 'high_combo', 'stage_clear', 'game_over', 'win', 'start', 'warn', 'locked', 'pinyin_locked'].includes(type);
+        if (state.minimized && (customText || isPriority)) {
+            toggleMinimize(false);
+        }
         const el = getLiveElements();
         if (!el.bubble || state.minimized) return;
 
         const now = Date.now();
         lastUserActivity = now;
-        const isPriority = ['damage', 'boss', 'high_combo', 'stage_clear', 'game_over', 'win', 'start'].includes(type);
 
         // Giảm tần suất bình luận cho lượt bắn thường để tránh chớp nháy
         if (!isPriority && (now - lastGameSayTime < 1300)) {

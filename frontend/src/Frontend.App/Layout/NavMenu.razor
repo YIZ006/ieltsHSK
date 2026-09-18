@@ -412,6 +412,7 @@
         ExamHeader.OnChange += OnExamHeaderChanged;
         NavigationManager.LocationChanged += OnLocationChanged;
         NotifSvc.OnChange += OnNotifChanged;
+        ProfileService.OnProfileChanged += OnProfileServiceChanged;
         _ = LoadNotificationsAsync();
     }
 
@@ -587,11 +588,22 @@
 
     private void OnExamHeaderChanged() => InvokeAsync(StateHasChanged);
 
+    private void OnProfileServiceChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            var p = await ProfileSvc.GetAsync(true);
+            ApplyProfile(p);
+            StateHasChanged();
+        });
+    }
+
     public void Dispose()
     {
         ExamHeader.OnChange -= OnExamHeaderChanged;
         NavigationManager.LocationChanged -= OnLocationChanged;
         NotifSvc.OnChange -= OnNotifChanged;
+        ProfileService.OnProfileChanged -= OnProfileServiceChanged;
     }
 
     private async Task Logout()

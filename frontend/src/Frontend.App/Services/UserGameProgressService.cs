@@ -28,13 +28,16 @@ public sealed class UserGameProgressService
     {
         int localCurrent = 0;
         int localMax = 0;
+        int localScore = 0;
 
         try
         {
             var curStr = await _localStorage.GetItemAsync<string>($"{gameType}_progress_{level}");
             var maxStr = await _localStorage.GetItemAsync<string>($"{gameType}_max_unlocked_{level}");
+            var scoreStr = await _localStorage.GetItemAsync<string>($"{gameType}_score_{level}");
             int.TryParse(curStr, out localCurrent);
             int.TryParse(maxStr, out localMax);
+            int.TryParse(scoreStr, out localScore);
         }
         catch { }
 
@@ -47,17 +50,17 @@ public sealed class UserGameProgressService
                 var item = serverItems?.FirstOrDefault(i => string.Equals(i.Level, level, StringComparison.OrdinalIgnoreCase));
                 if (item != null)
                 {
-                    var cur = Math.Max(item.CurrentStage, localCurrent);
+                    var cur = gameType == "wordle" ? localCurrent : Math.Max(item.CurrentStage, localCurrent);
                     var max = Math.Max(item.MaxUnlockedStage, localMax);
-                    var score = item.HighScore;
+                    var score = Math.Max(item.HighScore, localScore);
 
-                    await SaveLocalAsync(gameType, level, cur, max);
+                    await SaveLocalAsync(gameType, level, cur, max, score);
                     return (cur, max, score);
                 }
-                else if (!_migrated && (localCurrent > 0 || localMax > 0))
+                else if (!_migrated && (localCurrent > 0 || localMax > 0 || localScore > 0))
                 {
                     _migrated = true;
-                    _ = SaveProgressAsync(gameType, level, localCurrent, localMax);
+                    _ = SaveProgressAsync(gameType, level, localCurrent, localMax, localScore);
                 }
             }
         }
@@ -66,12 +69,12 @@ public sealed class UserGameProgressService
             // Offline fallback
         }
 
-        return (localCurrent, localMax, 0);
+        return (localCurrent, localMax, localScore);
     }
 
     public async Task SaveProgressAsync(string gameType, string level, int currentStage, int maxUnlockedStage, int? score = null)
     {
-        await SaveLocalAsync(gameType, level, currentStage, maxUnlockedStage);
+        await SaveLocalAsync(gameType, level, currentStage, maxUnlockedStage, score);
 
         try
         {
@@ -93,12 +96,16 @@ public sealed class UserGameProgressService
         }
     }
 
-    private async Task SaveLocalAsync(string gameType, string level, int currentStage, int maxUnlockedStage)
+    private async Task SaveLocalAsync(string gameType, string level, int currentStage, int maxUnlockedStage, int? score = null)
     {
         try
         {
             await _localStorage.SetItemAsync($"{gameType}_progress_{level}", currentStage.ToString());
             await _localStorage.SetItemAsync($"{gameType}_max_unlocked_{level}", maxUnlockedStage.ToString());
+            if (score.HasValue)
+            {
+                await _localStorage.SetItemAsync($"{gameType}_score_{level}", score.Value.ToString());
+            }
         }
         catch { }
     }

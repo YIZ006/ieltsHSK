@@ -16,6 +16,7 @@ public class GrammarStructureDto
     public string? CommonMistakes { get; set; }
     public string? PracticeExercise { get; set; }
     public string? Tags { get; set; }
+    public string? ReferenceSource { get; set; }
     public int DisplayOrder { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
@@ -37,6 +38,7 @@ public class CreateGrammarStructureDto
     public string? CommonMistakes { get; set; }
     public string? PracticeExercise { get; set; }
     public string? Tags { get; set; }
+    public string? ReferenceSource { get; set; }
     public int DisplayOrder { get; set; } = 0;
     public bool IsActive { get; set; } = true;
 }
