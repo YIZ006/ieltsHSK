@@ -15,10 +15,13 @@ public class R2StorageService : IR2StorageService
         _config = config;
     }
 
+    private string GetAccessKey() => _config["CloudflareR2:AccessKey"] ?? Environment.GetEnvironmentVariable("CLOUDFLARE_R2_ACCESS_KEY") ?? "";
+    private string GetSecretKey() => _config["CloudflareR2:SecretKey"] ?? Environment.GetEnvironmentVariable("CLOUDFLARE_R2_SECRET_KEY") ?? "";
+
     public async Task<string> UploadFileAsync(Stream fileStream, string fileName, string contentType, CancellationToken cancellationToken = default)
     {
-        var accessKey = _config["CloudflareR2:AccessKey"];
-        var secretKey = _config["CloudflareR2:SecretKey"];
+        var accessKey = GetAccessKey();
+        var secretKey = GetSecretKey();
         var endpoint = _config["CloudflareR2:Endpoint"]; // e.g. https://<accountid>.r2.cloudflarestorage.com
         var bucketName = _config["CloudflareR2:BucketName"];
         var publicUrlBase = _config["CloudflareR2:PublicUrlBase"]; // e.g. https://pub-xxx.r2.dev
@@ -72,8 +75,8 @@ public class R2StorageService : IR2StorageService
 
         if (string.IsNullOrEmpty(fileName)) return false;
 
-        var accessKey = _config["CloudflareR2:AccessKey"];
-        var secretKey = _config["CloudflareR2:SecretKey"];
+        var accessKey = GetAccessKey();
+        var secretKey = GetSecretKey();
         var endpoint = _config["CloudflareR2:Endpoint"];
         var bucketName = _config["CloudflareR2:BucketName"];
 
@@ -106,8 +109,8 @@ public class R2StorageService : IR2StorageService
 
     public async Task<string> UploadPrivateAudioAsync(Stream fileStream, string key, string contentType, CancellationToken cancellationToken = default)
     {
-        var accessKey = _config["CloudflareR2:AccessKey"];
-        var secretKey = _config["CloudflareR2:SecretKey"];
+        var accessKey = GetAccessKey();
+        var secretKey = GetSecretKey();
         var endpoint = _config["CloudflareR2:Endpoint"];
         // Private bucket name, falls back to default bucket if not specified
         var bucketName = _config["CloudflareR2:UserAudioBucketName"] ?? _config["CloudflareR2:BucketName"];
@@ -149,8 +152,8 @@ public class R2StorageService : IR2StorageService
     {
         if (string.IsNullOrWhiteSpace(key)) return null;
 
-        var accessKey = _config["CloudflareR2:AccessKey"];
-        var secretKey = _config["CloudflareR2:SecretKey"];
+        var accessKey = GetAccessKey();
+        var secretKey = GetSecretKey();
         var endpoint = _config["CloudflareR2:Endpoint"];
         var bucketName = _config["CloudflareR2:UserAudioBucketName"] ?? _config["CloudflareR2:BucketName"];
 
@@ -185,8 +188,8 @@ public class R2StorageService : IR2StorageService
     {
         if (string.IsNullOrWhiteSpace(key)) return false;
 
-        var accessKey = _config["CloudflareR2:AccessKey"];
-        var secretKey = _config["CloudflareR2:SecretKey"];
+        var accessKey = GetAccessKey();
+        var secretKey = GetSecretKey();
         var endpoint = _config["CloudflareR2:Endpoint"];
         var bucketName = _config["CloudflareR2:UserAudioBucketName"] ?? _config["CloudflareR2:BucketName"];
 
@@ -219,8 +222,8 @@ public class R2StorageService : IR2StorageService
 
     public async Task<List<string>> ListFilesAsync(string prefix, CancellationToken cancellationToken = default)
     {
-        var accessKey = _config["CloudflareR2:AccessKey"];
-        var secretKey = _config["CloudflareR2:SecretKey"];
+        var accessKey = GetAccessKey();
+        var secretKey = GetSecretKey();
         var endpoint = _config["CloudflareR2:Endpoint"];
         var bucketName = _config["CloudflareR2:BucketName"];
 

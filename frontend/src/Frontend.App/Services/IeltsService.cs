@@ -9,8 +9,6 @@ public class IeltsService
 
     // Client-side in-memory caches
     private List<IeltsVocabularyItem>? _vocabCache;
-    private List<CourseDto>? _coursesCache;
-    private List<WebsiteDto>? _websitesCache;
     private List<LearningSectionDto>? _sectionsCache;
     private List<ListenVideoDto>? _videosCache;
 
@@ -24,8 +22,6 @@ public class IeltsService
     public void InvalidateAllCache()
     {
         _vocabCache = null;
-        _coursesCache = null;
-        _websitesCache = null;
         _sectionsCache = null;
         _videosCache = null;
     }
@@ -204,68 +200,6 @@ public class IeltsService
         catch
         {
             return null;
-        }
-    }
-
-    public async Task<List<CourseDto>> GetCoursesAsync(bool forceRefresh = false)
-    {
-        if (!forceRefresh && _coursesCache != null) return _coursesCache;
-        try
-        {
-            var response = await _httpClient.GetFromJsonAsync<List<CourseDto>>("api/ielts/courses");
-            _coursesCache = response ?? new List<CourseDto>();
-            return _coursesCache;
-        }
-        catch (HttpRequestException)
-        {
-            try
-            {
-                await Task.Delay(500);
-                var response = await _httpClient.GetFromJsonAsync<List<CourseDto>>("api/ielts/courses");
-                _coursesCache = response ?? new List<CourseDto>();
-                return _coursesCache;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error fetching courses: {ex.Message}");
-                return _coursesCache ?? new List<CourseDto>();
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error fetching courses: {ex.Message}");
-            return _coursesCache ?? new List<CourseDto>();
-        }
-    }
-
-    public async Task<List<WebsiteDto>> GetWebsitesAsync(bool forceRefresh = false)
-    {
-        if (!forceRefresh && _websitesCache != null) return _websitesCache;
-        try
-        {
-            var response = await _httpClient.GetFromJsonAsync<List<WebsiteDto>>("api/ielts/websites");
-            _websitesCache = response ?? new List<WebsiteDto>();
-            return _websitesCache;
-        }
-        catch (HttpRequestException)
-        {
-            try
-            {
-                await Task.Delay(500);
-                var response = await _httpClient.GetFromJsonAsync<List<WebsiteDto>>("api/ielts/websites");
-                _websitesCache = response ?? new List<WebsiteDto>();
-                return _websitesCache;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error fetching websites: {ex.Message}");
-                return _websitesCache ?? new List<WebsiteDto>();
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error fetching websites: {ex.Message}");
-            return _websitesCache ?? new List<WebsiteDto>();
         }
     }
 

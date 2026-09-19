@@ -1,0 +1,254 @@
+@using Frontend.App.Models
+
+<div class="toeic-test-list-container">
+    <div class="toeic-test-topbar">
+        <a href="/toeic" class="btn-back-dashboard">
+            <i class="bi bi-arrow-left"></i> Về TOEIC Dashboard
+        </a>
+        <div class="toeic-r2-pill">
+            <span class="r2-pulse-dot"></span>
+            <span><i class="bi bi-cloud-check-fill"></i> Cloudflare R2</span>
+        </div>
+        <div class="toeic-topbar-actions">
+            <button class="btn-refresh-r2" @onclick="OnRefreshTests" title="Quét lại folder R2 để tìm đề mới">
+                <i class="bi bi-arrow-clockwise @(IsLoading ? "spin" : "")"></i> Làm mới đề
+            </button>
+        </div>
+    </div>
+
+    <div class="header-logo" style="justify-content: center; margin-top: 1.5rem; margin-bottom: 0.5rem;">
+        <span class="logo-icon">🎓</span>
+        <span class="header-title" style="font-size: 2rem;">HỆ THỐNG THI TRỰC TUYẾN</span>
+    </div>
+    <h2 style="text-align: center; color: #0d1b2a; margin-bottom: 1.25rem;">
+        Danh sách đề thi TOEIC (@(AvailableTests?.Count ?? 0) đề)
+    </h2>
+
+    @* ── THANH LỌC NĂM & SẮP XẾP ĐỀ ── *@
+    @if (AvailableTests != null && AvailableTests.Any())
+    {
+        <div class="toeic-filter-toolbar">
+            <div class="filter-pills-group">
+                <button type="button" class="filter-pill @(SelectedYear == null ? "active" : "")" @onclick="() => OnSelectYear.InvokeAsync(null)">
+                    <i class="bi bi-grid-fill"></i> Tất cả (@AvailableTests.Count)
+                </button>
+                @foreach (var y in AvailableYears)
+                {
+                    var count = AvailableTests.Count(t => ExtractYear(t.CollectionName, t.Title) == y);
+                    <button type="button" class="filter-pill @(SelectedYear == y ? "active" : "")" @onclick="() => OnSelectYear.InvokeAsync(y)">
+                        <i class="bi bi-calendar3"></i> Năm @y (@count)
+                    </button>
+                }
+            </div>
+            <div class="sort-order-group">
+                <button type="button" class="btn-sort-toggle" @onclick="OnToggleYearSort" title="Nhấp để đổi thứ tự sắp xếp theo năm">
+                    <i class="bi bi-arrow-down-up"></i>
+                    <span>Năm: @(SortYearDescending ? "Mới nhất (2026 → cũ)" : "Cũ nhất (cũ → 2026)")</span>
+                </button>
+            </div>
+        </div>
+    }
+
+    @* ── DANH SÁCH ĐỀ THI (SẮP XẾP THEO NĂM, TRONG 1 NĂM XẾP TỪ TEST 1) ── *@
+    @if (AvailableTests == null || !AvailableTests.Any())
+    {
+        <div class="toeic-empty-r2">
+            <i class="bi bi-folder-x" style="font-size: 3rem; color: #9ca3af;"></i>
+            <p>Không tìm thấy file đề thi nào trong folder R2.</p>
+            <button class="btn-start" @onclick="OnRefreshTests">Thử tải lại</button>
+        </div>
+    }
+    else
+    {
+        <div class="toeic-year-groups-list">
+            @foreach (var group in GroupedTests)
+            {
+                <div class="toeic-year-group-box">
+                    <div class="year-group-header">
+                        <div class="year-group-header-left">
+                            <span class="year-group-badge"><i class="bi bi-award-fill"></i> @(group.Year > 0 ? $"NĂM {group.Year}" : "BỘ ĐỀ")</span>
+                            <span class="year-group-title">@group.CollectionName</span>
+                        </div>
+                        <div class="year-group-header-right">
+                            <span class="year-group-hint"><i class="bi bi-sort-numeric-down"></i> @group.Tests.Count đề · Xếp từ Test 1</span>
+                        </div>
+                    </div>
+
+                    <div class="test-grid">
+                        @foreach (var t in group.Tests)
+                        {
+                            <div class="test-card" @onclick="() => OnSelectTest.InvokeAsync(t.ToeicUrl)">
+                                <div class="test-collection">@t.CollectionName</div>
+                                <div class="test-title">@t.Title</div>
+                                <div class="test-meta-pills">
+                                    <span><i class="bi bi-clock"></i> 120 phút</span>
+                                    <span><i class="bi bi-ui-checks"></i> 200 câu</span>
+                                    <span><i class="bi bi-layers"></i> 7 Parts</span>
+                                </div>
+                                <button class="btn-start">Làm bài →</button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @* ── DROPDOWN LỊCH SỬ LÀM BÀI (HIỂN THỊ BÊN DƯỚI DANH SÁCH ĐỀ) ── *@
+    <div class="toeic-history-dropdown-section">
+        <button type="button" class="btn-history-dropdown-trigger @(isHistoryExpanded ? "expanded" : "")" @onclick="ToggleHistory">
+            <div class="trigger-left">
+                <span class="trigger-icon"><i class="bi bi-clock-history"></i></span>
+                <span class="trigger-text">Lịch sử làm bài</span>
+                @if (ToeicSubmissions.Count > 0)
+                {
+                    <span class="history-count-badge">@ToeicSubmissions.Count đề đã làm</span>
+                }
+            </div>
+            <div class="trigger-right">
+                <span class="trigger-toggle-label">@(isHistoryExpanded ? "Thu gọn" : "Xem danh sách")</span>
+                <i class="bi @(isHistoryExpanded ? "bi-chevron-up" : "bi-chevron-down") trigger-arrow"></i>
+            </div>
+        </button>
+
+        @if (isHistoryExpanded)
+        {
+            <div class="toeic-history-dropdown-panel">
+                @if (IsLoadingHistory)
+                {
+                    <div class="toeic-history-loading">
+                        <div class="loading-spinner"></div>
+                        <p>Đang tải lịch sử bài thi...</p>
+                    </div>
+                }
+                else if (ToeicSubmissions.Count == 0)
+                {
+                    <div class="toeic-history-empty">
+                        <div class="history-empty-icon">📝</div>
+                        <h4>Chưa có bài thi nào</h4>
+                        <p>Bạn chưa nộp bài thi TOEIC nào. Hãy chọn một đề thi bên trên để bắt đầu thử sức nhé!</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="toeic-history-list">
+                        @foreach (var sub in ToeicSubmissions)
+                        {
+                            <div class="toeic-history-card">
+                                <div class="toeic-history-card-main">
+                                    <div class="history-exam-name">
+                                        @(string.IsNullOrWhiteSpace(sub.ExamTitle) ? (string.IsNullOrWhiteSpace(sub.TestTitle) ? "Đề thi TOEIC" : sub.TestTitle) : sub.ExamTitle)
+                                    </div>
+                                    <div class="history-meta-row">
+                                        <span><i class="bi bi-calendar3"></i> @sub.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                                        <span><i class="bi bi-clock"></i> @FormatDuration(sub.DurationSeconds)</span>
+                                        @if (sub.CorrectCount.HasValue && sub.TotalQuestions.HasValue)
+                                        {
+                                            <span><i class="bi bi-check2-circle"></i> Đúng @sub.CorrectCount/@sub.TotalQuestions câu</span>
+                                        }
+                                    </div>
+                                    @if (sub.ListeningScore.HasValue || sub.ReadingScore.HasValue)
+                                    {
+                                        <div class="history-subscores">
+                                            @if (sub.ListeningScore.HasValue)
+                                            {
+                                                <span class="subscore-pill listening"><i class="bi bi-headphones"></i> Listening: <b>@sub.ListeningScore</b>/495</span>
+                                            }
+                                            @if (sub.ReadingScore.HasValue)
+                                            {
+                                                <span class="subscore-pill reading"><i class="bi bi-book"></i> Reading: <b>@sub.ReadingScore</b>/495</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="toeic-history-card-side">
+                                    @if (sub.TotalScore.HasValue)
+                                    {
+                                        <div class="history-total-badge @ScoreClass(sub.TotalScore)">
+                                            <span class="history-total-num">@sub.TotalScore.Value</span>
+                                            <span class="history-total-max">/990</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="history-status-badge @(sub.TimedOut ? "timed-out" : "submitted")">
+                                            @(sub.TimedOut ? "Hết giờ" : "Đã nộp")
+                                        </div>
+                                    }
+
+                                    <div class="history-card-actions">
+                                        <button type="button" class="btn-review-exam" @onclick="() => OnReviewExam.InvokeAsync(sub)" title="Xem lại bài làm và lời giải">
+                                            <i class="bi bi-eye"></i> Xem lại bài
+                                        </button>
+                                        @if (!string.IsNullOrWhiteSpace(sub.ExamUrl))
+                                        {
+                                            <button type="button" class="btn-retake" @onclick="() => OnRetakeExam.InvokeAsync(sub.ExamUrl)" title="Làm lại đề thi này">
+                                                <i class="bi bi-arrow-repeat"></i> Làm lại
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public List<MockTestDto>? AvailableTests { get; set; }
+    [Parameter] public List<ToeicYearGroup> GroupedTests { get; set; } = new();
+    [Parameter] public List<int> AvailableYears { get; set; } = new();
+    [Parameter] public int? SelectedYear { get; set; }
+    [Parameter] public bool SortYearDescending { get; set; } = true;
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public bool IsLoadingHistory { get; set; }
+    [Parameter] public List<IeltsSubmissionRecord> ToeicSubmissions { get; set; } = new();
+
+    [Parameter] public EventCallback OnRefreshTests { get; set; }
+    [Parameter] public EventCallback<int?> OnSelectYear { get; set; }
+    [Parameter] public EventCallback OnToggleYearSort { get; set; }
+    [Parameter] public EventCallback<string> OnSelectTest { get; set; }
+    [Parameter] public EventCallback<IeltsSubmissionRecord> OnReviewExam { get; set; }
+    [Parameter] public EventCallback<string> OnRetakeExam { get; set; }
+    [Parameter] public EventCallback OnHistoryOpened { get; set; }
+
+    private bool isHistoryExpanded = false;
+
+    private async Task ToggleHistory()
+    {
+        isHistoryExpanded = !isHistoryExpanded;
+        if (isHistoryExpanded && ToeicSubmissions.Count == 0)
+        {
+            await OnHistoryOpened.InvokeAsync();
+        }
+    }
+
+    private static int ExtractYear(string? collection, string? title)
+    {
+        var text = $"{collection} {title}";
+        var match = System.Text.RegularExpressions.Regex.Match(text, @"(20\d\d)");
+        return match.Success && int.TryParse(match.Groups[1].Value, out var y) ? y : 0;
+    }
+
+    private static string FormatDuration(int? seconds)
+    {
+        if (!seconds.HasValue || seconds <= 0) return "0 phút";
+        int s = seconds.Value;
+        int h = s / 3600;
+        int m = (s % 3600) / 60;
+        return h > 0
+            ? (m > 0 ? $"{h} giờ {m} phút" : $"{h} giờ")
+            : $"{m} phút";
+    }
+
+    private static string ScoreClass(int? score) => score switch
+    {
+        >= 780 => "score-high",
+        >= 500 => "score-mid",
+        _ => "score-low"
+    };
+}

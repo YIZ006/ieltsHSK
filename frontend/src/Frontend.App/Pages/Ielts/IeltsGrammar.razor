@@ -5,6 +5,7 @@
 @using Frontend.App.Services
 @using Microsoft.AspNetCore.Components.Authorization
 @inject GrammarStructureService GrammarService
+@inject GrammarGuideService GrammarGuideService
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager NavManager
@@ -528,7 +529,7 @@
                                 {
                                     <div class="source-ref-badge" title="Tài liệu học thuật tham khảo">
                                         <i class="bi bi-journal-bookmark-fill me-1 text-primary"></i>
-                                        <span>Nguồn: <strong>@item.ReferenceSource</strong></span>
+                                        <span>Nguồn: <a href="@GetReferenceSourceUrl(item.StructureCode, item.ReferenceSource, item.GrammarTopic)" target="_blank" rel="noopener noreferrer" class="source-ref-link"><strong>@item.ReferenceSource</strong></a></span>
                                     </div>
                                 }
                                 <button class="btn-toggle-expand @(isExpanded ? "active" : "")" @onclick="() => ToggleExpand(item.Id)">
@@ -595,7 +596,7 @@
                                             @if (!string.IsNullOrWhiteSpace(item.ReferenceSource))
                                             {
                                                 <div class="table-ref-source mt-1">
-                                                    <small class="text-primary"><i class="bi bi-journal-bookmark-fill me-1"></i>@item.ReferenceSource</small>
+                                                    <small class="text-primary"><i class="bi bi-journal-bookmark-fill me-1"></i><a href="@GetReferenceSourceUrl(item.StructureCode, item.ReferenceSource, item.GrammarTopic)" target="_blank" rel="noopener noreferrer" class="source-ref-link">@item.ReferenceSource</a></small>
                                                 </div>
                                             }
                                         </td>
@@ -644,7 +645,7 @@
                                                         {
                                                             <div class="detail-meta-item source">
                                                                 <strong><i class="bi bi-journal-bookmark-fill text-primary me-1"></i> Nguồn tham khảo:</strong>
-                                                                <span class="text-primary font-weight-bold">@item.ReferenceSource</span>
+                                                                <a href="@GetReferenceSourceUrl(item.StructureCode, item.ReferenceSource, item.GrammarTopic)" target="_blank" rel="noopener noreferrer" class="source-ref-link text-primary fw-bold">@item.ReferenceSource</a>
                                                             </div>
                                                         }
                                                     </div>
@@ -759,7 +760,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        guideSections = GrammarGuideCatalog.GetSections();
+        guideSections = await GrammarGuideService.GetSectionsAsync();
 
         if (!string.IsNullOrWhiteSpace(TabParam) && TabParam.Equals("band", StringComparison.OrdinalIgnoreCase))
         {
@@ -1072,4 +1073,240 @@
         }
         return list;
     }
+
+    /// <summary>
+    /// Handcrafted, clean English search terms for all 110 IELTS grammar structures.
+    /// Each term is crafted to match authoritative grammar lessons and dictionary entries
+    /// without formula artifacts (+ bare V, etc.) or Vietnamese text.
+    /// </summary>
+    private static readonly Dictionary<string, string> CleanSearchKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // --- 13 BASIC TENSES ---
+        ["BAS_TENSE_01"] = "Present Simple",
+        ["BAS_TENSE_02"] = "Present Continuous",
+        ["BAS_TENSE_03"] = "Present Perfect Simple",
+        ["BAS_TENSE_04"] = "Present Perfect Continuous",
+        ["BAS_TENSE_05"] = "Past Simple",
+        ["BAS_TENSE_06"] = "Past Continuous",
+        ["BAS_TENSE_07"] = "Past Perfect Simple",
+        ["BAS_TENSE_08"] = "Past Perfect Continuous",
+        ["BAS_TENSE_09"] = "Future Simple will",
+        ["BAS_TENSE_10"] = "Future be going to",
+        ["BAS_TENSE_11"] = "Future Continuous",
+        ["BAS_TENSE_12"] = "Future Perfect",
+        ["BAS_TENSE_13"] = "Future Perfect Continuous",
+
+        // --- 9 PARTS OF SPEECH ---
+        ["BAS_POS_01"] = "Countable and Uncountable Nouns",
+        ["BAS_POS_02"] = "Personal and Possessive Pronouns",
+        ["BAS_POS_03"] = "Participial Adjectives -ed -ing",
+        ["BAS_POS_04"] = "Adjectives order OSASCOMP",
+        ["BAS_POS_05"] = "Modal Verbs",
+        ["BAS_POS_06"] = "Few a few Little a little",
+        ["BAS_POS_07"] = "Prepositions In On At place time",
+        ["BAS_POS_08"] = "Articles A An The zero article",
+        ["BAS_POS_09"] = "Coordinating and Correlative Conjunctions",
+
+        // --- 12 BASIC SENTENCE STRUCTURES ---
+        ["BAS_SENT_01"] = "Comparison as as equality",
+        ["BAS_SENT_02"] = "Comparative adjectives",
+        ["BAS_SENT_03"] = "Superlative adjectives",
+        ["BAS_SENT_04"] = "Double Comparative The more the more",
+        ["BAS_SENT_05"] = "Zero and First Conditional",
+        ["BAS_SENT_06"] = "Second Conditional",
+        ["BAS_SENT_07"] = "Third Conditional and Mixed Conditionals",
+        ["BAS_SENT_08"] = "Wish clauses subjunctive",
+        ["BAS_SENT_09"] = "Passive Voice",
+        ["BAS_SENT_10"] = "Reported Speech",
+        ["BAS_SENT_11"] = "Relative Clauses defining non-defining",
+        ["BAS_SENT_12"] = "Reduced Relative Clauses participle",
+
+        // --- 2 QUESTIONS ---
+        ["BAS_QUEST_01"] = "Wh- questions",
+        ["BAS_QUEST_02"] = "Question tags",
+
+        // --- 6 COMMON PATTERNS ---
+        ["BAS_COMM_01"] = "Enough structure adjective noun",
+        ["BAS_COMM_02"] = "Suggest subjunctive that should",
+        ["BAS_COMM_03"] = "Used to vs Be used to V-ing",
+        ["BAS_COMM_04"] = "Although even though despite in spite of",
+        ["BAS_COMM_05"] = "So that Such that result clauses",
+        ["BAS_COMM_06"] = "As if As though",
+
+        // --- 7 INVERSION STRUCTURES ---
+        ["W_INV_01"] = "Not only but also inversion",
+        ["W_INV_02"] = "Negative Inversion formal English",
+        ["W_INV_03"] = "Hardly scarcely when inversion",
+        ["W_INV_04"] = "Seldom rarely inversion",
+        ["W_INV_05"] = "Only by inversion",
+        ["W_INV_06"] = "No sooner than inversion",
+        ["W_INV_07"] = "Fronting and Negative Inversion",
+
+        // --- 3 NOMINALISATION ---
+        ["W_NOM_01"] = "Nominalisation Cause and Result academic writing",
+        ["W_NOM_02"] = "Gerund subject nominalisation",
+        ["W_NOM_03"] = "Complex noun phrase pre-modification",
+
+        // --- 3 CLEFT SENTENCES ---
+        ["W_CLE_01"] = "It cleft sentences it is that",
+        ["W_CLE_02"] = "Wh-cleft pseudo-cleft sentences",
+        ["W_CLE_03"] = "Reversed pseudo-cleft sentences",
+
+        // --- 4 PARTICIPLE CLAUSES ---
+        ["W_PAR_01"] = "Perfect participle clause having V3",
+        ["W_PAR_02"] = "Present participle clause result V-ing",
+        ["W_PAR_03"] = "Past participle clause reduced relative -ed",
+        ["W_PAR_04"] = "Negative participle clause Not having",
+
+        // --- 6 CONDITIONALS & CONCESSION ---
+        ["W_CON_01"] = "Inverted conditional Type 3 Had S V3",
+        ["W_CON_02"] = "Adjective as though concession inversion",
+        ["W_CON_03"] = "Inverted conditional Type 2 Were S to",
+        ["W_CON_04"] = "Inverted conditional Type 1 Should S",
+        ["W_CON_05"] = "Mixed Conditionals past cause present result",
+        ["W_CON_06"] = "Mixed Conditionals present condition past result",
+
+        // --- 1 SUBJUNCTIVE ---
+        ["W_SUB_01"] = "Subjunctive mood imperative adjectives",
+
+        // --- 2 IMPERSONAL PASSIVE ---
+        ["W_PAS_01"] = "Impersonal passive It is said that",
+        ["W_PAS_02"] = "Impersonal passive perfect infinitive to have done",
+
+        // --- 2 HEDGING ---
+        ["W_HED_01"] = "Academic Hedging cautious language",
+        ["W_HED_02"] = "Hedging modals and stance academic writing",
+
+        // --- 2 DOUBLE COMPARATIVE ---
+        ["W_DCO_01"] = "The more the more double comparative",
+        ["W_DCO_02"] = "The greater the comparative noun phrase",
+
+        // --- 2 RESULT ---
+        ["W_RES_01"] = "Such that result inversion Such be noun that",
+        ["W_RES_02"] = "So that result inversion So adj be that",
+
+        // --- 1 ABSOLUTE CONSTRUCTION ---
+        ["W_ABS_01"] = "Absolute construction nominative absolute",
+
+        // --- 12 TASK 1 REPORT STRUCTURES ---
+        ["T1_TRE_01"] = "Sharp trend vocabulary IELTS writing task 1",
+        ["T1_PRO_01"] = "Proportion percentage share IELTS writing task 1",
+        ["T1_FOL_01"] = "Followed by ranking IELTS writing task 1",
+        ["T1_FOL_02"] = "Plateau level off IELTS writing task 1",
+        ["T1_DOU_01"] = "Fold increase twofold threefold IELTS writing task 1",
+        ["T1_CON_01"] = "In stark contrast to IELTS writing task 1",
+        ["T1_PEA_01"] = "Peaking at reaching a peak IELTS writing task 1",
+        ["T1_TRO_01"] = "Hitting a trough bottoming out IELTS writing task 1",
+        ["T1_FLU_01"] = "Marked fluctuations IELTS writing task 1",
+        ["T1_OUT_01"] = "Outnumbered outstripped IELTS writing task 1",
+        ["T1_PRO_02"] = "Passive process sequence IELTS writing task 1",
+        ["T1_OVR_01"] = "Overview sentence formula IELTS writing task 1",
+
+        // --- 14 SPEAKING STRUCTURES ---
+        ["S_PAS_01"] = "Used to vs would spoken English past habits",
+        ["S_HYP_01"] = "Hypothetical opportunity second conditional speaking",
+        ["S_EXP_01"] = "Ever since present perfect continuous speaking",
+        ["S_CON_01"] = "On the one hand then again speaking",
+        ["S_SPE_01"] = "Speculation probability modals speaking",
+        ["S_DIS_01"] = "Discourse markers personal stance speaking",
+        ["S_WOU_01"] = "I would tend to say argue that hedging",
+        ["S_HAD_01"] = "Had I known inverted conditional speaking",
+        ["S_CON_02"] = "Having said that that being said discourse marker",
+        ["S_PRE_01"] = "Would much rather bare infinitive preference",
+        ["S_CAN_01"] = "Cannot help but feel that idiom",
+        ["S_POI_01"] = "To the best of my recollection idiom",
+        ["S_FUT_01"] = "Be bound to happen certainty",
+        ["S_RET_02"] = "With the benefit of hindsight idiom",
+
+        // --- 9 ADVANCED WRITING PATTERNS ---
+        ["W_APP_01"] = "Appositive noun phrase academic writing",
+        ["W_PRE_02"] = "Preposition which whom relative clauses",
+        ["W_WHE_01"] = "Whereas while contrast clauses",
+        ["W_DES_01"] = "Despite in spite of concession clauses",
+        ["W_COR_01"] = "Neither nor Either or correlative conjunctions",
+        ["W_CAU_01"] = "Causative have get something done",
+        ["W_PUR_01"] = "In order that so as to purpose clauses",
+        ["W_IRR_01"] = "Regardless of irrespective of preposition",
+        ["W_EXT_01"] = "To the extent that To such an extent that"
+    };
+
+    /// <summary>
+    /// Extracts a clean English search keyword from a grammar topic name.
+    /// - Pulls text from inside parentheses if present:
+    ///   "Thì Quá khứ hoàn thành (Past Perfect)" → "Past Perfect"
+    /// - Takes only the first part when "/" separates two names:
+    ///   "To the extent that / To such an extent that" → "To the extent that"
+    /// - Cleans formula markers (+ bare V, etc.)
+    /// </summary>
+    private static string ExtractEnglishKeyword(string? grammarTopic)
+    {
+        if (string.IsNullOrWhiteSpace(grammarTopic)) return string.Empty;
+
+        var term = grammarTopic.Trim();
+
+        // Pull English text from inside the last set of parentheses
+        var start = term.LastIndexOf('(');
+        var end   = term.LastIndexOf(')');
+        if (start >= 0 && end > start)
+        {
+            var inner = term.Substring(start + 1, end - start - 1).Trim();
+            if (!string.IsNullOrWhiteSpace(inner)) term = inner;
+        }
+
+        // Take only the first alternative when "/" separates two names
+        var slashIdx = term.IndexOf(" / ");
+        if (slashIdx > 0) term = term.Substring(0, slashIdx).Trim();
+
+        // Strip formula markers
+        term = term.Replace("+ bare V", "").Replace("+ V", "").Replace("...", "").Trim();
+
+        if (term.Length > 60) term = term.Substring(0, 60).Trim();
+
+        return term;
+    }
+
+    /// <summary>
+    /// Builds a targeted Google search URL that directly locates the authoritative lesson / explanation:
+    /// 1. Uses the handcrafted clean English keyword for the structure (110 items covered).
+    /// 2. Combines with the authoritative publisher (Cambridge, Oxford, or British Council).
+    /// 3. Never redirects to an unsearched generic homepage, never gives 404 or spellcheck error.
+    /// (Note: perfect-english-grammar.com is strictly excluded).
+    /// </summary>
+    private string GetReferenceSourceUrl(string? structureCode, string? source, string? grammarTopic = null)
+    {
+        string keyword;
+        if (!string.IsNullOrWhiteSpace(structureCode) && CleanSearchKeywords.TryGetValue(structureCode.Trim(), out var cleanKw))
+        {
+            keyword = cleanKw;
+        }
+        else
+        {
+            keyword = ExtractEnglishKeyword(grammarTopic);
+        }
+
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            keyword = "IELTS grammar";
+        }
+
+        var s = (source ?? string.Empty).ToLowerInvariant();
+        string authority;
+
+        if (s.Contains("oxford"))
+        {
+            authority = "Oxford Learner's Dictionaries";
+        }
+        else if (s.Contains("british council") || s.Contains("raymond murphy") || s.Contains("martin hewings"))
+        {
+            authority = "British Council grammar";
+        }
+        else
+        {
+            authority = "Cambridge Dictionary grammar";
+        }
+
+        var query = $"{keyword} {authority}";
+        return $"https://www.google.com/search?q={Uri.EscapeDataString(query)}";
+    }
 }
+

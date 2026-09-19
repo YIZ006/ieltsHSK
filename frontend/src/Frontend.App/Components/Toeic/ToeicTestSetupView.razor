@@ -1,0 +1,199 @@
+@using Frontend.App.Models
+
+<div class="toeic-setup-container">
+    <div class="setup-header">
+        @if (!string.IsNullOrWhiteSpace(Exam?.CollectionName))
+        {
+            <div class="setup-collection">@Exam.CollectionName</div>
+        }
+        <h1 class="setup-title">@Exam?.Title</h1>
+        <div class="setup-meta">
+            <span><i class="bi bi-clock-history"></i> Thời gian làm bài: <b>@FormatDuration(selectedTimeSeconds)</b></span>
+        </div>
+        <div class="setup-structure-label">Cấu trúc đề thi</div>
+    </div>
+
+    <div class="setup-card">
+        <label class="setup-toggle-row">
+            <input type="checkbox" @bind="selectByPart" />
+            <span>Chọn từng part</span>
+        </label>
+
+        @if (selectByPart)
+        {
+            <div class="setup-time-row">
+                <label for="setup-time-select">Chọn thời gian làm bài:</label>
+                <select id="setup-time-select" class="setup-time-select" @bind="selectedTimeSeconds">
+                    @foreach (var opt in GetTimeOptions())
+                    {
+                        <option value="@opt.Seconds">@opt.Label</option>
+                    }
+                </select>
+            </div>
+        }
+
+        @* LISTENING *@
+        @if (ListeningParts.Any())
+        {
+            <div class="setup-section-label">LISTENING</div>
+            @foreach (var part in ListeningParts)
+            {
+                <label class="setup-part-row">
+                    @if (selectByPart)
+                    {
+                        <input type="checkbox"
+                               checked="@selectedPartNumbers.Contains(part.PartNumber)"
+                               @onchange="e => TogglePart(part.PartNumber, (bool)e.Value!)" />
+                    }
+                    else
+                    {
+                        <span class="part-check-spacer"></span>
+                    }
+                    <span class="part-label">PART @part.PartNumber</span>
+                    <span class="part-count">@CountQuestions(part) câu</span>
+                </label>
+            }
+        }
+
+        @* READING *@
+        @if (ReadingParts.Any())
+        {
+            <div class="setup-section-label">READING</div>
+            @foreach (var part in ReadingParts)
+            {
+                <label class="setup-part-row">
+                    @if (selectByPart)
+                    {
+                        <input type="checkbox"
+                               checked="@selectedPartNumbers.Contains(part.PartNumber)"
+                               @onchange="e => TogglePart(part.PartNumber, (bool)e.Value!)" />
+                    }
+                    else
+                    {
+                        <span class="part-check-spacer"></span>
+                    }
+                    <span class="part-label">PART @part.PartNumber</span>
+                    <span class="part-count">@CountQuestions(part) câu</span>
+                </label>
+            }
+        }
+
+        @if (selectByPart && selectedPartNumbers.Count == 0)
+        {
+            <div class="setup-warning">Vui lòng chọn ít nhất một part.</div>
+        }
+
+        <button class="setup-start-btn"
+                disabled="@(selectByPart && selectedPartNumbers.Count == 0)"
+                @onclick="HandleStart">
+            BẮT ĐẦU →
+        </button>
+        <button class="setup-back-btn" @onclick="OnBackToList">← Chọn đề khác</button>
+    </div>
+</div>
+
+@* ── MODAL: BÀI THI LÀM DỞ ── *@
+@if (ShowResumePrompt && SavedProgress != null)
+{
+    <div class="result-overlay">
+        <div class="result-modal">
+            <div class="result-title">BÀI THI CHƯA HOÀN THÀNH</div>
+            <p class="confirm-text">Bạn có bài test đang làm dở: <b>@(SavedProgress.Title)</b></p>
+            <p class="confirm-sub">
+                Đã trả lời: <b>@SavedProgress.AnsweredCount câu</b>
+                · Thời gian còn lại: <b>@FormatDuration(SavedProgress.SecondsLeft)</b>
+                @if (!string.IsNullOrWhiteSpace(SavedProgress.SavedAtText))
+                {
+                    <div>Lưu lúc: @SavedProgress.SavedAtText</div>
+                }
+            </p>
+            <div class="confirm-actions">
+                <button class="btn-cancel" @onclick="OnDiscardSavedProgress">Làm lại từ đầu</button>
+                <button class="result-close-btn" @onclick="OnResumeSavedProgress">Tiếp tục làm bài</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public ToeicExamData? Exam { get; set; }
+    [Parameter] public List<ToeicPart> MasterParts { get; set; } = new();
+    [Parameter] public bool ShowResumePrompt { get; set; }
+    [Parameter] public ToeicSavedState? SavedProgress { get; set; }
+
+    [Parameter] public EventCallback<ToeicExamSetupResult> OnStart { get; set; }
+    [Parameter] public EventCallback OnBackToList { get; set; }
+    [Parameter] public EventCallback OnResumeSavedProgress { get; set; }
+    [Parameter] public EventCallback OnDiscardSavedProgress { get; set; }
+
+    private bool selectByPart = false;
+    private HashSet<int> selectedPartNumbers = new();
+    private int selectedTimeSeconds = 7200;
+    private int standardTimeSeconds = 7200;
+    private string? _lastExamTitle;
+
+    protected override void OnParametersSet()
+    {
+        if (Exam != null && Exam.Title != _lastExamTitle)
+        {
+            _lastExamTitle = Exam.Title;
+            var partsSource = MasterParts.Count > 0 ? MasterParts : Exam.Parts;
+            selectedPartNumbers = new HashSet<int>(partsSource.Select(p => p.PartNumber));
+            standardTimeSeconds = Exam.TotalTimeSeconds > 0 ? Exam.TotalTimeSeconds : 7200;
+            selectedTimeSeconds = standardTimeSeconds;
+            selectByPart = false;
+        }
+    }
+
+    private IEnumerable<ToeicPart> ListeningParts =>
+        ((MasterParts.Count > 0 ? MasterParts : Exam?.Parts) ?? Enumerable.Empty<ToeicPart>())
+            .Where(p => p.HasListening || p.PartNumber <= 4);
+
+    private IEnumerable<ToeicPart> ReadingParts =>
+        ((MasterParts.Count > 0 ? MasterParts : Exam?.Parts) ?? Enumerable.Empty<ToeicPart>())
+            .Where(p => !p.HasListening && p.PartNumber > 4);
+
+    private static int CountQuestions(ToeicPart part) =>
+        part.QuestionGroups.Sum(g => g.Questions.Count);
+
+    private void TogglePart(int partNumber, bool isChecked)
+    {
+        if (isChecked) selectedPartNumbers.Add(partNumber);
+        else selectedPartNumbers.Remove(partNumber);
+    }
+
+    private List<(int Seconds, string Label)> GetTimeOptions()
+    {
+        var options = new List<(int Seconds, string Label)>
+        {
+            (standardTimeSeconds, $"Thời gian chuẩn ({FormatDuration(standardTimeSeconds)})")
+        };
+        foreach (var minutes in new[] { 120, 105, 90, 75, 60, 45, 30 })
+        {
+            int seconds = minutes * 60;
+            if (seconds == standardTimeSeconds) continue;
+            options.Add((seconds, FormatDuration(seconds)));
+        }
+        return options;
+    }
+
+    private static string FormatDuration(int seconds)
+    {
+        int h = seconds / 3600;
+        int m = (seconds % 3600) / 60;
+        return h > 0
+            ? (m > 0 ? $"{h} giờ {m} phút" : $"{h} giờ")
+            : $"{m} phút";
+    }
+
+    private async Task HandleStart()
+    {
+        var result = new ToeicExamSetupResult
+        {
+            SelectByPart = selectByPart,
+            SelectedPartNumbers = new HashSet<int>(selectedPartNumbers),
+            SelectedTimeSeconds = selectedTimeSeconds
+        };
+        await OnStart.InvokeAsync(result);
+    }
+}

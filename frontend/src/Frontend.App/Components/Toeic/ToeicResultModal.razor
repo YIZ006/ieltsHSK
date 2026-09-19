@@ -1,0 +1,39 @@
+<div class="result-overlay">
+    <div class="result-modal">
+        <div class="result-title">🎉 KẾT QUẢ BÀI THI</div>
+        <div class="result-score">
+            <span class="result-num">@TotalScore</span>
+            <span class="result-sep">/</span>
+            <span class="result-total">990</span>
+        </div>
+        <div class="score-table">
+            <div class="score-row">
+                <span class="score-row-label">🎧 Listening</span>
+                <span class="score-row-correct">@ListenCorrect câu đúng</span>
+                <span class="score-row-points"><b>@ListenScore</b>/495</span>
+            </div>
+            <div class="score-row">
+                <span class="score-row-label">📖 Reading</span>
+                <span class="score-row-correct">@ReadCorrect câu đúng</span>
+                <span class="score-row-points"><b>@ReadScore</b>/495</span>
+            </div>
+        </div>
+        <div class="result-time">
+            ⏱ Thời gian đã dùng: @ElapsedTime
+        </div>
+        <button class="result-close-btn" @onclick="OnShowAnswers">Xem đáp án</button>
+        <button class="btn-cancel" style="margin-top: 12px;" @onclick="OnClose">Đóng</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int TotalScore { get; set; }
+    [Parameter] public int ListenScore { get; set; }
+    [Parameter] public int ReadScore { get; set; }
+    [Parameter] public int ListenCorrect { get; set; }
+    [Parameter] public int ReadCorrect { get; set; }
+    [Parameter] public string ElapsedTime { get; set; } = "";
+
+    [Parameter] public EventCallback OnShowAnswers { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+}

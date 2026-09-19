@@ -178,6 +178,12 @@ builder.Services.AddScoped(sp =>
     return new OfflineStorageService(js, httpClient);
 });
 
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
+    return new GrammarGuideService(httpClient);
+});
+
 // ExamService: dùng BaseAddress của frontend để load được relative path (wwwroot/sample-data)
 // Khi URL là đường dẫn tuyệt đối (http/https) thì HttpClient vẫn gọi thẳng được
 builder.Services.AddScoped(sp =>

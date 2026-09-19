@@ -1,0 +1,1214 @@
+@using Frontend.App.Models
+@using Frontend.App.Services
+@inject IeltsService IeltsService
+@inject IJSRuntime JS
+@inject UserGameProgressService GameProgressService
+@implements IDisposable
+
+    <div class="fullscreen-game-overlay quantum-game-overlay" @ref="wordleOverlayRef" @onkeydown="HandleKeyDown" tabindex="0" @onclick="FocusWordle">
+        <!-- Topbar -->
+        <header class="fullscreen-topbar quantum-topbar">
+            <div class="topbar-left">
+                <div class="fs-game-badge quantum-badge">
+                    <i class="bi bi-shield-lock-fill"></i> BẺ KHÓA BOM LƯỢNG TỬ
+                </div>
+                <span class="mode-tag">DEFUSAL ACTIVE</span>
+            </div>
+
+            <!-- Length Mode Selector (4, 5, 6, 7, 8 ký tự) -->
+            <div class="quantum-mode-selector">
+                <span class="mode-lbl">CHẾ ĐỘ:</span>
+                @foreach (var len in new[] { "4", "5", "6", "7", "8" })
+                {
+                    <button type="button" class="btn-mode @(selectedWordLength == len ? "active" : "")" @onclick="() => SetWordLengthMode(len)">
+                        @(len) KÝ TỰ
+                    </button>
+                }
+            </div>
+
+            <div class="topbar-center">
+                <span class="fs-stat-pill text-warning"><i class="bi bi-star-fill"></i> Điểm: <b>@wordleScore</b></span>
+                <span class="fs-stat-pill text-danger"><i class="bi bi-fire"></i> Chuỗi: <b>@wordleStreak</b> 🔥</span>
+                <span class="fs-stat-pill text-info"><i class="bi bi-battery-charging"></i> Pin: <b>@(MaxGuesses - guesses.Count)/@MaxGuesses</b></span>
+            </div>
+
+            <div class="topbar-right">
+                <button type="button" class="btn-fs-tool btn-fs-tut" @onclick="OpenQuantumTutorial" title="Hướng dẫn từng phần">
+                    <i class="bi bi-question-circle"></i> Hướng dẫn
+                </button>
+                <button type="button" class="btn-fs-tool" @onclick="NextWord" title="Đổi từ vựng khác">
+                    <i class="bi bi-arrow-clockwise"></i> Đổi từ
+                </button>
+                <button type="button" class="btn-fs-exit" @onclick="CloseWordleGame" title="Thoát trò chơi">
+                    <i class="bi bi-x-lg me-1"></i> Thoát
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Body: Quantum Briefcase Stage -->
+        <main class="fullscreen-game-body quantum-body">
+            @if (currentWord == null)
+            {
+                <div class="fs-loading-box">
+                    <div class="spinner"></div>
+                    <p>Đang chuẩn bị mật thư...</p>
+                </div>
+            }
+            else
+            {
+                <div class="stage-box" id="quantumStageBox">
+                    <!-- 1. Background Image -->
+                    <img class="briefcase-bg" src="images/games/quantum-cipher/kipbom_base.png" alt="Quantum Briefcase">
+
+                    <!-- 2. Interactive Layer -->
+                    <div class="interactive-layer">
+
+                        <!-- LEFT DOOR: TACTICAL PHONE HUD -->
+                        <div class="phone-dock-left">
+                            <div class="phone-casing">
+                                <div class="phone-screen">
+                                    <div class="screen-topbar">
+                                        <div class="screen-title">
+                                            <span class="dot"></span>
+                                            <span>DOSSIER // @(string.IsNullOrWhiteSpace(currentWord.CefrLevel) ? "IELTS" : $"CEFR {currentWord.CefrLevel}")</span>
+                                        </div>
+                                        <div class="screen-stat">📶 99%</div>
+                                    </div>
+
+                                    <!-- Tags Row -->
+                                    <div class="clue-tags-row">
+                                        <span class="badge-pos">@(string.IsNullOrWhiteSpace(currentWord.PartOfSpeech) ? "NOUN" : currentWord.PartOfSpeech.ToUpperInvariant())</span>
+                                        @if (!string.IsNullOrWhiteSpace(currentWord.Topic))
+                                        {
+                                            <span class="badge-topic"><i class="bi bi-tag-fill"></i> @currentWord.Topic</span>
+                                        }
+                                        <span class="badge-len"><i class="bi bi-fonts"></i> @WordLength chữ</span>
+                                    </div>
+
+                                    <!-- Vietnamese Definition -->
+                                    <div class="clue-viet-box">
+                                        <div class="clue-viet-label">Nghĩa tiếng Việt:</div>
+                                        <div class="clue-viet-text">@CleanMeaningForDisplay(currentWord.Meaning, currentWord.Word)</div>
+                                    </div>
+
+                                    <!-- Context Sentence with Blank -->
+                                    @if (!string.IsNullOrWhiteSpace(ContextSentence))
+                                    {
+                                        <div class="clue-sentence-box">
+                                            <div class="clue-sentence-label">Ngữ cảnh câu ví dụ:</div>
+                                            <div class="clue-sentence-text">
+                                                @((MarkupString)FormattedSentenceHtml)
+                                            </div>
+                                            @if (showSentenceTranslation && !string.IsNullOrWhiteSpace(currentWord.ExampleMeaning))
+                                            {
+                                                <div class="sent-vi-trans">
+                                                    <i class="bi bi-arrow-return-right me-1 text-muted"></i> @currentWord.ExampleMeaning
+                                                </div>
+                                            }
+                                            else if (!string.IsNullOrWhiteSpace(currentWord.ExampleMeaning))
+                                            {
+                                                <button type="button" class="btn-toggle-trans" @onclick="() => showSentenceTranslation = true">
+                                                    <i class="bi bi-eye"></i> Xem bản dịch câu
+                                                </button>
+                                            }
+                                        </div>
+                                    }
+
+                                    <!-- Action Buttons -->
+                                    <div class="phone-tools">
+                                        <button type="button" class="btn-screen-act btn-hint-first" @onclick="UseLetterHint" disabled="@(isGameOver || hasUsedHintThisRound)" style="@(hasUsedHintThisRound ? "opacity: 0.45; cursor: not-allowed;" : "")" title="@(hasUsedHintThisRound ? "Đã dùng gợi ý cho từ này" : "Gợi ý chữ cái đầu tiên (Phím 1)")">
+                                            <span>⚡ MỞ CHỮ ĐẦU</span>
+                                            <span style="font-size: 0.65rem;">[GỢI Ý]</span>
+                                        </button>
+                                        <button type="button" class="btn-screen-act" @onclick="PronounceWord" title="Nghe phát âm tiếng Anh">
+                                            <span>🔊 PHÁT ÂM</span>
+                                            <span style="font-size: 0.65rem;">[AUDIO]</span>
+                                        </button>
+                                        <button type="button" class="btn-screen-act" @onclick="NextWord" title="Đổi từ vựng khác">
+                                            <span>🔄 ĐỔI TỪ MỚI</span>
+                                            <span style="font-size: 0.65rem;">[TIẾP]</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- CENTER: DIGITAL TIMER + PLASMA CORE + 2-ROW TILES -->
+                        <div class="center-hud-timer @GetTimerUrgentClass()" id="hudTimer">
+                            <div class="timer-val">@FormatWordleTimer()</div>
+                        </div>
+
+                        <!-- Plasma Core Spark Emitter -->
+                        <div class="plasma-reactor-spark">
+                            <img id="quantumCoreSpark" src="images/games/quantum-cipher/set/set1_trans.png" alt="Plasma Spark">
+                        </div>
+
+                        <!-- Row 1: Locked Green Cipher Slots (Upper Brushed Titanium Plate) -->
+                        <div class="plate-row1-lock" id="rowLockedSlots">
+                            <div class="row-deck-badge badge-lock">
+                                <span class="led-dot"></span> CHỐT
+                            </div>
+                            @for (int i = 0; i < WordLength; i++)
+                            {
+                                var colIndex = i;
+                                var lockedChar = GetLockedLetterAt(colIndex);
+                                <div class="tile-socket">
+                                    <div class="tile-button locked-slot @(lockedChar.HasValue ? "locked-green" : "")" style="@GetDynamicTileStyle()">
+                                        @(lockedChar.HasValue ? lockedChar.Value.ToString() : "·")
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Row 2: Active Input Cipher Slots (Lower Brushed Titanium Plate) -->
+                        <div class="plate-row2-input @(shakeCurrentRow ? "shake-deck" : "")" id="plateRow2">
+                            <div class="row-deck-badge badge-input">
+                                <span class="led-dot"></span> NHẬP
+                            </div>
+                            <div style="display: flex; align-items: center; justify-content: center; gap: inherit; width: 100%;">
+                                @for (int i = 0; i < WordLength; i++)
+                                {
+                                    var colIndex = i;
+                                    var hasChar = colIndex < currentInput.Length;
+                                    var charVal = hasChar ? currentInput[colIndex].ToString() : "";
+                                    var isCursor = !isGameOver && colIndex == currentInput.Length && currentInput.Length < WordLength;
+
+                                    <div class="tile-socket">
+                                        <div class="tile-button input-slot @(hasChar ? "has-char" : "") @(isCursor ? "cursor-active" : "")" style="@GetDynamicTileStyle()">
+                                            @charVal
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- RIGHT DOOR: 6 SLIM PIN & KEYBOARD -->
+                        <div class="right-door-pin-tray" id="quantumBatteryTray">
+                            @for (int b = 0; b < MaxGuesses; b++)
+                            {
+                                var isBlown = b < guesses.Count;
+                                <div class="power-rod @(isBlown ? "blown" : "")" data-pin="@b">
+                                    <span class="rod-bolt">⚡</span>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Spark burst on blown battery rod -->
+                        <div class="spark-rod-burst" id="quantumSparkBurst">
+                            <img id="quantumSparkBurstImg" src="images/games/quantum-cipher/setgiat/setgiat1_trans.png" alt="Spark">
+                        </div>
+
+                        <!-- Virtual Mechanical Keyboard -->
+                        <div class="right-door-keyboard" id="keyboardContainer">
+                            <div class="kb-row">
+                                @foreach (var key in KeyRow1)
+                                {
+                                    <button type="button" class="kb-key @GetQuantumKeyClass(key)" @onclick="() => OnVirtualKeyPress(key)">@key</button>
+                                }
+                            </div>
+                            <div class="kb-row">
+                                @foreach (var key in KeyRow2)
+                                {
+                                    <button type="button" class="kb-key @GetQuantumKeyClass(key)" @onclick="() => OnVirtualKeyPress(key)">@key</button>
+                                }
+                            </div>
+                            <div class="kb-row">
+                                @foreach (var key in KeyRow3)
+                                {
+                                    <button type="button" class="kb-key @GetQuantumKeyClass(key)" @onclick="() => OnVirtualKeyPress(key)">@key</button>
+                                }
+                            </div>
+                            <div class="kb-row">
+                                <button type="button" class="kb-key action-key del-key" @onclick='() => OnVirtualKeyPress("BACKSPACE")'>⌫ XÓA</button>
+                                <button type="button" class="kb-key action-key enter-key" @onclick='() => OnVirtualKeyPress("ENTER")'>⏎ XÁC NHẬN</button>
+                            </div>
+                        </div>
+
+                        <!-- Toast alert -->
+                        @if (!string.IsNullOrEmpty(toastMessage))
+                        {
+                            <div class="hud-toast">
+                                @toastMessage
+                            </div>
+                        }
+
+                        <!-- ====================================================
+                             INTERACTIVE SPOTLIGHT TUTORIAL & PROMPT MODAL
+                             ==================================================== -->
+
+                        <!-- 1. Initial Prompt Modal (Trước khi bắt đầu chơi) -->
+                        @if (showWordleTutorialPrompt)
+                        {
+                            <div class="tutorial-prompt-modal" id="tutorialPromptModal">
+                                <div class="prompt-card">
+                                    <div class="prompt-title">NHIỆM VỤ BẺ KHÓA BOM</div>
+                                    <div class="prompt-desc">
+                                        Hệ thống điều khiển vũ khí vali lượng tử đã sẵn sàng. Bạn có muốn xem hướng dẫn chi tiết từng bộ phận và chức năng trước khi bắt đầu không?
+                                    </div>
+                                    <div class="prompt-actions">
+                                        <button type="button" class="btn-prompt-guide" @onclick="StartQuantumTutorial">🚀 XEM HƯỚNG DẪN</button>
+                                        <button type="button" class="btn-prompt-play" @onclick="SkipWordleTutorialAndPlay">⚡ VÀO CHƠI LUÔN</button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- 2. Spotlight Tour Overlay -->
+                        @if (isWordleTutorialActive)
+                        {
+                            <div class="tutorial-overlay show" id="tutorialOverlay">
+                            <!-- Glowing Cutout Box -->
+                            <div class="tutorial-spotlight-box" id="tutorialSpotlightBox"></div>
+
+                            <!-- Briefing Dialog Card -->
+                            <div class="tutorial-card" id="tutorialCard">
+                                <div class="tut-header">
+                                    <div class="tut-step-tag">
+                                        <span id="tutStepText">BƯỚC 1/5</span>
+                                    </div>
+                                    <div class="tut-step-dots" id="tutStepDots">
+                                        <span class="tut-dot active"></span>
+                                        <span class="tut-dot"></span>
+                                        <span class="tut-dot"></span>
+                                        <span class="tut-dot"></span>
+                                        <span class="tut-dot"></span>
+                                    </div>
+                                </div>
+
+                                <div class="tut-title" id="tutTitle">1. MẬT THƯ TÌNH BÁO</div>
+                                <div class="tut-body">
+                                    <span id="tutBodyText"></span><span class="tut-cursor" id="tutCursor"></span>
+                                </div>
+
+                                <div class="tut-hint-click">
+                                    <span>💡 Nhấn vào khung để hiện toàn bộ chữ • Phím Space hoặc Enter để tiếp tục</span>
+                                </div>
+
+                                <div class="tut-footer">
+                                    <button type="button" class="btn-tut-skip" id="btnTutSkip" @onclick="OnTutorialSkipClick" @onclick:stopPropagation>Bỏ qua (Esc)</button>
+                                    <button type="button" class="btn-tut-next" id="btnTutNext" @onclick="OnTutorialNextClick" @onclick:stopPropagation>
+                                        <span id="tutNextBtnText">Tiếp theo</span> ➜
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        }
+
+                        <!-- Result Modal -->
+                        @if (showResultModal && currentWord != null)
+                        {
+                            <div class="overlay-modal show" @onclick="() => showResultModal = false">
+                                <div class="modal-card @(isGameWon ? "victory" : "defeat")" @onclick:stopPropagation="true">
+                                    <div class="modal-title">@(isGameWon ? "GỠ BOM THÀNH CÔNG!" : "NHIỆM VỤ THẤT BẠI!")</div>
+                                    <div class="modal-word">@currentWord.Word.ToUpperInvariant()</div>
+                                    <div class="modal-desc">
+                                        @if (isGameWon)
+                                        {
+                                            <span>@currentWord.Meaning</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Mã giải mã đúng là: <b>@currentWord.Word.ToUpperInvariant()</b> (@currentWord.Meaning)</span>
+                                        }
+                                    </div>
+                                    <div class="modal-stats">
+                                        <div class="stat-item">
+                                            <div class="stat-val">@FormatWordleTimer()</div>
+                                            <div class="stat-lbl">Thời gian còn lại</div>
+                                        </div>
+                                        <div class="stat-item">
+                                            <div class="stat-val">@(guesses.Count)/@MaxGuesses</div>
+                                            <div class="stat-lbl">Lượt đoán</div>
+                                        </div>
+                                        <div class="stat-item">
+                                            <div class="stat-val">@(isGameWon ? "+30 điểm" : "0 điểm")</div>
+                                            <div class="stat-lbl">Điểm số</div>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="modal-btn @(isGameWon ? "" : "defeat-btn")" @onclick="NextWord">
+                                        @(isGameWon ? "TỪ VỰNG TIẾP THEO ➜" : "THỬ LẠI NHIỆM VỤ 🔄")
+                                    </button>
+                                </div>
+                            </div>
+                        }
+
+                    </div>
+                </div>
+            }
+        </main>
+    </div>
+
+
+@code {
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnStatsChanged { get; set; }
+    [Parameter] public List<IeltsVocabularyItem>? VocabPool { get; set; }
+    [Parameter] public string InitialWordLength { get; set; } = "5";
+    [Parameter] public string SelectedCefr { get; set; } = "all";
+
+    private bool isPlayingWordle = true;
+    private bool showWordleTutorialPrompt = false;
+    private bool isWordleTutorialActive = false;
+    private bool hasSeenWordleTutorial = false;
+
+    private bool hasUsedHintThisRound = false;
+
+    // === WORDLE GAME STATE ===
+    private const int MaxGuesses = 6;
+    private List<IeltsVocabularyItem> vocabPool = new();
+    private List<IeltsVocabularyItem> filteredPool = new();
+    private IeltsVocabularyItem? currentWord;
+
+    private int WordLength => currentWord?.Word.Trim().Length ?? 5;
+    private string ContextSentence => currentWord?.Example ?? "";
+
+    private List<string> guesses = new();
+    private List<List<string>> guessEvaluations = new();
+    private string currentInput = "";
+    private int currentGuessIndex => guesses.Count;
+    private bool isGameOver;
+    private bool isGameWon;
+    private bool showResultModal;
+    private bool shakeCurrentRow;
+    private string toastMessage = "";
+    private bool showSentenceTranslation;
+
+    private int wordleScore = 0;
+    private int wordleStreak = 0;
+    private int wordleMaxStreak = 0;
+    private Dictionary<int, char> hintLetterIndices = new();
+    private string selectedCefr = "all";
+    private string selectedWordLength = "5";
+    private readonly HashSet<int> playedIeltsVocabIds = new();
+    private readonly HashSet<string> playedIeltsWords = new();
+
+    private Dictionary<char, string> keyStatuses = new();
+
+    // === QUANTUM CIPHER STATE & HELPERS ===
+    private int wordleTimerSeconds = 120;
+    private Timer? wordleTimer;
+
+    private void StartWordleTimer(bool resetTime = false)
+    {
+        wordleTimer?.Dispose();
+        if (resetTime || wordleTimerSeconds <= 0)
+        {
+            wordleTimerSeconds = 120;
+        }
+        wordleTimer = new Timer(async _ =>
+        {
+            if (!isPlayingWordle || isGameOver || isWordleTutorialActive || showWordleTutorialPrompt) return;
+            wordleTimerSeconds--;
+            if (wordleTimerSeconds <= 0)
+            {
+                wordleTimerSeconds = 0;
+                isGameOver = true;
+                isGameWon = false;
+                wordleStreak = 0;
+                _ = SaveWordleProgressAsync();
+                _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.lose()");
+                _ = Task.Delay(300).ContinueWith(_ => InvokeAsync(PronounceWord));
+                _ = Task.Delay(500).ContinueWith(_ => InvokeAsync(async () =>
+                {
+                    showResultModal = true;
+                    StateHasChanged();
+                    await FocusWordle();
+                }));
+                wordleTimer?.Dispose();
+            }
+            else
+            {
+                _ = JS.InvokeVoidAsync("eval", $"window.WordleSfx?.quantumTick({wordleTimerSeconds})");
+            }
+            await InvokeAsync(StateHasChanged);
+        }, null, 1000, 1000);
+    }
+
+    private void StopWordleTimer()
+    {
+        wordleTimer?.Dispose();
+        wordleTimer = null;
+    }
+
+    private string FormatWordleTimer()
+    {
+        int m = wordleTimerSeconds / 60;
+        int s = wordleTimerSeconds % 60;
+        return $"{m:D2}:{s:D2}";
+    }
+
+    private string GetTimerUrgentClass()
+    {
+        if (wordleTimerSeconds <= 10 && wordleTimerSeconds > 0) return "urgent-10";
+        if (wordleTimerSeconds <= 20 && wordleTimerSeconds > 0) return "urgent-20";
+        if (wordleTimerSeconds <= 30 && wordleTimerSeconds > 0) return "urgent-30";
+        return "";
+    }
+
+    private char? GetLockedLetterAt(int index)
+    {
+        if (hintLetterIndices.TryGetValue(index, out var hintChar))
+            return hintChar;
+        for (int r = 0; r < guessEvaluations.Count; r++)
+        {
+            var evals = guessEvaluations[r];
+            if (index < evals.Count && evals[index] == "correct" && index < guesses[r].Length)
+            {
+                return guesses[r][index];
+            }
+        }
+        return null;
+    }
+
+    private string GetQuantumKeyClass(string key)
+    {
+        if (key.Length == 1 && keyStatuses.TryGetValue(char.ToUpperInvariant(key[0]), out var status))
+        {
+            return status switch
+            {
+                "correct" => "state-green",
+                "present" => "state-yellow",
+                "absent" => "state-dark",
+                _ => ""
+            };
+        }
+        return "";
+    }
+
+    private string GetDynamicTileStyle()
+    {
+        if (WordLength >= 8)
+            return "width: clamp(20px, 2.5vw, 34px); height: clamp(20px, 2.5vw, 34px); font-size: clamp(11px, 1.3vw, 18px);";
+        if (WordLength == 7)
+            return "width: clamp(22px, 2.8vw, 38px); height: clamp(22px, 2.8vw, 38px); font-size: clamp(12px, 1.5vw, 20px);";
+        return "";
+    }
+
+    private void SetWordLengthMode(string len)
+    {
+        selectedWordLength = len;
+        ApplyDifficultyFilter();
+        NextWord();
+    }
+
+
+    private static readonly string[] KeyRow1 = { "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P" };
+    private static readonly string[] KeyRow2 = { "A", "S", "D", "F", "G", "H", "J", "K", "L" };
+    private static readonly string[] KeyRow3 = { "Z", "X", "C", "V", "B", "N", "M" };
+
+    private ElementReference wordleOverlayRef;
+
+
+    private static readonly List<IeltsVocabularyItem> FallbackVocab = new()
+    {
+        new IeltsVocabularyItem { Word = "pollution", Phonetic = "/pəˈluːʃn/", PartOfSpeech = "noun", Meaning = "Sự ô nhiễm", Example = "Air pollution is a severe environmental challenge in modern megacities.", ExampleMeaning = "Ô nhiễm không khí là một thách thức môi trường nghiêm trọng ở các siêu đô thị hiện đại.", Topic = "Environment", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "climate", Phonetic = "/ˈklaɪmət/", PartOfSpeech = "noun", Meaning = "Khí hậu", Example = "Climate change poses existential threats to island nations globally.", ExampleMeaning = "Biến đổi khí hậu đặt ra các mối đe dọa sinh tồn cho các quốc đảo trên toàn cầu.", Topic = "Environment", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "develop", Phonetic = "/dɪˈveləp/", PartOfSpeech = "verb", Meaning = "Phát triển", Example = "Children develop cognitive abilities rapidly in early childhood.", ExampleMeaning = "Trẻ em phát triển các khả năng nhận thức nhanh chóng trong thời thơ ấu.", Topic = "Education", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "achieve", Phonetic = "/əˈtʃiːv/", PartOfSpeech = "verb", Meaning = "Đạt được", Example = "Hard work and dedication allow students to achieve high band scores.", ExampleMeaning = "Sự chăm chỉ và cống hiến giúp học sinh đạt được điểm số cao.", Topic = "Education", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "economic", Phonetic = "/ˌekəˈnɒmɪk/", PartOfSpeech = "adj", Meaning = "Thuộc kinh tế", Example = "Rapid economic growth has transformed living standards nationwide.", ExampleMeaning = "Tăng trưởng kinh tế nhanh chóng đã thay đổi mức sống trên toàn quốc.", Topic = "Economy", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "resource", Phonetic = "/rɪˈsɔːs/", PartOfSpeech = "noun", Meaning = "Tài nguyên, nguồn lực", Example = "Renewable natural resources include solar, wind, and tidal power.", ExampleMeaning = "Tài nguyên thiên nhiên tái tạo bao gồm năng lượng mặt trời, gió và thủy triều.", Topic = "Environment", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "analysis", Phonetic = "/əˈnæləsɪs/", PartOfSpeech = "noun", Meaning = "Sự phân tích", Example = "Statistical analysis revealed significant trends across all age groups.", ExampleMeaning = "Phân tích thống kê đã tiết lộ các xu hướng đáng kể ở mọi nhóm tuổi.", Topic = "Science", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "education", Phonetic = "/ˌedʒuˈkeɪʃn/", PartOfSpeech = "noun", Meaning = "Giáo dục", Example = "Quality tertiary education equips graduates with vital workplace skills.", ExampleMeaning = "Giáo dục đại học chất lượng trang bị cho sinh viên tốt nghiệp các kỹ năng làm việc quan trọng.", Topic = "Education", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "technology", Phonetic = "/tekˈnɒlədʒi/", PartOfSpeech = "noun", Meaning = "Công nghệ", Example = "Modern digital technology revolutionizes remote communication.", ExampleMeaning = "Công nghệ kỹ thuật số hiện đại cách mạng hóa giao tiếp từ xa.", Topic = "Technology", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "critical", Phonetic = "/ˈkrɪtɪkl/", PartOfSpeech = "adj", Meaning = "Quan trọng, phản biện", Example = "Critical thinking is an essential skill for academic research.", ExampleMeaning = "Tư duy phản biện là một kỹ năng thiết yếu cho nghiên cứu học thuật.", Topic = "Education", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "environment", Phonetic = "/ɪnˈvaɪrənmənt/", PartOfSpeech = "noun", Meaning = "Môi trường", Example = "Protecting the global environment requires international cooperation.", ExampleMeaning = "Bảo vệ môi trường toàn cầu đòi hỏi sự hợp tác quốc tế.", Topic = "Environment", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "opinion", Phonetic = "/əˈpɪnjən/", PartOfSpeech = "noun", Meaning = "Ý kiến, quan điểm", Example = "Public opinion remains deeply divided regarding the proposed policy.", ExampleMeaning = "Dư luận công chúng vẫn bị chia rẽ sâu sắc về chính sách được đề xuất.", Topic = "Society", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "impact", Phonetic = "/ˈɪmpækt/", PartOfSpeech = "noun", Meaning = "Tác động, ảnh hưởng", Example = "Human activities produce an enormous impact on natural habitats.", ExampleMeaning = "Các hoạt động của con người tạo ra tác động to lớn đến môi trường sống tự nhiên.", Topic = "Environment", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "significant", Phonetic = "/sɪɡˈnɪfɪkənt/", PartOfSpeech = "adj", Meaning = "Đáng kể, quan trọng", Example = "There is a significant difference between theoretical and applied science.", ExampleMeaning = "Có một sự khác biệt đáng kể giữa khoa học lý thuyết và khoa học ứng dụng.", Topic = "Academic", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "sustainable", Phonetic = "/səˈsteɪnəbl/", PartOfSpeech = "adj", Meaning = "Bền vững", Example = "Sustainable agriculture minimizes toxic chemical runoff into waterways.", ExampleMeaning = "Nông nghiệp bền vững giảm thiểu dòng chảy hóa chất độc hại vào nguồn nước.", Topic = "Environment", CefrLevel = "C1" },
+        new IeltsVocabularyItem { Word = "diversity", Phonetic = "/daɪˈvɜːsəti/", PartOfSpeech = "noun", Meaning = "Sự đa dạng", Example = "Cultural diversity enriches societal viewpoints and creative problem solving.", ExampleMeaning = "Sự đa dạng văn hóa làm phong phú thêm quan điểm xã hội và giải quyết vấn đề sáng tạo.", Topic = "Society", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "innovation", Phonetic = "/ˌɪnəˈveɪʃn/", PartOfSpeech = "noun", Meaning = "Sự đổi mới, sáng tạo", Example = "Technological innovation drives efficiency across traditional manufacturing sectors.", ExampleMeaning = "Đổi mới công nghệ thúc đẩy hiệu quả trong các lĩnh vực sản xuất truyền thống.", Topic = "Technology", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "challenge", Phonetic = "/ˈtʃælɪndʒ/", PartOfSpeech = "noun", Meaning = "Thử thách", Example = "Overpopulation presents a monumental challenge for urban planners.", ExampleMeaning = "Dân số quá đông đặt ra một thách thức to lớn cho các nhà quy hoạch đô thị.", Topic = "Society", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "evidence", Phonetic = "/ˈevɪdəns/", PartOfSpeech = "noun", Meaning = "Bằng chứng", Example = "Scientific evidence firmly supports the efficacy of renewable energy.", ExampleMeaning = "Bằng chứng khoa học ủng hộ mạnh mẽ hiệu quả của năng lượng tái tạo.", Topic = "Science", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "strategy", Phonetic = "/ˈstrætədʒi/", PartOfSpeech = "noun", Meaning = "Chiến lược", Example = "Effective marketing strategies attract international consumers.", ExampleMeaning = "Các chiến lược tiếp thị hiệu quả thu hút người tiêu dùng quốc tế.", Topic = "Business", CefrLevel = "B2" },
+        new IeltsVocabularyItem { Word = "tradition", Phonetic = "/trəˈdɪʃn/", PartOfSpeech = "noun", Meaning = "Truyền thống", Example = "Preserving ancient traditions preserves cultural identity across generations.", ExampleMeaning = "Gìn giữ các truyền thống cổ xưa bảo tồn bản sắc văn hóa qua nhiều thế hệ.", Topic = "Culture", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "community", Phonetic = "/kəˈmjuːnəti/", PartOfSpeech = "noun", Meaning = "Cộng đồng", Example = "Local communities organized clean-up campaigns along the coastline.", ExampleMeaning = "Các cộng đồng địa phương đã tổ chức các chiến dịch dọn rác dọc theo bờ biển.", Topic = "Society", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "knowledge", Phonetic = "/ˈnɒlɪdʒ/", PartOfSpeech = "noun", Meaning = "Kiến thức", Example = "Acquiring domain knowledge is crucial for solving specialized problems.", ExampleMeaning = "Tiếp thu kiến thức chuyên ngành là rất quan trọng để giải quyết các vấn đề chuyên sâu.", Topic = "Education", CefrLevel = "B1" },
+        new IeltsVocabularyItem { Word = "consumer", Phonetic = "/kənˈsjuːmə(r)/", PartOfSpeech = "noun", Meaning = "Người tiêu dùng", Example = "Informed consumers demand transparency in sustainable supply chains.", ExampleMeaning = "Người tiêu dùng hiểu biết đòi hỏi sự minh bạch trong các chuỗi cung ứng bền vững.", Topic = "Economy", CefrLevel = "B2" }
+    };
+
+    private string FormattedSentenceHtml
+    {
+        get
+        {
+            if (currentWord == null || string.IsNullOrWhiteSpace(currentWord.Example)) return "";
+            var ex = currentWord.Example;
+            var w = currentWord.Word.Trim();
+            if (string.IsNullOrWhiteSpace(w)) return ex;
+
+            var replacement = $"<span class='blank-target'>[ {new string('_', Math.Min(w.Length, 8))} ]</span>";
+
+            // 1. Khớp từ chính xác và các biến thể đuôi s, es, ed, ing, d, 's
+            var pattern = $@"\b{System.Text.RegularExpressions.Regex.Escape(w)}(?:s|es|ed|ing|d|'s)?\b";
+            var regex = new System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (regex.IsMatch(ex))
+            {
+                return regex.Replace(ex, replacement);
+            }
+
+            // 2. Khớp từ gốc bỏ 'e' hoặc đổi 'y' -> 'i' (ví dụ: create -> creating, rely -> relied)
+            string stem = w;
+            if (w.EndsWith("e", StringComparison.OrdinalIgnoreCase) && w.Length > 2)
+            {
+                stem = w[..^1];
+            }
+            else if (w.EndsWith("y", StringComparison.OrdinalIgnoreCase) && w.Length > 2)
+            {
+                stem = w[..^1] + "(?:y|i|ie)";
+            }
+
+            var flexPattern = $@"\b{stem}(?:s|es|ed|ing|d|'s)?\b";
+            var flexRegex = new System.Text.RegularExpressions.Regex(flexPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (flexRegex.IsMatch(ex))
+            {
+                return flexRegex.Replace(ex, replacement);
+            }
+
+            // 3. Quét từng token để tìm từ biến thể/gần giống nhất trong câu và ẩn đi (tránh tuyệt đối lộ đáp án)
+            var wordsInSent = System.Text.RegularExpressions.Regex.Matches(ex, @"\b[a-zA-Z']+\b");
+            foreach (System.Text.RegularExpressions.Match match in wordsInSent)
+            {
+                var token = match.Value.Trim('\'').ToLowerInvariant();
+                if (token.Length >= 3 && Math.Abs(token.Length - w.Length) <= 3)
+                {
+                    if (token.StartsWith(w[..Math.Min(3, w.Length)].ToLowerInvariant()) ||
+                        LevenshteinDistance(token, w.ToLowerInvariant()) <= 2)
+                    {
+                        var exactTokenRegex = new System.Text.RegularExpressions.Regex($@"\b{System.Text.RegularExpressions.Regex.Escape(match.Value)}\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        return exactTokenRegex.Replace(ex, replacement);
+                    }
+                }
+            }
+
+            // 4. Nếu câu ví dụ không chứa từ mục tiêu: chèn chỗ trống ở cuối một cách tự nhiên
+            return $"{ex} {replacement}";
+        }
+    }
+
+    private static string CleanMeaningForDisplay(string? meaning, string? word)
+    {
+        if (string.IsNullOrWhiteSpace(meaning)) return "";
+        if (string.IsNullOrWhiteSpace(word)) return meaning;
+
+        // Loại bỏ tên từ tiếng Anh nếu vô tình xuất hiện ở đầu nghĩa (vd: "alien: người ngoài hành tinh")
+        var w = word.Trim();
+        var cleaned = System.Text.RegularExpressions.Regex.Replace(meaning, $@"\b{System.Text.RegularExpressions.Regex.Escape(w)}\b[\s:–-]*", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return string.IsNullOrWhiteSpace(cleaned) ? meaning : cleaned.Trim();
+    }
+
+    private static int LevenshteinDistance(string s, string t)
+    {
+        if (string.IsNullOrEmpty(s)) return t?.Length ?? 0;
+        if (string.IsNullOrEmpty(t)) return s.Length;
+
+        int n = s.Length;
+        int m = t.Length;
+        int[] d = new int[m + 1];
+
+        for (int j = 0; j <= m; j++) d[j] = j;
+
+        for (int i = 1; i <= n; i++)
+        {
+            int prev = d[0];
+            d[0] = i;
+            for (int j = 1; j <= m; j++)
+            {
+                int temp = d[j];
+                int cost = (s[i - 1] == t[j - 1]) ? 0 : 1;
+                d[j] = Math.Min(Math.Min(d[j] + 1, d[j - 1] + 1), prev + cost);
+                prev = temp;
+            }
+        }
+        return d[m];
+    }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(InitialWordLength))
+        {
+            selectedWordLength = InitialWordLength;
+        }
+        if (!string.IsNullOrWhiteSpace(SelectedCefr))
+        {
+            selectedCefr = SelectedCefr;
+        }
+        if (VocabPool != null && VocabPool.Count > 0)
+        {
+            vocabPool = VocabPool;
+        }
+        else
+        {
+            vocabPool = [.. FallbackVocab];
+            _ = LoadVocabularyFromApiAsync();
+        }
+        await LoadWordleStatsAsync();
+        await StartWordleGame();
+    }
+
+    private async Task LoadWordleStatsAsync()
+    {
+        try
+        {
+            var (streak, maxStreak, score) = await GameProgressService.LoadProgressAsync("wordle", "all");
+            wordleStreak = streak;
+            wordleMaxStreak = maxStreak;
+            wordleScore = score;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { }
+    }
+
+    private async Task SaveWordleProgressAsync()
+    {
+        try
+        {
+            wordleMaxStreak = Math.Max(wordleMaxStreak, wordleStreak);
+            await GameProgressService.SaveProgressAsync("wordle", "all", wordleStreak, wordleMaxStreak, wordleScore);
+            await OnStatsChanged.InvokeAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { }
+    }
+
+    // === WORDLE ACTIONS ===
+    private async Task StartWordleGame()
+    {
+        ApplyDifficultyFilter();
+        StartNewRound();
+        isPlayingWordle = true;
+        _ = JS.InvokeVoidAsync("MascotManager.setGameMode", true, "wordle");
+        _ = JS.InvokeVoidAsync("MascotManager.gameSay", "start", "Giải mã mật mã nào! 🔠", "Wordle Challenge");
+        
+        if (!hasSeenWordleTutorial)
+        {
+            showWordleTutorialPrompt = true;
+            StopWordleTimer();
+        }
+        else
+        {
+            StartWordleTimer(resetTime: false);
+        }
+
+        await Task.Delay(50);
+        await FocusWordle();
+        _ = JS.InvokeVoidAsync("initQuantumBriefcase");
+        _ = JS.InvokeVoidAsync("window.QuantumCipherKeyboard.init", DotNetObjectReference.Create(this));
+    }
+
+    private async Task StartQuantumTutorial()
+    {
+        showWordleTutorialPrompt = false;
+        isWordleTutorialActive = true;
+        StopWordleTimer();
+        StateHasChanged();
+        await Task.Delay(100);
+        await JS.InvokeVoidAsync("window.QuantumTutorial.start", DotNetObjectReference.Create(this));
+    }
+
+    private async Task OpenQuantumTutorial()
+    {
+        if (isWordleTutorialActive) return;
+        showWordleTutorialPrompt = false;
+        isWordleTutorialActive = true;
+        StopWordleTimer();
+        StateHasChanged();
+        await Task.Delay(100);
+        await JS.InvokeVoidAsync("window.QuantumTutorial.start", DotNetObjectReference.Create(this));
+    }
+
+    private async Task SkipWordleTutorialAndPlay()
+    {
+        showWordleTutorialPrompt = false;
+        hasSeenWordleTutorial = true;
+        StartWordleTimer(resetTime: false);
+        await FocusWordle();
+    }
+
+    private async Task OnTutorialCardClick()
+    {
+        if (!isWordleTutorialActive) return;
+        await JS.InvokeVoidAsync("window.QuantumTutorial.advanceStep");
+    }
+
+    private async Task OnTutorialNextClick()
+    {
+        Console.WriteLine("[DEBUG] OnTutorialNextClick fired. isWordleTutorialActive=" + isWordleTutorialActive);
+        if (!isWordleTutorialActive) return;
+        await JS.InvokeVoidAsync("window.QuantumTutorial.advanceStep");
+    }
+
+    private async Task OnTutorialSkipClick()
+    {
+        if (!isWordleTutorialActive) return;
+        await JS.InvokeVoidAsync("window.QuantumTutorial.end");
+    }
+
+    [JSInvokable]
+    public void OnQuantumTutorialFinished()
+    {
+        isWordleTutorialActive = false;
+        hasSeenWordleTutorial = true;
+        if (!isGameOver && isPlayingWordle)
+        {
+            StartWordleTimer(resetTime: false);
+            _ = FocusWordle();
+        }
+        StateHasChanged();
+    }
+
+    private async Task FocusWordle()
+    {
+        try { await wordleOverlayRef.FocusAsync(); } catch { }
+    }
+
+    private async Task CloseWordleGame()
+    {
+        isPlayingWordle = false;
+        _ = JS.InvokeVoidAsync("MascotManager.setGameMode", false);
+        showResultModal = false;
+        showWordleTutorialPrompt = false;
+        isWordleTutorialActive = false;
+        _ = JS.InvokeVoidAsync("window.QuantumTutorial.end");
+        _ = JS.InvokeVoidAsync("window.QuantumCipherKeyboard.destroy");
+        StopWordleTimer();
+        await OnClose.InvokeAsync();
+    }
+
+    [JSInvokable]
+    public void HandleGlobalKeyDown(string key, string code)
+    {
+        if (!isPlayingWordle || isWordleTutorialActive || showWordleTutorialPrompt) return;
+        HandleKeyDown(new KeyboardEventArgs { Key = key, Code = code });
+        StateHasChanged();
+    }
+
+    private static readonly HashSet<string> ExcludedJargonTopicKeywords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "cleanroom", "biomimetic", "hardware", "astronomy", "aviation", "chemistry",
+        "robotics", "iot", "telecommunication", "cloud", "database", "programming",
+        "biotechnology", "nanotechnology", "archaeology", "defense", "aerospace",
+        "semiconductor", "clean room", "spectrometry", "chromatography", "avionics", "metallurgy"
+    };
+
+    private static readonly HashSet<string> ExcludedTechnicalAcronyms = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "scada", "rfid", "asic", "cmos", "pcba", "ddos", "http", "html", "json", "cidr", "gpio", "uart", "usart", "vlsi", "fpga", "sram", "dram"
+    };
+
+    private async Task LoadVocabularyFromApiAsync()
+    {
+        try
+        {
+            var all = await IeltsService.GetVocabularyAsync();
+            if (all != null && all.Count > 0)
+            {
+                var allowedCefr = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "A2", "B1", "B2", "C1" };
+                var clean = all
+                    .Where(v => v.IsActive && !string.IsNullOrWhiteSpace(v.Word))
+                    .Where(v => v.Word.Trim().All(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')))
+                    .Where(v => v.Word.Trim().Length >= 4 && v.Word.Trim().Length <= 8)
+                    .Where(v => string.IsNullOrEmpty(v.CefrLevel) || allowedCefr.Contains(v.CefrLevel.Trim()))
+                    .Where(v => !ExcludedTechnicalAcronyms.Contains(v.Word.Trim()))
+                    .Where(v => string.IsNullOrEmpty(v.Topic) || !ExcludedJargonTopicKeywords.Any(k => v.Topic.Contains(k, StringComparison.OrdinalIgnoreCase)))
+                    .Where(v => string.IsNullOrEmpty(v.Meaning) || (!v.Meaning.Contains("bán dẫn", StringComparison.OrdinalIgnoreCase) && !v.Meaning.Contains("vi mạch", StringComparison.OrdinalIgnoreCase) && !v.Meaning.Contains("hệ thống scada", StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+
+                if (clean.Count > 0)
+                {
+                    vocabPool = clean;
+                    ApplyDifficultyFilter();
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GameHub] Background vocab load: {ex.Message}");
+        }
+    }
+
+    private void ApplyDifficultyFilter()
+    {
+        var source = vocabPool.Count > 0 ? vocabPool : FallbackVocab;
+        var query = source.AsEnumerable();
+
+        // 1. Lọc theo cấp độ CEFR từ kho đã import (A2 - C1)
+        if (selectedCefr != "all")
+        {
+            query = query.Where(v => string.Equals(v.CefrLevel?.Trim(), selectedCefr, StringComparison.OrdinalIgnoreCase));
+        }
+        else
+        {
+            var allowedCefr = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "A2", "B1", "B2", "C1" };
+            query = query.Where(v => string.IsNullOrEmpty(v.CefrLevel) || allowedCefr.Contains(v.CefrLevel.Trim()));
+        }
+
+        // 2. Chỉ được phép các từ đủ số lượng chữ trong từ (độ dài chính xác)
+        if (int.TryParse(selectedWordLength, out var exactLen) && exactLen >= 4 && exactLen <= 8)
+        {
+            query = query.Where(v => v.Word.Trim().Length == exactLen);
+        }
+        else
+        {
+            query = query.Where(v => v.Word.Trim().Length >= 4 && v.Word.Trim().Length <= 7);
+        }
+
+        // Đảm bảo từ tiếng Anh hợp lệ, chỉ gồm chữ cái A-Z
+        query = query.Where(v => v.Word.Trim().All(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')));
+
+        filteredPool = query.ToList();
+
+        if (filteredPool.Count == 0)
+        {
+            filteredPool = source.Where(v => v.Word.Trim().Length >= 4 && v.Word.Trim().Length <= 7).ToList();
+        }
+    }
+
+    private void StartNewRound()
+    {
+        if (filteredPool.Count == 0) ApplyDifficultyFilter();
+        if (filteredPool.Count == 0) return;
+
+        var rng = new Random();
+
+        // KHÔNG ĐƯỢC ĐỂ CÁC TỪ TRÙNG LẶP LẠI (chọn từ chưa từng chơi trong phiên này)
+        var unplayed = filteredPool.Where(v =>
+            (v.Id <= 0 || !playedIeltsVocabIds.Contains(v.Id)) &&
+            !playedIeltsWords.Contains(v.Word.Trim().ToUpperInvariant())
+        ).ToList();
+
+        if (unplayed.Count == 0)
+        {
+            // Đã chơi hết toàn bộ từ trong kho theo bộ lọc hiện tại -> reset để bắt đầu vòng mới
+            playedIeltsVocabIds.Clear();
+            playedIeltsWords.Clear();
+            unplayed = filteredPool.ToList();
+            ShowToast("Bạn đã giải mã hết tất cả từ vựng trong cấp độ này! Bắt đầu vòng quay mới.");
+        }
+
+        currentWord = unplayed[rng.Next(unplayed.Count)];
+        if (currentWord.Id > 0) playedIeltsVocabIds.Add(currentWord.Id);
+        playedIeltsWords.Add(currentWord.Word.Trim().ToUpperInvariant());
+
+        guesses.Clear();
+        guessEvaluations.Clear();
+        keyStatuses.Clear();
+        currentInput = "";
+        isGameOver = false;
+        isGameWon = false;
+        showResultModal = false;
+        shakeCurrentRow = false;
+        toastMessage = "";
+        showSentenceTranslation = false;
+        hintLetterIndices.Clear();
+        hasUsedHintThisRound = false;
+        wordleTimerSeconds = 120;
+        if (!showWordleTutorialPrompt && !isWordleTutorialActive)
+        {
+            StartWordleTimer(resetTime: true);
+        }
+        _ = JS.InvokeVoidAsync("initQuantumBriefcase");
+    }
+
+    private void NextWord()
+    {
+        StartNewRound();
+        StateHasChanged();
+        _ = FocusWordle();
+    }
+
+    private void UseLetterHint()
+    {
+        if (isGameOver || currentWord == null) return;
+
+        if (hasUsedHintThisRound)
+        {
+            ShowToast("Bạn đã dùng gợi ý cho từ vựng này rồi!");
+            return;
+        }
+
+        var target = currentWord.Word.Trim().ToUpperInvariant();
+
+        // 1. Tập hợp các vị trí đã được đoán ĐÚNG (correct) trong các lượt trước
+        var alreadyCorrectIndices = new HashSet<int>();
+        for (int r = 0; r < guessEvaluations.Count; r++)
+        {
+            var evals = guessEvaluations[r];
+            for (int c = 0; c < evals.Count; c++)
+            {
+                if (evals[c] == "correct")
+                {
+                    alreadyCorrectIndices.Add(c);
+                }
+            }
+        }
+
+        // 2. Chỉ tìm các vị trí CHƯA được mở gợi ý VÀ CHƯA TỪNG ĐOÁN ĐÚNG
+        var candidates = new List<int>();
+        for (int i = 0; i < target.Length; i++)
+        {
+            if (!hintLetterIndices.ContainsKey(i) && !alreadyCorrectIndices.Contains(i))
+            {
+                candidates.Add(i);
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            ShowToast("Tất cả các chữ cái đã được đoán đúng rồi!");
+            return;
+        }
+
+        // 3. Mở đúng 1 chữ cái đầu tiên chưa giải
+        var chosenIndex = candidates[0];
+        hintLetterIndices[chosenIndex] = target[chosenIndex];
+        hasUsedHintThisRound = true;
+        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.keyEnterOk()");
+        ShowToast($"ĐÃ MỞ CHỮ ĐẦU: Ô số {chosenIndex + 1} là '{target[chosenIndex]}'!");
+        StateHasChanged();
+    }
+
+    private async Task PronounceWord()
+    {
+        if (currentWord == null) return;
+        try
+        {
+            var word = currentWord.Word.Trim().Replace("'", "\\'");
+            await JS.InvokeVoidAsync("eval", $"if ('speechSynthesis' in window) {{ var u = new SpeechSynthesisUtterance('{word}'); u.lang = 'en-US'; window.speechSynthesis.speak(u); }}");
+        }
+        catch { }
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (!isPlayingWordle || isWordleTutorialActive || showWordleTutorialPrompt) return;
+
+        var key = e.Key.ToUpperInvariant();
+
+        // Nếu bảng kết quả đang hiện hoặc ván đã kết thúc -> bấm ENTER hoặc SPACE để sang màn/từ tiếp theo ngay!
+        if (showResultModal || isGameOver)
+        {
+            if (key == "ENTER" || key == " " || key == "SPACE")
+            {
+                NextWord();
+            }
+            else if (key == "ESCAPE")
+            {
+                _ = CloseWordleGame();
+            }
+            return;
+        }
+
+        // Phím tắt 1: Gợi ý chữ cái chưa đoán đúng
+        if (key == "1" || e.Code == "Digit1" || e.Code == "Numpad1")
+        {
+            UseLetterHint();
+            return;
+        }
+
+        // Phím tắt 2: Phát âm tiếng Anh của từ vựng
+        if (key == "2" || e.Code == "Digit2" || e.Code == "Numpad2")
+        {
+            _ = PronounceWord();
+            return;
+        }
+
+        if (key == "ENTER") SubmitGuess();
+        else if (key == "BACKSPACE") DeleteChar();
+        else if (key.Length == 1 && char.IsLetter(key[0])) AddChar(key[0]);
+    }
+
+    private void OnVirtualKeyPress(string key)
+    {
+        if (!isPlayingWordle || isWordleTutorialActive || showWordleTutorialPrompt) return;
+
+        if (showResultModal || isGameOver)
+        {
+            if (key == "ENTER") NextWord();
+            return;
+        }
+
+        if (isGameOver) return;
+
+        if (key == "ENTER") SubmitGuess();
+        else if (key == "BACKSPACE") DeleteChar();
+        else if (key.Length == 1 && char.IsLetter(key[0])) AddChar(key[0]);
+    }
+
+    private void AddChar(char c)
+    {
+        if (currentInput.Length < WordLength)
+        {
+            currentInput += char.ToUpperInvariant(c);
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.keyClick()");
+            StateHasChanged();
+        }
+    }
+
+    private void DeleteChar()
+    {
+        if (currentInput.Length > 0)
+        {
+            currentInput = currentInput.Substring(0, currentInput.Length - 1);
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.keyDelete()");
+            StateHasChanged();
+        }
+    }
+
+    private void SubmitGuess()
+    {
+        if (currentWord == null || isGameOver) return;
+
+        if (currentInput.Length < WordLength)
+        {
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.keyEnterError()");
+            TriggerShake();
+            ShowToast($"Cần nhập đủ {WordLength} chữ cái!");
+            return;
+        }
+
+        var guess = currentInput.ToUpperInvariant();
+        var target = currentWord.Word.Trim().ToUpperInvariant();
+
+        var evals = EvaluateGuess(guess, target);
+
+        guesses.Add(guess);
+        guessEvaluations.Add(evals);
+
+        for (int i = 0; i < guess.Length; i++)
+        {
+            char letter = guess[i];
+            string status = evals[i];
+
+            if (!keyStatuses.TryGetValue(letter, out var oldStatus) || oldStatus != "correct")
+            {
+                if (status == "correct" || (status == "present" && oldStatus != "present"))
+                {
+                    keyStatuses[letter] = status;
+                }
+                else if (oldStatus == null)
+                {
+                    keyStatuses[letter] = status;
+                }
+            }
+        }
+
+        currentInput = "";
+
+        if (guess == target)
+        {
+            StopWordleTimer();
+            isGameOver = true;
+            isGameWon = true;
+            wordleScore += 30;
+            wordleStreak++;
+            _ = SaveWordleProgressAsync();
+            _ = JS.InvokeVoidAsync("MascotManager.gameSay", "win", "Đoán chuẩn xác rồi! 🌟", "+30 điểm!");
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.win()");
+            _ = Task.Delay(300).ContinueWith(_ => InvokeAsync(PronounceWord));
+            _ = Task.Delay(500).ContinueWith(_ => InvokeAsync(async () =>
+            {
+                showResultModal = true;
+                StateHasChanged();
+                await FocusWordle();
+            }));
+            return;
+        }
+
+        if (guesses.Count >= MaxGuesses)
+        {
+            StopWordleTimer();
+            isGameOver = true;
+            isGameWon = false;
+            wordleStreak = 0;
+            _ = SaveWordleProgressAsync();
+            _ = JS.InvokeVoidAsync("MascotManager.gameSay", "game_over", "Hết lượt đoán rồi! Đừng nản nhé! 💪", "Thử lại nào!");
+            _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.lose()");
+            _ = Task.Delay(300).ContinueWith(_ => InvokeAsync(PronounceWord));
+            _ = Task.Delay(500).ContinueWith(_ => InvokeAsync(async () =>
+            {
+                showResultModal = true;
+                StateHasChanged();
+                await FocusWordle();
+            }));
+            return;
+        }
+        // Nộp hợp lệ nhưng chưa đúng: âm nổ pin điện giật & tia sét
+        _ = JS.InvokeVoidAsync("triggerBatteryZap", guesses.Count - 1);
+
+        StateHasChanged();
+    }
+
+    private static List<string> EvaluateGuess(string guess, string target)
+    {
+        var result = new List<string>(new string[guess.Length]);
+        var targetCounts = new Dictionary<char, int>();
+
+        foreach (var c in target) targetCounts[c] = targetCounts.GetValueOrDefault(c, 0) + 1;
+
+        for (int i = 0; i < guess.Length; i++)
+        {
+            if (guess[i] == target[i])
+            {
+                result[i] = "correct";
+                targetCounts[guess[i]]--;
+            }
+        }
+
+        for (int i = 0; i < guess.Length; i++)
+        {
+            if (result[i] != null) continue;
+            char c = guess[i];
+            if (targetCounts.GetValueOrDefault(c, 0) > 0)
+            {
+                result[i] = "present";
+                targetCounts[c]--;
+            }
+            else
+            {
+                result[i] = "absent";
+            }
+        }
+
+        return result;
+    }
+
+    private void TriggerShake()
+    {
+        shakeCurrentRow = true;
+        StateHasChanged();
+        _ = Task.Delay(400).ContinueWith(_ => InvokeAsync(() =>
+        {
+            shakeCurrentRow = false;
+            StateHasChanged();
+        }));
+    }
+
+    private void ShowToast(string msg)
+    {
+        toastMessage = msg;
+        StateHasChanged();
+        _ = Task.Delay(2400).ContinueWith(_ => InvokeAsync(() =>
+        {
+            toastMessage = "";
+            StateHasChanged();
+        }));
+    }
+
+    private string GetKeyClass(string key)
+    {
+        if (key.Length == 1 && keyStatuses.TryGetValue(key[0], out var status)) return status;
+        return "";
+    }
+
+
+
+    public void Dispose()
+    {
+        wordleTimer?.Dispose();
+        _ = JS.InvokeVoidAsync("window.QuantumCipherKeyboard.destroy");
+        _ = JS.InvokeVoidAsync("MascotManager.setGameMode", false);
+        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm(); if ('speechSynthesis' in window) window.speechSynthesis.cancel();");
+    }
+}

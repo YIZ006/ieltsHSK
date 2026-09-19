@@ -27,203 +27,22 @@
 }
 else if (showTestList)
 {
-    <div class="toeic-test-list-container">
-        <div class="toeic-test-topbar">
-            <a href="/toeic" class="btn-back-dashboard">
-                <i class="bi bi-arrow-left"></i> Về TOEIC Dashboard
-            </a>
-            <div class="toeic-r2-pill">
-                <span class="r2-pulse-dot"></span>
-                <span><i class="bi bi-cloud-check-fill"></i> Cloudflare R2</span>
-            </div>
-            <div class="toeic-topbar-actions">
-                <button class="btn-refresh-r2" @onclick="RefreshTestsAsync" title="Quét lại folder R2 để tìm đề mới">
-                    <i class="bi bi-arrow-clockwise @(isLoading ? "spin" : "")"></i> Làm mới đề
-                </button>
-            </div>
-        </div>
-
-        <div class="header-logo" style="justify-content: center; margin-top: 1.5rem; margin-bottom: 0.5rem;">
-            <span class="logo-icon">🎓</span>
-            <span class="header-title" style="font-size: 2rem;">HỆ THỐNG THI TRỰC TUYẾN</span>
-        </div>
-        <h2 style="text-align: center; color: #0d1b2a; margin-bottom: 1.25rem;">
-            Danh sách đề thi TOEIC (@(availableTests?.Count ?? 0) đề)
-        </h2>
-
-        @* ── THANH LỌC NĂM & SẮP XẾP ĐỀ ── *@
-        @if (availableTests != null && availableTests.Any())
-        {
-            <div class="toeic-filter-toolbar">
-                <div class="filter-pills-group">
-                    <button type="button" class="filter-pill @(selectedYear == null ? "active" : "")" @onclick="() => SelectYear(null)">
-                        <i class="bi bi-grid-fill"></i> Tất cả (@availableTests.Count)
-                    </button>
-                    @foreach (var y in AvailableYears)
-                    {
-                        var count = availableTests.Count(t => ExtractYear(t.CollectionName, t.Title) == y);
-                        <button type="button" class="filter-pill @(selectedYear == y ? "active" : "")" @onclick="() => SelectYear(y)">
-                            <i class="bi bi-calendar3"></i> Năm @y (@count)
-                        </button>
-                    }
-                </div>
-                <div class="sort-order-group">
-                    <button type="button" class="btn-sort-toggle" @onclick="ToggleYearSort" title="Nhấp để đổi thứ tự sắp xếp theo năm">
-                        <i class="bi bi-arrow-down-up"></i>
-                        <span>Năm: @(sortYearDescending ? "Mới nhất (2026 → cũ)" : "Cũ nhất (cũ → 2026)")</span>
-                    </button>
-                </div>
-            </div>
-        }
-
-        @* ── DANH SÁCH ĐỀ THI (SẮP XẾP THEO NĂM, TRONG 1 NĂM XẾP TỪ TEST 1) ── *@
-        @if (availableTests == null || !availableTests.Any())
-        {
-            <div class="toeic-empty-r2">
-                <i class="bi bi-folder-x" style="font-size: 3rem; color: #9ca3af;"></i>
-                <p>Không tìm thấy file đề thi nào trong folder R2.</p>
-                <button class="btn-start" @onclick="RefreshTestsAsync">Thử tải lại</button>
-            </div>
-        }
-        else
-        {
-            <div class="toeic-year-groups-list">
-                @foreach (var group in GroupedTests)
-                {
-                    <div class="toeic-year-group-box">
-                        <div class="year-group-header">
-                            <div class="year-group-header-left">
-                                <span class="year-group-badge"><i class="bi bi-award-fill"></i> @(group.Year > 0 ? $"NĂM {group.Year}" : "BỘ ĐỀ")</span>
-                                <span class="year-group-title">@group.CollectionName</span>
-                            </div>
-                            <div class="year-group-header-right">
-                                <span class="year-group-hint"><i class="bi bi-sort-numeric-down"></i> @group.Tests.Count đề · Xếp từ Test 1</span>
-                            </div>
-                        </div>
-
-                        <div class="test-grid">
-                            @foreach (var t in group.Tests)
-                            {
-                                <div class="test-card" @onclick="() => GoToTest(t.ToeicUrl)">
-                                    <div class="test-collection">@t.CollectionName</div>
-                                    <div class="test-title">@t.Title</div>
-                                    <div class="test-meta-pills">
-                                        <span><i class="bi bi-clock"></i> 120 phút</span>
-                                        <span><i class="bi bi-ui-checks"></i> 200 câu</span>
-                                        <span><i class="bi bi-layers"></i> 7 Parts</span>
-                                    </div>
-                                    <button class="btn-start">Làm bài →</button>
-                                </div>
-                            }
-                        </div>
-                    </div>
-                }
-            </div>
-        }
-
-        @* ── DROPDOWN LỊCH SỬ LÀM BÀI (HIỂN THỊ BÊN DƯỚI DANH SÁCH ĐỀ) ── *@
-        <div class="toeic-history-dropdown-section">
-            <button type="button" class="btn-history-dropdown-trigger @(isHistoryExpanded ? "expanded" : "")" @onclick="ToggleHistoryDropdown">
-                <div class="trigger-left">
-                    <span class="trigger-icon"><i class="bi bi-clock-history"></i></span>
-                    <span class="trigger-text">Lịch sử làm bài</span>
-                    @if (toeicSubmissions.Count > 0)
-                    {
-                        <span class="history-count-badge">@toeicSubmissions.Count đề đã làm</span>
-                    }
-                </div>
-                <div class="trigger-right">
-                    <span class="trigger-toggle-label">@(isHistoryExpanded ? "Thu gọn" : "Xem danh sách")</span>
-                    <i class="bi @(isHistoryExpanded ? "bi-chevron-up" : "bi-chevron-down") trigger-arrow"></i>
-                </div>
-            </button>
-
-            @if (isHistoryExpanded)
-            {
-                <div class="toeic-history-dropdown-panel">
-                    @if (isLoadingHistory)
-                    {
-                        <div class="toeic-history-loading">
-                            <div class="loading-spinner"></div>
-                            <p>Đang tải lịch sử bài thi...</p>
-                        </div>
-                    }
-                    else if (toeicSubmissions.Count == 0)
-                    {
-                        <div class="toeic-history-empty">
-                            <div class="history-empty-icon">📝</div>
-                            <h4>Chưa có bài thi nào</h4>
-                            <p>Bạn chưa nộp bài thi TOEIC nào. Hãy chọn một đề thi bên trên để bắt đầu thử sức nhé!</p>
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="toeic-history-list">
-                            @foreach (var sub in toeicSubmissions)
-                            {
-                                <div class="toeic-history-card">
-                                    <div class="toeic-history-card-main">
-                                        <div class="history-exam-name">
-                                            @(string.IsNullOrWhiteSpace(sub.ExamTitle) ? (string.IsNullOrWhiteSpace(sub.TestTitle) ? "Đề thi TOEIC" : sub.TestTitle) : sub.ExamTitle)
-                                        </div>
-                                        <div class="history-meta-row">
-                                            <span><i class="bi bi-calendar3"></i> @sub.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
-                                            <span><i class="bi bi-clock"></i> @FormatDuration(sub.DurationSeconds)</span>
-                                            @if (sub.CorrectCount.HasValue && sub.TotalQuestions.HasValue)
-                                            {
-                                                <span><i class="bi bi-check2-circle"></i> Đúng @sub.CorrectCount/@sub.TotalQuestions câu</span>
-                                            }
-                                        </div>
-                                        @if (sub.ListeningScore.HasValue || sub.ReadingScore.HasValue)
-                                        {
-                                            <div class="history-subscores">
-                                                @if (sub.ListeningScore.HasValue)
-                                                {
-                                                    <span class="subscore-pill listening"><i class="bi bi-headphones"></i> Listening: <b>@sub.ListeningScore</b>/495</span>
-                                                }
-                                                @if (sub.ReadingScore.HasValue)
-                                                {
-                                                    <span class="subscore-pill reading"><i class="bi bi-book"></i> Reading: <b>@sub.ReadingScore</b>/495</span>
-                                                }
-                                            </div>
-                                        }
-                                    </div>
-
-                                    <div class="toeic-history-card-side">
-                                        @if (sub.TotalScore.HasValue)
-                                        {
-                                            <div class="history-total-badge @ScoreClass(sub.TotalScore)">
-                                                <span class="history-total-num">@sub.TotalScore.Value</span>
-                                                <span class="history-total-max">/990</span>
-                                            </div>
-                                        }
-                                        else
-                                        {
-                                            <div class="history-status-badge @(sub.TimedOut ? "timed-out" : "submitted")">
-                                                @(sub.TimedOut ? "Hết giờ" : "Đã nộp")
-                                            </div>
-                                        }
-
-                                        <div class="history-card-actions">
-                                            <button type="button" class="btn-review-exam" @onclick="() => ReviewExam(sub)" title="Xem lại bài làm và lời giải">
-                                                <i class="bi bi-eye"></i> Xem lại bài
-                                            </button>
-                                            @if (!string.IsNullOrWhiteSpace(sub.ExamUrl))
-                                            {
-                                                <button type="button" class="btn-retake" @onclick="() => RetakeExam(sub.ExamUrl)" title="Làm lại đề thi này">
-                                                    <i class="bi bi-arrow-repeat"></i> Làm lại
-                                                </button>
-                                            }
-                                        </div>
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    }
-                </div>
-            }
-        </div>
-    </div>
+    <ToeicTestListView
+        AvailableTests="availableTests"
+        GroupedTests="GroupedTests"
+        AvailableYears="AvailableYears"
+        SelectedYear="selectedYear"
+        SortYearDescending="sortYearDescending"
+        IsLoading="isLoading"
+        IsLoadingHistory="isLoadingHistory"
+        ToeicSubmissions="toeicSubmissions"
+        OnRefreshTests="RefreshTestsAsync"
+        OnSelectYear="SelectYear"
+        OnToggleYearSort="ToggleYearSort"
+        OnSelectTest="GoToTest"
+        OnReviewExam="ReviewExam"
+        OnRetakeExam="RetakeExam"
+        OnHistoryOpened="LoadToeicSubmissionsAsync" />
 }
 else if (exam == null)
 {
@@ -245,121 +64,15 @@ else if (exam == null)
 }
 else if (showSetup && exam != null)
 {
-    @* ── SETUP: MÀN HÌNH CHỌN PART ── *@
-    <div class="toeic-setup-container">
-        <div class="setup-header">
-            @if (!string.IsNullOrWhiteSpace(exam.CollectionName))
-            {
-                <div class="setup-collection">@exam.CollectionName</div>
-            }
-            <h1 class="setup-title">@exam.Title</h1>
-            <div class="setup-meta">
-                <span><i class="bi bi-clock-history"></i> Thời gian làm bài: <b>@FormatDuration(SelectedTimeSeconds)</b></span>
-            </div>
-            <div class="setup-structure-label">Cấu trúc đề thi</div>
-        </div>
-
-        <div class="setup-card">
-            <label class="setup-toggle-row">
-                <input type="checkbox" @bind="selectByPart" />
-                <span>Chọn từng part</span>
-            </label>
-
-            @if (selectByPart)
-            {
-                <div class="setup-time-row">
-                    <label for="setup-time-select">Chọn thời gian làm bài:</label>
-                    <select id="setup-time-select" class="setup-time-select" @bind="selectedTimeSeconds">
-                        @foreach (var opt in GetTimeOptions())
-                        {
-                            <option value="@opt.Seconds">@opt.Label</option>
-                        }
-                    </select>
-                </div>
-            }
-
-            @* LISTENING *@
-            @if (SetupListeningParts.Any())
-            {
-                <div class="setup-section-label">LISTENING</div>
-                @foreach (var part in SetupListeningParts)
-                {
-                    <label class="setup-part-row">
-                        @if (selectByPart)
-                        {
-                            <input type="checkbox"
-                                   checked="@selectedPartNumbers.Contains(part.PartNumber)"
-                                   @onchange="e => TogglePart(part.PartNumber, (bool)e.Value!)" />
-                        }
-                        else
-                        {
-                            <span class="part-check-spacer"></span>
-                        }
-                        <span class="part-label">PART @part.PartNumber</span>
-                        <span class="part-count">@CountQuestions(part) câu</span>
-                    </label>
-                }
-            }
-
-            @* READING *@
-            @if (SetupReadingParts.Any())
-            {
-                <div class="setup-section-label">READING</div>
-                @foreach (var part in SetupReadingParts)
-                {
-                    <label class="setup-part-row">
-                        @if (selectByPart)
-                        {
-                            <input type="checkbox"
-                                   checked="@selectedPartNumbers.Contains(part.PartNumber)"
-                                   @onchange="e => TogglePart(part.PartNumber, (bool)e.Value!)" />
-                        }
-                        else
-                        {
-                            <span class="part-check-spacer"></span>
-                        }
-                        <span class="part-label">PART @part.PartNumber</span>
-                        <span class="part-count">@CountQuestions(part) câu</span>
-                    </label>
-                }
-            }
-
-            @if (selectByPart && selectedPartNumbers.Count == 0)
-            {
-                <div class="setup-warning">Vui lòng chọn ít nhất một part.</div>
-            }
-
-            <button class="setup-start-btn"
-                    disabled="@(selectByPart && selectedPartNumbers.Count == 0)"
-                    @onclick="StartExamFromSetup">
-                BẮT ĐẦU →
-            </button>
-            <button class="setup-back-btn" @onclick='() => NavManager.NavigateTo("/toeic/test")'>← Chọn đề khác</button>
-        </div>
-    </div>
-
-    @* ── MODAL: BÀI THI LÀM DỞ ── *@
-    @if (showResumePrompt && savedProgress != null)
-    {
-        <div class="result-overlay">
-            <div class="result-modal">
-                <div class="result-title">BÀI THI CHƯA HOÀN THÀNH</div>
-                <p class="confirm-text">Bạn có bài test đang làm dở: <b>@(savedProgress.Title)</b></p>
-                <p class="confirm-sub">
-                    Đã trả lời: <b>@savedProgress.AnsweredCount câu</b>
-                    · Thời gian còn lại: <b>@FormatDuration(savedProgress.SecondsLeft)</b>
-                    @if (!string.IsNullOrWhiteSpace(savedProgress.SavedAtText))
-                    {
-                        <div>Lưu lúc: @savedProgress.SavedAtText</div>
-                    }
-                </p>
-                <div class="confirm-actions">
-                    <button class="btn-cancel" @onclick="DiscardSavedProgress">Làm lại từ đầu</button>
-                    <button class="result-close-btn" @onclick="ResumeSavedExam">Tiếp tục làm bài</button>
-                </div>
-            </div>
-        </div>
-    }
+    <ToeicTestSetupView
+        Exam="exam"
+        MasterParts="_masterParts"
+        ShowResumePrompt="showResumePrompt"
+        SavedProgress="savedProgress"
+        OnStart="StartExamFromSetup"
+        OnBackToList='() => NavManager.NavigateTo("/toeic/test")'
+        OnResumeSavedProgress="ResumeSavedExam"
+        OnDiscardSavedProgress="DiscardSavedProgress" />
 }
 else
 {
@@ -836,33 +549,15 @@ else
     @* ── RESULT MODAL ── *@
     @if (showResult)
     {
-        <div class="result-overlay">
-            <div class="result-modal">
-                <div class="result-title">🎉 KẾT QUẢ BÀI THI</div>
-                <div class="result-score">
-                    <span class="result-num">@totalScore</span>
-                    <span class="result-sep">/</span>
-                    <span class="result-total">990</span>
-                </div>
-                <div class="score-table">
-                    <div class="score-row">
-                        <span class="score-row-label">🎧 Listening</span>
-                        <span class="score-row-correct">@listenCorrect câu đúng</span>
-                        <span class="score-row-points"><b>@listenScore</b>/495</span>
-                    </div>
-                    <div class="score-row">
-                        <span class="score-row-label">📖 Reading</span>
-                        <span class="score-row-correct">@readCorrect câu đúng</span>
-                        <span class="score-row-points"><b>@readScore</b>/495</span>
-                    </div>
-                </div>
-                <div class="result-time">
-                    ⏱ Thời gian đã dùng: @ElapsedTime
-                </div>
-                <button class="result-close-btn" @onclick="ShowAnswers">Xem đáp án</button>
-                <button class="btn-cancel" style="margin-top: 12px;" @onclick="CloseResultModal">Đóng</button>
-            </div>
-        </div>
+        <ToeicResultModal
+            TotalScore="totalScore"
+            ListenScore="listenScore"
+            ReadScore="readScore"
+            ListenCorrect="listenCorrect"
+            ReadCorrect="readCorrect"
+            ElapsedTime="@ElapsedTime"
+            OnShowAnswers="ShowAnswers"
+            OnClose="CloseResultModal" />
     }
 }
 </div>
@@ -1033,13 +728,6 @@ else
         .OrderByDescending(y => y)
         .ToList();
 
-    private sealed class ToeicYearGroup
-    {
-        public int Year { get; set; }
-        public string CollectionName { get; set; } = "";
-        public List<MockTestDto> Tests { get; set; } = new();
-    }
-
     private List<ToeicYearGroup> GroupedTests
     {
         get
@@ -1087,10 +775,6 @@ else
 
     // ── SETUP SCREEN: chọn part & thời gian ──
     private bool showSetup = false;
-    private bool selectByPart = false;
-    private HashSet<int> selectedPartNumbers = new();
-    private int selectedTimeSeconds;
-    private int standardTimeSeconds;
     private List<ToeicPart> _masterParts = new();
     private int _masterTotalQuestions;
     private int _masterTotalTimeSeconds;
@@ -1105,22 +789,6 @@ else
     private string _progressKey = "";
     private bool showResumePrompt = false;
     private ToeicSavedState? savedProgress;
-
-    /// <summary>Trạng thái bài thi đang làm dở lưu trong localStorage.</summary>
-    private sealed class ToeicSavedState
-    {
-        public string Title { get; set; } = "";
-        public List<int> PartNumbers { get; set; } = new();
-        public int TotalTimeSeconds { get; set; }
-        public int ActivePartIndex { get; set; }
-        public int ActivePageIndex { get; set; }
-        public int ActiveQuestionId { get; set; }
-        public int SecondsLeft { get; set; }
-        public Dictionary<int, int> Answers { get; set; } = new();
-        public List<int> FlaggedIds { get; set; } = new();
-        public string SavedAtText { get; set; } = "";
-        public int AnsweredCount => Answers.Count;
-    }
 
     private static string BuildProgressKey(string examUrl) => $"toeic:{examUrl}";
 
@@ -1415,11 +1083,6 @@ else
         }
 
         showSetup = true;
-        selectByPart = false;
-        var partsSource = _masterParts.Count > 0 ? _masterParts : exam!.Parts;
-        selectedPartNumbers = new HashSet<int>(partsSource.Select(p => p.PartNumber));
-        standardTimeSeconds = exam!.TotalTimeSeconds;
-        selectedTimeSeconds = exam!.TotalTimeSeconds;
     }
 
     /// <summary>Kiểm tra localStorage: có bài thi đang làm dở của đề này không.</summary>
@@ -1438,60 +1101,20 @@ else
         StateHasChanged();
     }
 
-    private IEnumerable<ToeicPart> SetupListeningParts =>
-        (_masterParts.Count > 0 ? _masterParts : exam!.Parts)
-            .Where(p => p.HasListening || p.PartNumber <= 4);
-
-    private IEnumerable<ToeicPart> SetupReadingParts =>
-        (_masterParts.Count > 0 ? _masterParts : exam!.Parts)
-            .Where(p => !p.HasListening && p.PartNumber > 4);
-
-    private int SelectedTimeSeconds => selectedTimeSeconds;
-
     private static int CountQuestions(ToeicPart part) =>
         part.QuestionGroups.Sum(g => g.Questions.Count);
-
-    private void TogglePart(int partNumber, bool isChecked)
-    {
-        if (isChecked) selectedPartNumbers.Add(partNumber);
-        else selectedPartNumbers.Remove(partNumber);
-    }
-
-    private List<(int Seconds, string Label)> GetTimeOptions()
-    {
-        var options = new List<(int Seconds, string Label)>
-        {
-            (standardTimeSeconds, $"Thời gian chuẩn ({FormatDuration(standardTimeSeconds)})")
-        };
-        foreach (var minutes in new[] { 120, 105, 90, 75, 60, 45, 30 })
-        {
-            int seconds = minutes * 60;
-            if (seconds == standardTimeSeconds) continue;
-            options.Add((seconds, FormatDuration(seconds)));
-        }
-        return options;
-    }
-
-    private static string FormatDuration(int seconds)
-    {
-        int h = seconds / 3600;
-        int m = seconds % 3600 / 60;
-        return h > 0
-            ? (m > 0 ? $"{h} giờ {m} phút" : $"{h} giờ")
-            : $"{m} phút";
-    }
 
     /// <summary>
     /// BẮT ĐẦU: lọc part theo lựa chọn, áp thời gian tuỳ chỉnh rồi vào bài thi.
     /// </summary>
-    private void StartExamFromSetup()
+    private void StartExamFromSetup(ToeicExamSetupResult result)
     {
         if (exam == null) return;
 
         var source = _masterParts.Count > 0 ? _masterParts : exam.Parts;
-        if (selectByPart)
+        if (result.SelectByPart)
         {
-            var chosen = source.Where(p => selectedPartNumbers.Contains(p.PartNumber)).ToList();
+            var chosen = source.Where(p => result.SelectedPartNumbers.Contains(p.PartNumber)).ToList();
             if (chosen.Count == 0) return;
             exam.Parts = chosen;
             exam.TotalQuestions = chosen.Sum(CountQuestions);
@@ -1504,7 +1127,7 @@ else
                 exam.TotalQuestions = _masterTotalQuestions;
             }
         }
-        exam.TotalTimeSeconds = selectedTimeSeconds;
+        exam.TotalTimeSeconds = result.SelectedTimeSeconds;
 
         showSetup = false;
         ResetExamState();

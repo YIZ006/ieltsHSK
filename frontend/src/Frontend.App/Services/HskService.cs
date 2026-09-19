@@ -79,7 +79,7 @@ public class HskService
             new HskLearningSection { Name = "Luyện đề HSK", Route = "/hsk/luyen-de", Icon = "bi-journal-check", Description = "Bộ đề thi thử mô phỏng thời gian thực" },
             new HskLearningSection { Name = "Từ vựng HSK", Route = "/hsk/tu-vung", Icon = "bi-book-half", Description = "Flashcard và tra cứu từ vựng chuẩn HSK 1–6" },
             new HskLearningSection { Name = "Trò chơi", Route = "/hsk/games", Icon = "bi-controller", Description = "Game học từ & phản xạ" },
-            new HskLearningSection { Name = "Bắn Từ Vựng", Route = "/hsk/vocab-shooter", Icon = "bi-crosshair", Description = "Gõ pinyin bắn từ vựng rơi" }
+            new HskLearningSection { Name = "Bắn Từ Vựng", Route = "/games?game=hsk-shooter", Icon = "bi-crosshair", Description = "Gõ pinyin bắn từ vựng rơi" }
         };
     }
 

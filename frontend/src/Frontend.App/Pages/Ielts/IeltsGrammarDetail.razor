@@ -5,11 +5,19 @@
 @using Frontend.App.Services
 @inject NavigationManager NavManager
 @inject IJSRuntime JS
+@inject GrammarGuideService GrammarGuideService
 
 <PageTitle>@(topic != null ? $"{topic.Title} ({topic.EnglishTitle}) - Cẩm Nang Ngữ Pháp IELTS" : "Bài Học Ngữ Pháp - ieltsHSK")</PageTitle>
 
 <div class="grammar-detail-page">
-    @if (topic == null)
+    @if (isLoading)
+    {
+        <div class="d-flex flex-column align-items-center justify-content-center py-5 text-center">
+            <div class="spinner-border text-primary mb-3" role="status"></div>
+            <p class="text-muted">Đang tải nội dung bài học ngữ pháp...</p>
+        </div>
+    }
+    else if (topic == null)
     {
         <div class="empty-state-card">
             <div class="empty-icon"><i class="bi bi-journal-x"></i></div>
@@ -539,18 +547,28 @@
     private Dictionary<int, int> userAnswers = new();
     private HashSet<int> exerciseSubmitted = new();
 
-    protected override void OnParametersSet()
+    private bool isLoading = true;
+
+    protected override async Task OnParametersSetAsync()
     {
-        topic = GrammarGuideCatalog.GetTopicBySlug(Slug);
-        if (topic != null)
+        isLoading = true;
+        try
         {
-            var adj = GrammarGuideCatalog.GetAdjacentTopics(topic.Slug);
-            prevTopic = adj.Prev;
-            nextTopic = adj.Next;
-            userAnswers.Clear();
-            exerciseSubmitted.Clear();
-            irregularSearchTerm = "";
-            activeTab = "all";
+            topic = await GrammarGuideService.GetTopicBySlugAsync(Slug);
+            if (topic != null)
+            {
+                var adj = await GrammarGuideService.GetAdjacentTopicsAsync(topic.Slug);
+                prevTopic = adj.Prev;
+                nextTopic = adj.Next;
+                userAnswers.Clear();
+                exerciseSubmitted.Clear();
+                irregularSearchTerm = "";
+                activeTab = "all";
+            }
+        }
+        finally
+        {
+            isLoading = false;
         }
     }
 

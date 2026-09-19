@@ -98,3 +98,41 @@ public class ToeicFlashcardState
     public List<int> Learned { get; set; } = new();
     public List<int> Again { get; set; } = new();
 }
+
+/// <summary>
+/// Nhóm đề thi TOEIC theo năm
+/// </summary>
+public sealed class ToeicYearGroup
+{
+    public int Year { get; set; }
+    public string CollectionName { get; set; } = "";
+    public List<MockTestDto> Tests { get; set; } = new();
+}
+
+/// <summary>
+/// Trạng thái bài thi đang làm dở lưu trong localStorage
+/// </summary>
+public sealed class ToeicSavedState
+{
+    public string Title { get; set; } = "";
+    public List<int> PartNumbers { get; set; } = new();
+    public int TotalTimeSeconds { get; set; }
+    public int ActivePartIndex { get; set; }
+    public int ActivePageIndex { get; set; }
+    public int ActiveQuestionId { get; set; }
+    public int SecondsLeft { get; set; }
+    public Dictionary<int, int> Answers { get; set; } = new();
+    public List<int> FlaggedIds { get; set; } = new();
+    public string SavedAtText { get; set; } = "";
+    public int AnsweredCount => Answers.Count;
+}
+
+/// <summary>
+/// Kết quả cấu hình từ màn hình ToeicTestSetupView
+/// </summary>
+public sealed class ToeicExamSetupResult
+{
+    public bool SelectByPart { get; set; }
+    public HashSet<int> SelectedPartNumbers { get; set; } = new();
+    public int SelectedTimeSeconds { get; set; }
+}
