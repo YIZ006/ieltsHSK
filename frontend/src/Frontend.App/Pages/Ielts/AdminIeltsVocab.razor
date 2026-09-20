@@ -102,6 +102,11 @@
                 <span>Tổng: <strong>@FilteredItems.Count</strong> từ</span>
             </div>
 
+            <button class="btn-secondary-action" @onclick="() => LoadData(true)" title="Làm mới dữ liệu từ server (bỏ qua cache)" disabled="@isLoading" style="padding: 6px 12px; font-size: 0.88rem; height: 36px; display: inline-flex; align-items: center; gap: 6px;">
+                <i class="bi bi-arrow-clockwise @(isLoading ? "spin" : "")"></i>
+                <span>Làm mới</span>
+            </button>
+
             <button class="btn-danger-action" @onclick="DeleteAll" title="Xóa toàn bộ từ vựng trong database" disabled="@(!items.Any() || isImporting)">
                 <i class="bi bi-trash3-fill"></i>
                 <span>Xóa hết</span>
@@ -449,11 +454,11 @@
         await LoadData();
     }
 
-    private async Task LoadData()
+    private async Task LoadData(bool forceRefresh = false)
     {
         isLoading = true;
         StateHasChanged();
-        items = await IeltsService.GetVocabularyAsync() ?? new List<IeltsVocabularyItem>();
+        items = await IeltsService.GetVocabularyAsync(forceRefresh: forceRefresh) ?? new List<IeltsVocabularyItem>();
         topics = items.Where(x => !string.IsNullOrEmpty(x.Topic))
                       .Select(x => x.Topic!)
                       .Distinct().OrderBy(t => t).ToList();
@@ -495,12 +500,33 @@
             await JS.InvokeVoidAsync("alert", "Vui lòng nhập Từ và Nghĩa tiếng Việt.");
             return;
         }
+
+        bool success;
+        string? errorMsg = null;
+
         if (editingItem == null)
-            await IeltsService.CreateVocabularyAsync(form);
+        {
+            var res = await IeltsService.CreateVocabularyWithFeedbackAsync(form);
+            success = res.Success;
+            errorMsg = res.ErrorMessage;
+        }
         else
-            await IeltsService.UpdateVocabularyAsync(form.Id, form);
+        {
+            var res = await IeltsService.UpdateVocabularyWithFeedbackAsync(form.Id, form);
+            success = res.Success;
+            errorMsg = res.ErrorMessage;
+        }
+
+        if (!success)
+        {
+            await JS.InvokeVoidAsync("alert", !string.IsNullOrEmpty(errorMsg)
+                ? $"Không thể lưu từ vựng:\n{errorMsg}"
+                : "Không thể lưu từ vựng. Cặp (từ, nghĩa) có thể đã tồn tại.");
+            return;
+        }
+
         showModal = false;
-        await LoadData();
+        await LoadData(forceRefresh: true);
     }
 
     private void CloseModal() => showModal = false;

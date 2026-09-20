@@ -33,8 +33,12 @@ public class IeltsService
     // === Vocabulary (IELTS) ===
     public async Task<List<IeltsVocabularyItem>?> GetVocabularyAsync(string? topic = null, string? search = null, bool forceRefresh = false)
     {
+        if (forceRefresh)
+        {
+            InvalidateVocabCache();
+        }
         // Phục vụ tức thì 0ms từ RAM nếu đang lấy toàn bộ danh sách
-        if (!forceRefresh && string.IsNullOrEmpty(topic) && string.IsNullOrEmpty(search) && _vocabCache != null)
+        else if (string.IsNullOrEmpty(topic) && string.IsNullOrEmpty(search) && _vocabCache != null)
         {
             return _vocabCache;
         }
@@ -43,6 +47,7 @@ public class IeltsService
         {
             var url = "api/ielts/vocab";
             var qs = new List<string>();
+            if (forceRefresh) qs.Add("bypassCache=true");
             if (!string.IsNullOrEmpty(topic)) qs.Add($"topic={Uri.EscapeDataString(topic)}");
             if (!string.IsNullOrEmpty(search)) qs.Add($"search={Uri.EscapeDataString(search)}");
             if (qs.Count > 0) url += "?" + string.Join("&", qs);
@@ -61,7 +66,7 @@ public class IeltsService
         }
     }
 
-    public async Task<bool> CreateVocabularyAsync(IeltsVocabularyItem item)
+    public async Task<(bool Success, string? ErrorMessage)> CreateVocabularyWithFeedbackAsync(IeltsVocabularyItem item)
     {
         try
         {
@@ -69,14 +74,24 @@ public class IeltsService
             if (response.IsSuccessStatusCode)
             {
                 InvalidateVocabCache();
-                return true;
+                return (true, null);
             }
-            return false;
+            var err = await response.Content.ReadAsStringAsync();
+            return (false, string.IsNullOrWhiteSpace(err) ? "Thêm từ mới thất bại." : err.Trim('"'));
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
     }
 
-    public async Task<bool> UpdateVocabularyAsync(int id, IeltsVocabularyItem item)
+    public async Task<bool> CreateVocabularyAsync(IeltsVocabularyItem item)
+    {
+        var (success, _) = await CreateVocabularyWithFeedbackAsync(item);
+        return success;
+    }
+
+    public async Task<(bool Success, string? ErrorMessage)> UpdateVocabularyWithFeedbackAsync(int id, IeltsVocabularyItem item)
     {
         try
         {
@@ -84,11 +99,21 @@ public class IeltsService
             if (response.IsSuccessStatusCode)
             {
                 InvalidateVocabCache();
-                return true;
+                return (true, null);
             }
-            return false;
+            var err = await response.Content.ReadAsStringAsync();
+            return (false, string.IsNullOrWhiteSpace(err) ? "Cập nhật từ thất bại." : err.Trim('"'));
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    public async Task<bool> UpdateVocabularyAsync(int id, IeltsVocabularyItem item)
+    {
+        var (success, _) = await UpdateVocabularyWithFeedbackAsync(id, item);
+        return success;
     }
 
     public async Task<bool> DeleteVocabularyAsync(int id)

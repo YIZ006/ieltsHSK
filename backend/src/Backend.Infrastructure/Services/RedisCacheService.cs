@@ -17,6 +17,8 @@ public class RedisCacheService : ICacheService
     private readonly bool _redisEnabled;
     private readonly JsonSerializerOptions _jsonOptions;
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _memoryKeys = new();
+
     public RedisCacheService(
         IConnectionMultiplexer? redis,
         IMemoryCache memoryCache,
@@ -95,6 +97,7 @@ public class RedisCacheService : ICacheService
         }
 
         // 2. Lưu đồng thời vào MemoryCache để dự phòng
+        _memoryKeys.TryAdd(fullKey, 0);
         _memoryCache.Set(fullKey, value, ttl);
     }
 
@@ -115,6 +118,7 @@ public class RedisCacheService : ICacheService
             }
         }
 
+        _memoryKeys.TryRemove(fullKey, out _);
         _memoryCache.Remove(fullKey);
     }
 
@@ -145,6 +149,18 @@ public class RedisCacheService : ICacheService
             {
                 _logger.LogWarning(ex, "Redis RemoveByPrefix failed for pattern {Pattern}", searchPattern);
             }
+        }
+
+        // Luôn xóa đồng bộ trong MemoryCache dự phòng
+        var localPrefix = _prefix + prefix;
+        var matchingKeys = _memoryKeys.Keys
+            .Where(k => k.StartsWith(localPrefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var key in matchingKeys)
+        {
+            _memoryCache.Remove(key);
+            _memoryKeys.TryRemove(key, out _);
         }
     }
 }

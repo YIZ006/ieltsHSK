@@ -3193,10 +3193,15 @@ app.MapPost("/api/hsk/save-exam",
 });
 
 // ─── IELTS: Vocabulary CRUD ───
-app.MapGet("/api/ielts/vocab", async (string? topic, string? search, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
+app.MapGet("/api/ielts/vocab", async (string? topic, string? search, bool? bypassCache, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
 {
     const string cacheKey = "ielts:vocab:all";
-    var allItems = await cacheService.GetAsync<List<IeltsVocabularyDto>>(cacheKey, cancellationToken);
+    List<IeltsVocabularyDto>? allItems = null;
+
+    if (bypassCache != true)
+    {
+        allItems = await cacheService.GetAsync<List<IeltsVocabularyDto>>(cacheKey, cancellationToken);
+    }
 
     if (allItems == null)
     {
@@ -3253,6 +3258,7 @@ app.MapPost("/api/ielts/vocab", async (IeltsVocabularyRequest req, Backend.Infra
     dbContext.IeltsVocabularies.Add(vocab);
     await dbContext.SaveChangesAsync(cancellationToken);
 
+    await cacheService.RemoveAsync("ielts:vocab:all", cancellationToken);
     await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
     return Results.Ok(new { Id = vocab.Id });
@@ -3279,6 +3285,7 @@ app.MapPut("/api/ielts/vocab/{id:int}", async (int id, IeltsVocabularyRequest re
     if (req.IsActive.HasValue) vocab.IsActive = req.IsActive.Value;
     await dbContext.SaveChangesAsync(cancellationToken);
 
+    await cacheService.RemoveAsync("ielts:vocab:all", cancellationToken);
     await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
     return Results.Ok();
@@ -3291,6 +3298,7 @@ app.MapDelete("/api/ielts/vocab/{id:int}", async (int id, Backend.Infrastructure
     dbContext.IeltsVocabularies.Remove(vocab);
     await dbContext.SaveChangesAsync(cancellationToken);
 
+    await cacheService.RemoveAsync("ielts:vocab:all", cancellationToken);
     await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
     return Results.Ok();
