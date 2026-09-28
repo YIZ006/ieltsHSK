@@ -472,8 +472,7 @@ public static class HskEndpoints
 
         // ─── HSK Vocabulary Excel Import ───
 
-        app.MapGet("/api/hsk/vocab/template-excel",
-                [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] () =>
+        app.MapGet("/api/hsk/vocab/template-excel", () =>
         {
             using var workbook = new ClosedXML.Excel.XLWorkbook();
             var worksheet = workbook.Worksheets.Add("HSK Vocabulary");
@@ -516,196 +515,166 @@ public static class HskEndpoints
         });
 
 
-        app.MapPost("/api/hsk/vocab/import-excel",
-                [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Microsoft.AspNetCore.Http.IFormFile file,
+        // ─── HSK: Vocabulary Excel/CSV Import (Single File) ───
+
+        app.MapPost("/api/hsk/vocab/import-excel", async (Microsoft.AspNetCore.Http.IFormFile file,
                 Backend.Infrastructure.Persistence.AppDbContext dbContext,
                 Backend.Application.Abstractions.IR2StorageService r2Storage,
                 ICacheService cacheService,
                 HttpContext httpContext,
+                ILogger<Program> logger,
                 CancellationToken cancellationToken) =>
         {
             if (file == null || file.Length == 0)
                 return Results.BadRequest("File không hợp lệ hoặc trống.");
-            var ext = Path.GetExtension(file.FileName)?.ToLowerInvariant();
-            if (ext != ".xlsx" && ext != ".csv")
-                return Results.BadRequest("Vui lòng upload file Excel (.xlsx) hoặc CSV (.csv)");
 
-            // Chế độ xử lý từ trùng: "skip" (bỏ qua) hoặc "upsert" (cập nhật ghi đè)
+            var ext = Path.GetExtension(file.FileName)?.ToLowerInvariant();
+            if (ext != ".xlsx" && ext != ".csv" && ext != ".cvs" && ext != ".txt" && ext != ".tsv")
+                return Results.BadRequest($"Vui lòng upload file Excel (.xlsx), CSV (.csv) hoặc TSV/TXT. File nhận được: {file.FileName}");
+
             var mode = httpContext.Request.Form.TryGetValue("mode", out var modeValue) &&
                        modeValue.ToString().Trim().Equals("upsert", StringComparison.OrdinalIgnoreCase)
                 ? "upsert"
                 : "skip";
 
-            // Normalize rows into 10 columns: level, hanzi, pinyin, meaning, wordType,
-            // exampleSentence, examplePinyin, exampleMeaning, audioUrl, displayOrder
-            var rows = new List<string[]>();
+            logger.LogInformation("[HSK Import] Bắt đầu nhận file: {FileName}, dung lượng: {Length} bytes, mode: {Mode}", file.FileName, file.Length, mode);
+
+            List<List<string>> rawRows = new();
             if (ext == ".xlsx")
             {
                 using var stream = file.OpenReadStream();
                 using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
                 var worksheet = workbook.Worksheet(1);
                 var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
-                for (int i = 2; i <= lastRow; i++)
+                var lastCol = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
+                for (int r = 1; r <= lastRow; r++)
                 {
-                    var r = worksheet.Row(i);
-                    rows.Add(new[]
+                    var rowList = new List<string>();
+                    for (int c = 1; c <= lastCol; c++)
                     {
-                        r.Cell(1).GetString()?.Trim() ?? "",
-                        r.Cell(2).GetString()?.Trim() ?? "",
-                        r.Cell(3).GetString()?.Trim() ?? "",
-                        r.Cell(4).GetString()?.Trim() ?? "",
-                        r.Cell(5).GetString()?.Trim() ?? "",
-                        r.Cell(6).GetString()?.Trim() ?? "",
-                        r.Cell(7).GetString()?.Trim() ?? "",
-                        r.Cell(8).GetString()?.Trim() ?? "",
-                        r.Cell(9).GetString()?.Trim() ?? "",
-                        r.Cell(10).GetString()?.Trim() ?? ""
-                    });
+                        rowList.Add(worksheet.Cell(r, c).GetString()?.Trim() ?? "");
+                    }
+                    rawRows.Add(rowList);
                 }
             }
             else
             {
-                using var reader = new StreamReader(file.OpenReadStream(), System.Text.Encoding.UTF8);
-                var csvText = await reader.ReadToEndAsync(cancellationToken);
-                var csvRows = HskVocabCsvParser.Parse(csvText).ToList();
-
-                // Ánh xạ cột theo TÊN trong dòng header (chấp nhận thiếu/sai thứ tự cột)
-                int[] map = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
-                IEnumerable<List<string>> dataRows = csvRows;
-                if (csvRows.Count > 0 && csvRows[0].Count > 0 &&
-                    csvRows[0][0].Trim().Equals("HskLevel", StringComparison.OrdinalIgnoreCase))
-                {
-                    var header = csvRows[0]
-                        .Select(h => h.Trim().ToLowerInvariant().Replace("_", ""))
-                        .ToList();
-                    int Idx(string name) => header.IndexOf(name);
-                    map = new[]
-                    {
-                        Idx("hsklevel"), Idx("hanzi"), Idx("pinyin"), Idx("meaning"), Idx("wordtype"),
-                        Idx("examplesentence"), Idx("examplepinyin"), Idx("examplemeaning"), Idx("audiourl"), Idx("displayorder")
-                    };
-                    // Cột nào không khai báo trong header => dữ liệu không tồn tại, để trống
-                    // (Get(idx<0) trả về "")
-                    dataRows = csvRows.Skip(1);
-                }
-
-                foreach (var fields in dataRows)
-                {
-                    if (fields.All(string.IsNullOrWhiteSpace)) continue;
-                    string Get(int idx) => idx >= 0 && idx < fields.Count ? fields[idx]?.Trim() ?? "" : "";
-                    rows.Add(new[] { Get(map[0]), Get(map[1]), Get(map[2]), Get(map[3]), Get(map[4]), Get(map[5]), Get(map[6]), Get(map[7]), Get(map[8]), Get(map[9]) });
-                }
+                using var reader = new StreamReader(file.OpenReadStream(), System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+                var text = await reader.ReadToEndAsync(cancellationToken);
+                rawRows = HskVocabCsvParser.Parse(text).ToList();
             }
+
+            var (parsedRows, parseLogs) = HskVocabCsvParser.ProcessRows(rawRows, file.FileName, logger);
 
             int success = 0, fail = 0, duplicate = 0, updated = 0;
             var errors = new List<string>();
             var jsonItems = new List<object>();
-            var seenInFile = new HashSet<string>(StringComparer.Ordinal);
+            var seenInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            for (int i = 0; i < rows.Count; i++)
+            var existingVocabs = await dbContext.HskVocabularies.ToListAsync(cancellationToken);
+            var existingDict = existingVocabs.ToDictionary(v => $"{v.HskLevel}|{v.Hanzi}", v => v, StringComparer.OrdinalIgnoreCase);
+
+            for (int i = 0; i < parsedRows.Count; i++)
             {
-                var cells = rows[i];
+                var row = parsedRows[i];
                 try
                 {
-                    var level = cells[0];
-                    var hanzi = cells[1];
-                    if (string.IsNullOrEmpty(level) || string.IsNullOrEmpty(hanzi)) continue;
-
-                    // JSON xuất ra gồm TOÀN BỘ dòng hợp lệ trong file (kể cả từ đã tồn tại)
-                    string? wordType = HskVocabCsvParser.NullIfEmpty(cells[4]);
-                    int displayOrder = int.TryParse(cells[9], out int orderVal) ? orderVal : 0;
-                    // Trùng trong cùng file import (cùng cấp độ + cùng chữ Hán)
-                    if (!seenInFile.Add($"{level}|{hanzi}")) { duplicate++; continue; }
+                    var key = $"{row.Level}|{row.Hanzi}";
+                    if (!seenInFile.Add(key))
+                    {
+                        duplicate++;
+                        continue;
+                    }
 
                     var jsonItem = new
                     {
-                        hskLevel = level,
-                        hanzi,
-                        pinyin = cells[2],
-                        meaning = cells[3],
-                        wordType,
-                        exampleSentence = HskVocabCsvParser.NullIfEmpty(cells[5]),
-                        examplePinyin = HskVocabCsvParser.NullIfEmpty(cells[6]),
-                        exampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[7]),
-                        audioUrl = HskVocabCsvParser.NullIfEmpty(cells[8]),
-                        displayOrder
+                        hskLevel = row.Level,
+                        hanzi = row.Hanzi,
+                        pinyin = row.Pinyin,
+                        meaning = row.Meaning,
+                        wordType = row.WordType,
+                        exampleSentence = row.ExampleSentence,
+                        examplePinyin = row.ExamplePinyin,
+                        exampleMeaning = row.ExampleMeaning,
+                        audioUrl = row.AudioUrl,
+                        displayOrder = row.DisplayOrder,
+                        topic = row.Topic
                     };
 
-                    // Tìm từ đã tồn tại trong DB theo (cấp độ, chữ Hán)
-                    var existing = await dbContext.HskVocabularies.FirstOrDefaultAsync(
-                        v => v.HskLevel == level && v.Hanzi == hanzi, cancellationToken);
-
-                    if (existing != null)
+                    if (existingDict.TryGetValue(key, out var existing))
                     {
                         if (mode == "upsert")
                         {
-                            var newPinyin = cells[2];
-                            var newMeaning = cells[3];
-                            var newExampleSentence = HskVocabCsvParser.NullIfEmpty(cells[5]);
-                            var newExamplePinyin = HskVocabCsvParser.NullIfEmpty(cells[6]);
-                            var newExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[7]);
-                            var newAudioUrl = HskVocabCsvParser.NullIfEmpty(cells[8]);
-
-                            if (existing.Pinyin == newPinyin &&
-                                existing.Meaning == newMeaning &&
-                                existing.WordType == wordType &&
-                                existing.ExampleSentence == newExampleSentence &&
-                                existing.ExamplePinyin == newExamplePinyin &&
-                                existing.ExampleMeaning == newExampleMeaning &&
-                                (string.IsNullOrEmpty(newAudioUrl) || existing.AudioUrl == newAudioUrl) &&
-                                existing.DisplayOrder == displayOrder)
+                            if (existing.Pinyin == row.Pinyin &&
+                                existing.Meaning == row.Meaning &&
+                                existing.WordType == row.WordType &&
+                                existing.ExampleSentence == row.ExampleSentence &&
+                                existing.ExamplePinyin == row.ExamplePinyin &&
+                                existing.ExampleMeaning == row.ExampleMeaning &&
+                                existing.AudioUrl == row.AudioUrl &&
+                                existing.DisplayOrder == row.DisplayOrder)
                             {
                                 duplicate++;
                                 continue;
                             }
 
-                            existing.Pinyin = newPinyin;
-                            existing.Meaning = newMeaning;
-                            existing.WordType = wordType;
-                            existing.ExampleSentence = newExampleSentence;
-                            existing.ExamplePinyin = newExamplePinyin;
-                            existing.ExampleMeaning = newExampleMeaning;
-                            if (!string.IsNullOrEmpty(newAudioUrl)) existing.AudioUrl = newAudioUrl;
-                            existing.DisplayOrder = displayOrder;
+                            existing.Pinyin = row.Pinyin;
+                            existing.Meaning = row.Meaning;
+                            existing.WordType = row.WordType;
+                            existing.ExampleSentence = row.ExampleSentence;
+                            existing.ExamplePinyin = row.ExamplePinyin;
+                            existing.ExampleMeaning = row.ExampleMeaning;
+                            if (!string.IsNullOrEmpty(row.AudioUrl)) existing.AudioUrl = row.AudioUrl;
+                            existing.DisplayOrder = row.DisplayOrder;
                             updated++;
                             jsonItems.Add(jsonItem);
                         }
-                        else duplicate++;
-                        continue;
+                        else
+                        {
+                            duplicate++;
+                            continue;
+                        }
                     }
-
-                    var vocab = new Backend.Domain.Entities.HskVocabulary
+                    else
                     {
-                        HskLevel = level,
-                        Hanzi = hanzi,
-                        Pinyin = cells[2],
-                        Meaning = cells[3],
-                        WordType = wordType,
-                        ExampleSentence = HskVocabCsvParser.NullIfEmpty(cells[5]),
-                        ExamplePinyin = HskVocabCsvParser.NullIfEmpty(cells[6]),
-                        ExampleMeaning = HskVocabCsvParser.NullIfEmpty(cells[7]),
-                        AudioUrl = HskVocabCsvParser.NullIfEmpty(cells[8]),
-                        DisplayOrder = displayOrder,
-                        IsActive = true
-                    };
-                    dbContext.HskVocabularies.Add(vocab);
-                    success++;
-                    jsonItems.Add(jsonItem);
+                        var vocab = new Backend.Domain.Entities.HskVocabulary
+                        {
+                            HskLevel = row.Level,
+                            Hanzi = row.Hanzi,
+                            Pinyin = row.Pinyin,
+                            Meaning = row.Meaning,
+                            WordType = row.WordType,
+                            ExampleSentence = row.ExampleSentence,
+                            ExamplePinyin = row.ExamplePinyin,
+                            ExampleMeaning = row.ExampleMeaning,
+                            AudioUrl = row.AudioUrl,
+                            DisplayOrder = row.DisplayOrder,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        dbContext.HskVocabularies.Add(vocab);
+                        existingDict[key] = vocab;
+                        success++;
+                        jsonItems.Add(jsonItem);
+                    }
                 }
                 catch (Exception ex)
                 {
-                    errors.Add($"Dòng {i + 1}: {ex.Message}");
+                    errors.Add($"Dòng {i + 1} ({row.Hanzi}): {ex.Message}");
                     fail++;
                 }
             }
+
             try
             {
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
             catch (Exception ex)
             {
+                logger.LogError(ex, "[HSK Import] Lỗi lưu database");
                 return Results.Problem($"Lỗi khi lưu từ vựng vào database: {ex.Message}");
             }
+
             string jsonUrl = string.Empty;
             if (jsonItems.Count > 0)
             {
@@ -745,7 +714,7 @@ public static class HskEndpoints
             {
                 FileName = file.FileName,
                 JsonUrl = jsonUrl,
-                TotalRows = rows.Count,
+                TotalRows = parsedRows.Count,
                 ImportedCount = success,
                 UpdatedCount = updated,
                 DuplicateCount = duplicate,
@@ -756,9 +725,254 @@ public static class HskEndpoints
 
             await cacheService.RemoveByPrefixAsync("hsk:vocab:", cancellationToken);
 
-            var msg = $"Thêm mới {success}, cập nhật {updated}, thất bại {fail}, bỏ qua {duplicate} trùng.";
-            if (errors.Any()) msg += " Chi tiết: " + string.Join(" | ", errors.Take(3));
-            return Results.Ok(new { Success = success, Fail = fail, Duplicate = duplicate, Updated = updated, Errors = errors, JsonUrl = jsonUrl });
+            logger.LogInformation("[HSK Import] Thành công file đơn {FileName}: Success={Success}, Updated={Updated}, Duplicate={Duplicate}, Fail={Fail}",
+                file.FileName, success, updated, duplicate, fail);
+
+            return Results.Ok(new { 
+                Success = success, 
+                Fail = fail, 
+                Duplicate = duplicate, 
+                Updated = updated, 
+                Errors = errors, 
+                JsonUrl = jsonUrl,
+                Logs = parseLogs 
+            });
+        }).DisableAntiforgery();
+
+        // ─── HSK: Vocabulary Excel/CSV Import (Multiple Files) ───
+
+        app.MapPost("/api/hsk/vocab/import-multiple", async (Microsoft.AspNetCore.Http.IFormFileCollection files,
+                Backend.Infrastructure.Persistence.AppDbContext dbContext,
+                Backend.Application.Abstractions.IR2StorageService r2Storage,
+                ICacheService cacheService,
+                HttpContext httpContext,
+                ILogger<Program> logger,
+                CancellationToken cancellationToken) =>
+        {
+            if (files == null || files.Count == 0)
+                return Results.BadRequest("Không có file nào được upload.");
+
+            var mode = httpContext.Request.Form.TryGetValue("mode", out var modeValue) &&
+                       modeValue.ToString().Trim().Equals("upsert", StringComparison.OrdinalIgnoreCase)
+                ? "upsert"
+                : "skip";
+
+            logger.LogInformation("[HSK Import Multi] Bắt đầu nhận {Count} files, mode: {Mode}", files.Count, mode);
+
+            var allParsedRows = new List<(HskParsedRow row, string fileName)>();
+            var allLogs = new List<string>();
+
+            foreach (var file in files)
+            {
+                if (file.Length == 0) continue;
+                var ext = Path.GetExtension(file.FileName)?.ToLowerInvariant();
+                if (ext != ".xlsx" && ext != ".csv" && ext != ".cvs" && ext != ".txt" && ext != ".tsv")
+                {
+                    allLogs.Add($"[Bỏ qua] File '{file.FileName}' không thuộc định dạng được hỗ trợ (.xlsx, .csv, .tsv, .txt).");
+                    continue;
+                }
+
+                List<List<string>> rawRows = new();
+                if (ext == ".xlsx")
+                {
+                    using var stream = file.OpenReadStream();
+                    using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+                    var worksheet = workbook.Worksheet(1);
+                    var lastRow = worksheet.LastRowUsed()?.RowNumber() ?? 0;
+                    var lastCol = worksheet.LastColumnUsed()?.ColumnNumber() ?? 0;
+                    for (int r = 1; r <= lastRow; r++)
+                    {
+                        var rowList = new List<string>();
+                        for (int c = 1; c <= lastCol; c++)
+                        {
+                            rowList.Add(worksheet.Cell(r, c).GetString()?.Trim() ?? "");
+                        }
+                        rawRows.Add(rowList);
+                    }
+                }
+                else
+                {
+                    using var reader = new StreamReader(file.OpenReadStream(), System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+                    var text = await reader.ReadToEndAsync(cancellationToken);
+                    rawRows = HskVocabCsvParser.Parse(text).ToList();
+                }
+
+                var (pRows, fLogs) = HskVocabCsvParser.ProcessRows(rawRows, file.FileName, logger);
+                allLogs.AddRange(fLogs);
+                foreach (var r in pRows)
+                {
+                    allParsedRows.Add((r, file.FileName));
+                }
+            }
+
+            var existingVocabs = await dbContext.HskVocabularies.ToListAsync(cancellationToken);
+            var existingDict = existingVocabs.ToDictionary(v => $"{v.HskLevel}|{v.Hanzi}", v => v, StringComparer.OrdinalIgnoreCase);
+
+            int success = 0, fail = 0, duplicate = 0, updated = 0;
+            var errors = new List<string>();
+            var jsonItems = new List<object>();
+            var seenInImport = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            for (int i = 0; i < allParsedRows.Count; i++)
+            {
+                var (row, fileName) = allParsedRows[i];
+                try
+                {
+                    var key = $"{row.Level}|{row.Hanzi}";
+                    if (!seenInImport.Add(key))
+                    {
+                        duplicate++;
+                        continue;
+                    }
+
+                    var jsonItem = new
+                    {
+                        hskLevel = row.Level,
+                        hanzi = row.Hanzi,
+                        pinyin = row.Pinyin,
+                        meaning = row.Meaning,
+                        wordType = row.WordType,
+                        exampleSentence = row.ExampleSentence,
+                        examplePinyin = row.ExamplePinyin,
+                        exampleMeaning = row.ExampleMeaning,
+                        audioUrl = row.AudioUrl,
+                        displayOrder = row.DisplayOrder,
+                        topic = row.Topic
+                    };
+
+                    if (existingDict.TryGetValue(key, out var existing))
+                    {
+                        if (mode == "upsert")
+                        {
+                            if (existing.Pinyin == row.Pinyin &&
+                                existing.Meaning == row.Meaning &&
+                                existing.WordType == row.WordType &&
+                                existing.ExampleSentence == row.ExampleSentence &&
+                                existing.ExamplePinyin == row.ExamplePinyin &&
+                                existing.ExampleMeaning == row.ExampleMeaning &&
+                                existing.AudioUrl == row.AudioUrl &&
+                                existing.DisplayOrder == row.DisplayOrder)
+                            {
+                                duplicate++;
+                            }
+                            else
+                            {
+                                existing.Pinyin = row.Pinyin;
+                                existing.Meaning = row.Meaning;
+                                existing.WordType = row.WordType;
+                                existing.ExampleSentence = row.ExampleSentence;
+                                existing.ExamplePinyin = row.ExamplePinyin;
+                                existing.ExampleMeaning = row.ExampleMeaning;
+                                if (!string.IsNullOrEmpty(row.AudioUrl)) existing.AudioUrl = row.AudioUrl;
+                                existing.DisplayOrder = row.DisplayOrder;
+                                updated++;
+                                jsonItems.Add(jsonItem);
+                            }
+                        }
+                        else
+                        {
+                            duplicate++;
+                        }
+                    }
+                    else
+                    {
+                        var entity = new Backend.Domain.Entities.HskVocabulary
+                        {
+                            HskLevel = row.Level,
+                            Hanzi = row.Hanzi,
+                            Pinyin = row.Pinyin,
+                            Meaning = row.Meaning,
+                            WordType = row.WordType,
+                            ExampleSentence = row.ExampleSentence,
+                            ExamplePinyin = row.ExamplePinyin,
+                            ExampleMeaning = row.ExampleMeaning,
+                            AudioUrl = row.AudioUrl,
+                            DisplayOrder = row.DisplayOrder,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        dbContext.HskVocabularies.Add(entity);
+                        existingDict[key] = entity;
+                        success++;
+                        jsonItems.Add(jsonItem);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    fail++;
+                    errors.Add($"[{fileName} dòng {i + 1}] ({row.Hanzi}): {ex.Message}");
+                }
+            }
+
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[HSK Import Multi] Lỗi lưu database");
+                return Results.Problem($"Lỗi lưu database: {ex.Message}");
+            }
+
+            string? jsonUrl = null;
+            if (jsonItems.Count > 0)
+            {
+                var fileId = Guid.NewGuid().ToString("N")[..8];
+                var vocabJson = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    importedAt = DateTime.UtcNow,
+                    fileCount = files.Count,
+                    mode,
+                    totalCount = jsonItems.Count,
+                    items = jsonItems
+                }, new System.Text.Json.JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+                });
+                var jsonBytes = System.Text.Encoding.UTF8.GetBytes(vocabJson);
+
+                try
+                {
+                    using var ms = new MemoryStream(jsonBytes);
+                    jsonUrl = await r2Storage.UploadFileAsync(ms, $"hsk-vocab/multi_{fileId}.json", "application/json", cancellationToken);
+                }
+                catch
+                {
+                    var dir = Path.Combine("wwwroot", "exports");
+                    Directory.CreateDirectory(dir);
+                    await File.WriteAllBytesAsync(Path.Combine(dir, $"hsk-vocab_multi_{fileId}.json"), jsonBytes, cancellationToken);
+                    jsonUrl = $"/exports/hsk-vocab_multi_{fileId}.json";
+                }
+            }
+
+            var batch = new Backend.Domain.Entities.HskVocabularyImport
+            {
+                FileName = $"Batch ({files.Count} files): " + string.Join(", ", files.Take(3).Select(f => f.FileName)),
+                JsonUrl = jsonUrl ?? string.Empty,
+                TotalRows = allParsedRows.Count,
+                ImportedCount = success,
+                UpdatedCount = updated,
+                DuplicateCount = duplicate,
+                FailedCount = fail
+            };
+            dbContext.HskVocabularyImports.Add(batch);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            await cacheService.RemoveByPrefixAsync("hsk:vocab:", cancellationToken);
+
+            logger.LogInformation("[HSK Import Multi] Hoàn tất {FileCount} file(s): Success={Success}, Updated={Updated}, Duplicate={Duplicate}, Fail={Fail}",
+                files.Count, success, updated, duplicate, fail);
+
+            return Results.Ok(new { 
+                Success = success, 
+                Fail = fail, 
+                Duplicate = duplicate, 
+                Updated = updated, 
+                Errors = errors, 
+                JsonUrl = jsonUrl,
+                Logs = allLogs 
+            });
         }).DisableAntiforgery();
 
         // ─── IELTS: Auto-phân loại CEFR cho từ vựng chưa có CefrLevel ───

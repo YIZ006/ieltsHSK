@@ -90,9 +90,27 @@ public class HskVocabularyItem
     public string? ExamplePinyin { get; set; }
     public string? ExampleMeaning { get; set; }
     public string? AudioUrl { get; set; }
+    public string? Topic { get; set; }
     public int DisplayOrder { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>
+/// HSK Vocabulary Topic representation
+/// </summary>
+public class HskTopicItem
+{
+    public string Id { get; set; } = string.Empty;
+    public string TitleVi { get; set; } = string.Empty;
+    public string TitleZh { get; set; } = string.Empty;
+    public string Pinyin { get; set; } = string.Empty;
+    public string Icon { get; set; } = "bi-journal-bookmark";
+    public string Color { get; set; } = "#ef4444";
+    public string BgColor { get; set; } = "#fef2f2";
+    public string Description { get; set; } = string.Empty;
+    public string LevelRange { get; set; } = "HSK 1–4";
+    public int OrderIndex { get; set; }
 }
 
 /// <summary>

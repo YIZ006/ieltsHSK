@@ -38,88 +38,177 @@
                 <i class="bi bi-file-earmark-excel-fill text-success"></i>
                 <span>@(isImporting ? "Đang nhập..." : "Nhập Excel/CSV")</span>
             </button>
-            <a href="@templateUrl" class="btn-secondary-action" download="HSK_Vocabulary_Template.xlsx" style="text-decoration:none;">
-                <i class="bi bi-file-earmark-arrow-down"></i>
+            <button class="btn-secondary-action" @onclick="DownloadTemplate" title="Tải file mẫu Excel chuẩn để nhập từ vựng HSK">
+                <i class="bi bi-file-earmark-arrow-down text-primary"></i>
                 <span>Tải Mẫu Excel</span>
-            </a>
+            </button>
         </div>
     </div>
 
-    <InputFile id="vocabExcelInput" OnChange="HandleExcelImport" accept=".xlsx,.csv" style="display: none;" />
+    <InputFile id="vocabExcelInput" OnChange="HandleExcelImport" accept=".xlsx,.xls,.csv,.cvs,.txt,.tsv,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" multiple style="display: none;" />
 
     @if (!string.IsNullOrEmpty(importMessage))
     {
-        <div style="@(!importSuccess ? "background:#fdecea;color:#b71c1c;" : "background:#e8f5e9;color:#1b5e20;")padding:10px 16px;border-radius:8px;margin-bottom:14px;font-size:14px;">
-            <i class="bi @(!importSuccess ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill")"></i>
-            @importMessage
+        <div class="banner @(!importSuccess ? "banner-error" : "banner-success")" style="@(!importSuccess ? "background:#fdecea;color:#b71c1c;border:1px solid #fecaca;" : "background:#e8f5e9;color:#1b5e20;border:1px solid #c8e6c9;")padding:14px 20px;border-radius:14px;margin-bottom:18px;font-size:14px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+                <div style="display:flex;align-items:flex-start;gap:12px;">
+                    <i class="bi @(!importSuccess ? "bi-exclamation-triangle-fill text-danger" : "bi-check-circle-fill text-success") fs-4" style="margin-top:-2px;"></i>
+                    <div>
+                        <div style="font-weight:700;font-size:15px;margin-bottom:2px;">
+                            @(!importSuccess ? "Thông báo nhập file từ vựng" : "Nhập file từ vựng thành công")
+                        </div>
+                        <div>@importMessage</div>
+                        @if (lastImportResult?.Logs?.Any() == true || lastImportResult?.Errors?.Any() == true)
+                        {
+                            <button type="button" class="btn btn-sm mt-2" style="padding:4px 10px;font-size:12px;font-weight:600;border-radius:8px;background:rgba(0,0,0,0.06);border:1px solid rgba(0,0,0,0.12);cursor:pointer;" @onclick="() => showImportLogs = !showImportLogs">
+                                <i class="bi @(showImportLogs ? "bi-chevron-up" : "bi-terminal-fill") me-1"></i>
+                                @(showImportLogs ? "Ẩn log chi tiết" : "Xem log chi tiết phân tích file")
+                            </button>
+                        }
+                    </div>
+                </div>
+                <button style="background:none;border:none;cursor:pointer;color:inherit;font-size:16px;" @onclick='() => importMessage = null'>
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            @if (showImportLogs && lastImportResult != null)
+            {
+                <div style="margin-top:14px;padding:12px 16px;background:#0f172a;color:#e2e8f0;border-radius:10px;font-family:Consolas, monospace;font-size:12.5px;line-height:1.6;max-height:280px;overflow-y:auto;">
+                    <div style="color:#38bdf8;font-weight:700;margin-bottom:6px;border-bottom:1px solid #334155;padding-bottom:4px;">
+                        <i class="bi bi-terminal me-1"></i> LOG CHẨN ĐOÁN & PHÂN TÍCH TỪ SERVER:
+                    </div>
+                    @if (lastImportResult.Logs?.Any() == true)
+                    {
+                        @foreach (var log in lastImportResult.Logs)
+                        {
+                            <div style="color:@(log.Contains("LỖI") ? "#f87171" : (log.Contains("thành công") ? "#4ade80" : "#cbd5e1"));">
+                                @log
+                            </div>
+                        }
+                    }
+                    @if (lastImportResult.Errors?.Any() == true)
+                    {
+                        <div style="color:#f87171;font-weight:700;margin-top:8px;border-top:1px dashed #475569;padding-top:6px;">
+                            CHI TIẾT CÁC DÒNG GẶP SỰ CỐ (@lastImportResult.Errors.Count dòng):
+                        </div>
+                        @foreach (var err in lastImportResult.Errors)
+                        {
+                            <div style="color:#fca5a5;">⚠ @err</div>
+                        }
+                    }
+                </div>
+            }
         </div>
     }
 
-    <!-- Filter Toolbar -->
+    <!-- Filter & Controls Toolbar -->
     <div class="toolbar-card">
-        <div class="filter-group">
-            <label><i class="bi bi-funnel-fill"></i> Cấp độ:</label>
-            <select class="form-select-filter" @bind="filterLevel" @bind:after="LoadData">
-                <option value="">Tất cả cấp độ (All)</option>
-                <option value="HSK1">HSK 1 - Sơ cấp 1</option>
-                <option value="HSK2">HSK 2 - Sơ cấp 2</option>
-                <option value="HSK3">HSK 3 - Trung cấp 1</option>
-                <option value="HSK4">HSK 4 - Trung cấp 2</option>
-                <option value="HSK5">HSK 5 - Cao cấp 1</option>
-                <option value="HSK6">HSK 6 - Cao cấp 2</option>
-            </select>
+        <div class="toolbar-left">
+            <div class="search-box-wrapper">
+                <i class="bi bi-search search-icon"></i>
+                <input type="text" placeholder="Tìm Chữ Hán, Pinyin, Nghĩa..." @bind="searchTerm" @bind:event="oninput" />
+                @if (!string.IsNullOrEmpty(searchTerm))
+                {
+                    <button class="btn-clear-search" @onclick="ClearSearch" title="Xóa tìm kiếm">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                }
+            </div>
+
+            <div class="filter-group">
+                <label><i class="bi bi-funnel-fill"></i> Cấp độ:</label>
+                <select class="form-select-filter" @bind="filterLevel">
+                    <option value="">Tất cả cấp độ</option>
+                    <option value="HSK1">HSK 1 - Sơ cấp 1</option>
+                    <option value="HSK2">HSK 2 - Sơ cấp 2</option>
+                    <option value="HSK3">HSK 3 - Trung cấp 1</option>
+                    <option value="HSK4">HSK 4 - Trung cấp 2</option>
+                    <option value="HSK5">HSK 5 - Cao cấp 1</option>
+                    <option value="HSK6">HSK 6 - Cao cấp 2</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label><i class="bi bi-tag-fill"></i> Chủ đề:</label>
+                <select class="form-select-filter" @bind="filterTopic">
+                    <option value="">Tất cả chủ đề</option>
+                    @foreach (var t in availableTopics)
+                    {
+                        <option value="@t">@t</option>
+                    }
+                </select>
+            </div>
         </div>
 
-        <div class="search-box-wrapper">
-            <i class="bi bi-search search-icon"></i>
-            <input type="text" placeholder="Tìm theo Chữ Hán, Pinyin, Nghĩa..." @bind="searchTerm" @bind:event="oninput" @onkeyup="LoadData" />
-            @if (!string.IsNullOrEmpty(searchTerm))
-            {
-                <button class="btn-clear-search" @onclick='async () => { searchTerm = ""; await LoadData(); }'><i class="bi bi-x-lg"></i></button>
-            }
+        <div class="toolbar-right">
+            <div class="page-size-selector">
+                <label>Hiển thị:</label>
+                <select @bind="pageSize">
+                    <option value="50">50 từ / trang</option>
+                    <option value="100">100 từ / trang</option>
+                    <option value="200">200 từ / trang</option>
+                    <option value="500">500 từ / trang</option>
+                    <option value="999999">Tất cả</option>
+                </select>
+            </div>
+
+            <div class="stats-counter">
+                <i class="bi bi-collection-fill"></i>
+                <span>Tổng: <strong>@FilteredItems.Count</strong> từ</span>
+            </div>
+
+            <button class="btn-danger-action" @onclick="DeleteAll" title="Xóa toàn bộ từ vựng HSK trong database" disabled="@(!vocabItems.Any() || isImporting)">
+                <i class="bi bi-trash3-fill"></i>
+                <span>Xóa hết</span>
+            </button>
         </div>
     </div>
 
     <!-- Main Table Card -->
-    <div class="table-card">
-        @if (isLoading)
-        {
-            <div class="loading-state">
-                <div class="custom-spinner"></div>
-                <p>Đang tải danh sách từ vựng HSK...</p>
-            </div>
-        }
-        else if (vocabItems == null || !vocabItems.Any())
-        {
-            <div class="empty-state">
-                <i class="bi bi-translate"></i>
-                <h4>Chưa tìm thấy từ vựng HSK nào</h4>
-                <p>Thử đổi bộ lọc cấp độ hoặc bấm nút "Thêm Từ mới" để bổ sung từ vựng.</p>
-            </div>
-        }
-        else
-        {
+    @if (isLoading)
+    {
+        <div class="loading-state">
+            <div class="custom-spinner"></div>
+            <p>Đang tải danh sách từ vựng HSK...</p>
+        </div>
+    }
+    else if (!FilteredItems.Any())
+    {
+        <div class="empty-state">
+            <i class="bi bi-translate"></i>
+            <h4>Chưa tìm thấy từ vựng HSK nào</h4>
+            <p>Thử đổi bộ lọc cấp độ/chủ đề hoặc bấm nút "Thêm Từ mới" / "Nhập Excel/CSV".</p>
+            <button class="btn-primary-action mt-3" @onclick="() => ShowAddModal()">
+                <i class="bi bi-plus-circle-fill"></i> Thêm từ mới ngay
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="table-card">
             <div class="table-responsive">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th style="width: 70px;">ID</th>
-                            <th style="width: 100px;">Cấp độ</th>
-                            <th style="width: 150px;">Chữ Hán (Hanzi)</th>
+                            <th style="width: 60px; text-align: center;">ID</th>
+                            <th style="width: 95px; text-align: center;">Cấp độ</th>
+                            <th style="width: 150px;">Chữ Hán</th>
                             <th style="width: 140px;">Phiên âm (Pinyin)</th>
-                            <th>Nghĩa tiếng Việt</th>
-                            <th style="width: 110px;">Loại từ</th>
+                            <th style="width: 22%;">Nghĩa tiếng Việt</th>
+                            <th style="width: 100px;">Loại từ</th>
                             <th>Ví dụ câu mẫu</th>
-                            <th class="text-end" style="width: 180px;">Thao tác</th>
+                            <th style="width: 120px;">Chủ đề</th>
+                            <th class="text-end" style="width: 150px;">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in vocabItems)
+                        @foreach (var item in PagedItems)
                         {
                             var lvlNum = GetLevelNumber(item.HskLevel);
                             <tr>
-                                <td><span class="id-tag">#@item.Id</span></td>
-                                <td>
+                                <td style="text-align: center;"><span class="id-tag">#@item.Id</span></td>
+                                <td style="text-align: center;">
                                     <span class="hsk-badge hsk-badge-@lvlNum">@item.HskLevel</span>
                                 </td>
                                 <td>
@@ -140,7 +229,34 @@
                                     <span class="pos-badge">@(string.IsNullOrEmpty(item.WordType) ? "Từ vựng" : item.WordType)</span>
                                 </td>
                                 <td>
-                                    <span class="example-text">@item.ExampleSentence</span>
+                                    @if (!string.IsNullOrWhiteSpace(item.ExampleSentence))
+                                    {
+                                        <div class="example-cell">
+                                            <div class="example-zh">@item.ExampleSentence</div>
+                                            @if (!string.IsNullOrWhiteSpace(item.ExamplePinyin))
+                                            {
+                                                <div class="example-py">@item.ExamplePinyin</div>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(item.ExampleMeaning))
+                                            {
+                                                <div class="example-vi">@item.ExampleMeaning</div>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(item.Topic))
+                                    {
+                                        <span class="cell-topic">@item.Topic</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
                                 </td>
                                 <td class="text-end">
                                     <div class="action-buttons-group">
@@ -158,11 +274,52 @@
                 </table>
             </div>
 
-            <div class="table-footer">
-                <span>Tổng cộng: <b>@totalCount</b> từ vựng HSK</span>
-            </div>
-        }
-    </div>
+            <!-- Pagination Footer -->
+            @if (TotalPages > 1)
+            {
+                <div class="pagination-footer">
+                    <div class="pagination-info">
+                        Hiển thị <strong>@((CurrentPage - 1) * pageSize + 1)</strong> - <strong>@(Math.Min(CurrentPage * pageSize, FilteredItems.Count))</strong> trong tổng <strong>@FilteredItems.Count</strong> từ
+                    </div>
+                    <div class="pagination-controls">
+                        <button class="page-btn" @onclick="() => GoToPage(1)" disabled="@(CurrentPage == 1)" title="Trang đầu">
+                            <i class="bi bi-chevron-double-left"></i>
+                        </button>
+                        <button class="page-btn" @onclick="() => GoToPage(CurrentPage - 1)" disabled="@(CurrentPage == 1)" title="Trang trước">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+
+                        @foreach (var p in VisiblePageNumbers)
+                        {
+                            @if (p == -1)
+                            {
+                                <span class="page-ellipsis">...</span>
+                            }
+                            else
+                            {
+                                <button class="page-btn @(p == CurrentPage ? "active" : "")" @onclick="() => GoToPage(p)">
+                                    @p
+                                </button>
+                            }
+                        }
+
+                        <button class="page-btn" @onclick="() => GoToPage(CurrentPage + 1)" disabled="@(CurrentPage >= TotalPages)" title="Trang sau">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                        <button class="page-btn" @onclick="() => GoToPage(TotalPages)" disabled="@(CurrentPage >= TotalPages)" title="Trang cuối">
+                            <i class="bi bi-chevron-double-right"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="table-footer">
+                    <span>Tổng cộng: <b>@FilteredItems.Count</b> từ vựng HSK</span>
+                </div>
+            }
+        </div>
+    }
 </div>
 
 <!-- ========================================================================= -->
@@ -224,6 +381,17 @@
                 </div>
 
                 <div class="form-group mt-3">
+                    <label>Chủ đề (Topic)</label>
+                    <input type="text" class="form-input" @bind="form.Topic" placeholder="VD: Con người & Tính cách, Ẩm thực..." list="hskTopicOptions" />
+                    <datalist id="hskTopicOptions">
+                        @foreach (var topicName in availableTopics)
+                        {
+                            <option value="@topicName"></option>
+                        }
+                    </datalist>
+                </div>
+
+                <div class="form-group mt-3">
                     <label>Ví dụ câu mẫu (Example Sentence)</label>
                     <input type="text" class="form-input" @bind="form.ExampleSentence" placeholder="VD: 你好！很高兴认识你。" />
                 </div>
@@ -257,16 +425,135 @@
 
 @code {
     private List<HskVocabularyItem> vocabItems = new();
+    private List<string> availableTopics = new();
     private bool isLoading = true;
-    private string filterLevel = "";
-    private string searchTerm = "";
-    private int totalCount = 0;
+
+    private string _filterLevel = "";
+    private string filterLevel
+    {
+        get => _filterLevel;
+        set
+        {
+            if (_filterLevel != value)
+            {
+                _filterLevel = value;
+                CurrentPage = 1;
+            }
+        }
+    }
+
+    private string _filterTopic = "";
+    private string filterTopic
+    {
+        get => _filterTopic;
+        set
+        {
+            if (_filterTopic != value)
+            {
+                _filterTopic = value;
+                CurrentPage = 1;
+            }
+        }
+    }
+
+    private string _searchTerm = "";
+    private string searchTerm
+    {
+        get => _searchTerm;
+        set
+        {
+            if (_searchTerm != value)
+            {
+                _searchTerm = value;
+                CurrentPage = 1;
+            }
+        }
+    }
+
+    private int _pageSize = 50;
+    private int pageSize
+    {
+        get => _pageSize;
+        set
+        {
+            if (_pageSize != value)
+            {
+                _pageSize = value;
+                CurrentPage = 1;
+            }
+        }
+    }
+
+    private int CurrentPage { get; set; } = 1;
+
+    private List<HskVocabularyItem> FilteredItems =>
+        vocabItems
+            .Where(x => string.IsNullOrEmpty(filterLevel) || x.HskLevel.Equals(filterLevel, StringComparison.OrdinalIgnoreCase))
+            .Where(x => string.IsNullOrEmpty(filterTopic) || string.Equals(x.Topic, filterTopic, StringComparison.OrdinalIgnoreCase))
+            .Where(x => string.IsNullOrWhiteSpace(searchTerm) ||
+                        (x.Hanzi?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (x.Pinyin?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (x.Meaning?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (x.Topic?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+
+    private int TotalPages => (int)Math.Ceiling((double)FilteredItems.Count / Math.Max(1, pageSize));
+
+    private List<HskVocabularyItem> PagedItems =>
+        FilteredItems.Skip((CurrentPage - 1) * pageSize).Take(pageSize).ToList();
+
+    private List<int> VisiblePageNumbers
+    {
+        get
+        {
+            var pages = new List<int>();
+            int total = TotalPages;
+            if (total <= 7)
+            {
+                for (int i = 1; i <= total; i++) pages.Add(i);
+            }
+            else
+            {
+                pages.Add(1);
+                if (CurrentPage > 3) pages.Add(-1);
+
+                int start = Math.Max(2, CurrentPage - 1);
+                int end = Math.Min(total - 1, CurrentPage + 1);
+
+                for (int i = start; i <= end; i++)
+                {
+                    if (!pages.Contains(i)) pages.Add(i);
+                }
+
+                if (CurrentPage < total - 2) pages.Add(-1);
+                if (!pages.Contains(total)) pages.Add(total);
+            }
+            return pages;
+        }
+    }
+
+    private void GoToPage(int page)
+    {
+        if (page < 1) page = 1;
+        if (page > TotalPages) page = TotalPages;
+        CurrentPage = page;
+    }
+
+    private void ClearSearch()
+    {
+        searchTerm = "";
+        CurrentPage = 1;
+    }
 
     private bool showModal = false;
     private HskVocabularyItem? editingItem = null;
     private HskVocabularyItem form = new();
 
     private string templateUrl = "";
+    private bool isImporting = false;
+    private string? importMessage;
+    private bool importSuccess;
+    private string importMode = "upsert";
 
     protected override async Task OnInitializedAsync()
     {
@@ -275,27 +562,56 @@
         await LoadData();
     }
 
+    private async Task DownloadTemplate()
+    {
+        try
+        {
+            var bytes = await HskService.GetTemplateExcelAsync();
+            if (bytes != null && bytes.Length > 0)
+            {
+                var base64 = Convert.ToBase64String(bytes);
+                await JS.InvokeVoidAsync("eval", $@"
+                    (() => {{
+                        const a = document.createElement('a');
+                        a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{base64}';
+                        a.download = 'HSK_Vocabulary_Template.xlsx';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }})()
+                ");
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", "[HSK Admin] Lỗi tải mẫu Excel:", ex.ToString());
+        }
+        await JS.InvokeVoidAsync("open", templateUrl, "_blank");
+    }
+
     private async Task LoadData()
     {
         isLoading = true;
         StateHasChanged();
-        var items = await HskService.GetVocabularyAsync(filterLevel) ?? new List<HskVocabularyItem>();
-        if (!string.IsNullOrEmpty(searchTerm))
-        {
-            items = items.Where(x => x.Hanzi.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                                    x.Pinyin.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-                                    x.Meaning.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
-        }
+
+        var items = await HskService.GetVocabularyAsync() ?? new List<HskVocabularyItem>();
         vocabItems = items;
-        totalCount = items.Count;
+
+        // Build unique list of topics combining catalog and db
+        var dbTopics = items.Where(x => !string.IsNullOrWhiteSpace(x.Topic)).Select(x => x.Topic!.Trim()).Distinct();
+        var catTopics = HskTopicCatalog.Topics.Select(t => t.TitleVi);
+        availableTopics = dbTopics.Union(catTopics).OrderBy(t => t).ToList();
+
         isLoading = false;
+        CurrentPage = 1;
         StateHasChanged();
     }
 
     private void ShowAddModal()
     {
         editingItem = null;
-        form = new HskVocabularyItem { HskLevel = "HSK1", IsActive = true, DisplayOrder = 0 };
+        form = new HskVocabularyItem { HskLevel = string.IsNullOrEmpty(filterLevel) ? "HSK1" : filterLevel, IsActive = true, DisplayOrder = vocabItems.Count + 1 };
         showModal = true;
     }
 
@@ -313,6 +629,7 @@
             ExampleSentence = item.ExampleSentence,
             ExamplePinyin = item.ExamplePinyin,
             ExampleMeaning = item.ExampleMeaning,
+            Topic = item.Topic,
             AudioUrl = item.AudioUrl,
             DisplayOrder = item.DisplayOrder,
             IsActive = item.IsActive
@@ -347,6 +664,30 @@
         await LoadData();
     }
 
+    private async Task DeleteAll()
+    {
+        var confirm = await JS.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn xóa TOÀN BỘ từ vựng HSK trong database? Hành động này không thể hoàn tác.");
+        if (!confirm) return;
+
+        isImporting = true;
+        importMessage = null;
+        StateHasChanged();
+
+        var (success, deleted) = await HskService.DeleteAllVocabularyAsync();
+        isImporting = false;
+        if (success)
+        {
+            importMessage = $"Đã xóa {deleted} từ vựng HSK thành công.";
+            importSuccess = true;
+        }
+        else
+        {
+            importMessage = "Xóa toàn bộ từ vựng thất bại.";
+            importSuccess = false;
+        }
+        await LoadData();
+    }
+
     private async Task SpeakChinese(string text)
     {
         await JS.InvokeVoidAsync("eval", $"if ('speechSynthesis' in window) {{ const u = new SpeechSynthesisUtterance('{text}'); u.lang = 'zh-CN'; window.speechSynthesis.speak(u); }}");
@@ -361,10 +702,8 @@
         return 1;
     }
 
-    private bool isImporting = false;
-    private string? importMessage;
-    private bool importSuccess;
-    private string importMode = "upsert";
+    private HskImportExcelResponse? lastImportResult;
+    private bool showImportLogs = false;
 
     private async Task TriggerImportExcel()
     {
@@ -373,41 +712,87 @@
 
     private async Task HandleExcelImport(InputFileChangeEventArgs e)
     {
-        var file = e.File;
-        if (file == null) return;
-        var ext = System.IO.Path.GetExtension(file.Name).ToLowerInvariant();
-        if (ext != ".xlsx" && ext != ".csv")
+        var files = e.GetMultipleFiles(50).ToList();
+        if (files.Count == 0) return;
+
+        showImportLogs = false;
+        lastImportResult = null;
+
+        foreach (var f in files)
         {
-            importMessage = "Vui lòng chọn file Excel (.xlsx) hoặc CSV (.csv).";
-            importSuccess = false;
-            StateHasChanged();
-            return;
+            var ext = System.IO.Path.GetExtension(f.Name).ToLowerInvariant().Trim();
+            if (ext != ".xlsx" && ext != ".xls" && ext != ".csv" && ext != ".cvs" && ext != ".txt" && ext != ".tsv")
+            {
+                importMessage = $"File '{f.Name}' không thuộc định dạng được hỗ trợ (đuôi '{ext}'). Vui lòng chọn file Excel (.xlsx), CSV (.csv) hoặc TSV/TXT.";
+                importSuccess = false;
+                StateHasChanged();
+                return;
+            }
         }
 
         isImporting = true;
-        importMessage = null;
+        importMessage = $"Đang đọc và gửi {files.Count} file từ vựng lên máy chủ...";
         StateHasChanged();
 
-        var result = await HskService.ImportVocabularyExcelAsync(file, importMode);
+        try
+        {
+            await JS.InvokeVoidAsync("console.log", $"[HSK Admin] Đang upload {files.Count} file(s)...");
+            var result = await HskService.ImportMultipleVocabularyExcelAsync(files, importMode);
+            lastImportResult = result;
 
-        isImporting = false;
-        if (result == null)
+            isImporting = false;
+            if (result == null)
+            {
+                importMessage = "Máy chủ không phản hồi kết quả nhập. Vui lòng kiểm tra lại dịch vụ Backend.";
+                importSuccess = false;
+                showImportLogs = false;
+            }
+            else if (result.Success == 0 && result.Updated == 0 && result.Fail == 0 && result.Duplicate == 0)
+            {
+                var firstErr = result.Errors?.FirstOrDefault();
+                importMessage = !string.IsNullOrWhiteSpace(firstErr) 
+                    ? firstErr 
+                    : $"Không trích xuất được từ vựng nào từ {files.Count} file đã chọn. Hãy bấm 'Xem log chi tiết' bên dưới để kiểm tra tiêu đề cột.";
+                importSuccess = false;
+                showImportLogs = true;
+            }
+            else if (result.Success == 0 && result.Updated == 0 && result.Fail > 0)
+            {
+                var firstErr = result.Errors?.FirstOrDefault();
+                importMessage = !string.IsNullOrWhiteSpace(firstErr) 
+                    ? firstErr 
+                    : $"Nhập thất bại toàn bộ ({result.Fail} lỗi). Hãy xem log chẩn đoán bên dưới.";
+                importSuccess = false;
+                showImportLogs = true;
+            }
+            else
+            {
+                var parts = new List<string>();
+                if (result.Success > 0) parts.Add($"thêm mới {result.Success} từ");
+                if (result.Updated > 0) parts.Add($"cập nhật {result.Updated} từ");
+                if (result.Duplicate > 0) parts.Add($"bỏ qua {result.Duplicate} trùng");
+                if (result.Fail > 0) parts.Add($"lỗi {result.Fail} dòng");
+                if (parts.Count == 0) parts.Add("Đã xử lý xong");
+                if (!string.IsNullOrEmpty(result.JsonUrl)) parts.Add($"JSON lưu tại: {result.JsonUrl}");
+
+                var msg = $"Đã xử lý {files.Count} file: " + string.Join(", ", parts) + ".";
+                if (result.Errors?.Any() == true)
+                {
+                    msg += " Lưu ý: " + string.Join("; ", result.Errors.Take(3));
+                    showImportLogs = true;
+                }
+                importMessage = msg;
+                importSuccess = result.Fail == 0;
+            }
+        }
+        catch (Exception ex)
         {
-            importMessage = "Nhập Excel thất bại. Vui lòng kiểm tra định dạng file rồi thử lại.";
+            isImporting = false;
+            importMessage = $"Lỗi xử lý file: {ex.Message}";
             importSuccess = false;
+            await JS.InvokeVoidAsync("console.error", "[HSK Admin] Import exception:", ex.ToString());
         }
-        else
-        {
-            var parts = new List<string>();
-            if (result.Success > 0) parts.Add($"thêm mới {result.Success} từ");
-            if (result.Updated > 0) parts.Add($"cập nhật {result.Updated} từ");
-            if (result.Duplicate > 0) parts.Add($"bỏ qua {result.Duplicate} trùng");
-            if (result.Fail > 0) parts.Add($"lỗi {result.Fail} dòng");
-            if (parts.Count == 0) parts.Add("Không có dữ liệu hợp lệ nào trong file");
-            if (!string.IsNullOrEmpty(result.JsonUrl)) parts.Add($"File JSON đã lưu tại: {result.JsonUrl}");
-            importMessage = string.Join(", ", parts) + ".";
-            importSuccess = result.Fail == 0;
-        }
+
         await LoadData();
     }
 }

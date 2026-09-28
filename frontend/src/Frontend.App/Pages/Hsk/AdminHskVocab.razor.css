@@ -115,19 +115,34 @@
     box-shadow: 0 4px 16px rgba(220, 38, 38, 0.03);
 }
 
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
 .filter-group {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 
 .filter-group label {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     font-weight: 700;
     color: #dc2626;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
+    white-space: nowrap;
 }
 
 .form-select-filter {
@@ -147,9 +162,86 @@
     box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
 }
 
+.page-size-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.86rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.page-size-selector select {
+    padding: 7px 10px;
+    border-radius: 10px;
+    border: 1.5px solid #fecaca;
+    font-size: 0.86rem;
+    font-weight: 600;
+    background: #ffffff;
+    color: #334155;
+    outline: none;
+    cursor: pointer;
+}
+
+.page-size-selector select:focus {
+    border-color: #dc2626;
+}
+
+.stats-counter {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+    padding: 7px 16px;
+    border-radius: 20px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.btn-danger-action {
+    background: #fef2f2;
+    border: 1.5px solid #fecaca;
+    color: #dc2626;
+    padding: 8px 15px;
+    border-radius: 12px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-danger-action:hover:not(:disabled) {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.28);
+}
+
+.btn-danger-action:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.btn-danger-action:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    color: #94a3b8;
+    box-shadow: none;
+    transform: none;
+}
+
 .search-box-wrapper {
     position: relative;
-    width: 320px;
+    width: 280px;
 }
 
 .search-icon {
@@ -354,12 +446,115 @@
     color: #ffffff;
 }
 
+.cell-topic {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.example-cell {
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+.example-zh {
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 2px;
+}
+
+.example-py {
+    color: #dc2626;
+    font-size: 0.82rem;
+    margin-bottom: 1px;
+}
+
+.example-vi {
+    color: #64748b;
+    font-size: 0.82rem;
+    font-style: italic;
+}
+
 .table-footer {
     padding: 14px 20px;
     background: #fff8f8;
     border-top: 1px solid #fee2e2;
     font-size: 0.88rem;
     color: #991b1b;
+}
+
+/* Pagination Footer */
+.pagination-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 22px;
+    background: #fff8f8;
+    border-top: 1.5px solid #fee2e2;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.pagination-info {
+    font-size: 0.86rem;
+    color: #64748b;
+}
+
+.pagination-info strong {
+    color: #0f172a;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.page-btn {
+    background: #ffffff;
+    border: 1.5px solid #fecaca;
+    color: #334155;
+    min-width: 34px;
+    height: 34px;
+    padding: 0 8px;
+    border-radius: 9px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.page-btn:hover:not(:disabled) {
+    background: #fef2f2;
+    border-color: #f87171;
+    color: #dc2626;
+}
+
+.page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.page-btn.active {
+    background: #dc2626;
+    color: #ffffff;
+    border-color: #dc2626;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+}
+
+.page-ellipsis {
+    padding: 0 4px;
+    color: #94a3b8;
+    font-weight: 700;
 }
 
 /* Loading & Empty States */

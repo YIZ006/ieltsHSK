@@ -61,6 +61,10 @@ public class AuthHeaderHandler : DelegatingHandler
             string? token = null;
 
             bool isAdminEndpoint = path.Contains("/api/admin") 
+                || path.Contains("import-excel")
+                || path.Contains("import-multiple")
+                || (path.Contains("/api/hsk/vocab") && request.Method != HttpMethod.Get)
+                || (path.Contains("/api/ielts/vocab") && request.Method != HttpMethod.Get)
                 || (path.Contains("/api/mock-tests") && request.Method != HttpMethod.Get)
                 || path.Contains("/api/mock-tests/upload");
 

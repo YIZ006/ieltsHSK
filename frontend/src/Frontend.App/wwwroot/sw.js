@@ -1,5 +1,5 @@
 // PWA Service Worker — cache-first cho file tĩnh, network-first cho navigation Blazor WASM
-const CACHE = 'app-v7-mascot-circle-fix';
+const CACHE = 'app-v8-auth-and-multi-vocab';
 
 const ASSETS = [
   './',
@@ -45,7 +45,15 @@ self.addEventListener('fetch', e => {
   // Với request navigation (đổi trang Blazor WASM), dùng Network-first
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req).catch(async () => {
+      fetch(req).then(async res => {
+        if (!res.ok && res.status === 404) {
+          const cached = await caches.match('./index.html') 
+                      || await caches.match('/index.html') 
+                      || await caches.match('index.html');
+          if (cached) return cached;
+        }
+        return res;
+      }).catch(async () => {
         try {
           const cached = await caches.match('./index.html') 
                       || await caches.match('/index.html') 

@@ -2,6 +2,7 @@
 @page "/admin/hsk"
 @layout Frontend.App.Layout.AdminLayout
 @inject IJSRuntime JS
+@inject NavigationManager NavigationManager
 
 <PageTitle>Quản lý Tiếng Trung HSK - Admin Hub</PageTitle>
 
@@ -290,9 +291,9 @@
         await JS.InvokeVoidAsync("eval", $"if ('speechSynthesis' in window) {{ const u = new SpeechSynthesisUtterance('{text}'); u.lang = 'zh-CN'; window.speechSynthesis.speak(u); }}");
     }
 
-    private async Task OpenAddVocabModal()
+    private void OpenAddVocabModal()
     {
-        await JS.InvokeVoidAsync("alert", "Tính năng thêm từ vựng HSK trực tiếp sẽ được mở trong bản cập nhật kế tiếp.");
+        NavigationManager.NavigateTo("/portal-hub/hsk-vocab");
     }
 
     private async Task OpenAddTestModal()

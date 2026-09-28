@@ -26,172 +26,409 @@
             </div>
         </div>
 
-        <!-- Level Pills -->
-        <div class="level-tabs">
-            @foreach (var level in new[] { "HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6" })
-            {
-                var lvl = level;
-                <button class="level-tab @(selectedLevel == lvl ? "active" : "")"
-                        @onclick="() => SelectLevel(lvl)">
-                    @lvl
-                </button>
-            }
+        <!-- Mode Switcher Tabs -->
+        <div class="mode-tabs">
+            <button class="mode-tab @(viewCategoryMode == "level" ? "active" : "")"
+                    @onclick='() => SetCategoryMode("level")'>
+                <i class="bi bi-layers-fill"></i>
+                <span>Theo Cấp độ (HSK 1–6)</span>
+            </button>
+            <button class="mode-tab @(viewCategoryMode == "topic" ? "active" : "")"
+                    @onclick='() => SetCategoryMode("topic")'>
+                <i class="bi bi-grid-fill"></i>
+                <span>Học theo Chủ đề (@HskTopicCatalog.Topics.Count chủ đề)</span>
+                <span class="mode-badge-new">Mới</span>
+            </button>
         </div>
     </div>
 
-    <!-- Search & Filter Toolbar -->
-    <div class="toolbar-card">
-        <div class="search-box-wrapper">
-            <i class="bi bi-search search-icon"></i>
-            <input type="text" placeholder="Tìm Chữ Hán, Pinyin, Nghĩa tiếng Việt..." @bind="searchTerm" @bind:event="oninput" />
-        </div>
-
-        <div class="toolbar-actions">
-            <label class="hide-learned-toggle" title="Từ đã thuộc sẽ không còn hiển thị trong danh sách">
-                <input type="checkbox" @bind="hideLearned" />
-                <span>Ẩn từ đã thuộc</span>
-            </label>
-
-            <button class="btn-shuffle @(isShuffled ? "active" : "")" @onclick="ToggleShuffle"
-                    title="Xáo trộn thứ tự danh sách từ">
-                <i class="bi bi-shuffle"></i>
-                <span>@(isShuffled ? "Đang xáo trộn" : "Xáo trộn")</span>
-            </button>
-
-            <div class="flashcard-starter">
-                <select class="session-size-select" @bind="flashcardSize" title="Số từ mỗi phiên học">
-                    <option value="10">10 từ</option>
-                    <option value="20">20 từ</option>
-                    <option value="30">30 từ</option>
-                    <option value="40">40 từ</option>
-                    <option value="50">50 từ</option>
-                </select>
-                <button class="btn-flashcard-start" @onclick="StartFlashcardSession">
-                    <i class="bi bi-collection-play-fill"></i>
-                    <span>Học Flashcard</span>
-                </button>
+    @if (viewCategoryMode == "level")
+    {
+        <!-- Level Selector Sub-bar -->
+        <div class="level-bar-wrapper">
+            <div class="level-tabs">
+                @foreach (var level in new[] { "HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6" })
+                {
+                    var lvl = level;
+                    <button class="level-tab @(selectedLevel == lvl ? "active" : "")"
+                            @onclick="() => SelectLevel(lvl)">
+                        @lvl
+                    </button>
+                }
             </div>
         </div>
 
-        <div class="stats-counter">
-            <span>Tiến độ đã thuộc: <b>@learnedIds.Count</b> / @vocabItems.Count từ</span>
+        <!-- Search & Filter Toolbar -->
+        <div class="toolbar-card">
+            <div class="search-box-wrapper">
+                <i class="bi bi-search search-icon"></i>
+                <input type="text" placeholder="Tìm Chữ Hán, Pinyin, Nghĩa tiếng Việt..." @bind="searchTerm" @bind:event="oninput" />
+            </div>
+
+            <div class="toolbar-actions">
+                <label class="hide-learned-toggle" title="Từ đã thuộc sẽ không còn hiển thị trong danh sách">
+                    <input type="checkbox" @bind="hideLearned" />
+                    <span>Ẩn từ đã thuộc</span>
+                </label>
+
+                <button class="btn-shuffle @(isShuffled ? "active" : "")" @onclick="ToggleShuffle"
+                        title="Xáo trộn thứ tự danh sách từ">
+                    <i class="bi bi-shuffle"></i>
+                    <span>@(isShuffled ? "Đang xáo trộn" : "Xáo trộn")</span>
+                </button>
+
+                <div class="flashcard-starter">
+                    <select class="session-size-select" @bind="flashcardSize" title="Số từ mỗi phiên học">
+                        <option value="10">10 từ</option>
+                        <option value="20">20 từ</option>
+                        <option value="30">30 từ</option>
+                        <option value="40">40 từ</option>
+                        <option value="50">50 từ</option>
+                    </select>
+                    <button class="btn-flashcard-start" @onclick="() => StartFlashcardSession()">
+                        <i class="bi bi-collection-play-fill"></i>
+                        <span>Học Flashcard</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="stats-counter">
+                <span>Tiến độ đã thuộc: <b>@learnedIds.Count</b> / @vocabItems.Count từ</span>
+            </div>
         </div>
-    </div>
 
-    @if (isLoading)
-    {
-        <div class="loading-state">
-            <div class="custom-spinner"></div>
-            <p>Đang tải từ vựng @selectedLevel...</p>
-        </div>
-    }
-    else if (!FilteredItems.Any())
-    {
-        var noDataAtLevel = !vocabItems.Any();
-        <div class="empty-state">
-            <i class="bi bi-translate"></i>
-            <h4>@(noDataAtLevel ? $"Cấp độ {selectedLevel} chưa có từ vựng" : "Không tìm thấy từ vựng nào")</h4>
-            <p>@(noDataAtLevel
-                ? "Vui lòng chọn cấp độ khác hoặc quay lại sau nhé."
-                : "Thử đổi bộ lọc cấp độ, tắt \"Ẩn từ đã thuộc\" hoặc xóa từ khóa tìm kiếm.")</p>
-        </div>
-    }
-    else
-    {
-        <div class="vocab-grid">
-            @foreach (var item in PagedItems)
-            {
-                var isLearned = IsLearned(item.Id);
-                <div class="vocab-card @(isLearned ? "is-learned" : "")">
-                    <div class="card-top-row">
-                        <span class="vocab-level-tag">@item.HskLevel</span>
-                        <button class="btn-audio" @onclick="() => SpeakChinese(item.Hanzi)" title="Phát âm">
-                            <i class="bi bi-volume-up-fill"></i>
-                        </button>
-                    </div>
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="custom-spinner"></div>
+                <p>Đang tải từ vựng @selectedLevel...</p>
+            </div>
+        }
+        else if (!FilteredItems.Any())
+        {
+            var noDataAtLevel = !vocabItems.Any();
+            <div class="empty-state">
+                <i class="bi bi-translate"></i>
+                <h4>@(noDataAtLevel ? $"Cấp độ {selectedLevel} chưa có từ vựng" : "Không tìm thấy từ vựng nào")</h4>
+                <p>@(noDataAtLevel
+                    ? "Vui lòng chọn cấp độ khác hoặc quay lại sau nhé."
+                    : "Thử đổi bộ lọc cấp độ, tắt \"Ẩn từ đã thuộc\" hoặc xóa từ khóa tìm kiếm.")</p>
+            </div>
+        }
+        else
+        {
+            <div class="vocab-grid">
+                @foreach (var item in PagedItems)
+                {
+                    var isLearned = IsLearned(item.Id);
+                    <div class="vocab-card @(isLearned ? "is-learned" : "")">
+                        <div class="card-top-row">
+                            <span class="vocab-level-tag">@item.HskLevel</span>
+                            <button class="btn-audio" @onclick="() => SpeakChinese(item.Hanzi)" title="Phát âm">
+                                <i class="bi bi-volume-up-fill"></i>
+                            </button>
+                        </div>
 
-                    <div class="vocab-front">
-                        <div class="hanzi">@item.Hanzi</div>
-                        <div class="pinyin">@item.Pinyin</div>
-                    </div>
+                        <div class="vocab-front">
+                            <div class="hanzi">@item.Hanzi</div>
+                            <div class="pinyin">@item.Pinyin</div>
+                        </div>
 
-                    <div class="vocab-back">
-                        <div class="meaning">@item.Meaning</div>
-                        @if (!string.IsNullOrEmpty(item.WordType))
-                        {
-                            <div class="word-type">@item.WordType</div>
-                        }
-                        @if (!string.IsNullOrEmpty(item.ExampleSentence))
-                        {
-                            <div class="example-box">
-                                <div class="ex-hanzi">@item.ExampleSentence</div>
-                                @if (!string.IsNullOrEmpty(item.ExamplePinyin))
-                                {
-                                    <div class="ex-pinyin">@item.ExamplePinyin</div>
-                                }
-                                @if (!string.IsNullOrEmpty(item.ExampleMeaning))
-                                {
-                                    <div class="ex-meaning">@item.ExampleMeaning</div>
-                                }
-                            </div>
-                        }
-                    </div>
-
-                    <div class="vocab-actions">
-                        <button class="learn-btn @(isLearned ? "learned" : "")" @onclick="() => ToggleLearned(item.Id)">
-                            @if (isLearned)
+                        <div class="vocab-back">
+                            <div class="meaning">@item.Meaning</div>
+                            @if (!string.IsNullOrEmpty(item.WordType))
                             {
-                                <i class="bi bi-check2-circle"></i>
-                                <span>Đã thuộc</span>
+                                <div class="word-type">@item.WordType</div>
+                            }
+                            @if (!string.IsNullOrEmpty(item.ExampleSentence))
+                            {
+                                <div class="example-box">
+                                    <div class="ex-hanzi">@item.ExampleSentence</div>
+                                    @if (!string.IsNullOrEmpty(item.ExamplePinyin))
+                                    {
+                                        <div class="ex-pinyin">@item.ExamplePinyin</div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(item.ExampleMeaning))
+                                    {
+                                        <div class="ex-meaning">@item.ExampleMeaning</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <div class="vocab-actions">
+                            <button class="learn-btn @(isLearned ? "learned" : "")" @onclick="() => ToggleLearned(item.Id)">
+                                @if (isLearned)
+                                {
+                                    <i class="bi bi-check2-circle"></i>
+                                    <span>Đã thuộc</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-bookmark-plus"></i>
+                                    <span>Đánh dấu đã thuộc</span>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @* Pagination Controls *@
+            @if (TotalPages > 1)
+            {
+                <div class="pagination-container">
+                    <div class="pagination-summary">
+                        Hiển thị <strong>@((currentPage - 1) * pageSize + 1)</strong> - <strong>@(Math.Min(currentPage * pageSize, FilteredItems.Count))</strong> trong tổng <strong>@FilteredItems.Count.ToString("N0")</strong> từ @selectedLevel
+                    </div>
+
+                    <div class="pagination-buttons">
+                        <button class="btn-page" @onclick="() => GoToPage(1)" disabled="@(currentPage == 1)" title="Trang đầu">
+                            <i class="bi bi-chevron-double-left"></i>
+                        </button>
+                        <button class="btn-page" @onclick="() => GoToPage(currentPage - 1)" disabled="@(currentPage == 1)" title="Trang trước">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+
+                        @foreach (var p in VisiblePageNumbers)
+                        {
+                            @if (p == -1)
+                            {
+                                <span class="page-ellipsis">...</span>
                             }
                             else
                             {
-                                <i class="bi bi-bookmark-plus"></i>
-                                <span>Đánh dấu đã thuộc</span>
+                                <button class="btn-page @(p == currentPage ? "active" : "")" @onclick="() => GoToPage(p)">
+                                    @p
+                                </button>
                             }
+                        }
+
+                        <button class="btn-page" @onclick="() => GoToPage(currentPage + 1)" disabled="@(currentPage >= TotalPages)" title="Trang sau">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                        <button class="btn-page" @onclick="() => GoToPage(TotalPages)" disabled="@(currentPage >= TotalPages)" title="Trang cuối">
+                            <i class="bi bi-chevron-double-right"></i>
                         </button>
                     </div>
                 </div>
             }
-        </div>
-
-        @* Pagination Controls *@
-        @if (TotalPages > 1)
+        }
+    }
+    else
+    {
+        <!-- ================= CHẾ ĐỘ: HỌC THEO CHỦ ĐỀ ================= -->
+        @if (currentTopic == null)
         {
-            <div class="pagination-container">
-                <div class="pagination-summary">
-                    Hiển thị <strong>@((currentPage - 1) * pageSize + 1)</strong> - <strong>@(Math.Min(currentPage * pageSize, FilteredItems.Count))</strong> trong tổng <strong>@FilteredItems.Count.ToString("N0")</strong> từ @selectedLevel
+            <!-- TOPIC HUB (LƯỚI CHỦ ĐỀ) -->
+            <div class="topic-hub-header">
+                <div class="topic-hub-title-box">
+                    <h2 class="topic-hub-title"><i class="bi bi-compass-fill"></i> Chủ Đề Từ Vựng Tiếng Trung HSK</h2>
+                    <p class="topic-hub-sub">Khám phá từ vựng theo 14 chủ đề thiết thực đời sống. Luyện phản xạ Flashcard riêng từng nhóm từ.</p>
                 </div>
+                <div class="topic-search-wrap">
+                    <i class="bi bi-search"></i>
+                    <input type="text" placeholder="Tìm theo tên chủ đề hoặc từ khóa..." @bind="topicFilterTerm" @bind:event="oninput" />
+                </div>
+            </div>
 
-                <div class="pagination-buttons">
-                    <button class="btn-page" @onclick="() => GoToPage(1)" disabled="@(currentPage == 1)" title="Trang đầu">
-                        <i class="bi bi-chevron-double-left"></i>
-                    </button>
-                    <button class="btn-page" @onclick="() => GoToPage(currentPage - 1)" disabled="@(currentPage == 1)" title="Trang trước">
-                        <i class="bi bi-chevron-left"></i>
-                    </button>
+            <div class="topic-cards-grid">
+                @foreach (var topic in FilteredTopics)
+                {
+                    var (total, learned, pct) = GetTopicStats(topic.Id);
+                    <div class="topic-card" style="--topic-accent: @topic.Color; --topic-bg: @topic.BgColor;">
+                        <div class="topic-card-top">
+                            <div class="topic-icon-circle" style="background: @topic.BgColor; color: @topic.Color;">
+                                <i class="bi @topic.Icon"></i>
+                            </div>
+                            <span class="topic-level-tag">@topic.LevelRange</span>
+                        </div>
 
-                    @foreach (var p in VisiblePageNumbers)
-                    {
-                        @if (p == -1)
-                        {
-                            <span class="page-ellipsis">...</span>
-                        }
-                        else
-                        {
-                            <button class="btn-page @(p == currentPage ? "active" : "")" @onclick="() => GoToPage(p)">
-                                @p
+                        <div class="topic-card-body">
+                            <h3 class="topic-name-vi">@topic.TitleVi</h3>
+                            <div class="topic-name-zh">
+                                <span class="zh-hanzi">@topic.TitleZh</span>
+                                <span class="zh-pinyin">@topic.Pinyin</span>
+                            </div>
+                            <p class="topic-desc">@topic.Description</p>
+                        </div>
+
+                        <div class="topic-progress-wrap">
+                            <div class="topic-progress-meta">
+                                <span>Tiến độ đã thuộc</span>
+                                <b>@learned / @total từ (@pct%)</b>
+                            </div>
+                            <div class="topic-progress-track">
+                                <div class="topic-progress-fill" style="width: @pct%; background: @topic.Color;"></div>
+                            </div>
+                        </div>
+
+                        <div class="topic-card-actions">
+                            <button class="btn-topic-explore" @onclick="() => SelectTopic(topic)">
+                                <span>Xem từ vựng</span>
+                                <i class="bi bi-arrow-right"></i>
                             </button>
-                        }
-                    }
+                            <button class="btn-topic-fc" @onclick="() => StartTopicFlashcards(topic)" title="Học Flashcard chủ đề này">
+                                <i class="bi bi-collection-play-fill"></i>
+                                <span>Flashcard</span>
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <!-- TOPIC DETAIL (XEM CHI TIẾT TỪ VỰNG CỦA CHỦ ĐỀ ĐƯỢC CHỌN) -->
+            var topicWords = CurrentTopicFilteredWords;
+            var (topicTotal, topicLearned, topicPct) = GetTopicStats(currentTopic.Id);
 
-                    <button class="btn-page" @onclick="() => GoToPage(currentPage + 1)" disabled="@(currentPage >= TotalPages)" title="Trang sau">
-                        <i class="bi bi-chevron-right"></i>
-                    </button>
-                    <button class="btn-page" @onclick="() => GoToPage(TotalPages)" disabled="@(currentPage >= TotalPages)" title="Trang cuối">
-                        <i class="bi bi-chevron-double-right"></i>
-                    </button>
+            <div class="topic-detail-wrapper">
+                <button class="btn-back-topics" @onclick="() => currentTopic = null">
+                    <i class="bi bi-arrow-left"></i>
+                    <span>Tất cả chủ đề</span>
+                </button>
+
+                <!-- Topic Hero Banner -->
+                <div class="topic-hero-card" style="--topic-accent: @currentTopic.Color; --topic-bg: @currentTopic.BgColor;">
+                    <div class="topic-hero-left">
+                        <div class="topic-hero-icon" style="background: @currentTopic.BgColor; color: @currentTopic.Color;">
+                            <i class="bi @currentTopic.Icon"></i>
+                        </div>
+                        <div class="topic-hero-info">
+                            <div class="topic-hero-tags">
+                                <span class="badge-topic-level">@currentTopic.LevelRange</span>
+                                <span class="badge-topic-active">Đang học chủ đề</span>
+                            </div>
+                            <h2 class="topic-hero-title">@currentTopic.TitleVi</h2>
+                            <div class="topic-hero-zh">
+                                <span class="hero-hanzi">@currentTopic.TitleZh</span>
+                                <span class="hero-pinyin">@currentTopic.Pinyin</span>
+                            </div>
+                            <p class="topic-hero-desc">@currentTopic.Description</p>
+                        </div>
+                    </div>
+
+                    <div class="topic-hero-right">
+                        <div class="hero-stats-box">
+                            <div class="hero-stat-item">
+                                <span class="hero-stat-num">@topicTotal</span>
+                                <span class="hero-stat-lbl">Tổng từ</span>
+                            </div>
+                            <div class="hero-stat-divider"></div>
+                            <div class="hero-stat-item">
+                                <span class="hero-stat-num text-success">@topicLearned</span>
+                                <span class="hero-stat-lbl">Đã thuộc</span>
+                            </div>
+                            <div class="hero-stat-divider"></div>
+                            <div class="hero-stat-item">
+                                <span class="hero-stat-num text-amber">@(topicTotal - topicLearned)</span>
+                                <span class="hero-stat-lbl">Cần ôn</span>
+                            </div>
+                        </div>
+
+                        <div class="hero-progress-bar-wrap">
+                            <div class="hero-progress-fill" style="width: @topicPct%; background: @currentTopic.Color;"></div>
+                        </div>
+
+                        <button class="btn-hero-fc" @onclick="() => StartTopicFlashcards(currentTopic)">
+                            <i class="bi bi-collection-play-fill"></i>
+                            <span>Luyện Flashcard Chủ Đề Này</span>
+                        </button>
+                    </div>
                 </div>
+
+                <!-- Topic Filter Toolbar -->
+                <div class="toolbar-card">
+                    <div class="search-box-wrapper">
+                        <i class="bi bi-search search-icon"></i>
+                        <input type="text" placeholder="Tìm từ trong chủ đề @currentTopic.TitleVi..." @bind="topicSearchTerm" @bind:event="oninput" />
+                    </div>
+
+                    <div class="toolbar-actions">
+                        <label class="hide-learned-toggle">
+                            <input type="checkbox" @bind="topicHideLearned" />
+                            <span>Ẩn từ đã thuộc</span>
+                        </label>
+
+                        <button class="btn-shuffle @(topicIsShuffled ? "active" : "")" @onclick="ToggleTopicShuffle">
+                            <i class="bi bi-shuffle"></i>
+                            <span>@(topicIsShuffled ? "Đang xáo trộn" : "Xáo trộn")</span>
+                        </button>
+                    </div>
+
+                    <div class="stats-counter">
+                        <span>Hiển thị: <b>@topicWords.Count</b> từ</span>
+                    </div>
+                </div>
+
+                @if (!topicWords.Any())
+                {
+                    <div class="empty-state">
+                        <i class="bi bi-chat-square-text"></i>
+                        <h4>Không tìm thấy từ vựng nào trong chủ đề này</h4>
+                        <p>Thử tắt "Ẩn từ đã thuộc" hoặc xóa bớt từ khóa tìm kiếm.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="vocab-grid">
+                        @foreach (var item in topicWords)
+                        {
+                            var isLearned = IsLearned(item.Id);
+                            <div class="vocab-card @(isLearned ? "is-learned" : "")">
+                                <div class="card-top-row">
+                                    <span class="vocab-level-tag">@item.HskLevel</span>
+                                    <button class="btn-audio" @onclick="() => SpeakChinese(item.Hanzi)" title="Phát âm">
+                                        <i class="bi bi-volume-up-fill"></i>
+                                    </button>
+                                </div>
+
+                                <div class="vocab-front">
+                                    <div class="hanzi">@item.Hanzi</div>
+                                    <div class="pinyin">@item.Pinyin</div>
+                                </div>
+
+                                <div class="vocab-back">
+                                    <div class="meaning">@item.Meaning</div>
+                                    @if (!string.IsNullOrEmpty(item.WordType))
+                                    {
+                                        <div class="word-type">@item.WordType</div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(item.ExampleSentence))
+                                    {
+                                        <div class="example-box">
+                                            <div class="ex-hanzi">@item.ExampleSentence</div>
+                                            @if (!string.IsNullOrEmpty(item.ExamplePinyin))
+                                            {
+                                                <div class="ex-pinyin">@item.ExamplePinyin</div>
+                                            }
+                                            @if (!string.IsNullOrEmpty(item.ExampleMeaning))
+                                            {
+                                                <div class="ex-meaning">@item.ExampleMeaning</div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="vocab-actions">
+                                    <button class="learn-btn @(isLearned ? "learned" : "")" @onclick="() => ToggleLearned(item.Id)">
+                                        @if (isLearned)
+                                        {
+                                            <i class="bi bi-check2-circle"></i>
+                                            <span>Đã thuộc</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-bookmark-plus"></i>
+                                            <span>Đánh dấu đã thuộc</span>
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
         }
     }
@@ -205,7 +442,15 @@
             <div class="fc-topbar">
                 @if (!showSessionSummary)
                 {
-                    <span class="fc-counter"><b>@(sessionIndex + 1)</b> / @sessionQueue.Count</span>
+                    <div class="fc-topbar-info">
+                        <span class="fc-counter"><b>@(sessionIndex + 1)</b> / @sessionQueue.Count</span>
+                        @if (viewCategoryMode == "topic" && currentTopic != null)
+                        {
+                            <span class="fc-topic-chip" style="background:@currentTopic.BgColor; color:@currentTopic.Color;">
+                                <i class="bi @currentTopic.Icon"></i> @currentTopic.TitleVi
+                            </span>
+                        }
+                    </div>
                 }
                 else
                 {
@@ -343,6 +588,162 @@
     private bool isLoading = true;
     private HashSet<int> learnedIds = new();
 
+    // Mode Switcher (level vs topic)
+    private string viewCategoryMode = "level"; // "level" | "topic"
+    private HskTopicItem? currentTopic = null;
+    private string topicFilterTerm = "";
+    private string topicSearchTerm = "";
+    private bool topicHideLearned = false;
+    private bool topicIsShuffled = false;
+    private List<HskVocabularyItem>? topicShuffledItems;
+
+    // Topic Caches for instant 0ms switching
+    private Dictionary<string, List<HskVocabularyItem>> _topicWordsCache = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, (int total, int learned, int percent)> _topicStatsCache = new(StringComparer.OrdinalIgnoreCase);
+
+    private void SetCategoryMode(string mode)
+    {
+        if (viewCategoryMode == mode) return;
+        viewCategoryMode = mode;
+        if (mode == "level")
+        {
+            currentTopic = null;
+        }
+        else if (_topicWordsCache.Count == 0)
+        {
+            RebuildTopicCache();
+        }
+    }
+
+    private void SelectTopic(HskTopicItem topic)
+    {
+        currentTopic = topic;
+        topicSearchTerm = "";
+        topicHideLearned = false;
+        topicIsShuffled = false;
+        topicShuffledItems = null;
+    }
+
+    private void RebuildTopicCache()
+    {
+        var newCache = new Dictionary<string, List<HskVocabularyItem>>(StringComparer.OrdinalIgnoreCase);
+        var newStats = new Dictionary<string, (int total, int learned, int percent)>(StringComparer.OrdinalIgnoreCase);
+
+        // Pre-build index for external vocab items if any
+        ILookup<string, HskVocabularyItem>? externalLookup = null;
+        if (vocabItems.Count > 0)
+        {
+            externalLookup = vocabItems.ToLookup(w => w.Topic ?? HskTopicCatalog.InferTopic(w) ?? string.Empty);
+        }
+
+        foreach (var topic in HskTopicCatalog.Topics)
+        {
+            var staticList = HskTopicCatalog.GetStaticWords(topic.Id);
+            var list = new List<HskVocabularyItem>(staticList);
+
+            if (externalLookup != null && externalLookup.Contains(topic.Id))
+            {
+                var existingHanzi = new HashSet<string>(staticList.Select(x => x.Hanzi));
+                foreach (var ext in externalLookup[topic.Id])
+                {
+                    if (existingHanzi.Add(ext.Hanzi))
+                    {
+                        list.Add(ext);
+                    }
+                }
+            }
+
+            newCache[topic.Id] = list;
+
+            int total = list.Count;
+            int learned = 0;
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (learnedIds.Contains(list[i].Id)) learned++;
+            }
+            int pct = total == 0 ? 0 : (int)Math.Round((double)learned / total * 100);
+            newStats[topic.Id] = (total, learned, pct);
+        }
+
+        _topicWordsCache = newCache;
+        _topicStatsCache = newStats;
+    }
+
+    private void UpdateTopicStatsOnly()
+    {
+        var newStats = new Dictionary<string, (int total, int learned, int percent)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kvp in _topicWordsCache)
+        {
+            int total = kvp.Value.Count;
+            int learned = 0;
+            for (int i = 0; i < kvp.Value.Count; i++)
+            {
+                if (learnedIds.Contains(kvp.Value[i].Id)) learned++;
+            }
+            int pct = total == 0 ? 0 : (int)Math.Round((double)learned / total * 100);
+            newStats[kvp.Key] = (total, learned, pct);
+        }
+        _topicStatsCache = newStats;
+    }
+
+    private List<HskTopicItem> FilteredTopics =>
+        string.IsNullOrWhiteSpace(topicFilterTerm)
+            ? HskTopicCatalog.Topics
+            : HskTopicCatalog.Topics.Where(t =>
+                t.TitleVi.Contains(topicFilterTerm, StringComparison.OrdinalIgnoreCase) ||
+                t.TitleZh.Contains(topicFilterTerm, StringComparison.OrdinalIgnoreCase) ||
+                t.Pinyin.Contains(topicFilterTerm, StringComparison.OrdinalIgnoreCase)
+              ).ToList();
+
+    private (int total, int learned, int percent) GetTopicStats(string topicId)
+    {
+        if (_topicStatsCache.TryGetValue(topicId, out var stats))
+            return stats;
+        return (0, 0, 0);
+    }
+
+    private List<HskVocabularyItem> CurrentTopicBaseWords
+    {
+        get
+        {
+            if (currentTopic == null) return new();
+            if (!_topicWordsCache.TryGetValue(currentTopic.Id, out var words))
+            {
+                words = HskTopicCatalog.GetWordsForTopic(currentTopic.Id, vocabItems);
+                _topicWordsCache[currentTopic.Id] = words;
+            }
+            return topicIsShuffled ? (topicShuffledItems ?? words) : words;
+        }
+    }
+
+    private List<HskVocabularyItem> CurrentTopicFilteredWords =>
+        CurrentTopicBaseWords
+            .Where(x => !topicHideLearned || !IsLearned(x.Id))
+            .Where(x => string.IsNullOrWhiteSpace(topicSearchTerm) ||
+                        (x.Hanzi != null && x.Hanzi.Contains(topicSearchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                        (x.Pinyin != null && x.Pinyin.Contains(topicSearchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                        (x.Meaning != null && x.Meaning.Contains(topicSearchTerm, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+    private void ToggleTopicShuffle()
+    {
+        if (currentTopic == null) return;
+        topicIsShuffled = !topicIsShuffled;
+        if (_topicWordsCache.TryGetValue(currentTopic.Id, out var words))
+        {
+            topicShuffledItems = topicIsShuffled ? ShuffleList(words) : null;
+        }
+    }
+
+    private async Task StartTopicFlashcards(HskTopicItem topic)
+    {
+        if (!_topicWordsCache.TryGetValue(topic.Id, out var words))
+        {
+            words = HskTopicCatalog.GetWordsForTopic(topic.Id, vocabItems);
+        }
+        await StartFlashcardSession(words);
+    }
+
     // Danh sách xáo trộn + ẩn từ đã thuộc
     private bool isShuffled = false;
     private bool hideLearned = false;
@@ -473,6 +874,8 @@
         if (isShuffled)
             shuffledItems = ShuffleList(vocabItems);
 
+        RebuildTopicCache();
+
         isLoading = false;
         StateHasChanged();
     }
@@ -543,6 +946,9 @@
 
         await PersistLearnedState();
 
+        // Cập nhật thống kê chủ đề tức thì O(1)
+        UpdateTopicStatsOnly();
+
         // Đăng nhập thì đồng bộ lên tài khoản
         if (isAuthenticated)
         {
@@ -555,15 +961,21 @@
 
     // ===== Flashcard session =====
 
-    private async Task StartFlashcardSession()
+    private async Task StartFlashcardSession(List<HskVocabularyItem>? customSource = null)
     {
+        var src = customSource ?? vocabItems;
         // Pool: chỉ những từ CHƯA được đánh dấu là đã thuộc, xáo trộn ngẫu nhiên
-        var pool = ShuffleList(vocabItems.Where(x => !IsLearned(x.Id)).ToList());
+        var pool = ShuffleList(src.Where(x => !IsLearned(x.Id)).ToList());
 
         if (pool.Count == 0)
         {
-            await JS.InvokeVoidAsync("alert", "Tuyệt vời! Tất cả từ vựng ở cấp độ này đều đã thuộc.");
-            return;
+            // Nếu đã thuộc hết trong nhóm này, cho phép ôn lại toàn bộ
+            pool = ShuffleList(src.ToList());
+            if (pool.Count == 0)
+            {
+                await JS.InvokeVoidAsync("alert", "Chưa có từ vựng nào trong nhóm này.");
+                return;
+            }
         }
 
         sessionQueue = pool.Take(flashcardSize).ToList();

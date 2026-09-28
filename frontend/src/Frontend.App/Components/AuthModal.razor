@@ -130,7 +130,12 @@
 }
 
 @code {
-    public bool IsVisible { get; private set; }
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> IsVisibleChanged { get; set; }
+
     private bool IsLogin = true;
     private bool IsLoading = false;
     private string ErrorMessage = string.Empty;
@@ -169,12 +174,14 @@
         showPassword = false;
         showConfirmPassword = false;
         IsVisible = true;
+        _ = IsVisibleChanged.InvokeAsync(true);
         StateHasChanged();
     }
 
     public void Close()
     {
         IsVisible = false;
+        _ = IsVisibleChanged.InvokeAsync(false);
         StateHasChanged();
     }
 

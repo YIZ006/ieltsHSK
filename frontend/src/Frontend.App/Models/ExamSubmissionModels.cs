@@ -143,11 +143,17 @@ public sealed class IeltsCriterionScore
 
 public sealed class SubmissionSummaryDto
 {
+    public string Id { get; set; } = "";
     public string Skill { get; set; } = "";
+    public string ExamTitle { get; set; } = "";
+    public string ExamUrl { get; set; } = "";
     public double BandScore { get; set; }
     public int CorrectCount { get; set; }
     public int TotalCount { get; set; }
     public DateTimeOffset SubmittedAt { get; set; }
+    public GradingResultRecord? Grading { get; set; }
+    public IeltsScoreReport? Score { get; set; }
+    public SpeakingSubmissionData? Speaking { get; set; }
 }
 
 public sealed class TestSubmissionSyncDto

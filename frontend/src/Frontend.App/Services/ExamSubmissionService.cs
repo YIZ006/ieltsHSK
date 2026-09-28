@@ -305,7 +305,7 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
     }
 
     /// <summary>Lấy N bài làm gần nhất (có điểm) để phân tích trên trang Ưu tiên ôn tập.</summary>
-    public async Task<List<SubmissionSummaryDto>> GetMyRecentSubmissionsAsync(int take = 10)
+    public async Task<List<SubmissionSummaryDto>> GetMyRecentSubmissionsAsync(int take = 15)
     {
         var all = await GetAllAsync();
         return all
@@ -314,11 +314,17 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
             .Take(take)
             .Select(s => new SubmissionSummaryDto
             {
+                Id           = s.Id,
                 Skill        = CapitalizeFirst(s.Skill ?? ""),
+                ExamTitle    = !string.IsNullOrWhiteSpace(s.ExamTitle) ? s.ExamTitle : (!string.IsNullOrWhiteSpace(s.TestTitle) ? s.TestTitle : "Đề thi IELTS"),
+                ExamUrl      = s.ExamUrl,
                 BandScore    = s.BandScore ?? s.Score?.Overall ?? 0,
                 CorrectCount = s.CorrectCount ?? s.Grading?.CorrectCount ?? 0,
                 TotalCount   = s.TotalQuestions ?? s.Grading?.TotalCount ?? 0,
-                SubmittedAt  = s.SubmittedAt
+                SubmittedAt  = s.SubmittedAt,
+                Grading      = s.Grading,
+                Score        = s.Score,
+                Speaking     = s.Speaking
             })
             .ToList();
     }

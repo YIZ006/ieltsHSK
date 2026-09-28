@@ -24,7 +24,7 @@ public static class AiEndpoints
         {
             var result = await aiService.GradeWritingAsync(request, cancellationToken);
             return Results.Ok(result);
-        });
+        }).RequireRateLimiting("ai");
 
 
         app.MapPost("/api/ai/grade-speaking", [Microsoft.AspNetCore.Authorization.Authorize] async (
@@ -34,7 +34,7 @@ public static class AiEndpoints
         {
             var result = await aiService.GradeSpeakingAsync(request, cancellationToken);
             return Results.Ok(result);
-        });
+        }).RequireRateLimiting("ai");
 
         // ─── SPEAKING: Upload audio riêng tư lên R2 Private ───
 

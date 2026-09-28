@@ -897,4 +897,509 @@
     padding: 0 6px;
     color: #94a3b8;
     font-weight: 700;
-}
+}
+
+/* ========================================================================= */
+/* HSK VOCABULARY - MODE SWITCHER & TOPIC LEARNING HUB                       */
+/* ========================================================================= */
+
+/* ─── Mode Switcher Bar ─── */
+.mode-tabs {
+    display: flex;
+    gap: 10px;
+    background: #f1f5f9;
+    padding: 5px;
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+}
+
+.mode-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.mode-tab:hover {
+    color: #0f172a;
+    background: rgba(255, 255, 255, 0.6);
+}
+
+.mode-tab.active {
+    background: #ffffff;
+    color: #dc2626;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.mode-badge-new {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 12px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.level-bar-wrapper {
+    margin-bottom: 20px;
+}
+
+/* ─── Topic Hub Header ─── */
+.topic-hub-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 26px;
+    flex-wrap: wrap;
+    gap: 16px;
+    background: linear-gradient(135deg, #ffffff 0%, #fef2f2 100%);
+    border: 1.5px solid #fee2e2;
+    border-radius: 18px;
+    padding: 20px 24px;
+    box-shadow: 0 4px 20px rgba(220, 38, 38, 0.04);
+}
+
+.topic-hub-title-box .topic-hub-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 6px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.topic-hub-title-box .topic-hub-title i {
+    color: #dc2626;
+}
+
+.topic-hub-sub {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+.topic-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #ffffff;
+    border: 1.5px solid #fca5a5;
+    border-radius: 12px;
+    padding: 8px 14px;
+    min-width: 280px;
+}
+
+.topic-search-wrap i {
+    color: #dc2626;
+    font-size: 0.95rem;
+}
+
+.topic-search-wrap input {
+    border: none;
+    outline: none;
+    width: 100%;
+    font-size: 0.88rem;
+    color: #0f172a;
+    background: transparent;
+}
+
+/* ─── Topic Cards Grid ─── */
+.topic-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    margin-bottom: 40px;
+}
+
+.topic-card {
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 18px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+    position: relative;
+    overflow: hidden;
+}
+
+.topic-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--topic-accent, #dc2626);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08);
+}
+
+.topic-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.topic-icon-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+}
+
+.topic-level-tag {
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.topic-card-body {
+    flex-grow: 1;
+    margin-bottom: 16px;
+}
+
+.topic-name-vi {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 6px 0;
+}
+
+.topic-name-zh {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.topic-name-zh .zh-hanzi {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--topic-accent, #dc2626);
+    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.topic-name-zh .zh-pinyin {
+    font-size: 0.82rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.topic-desc {
+    font-size: 0.84rem;
+    color: #64748b;
+    line-height: 1.45;
+    margin: 0;
+}
+
+/* Topic Progress inside Card */
+.topic-progress-wrap {
+    margin-bottom: 16px;
+    padding-top: 12px;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.topic-progress-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.76rem;
+    color: #64748b;
+    margin-bottom: 6px;
+}
+
+.topic-progress-meta b {
+    color: #0f172a;
+}
+
+.topic-progress-track {
+    height: 7px;
+    background: #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.topic-progress-fill {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.4s ease;
+}
+
+/* Topic Card Actions */
+.topic-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-topic-explore {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 14px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    color: #0f172a;
+    font-size: 0.86rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-topic-explore:hover {
+    background: var(--topic-accent, #dc2626);
+    border-color: var(--topic-accent, #dc2626);
+    color: #ffffff;
+}
+
+.btn-topic-fc {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 9px 14px;
+    border-radius: 10px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #2563eb;
+    font-size: 0.86rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-topic-fc:hover {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+}
+
+/* ─── Topic Detail View ─── */
+.btn-back-topics {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 10px;
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    color: #334155;
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 20px;
+    transition: all 0.15s ease;
+}
+
+.btn-back-topics:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #0f172a;
+}
+
+.topic-hero-card {
+    background: #ffffff;
+    border-radius: 20px;
+    border: 1.5px solid #e2e8f0;
+    border-left: 6px solid var(--topic-accent, #dc2626);
+    padding: 26px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 24px;
+    box-shadow: 0 4px 22px rgba(0, 0, 0, 0.05);
+}
+
+.topic-hero-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    max-width: 600px;
+}
+
+.topic-hero-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.7rem;
+    flex-shrink: 0;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+.topic-hero-tags {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.badge-topic-level {
+    font-size: 0.74rem;
+    font-weight: 800;
+    padding: 3px 9px;
+    border-radius: 16px;
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.badge-topic-active {
+    font-size: 0.74rem;
+    font-weight: 800;
+    padding: 3px 9px;
+    border-radius: 16px;
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+.topic-hero-title {
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 6px 0;
+}
+
+.topic-hero-zh {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.topic-hero-zh .hero-hanzi {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--topic-accent, #dc2626);
+    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.topic-hero-zh .hero-pinyin {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.topic-hero-desc {
+    font-size: 0.9rem;
+    color: #475569;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.topic-hero-right {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 280px;
+}
+
+.hero-stats-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 12px 18px;
+}
+
+.hero-stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.hero-stat-num {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.hero-stat-lbl {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.hero-stat-divider {
+    width: 1px;
+    height: 28px;
+    background: #cbd5e1;
+}
+
+.hero-progress-bar-wrap {
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.hero-progress-fill {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.4s ease;
+}
+
+.btn-hero-fc {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #ffffff;
+    font-size: 0.92rem;
+    font-weight: 800;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.28);
+    transition: all 0.2s ease;
+}
+
+.btn-hero-fc:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.35);
+}
+
+/* Flashcard Topbar Topic Tag */
+.fc-topbar-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.fc-topic-chip {
+    font-size: 0.76rem;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+

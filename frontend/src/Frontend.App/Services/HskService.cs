@@ -170,18 +170,109 @@ public class HskService
         {
             using var content = new MultipartFormDataContent();
             var fileContent = new StreamContent(file.OpenReadStream(20 * 1024 * 1024));
-            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+            var mime = ResolveMimeType(file);
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(mime);
             content.Add(fileContent, "file", file.Name);
             content.Add(new StringContent(mode), "mode");
 
             var response = await _http.PostAsync("/api/hsk/vocab/import-excel", content);
-            if (!response.IsSuccessStatusCode) return null;
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                var msg = response.StatusCode == System.Net.HttpStatusCode.Unauthorized || response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                    ? "Phiên đăng nhập Quản trị viên (Admin) đã hết hạn hoặc không đủ quyền. Vui lòng đăng nhập lại."
+                    : (!string.IsNullOrWhiteSpace(err) ? err : $"Máy chủ phản hồi mã lỗi {(int)response.StatusCode}: {response.ReasonPhrase}");
+                return new HskImportExcelResponse(0, 1, 0, 0, null, new List<string> { $"[{file.Name}] {msg}" });
+            }
+            InvalidateVocabCache();
             return await response.Content.ReadFromJsonAsync<HskImportExcelResponse>();
         }
-        catch
+        catch (Exception ex)
         {
-            return null;
+            return new HskImportExcelResponse(0, 1, 0, 0, null, new List<string> { $"[{file.Name}] Lỗi đọc/gửi file: {ex.Message}" });
         }
+    }
+
+    public async Task<HskImportExcelResponse?> ImportMultipleVocabularyExcelAsync(IReadOnlyList<Microsoft.AspNetCore.Components.Forms.IBrowserFile> files, string mode = "skip")
+    {
+        try
+        {
+            Console.WriteLine($"[HskService] Chuẩn bị gửi {files.Count} file tới /api/hsk/vocab/import-multiple (mode={mode})...");
+            using var content = new MultipartFormDataContent();
+            foreach (var file in files)
+            {
+                var fileContent = new StreamContent(file.OpenReadStream(20 * 1024 * 1024));
+                var mime = ResolveMimeType(file);
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(mime);
+                content.Add(fileContent, "files", file.Name);
+                Console.WriteLine($"[HskService] -> Đính kèm: {file.Name} ({file.Size} bytes, MIME={mime})");
+            }
+            content.Add(new StringContent(mode), "mode");
+
+            var response = await _http.PostAsync("/api/hsk/vocab/import-multiple", content);
+            Console.WriteLine($"[HskService] Server phản hồi: {(int)response.StatusCode} {response.ReasonPhrase}");
+
+            // Nếu endpoint import-multiple chưa có hoặc 404, tự động fallback gọi import-excel tuần tự cho từng file
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                Console.WriteLine("[HskService] Endpoint import-multiple trả về 404, chuyển sang gọi tuần tự import-excel...");
+                int totSuccess = 0, totFail = 0, totDup = 0, totUpd = 0;
+                var allErrs = new List<string>();
+                string? lastJson = null;
+
+                foreach (var file in files)
+                {
+                    var singleRes = await ImportVocabularyExcelAsync(file, mode);
+                    if (singleRes != null)
+                    {
+                        totSuccess += singleRes.Success;
+                        totFail += singleRes.Fail;
+                        totDup += singleRes.Duplicate;
+                        totUpd += singleRes.Updated;
+                        lastJson = singleRes.JsonUrl ?? lastJson;
+                        if (singleRes.Errors?.Any() == true) allErrs.AddRange(singleRes.Errors);
+                    }
+                    else
+                    {
+                        totFail++;
+                        allErrs.Add($"[{file.Name}] Không thể tải lên file.");
+                    }
+                }
+                InvalidateVocabCache();
+                return new HskImportExcelResponse(totSuccess, totFail, totDup, totUpd, lastJson, allErrs);
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[HskService Lỗi] Chi tiết: {err}");
+                var msg = response.StatusCode == System.Net.HttpStatusCode.Unauthorized || response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                    ? "Phiên đăng nhập Quản trị viên (Admin) đã hết hạn hoặc không đủ quyền. Vui lòng đăng nhập lại."
+                    : (!string.IsNullOrWhiteSpace(err) ? err : $"Máy chủ phản hồi mã lỗi {(int)response.StatusCode}: {response.ReasonPhrase}");
+                return new HskImportExcelResponse(0, files.Count, 0, 0, null, new List<string> { msg });
+            }
+
+            InvalidateVocabCache();
+            var res = await response.Content.ReadFromJsonAsync<HskImportExcelResponse>();
+            Console.WriteLine($"[HskService] Nhận kết quả: Success={res?.Success}, Fail={res?.Fail}, Dup={res?.Duplicate}, Upd={res?.Updated}");
+            return res;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HskService Exception] {ex.Message}");
+            return new HskImportExcelResponse(0, files.Count, 0, 0, null, new List<string> { $"Lỗi tải lên: {ex.Message}" });
+        }
+    }
+
+    private static string ResolveMimeType(Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
+    {
+        if (!string.IsNullOrWhiteSpace(file.ContentType) && System.Net.Http.Headers.MediaTypeHeaderValue.TryParse(file.ContentType, out _))
+            return file.ContentType;
+        if (file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) || file.Name.EndsWith(".cvs", StringComparison.OrdinalIgnoreCase))
+            return "text/csv";
+        if (file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+            return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        return "application/octet-stream";
     }
 
     // === Vocabulary Progress (theo tài khoản) ===
@@ -292,6 +383,7 @@ public class HskService
         try
         {
             var response = await _http.DeleteAsync($"/api/hsk/vocab/{id}");
+            if (response.IsSuccessStatusCode) InvalidateVocabCache();
             return response.IsSuccessStatusCode;
         }
         catch
@@ -299,11 +391,42 @@ public class HskService
             return false;
         }
     }
+
+    public async Task<(bool Success, int Deleted)> DeleteAllVocabularyAsync()
+    {
+        try
+        {
+            var response = await _http.DeleteAsync("/api/hsk/vocab/all");
+            if (!response.IsSuccessStatusCode) return (false, 0);
+            InvalidateVocabCache();
+            var result = await response.Content.ReadFromJsonAsync<HskDeleteAllResult>();
+            return (true, result?.Deleted ?? 0);
+        }
+        catch
+        {
+            return (false, 0);
+        }
+    }
+
+    public async Task<byte[]?> GetTemplateExcelAsync()
+    {
+        try
+        {
+            return await _http.GetByteArrayAsync("/api/hsk/vocab/template-excel");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HskService] Lỗi tải file mẫu Excel: {ex.Message}");
+            return null;
+        }
+    }
 }
+
+public record HskDeleteAllResult(int Deleted, int R2FilesDeleted);
 
 // === Request/Response DTOs ===
 public record HskSaveExamRequest(string CollectionName, string Title, int? MockTestId, object ExamData);
 public record HskSaveExamResponse(string Url, int Id);
 public record HskUploadMediaResponse(string Url, string Type);
-public record HskImportExcelResponse(int Success, int Fail, int Duplicate, int Updated, string? JsonUrl, List<string>? Errors);
+public record HskImportExcelResponse(int Success, int Fail, int Duplicate, int Updated, string? JsonUrl, List<string>? Errors, List<string>? Logs = null);
 public record HskVocabProgressResponse(List<int> VocabularyIds);
