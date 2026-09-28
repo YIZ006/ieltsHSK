@@ -6,7 +6,6 @@
 @inject AuthService AuthSvc
 @inject StreakService StreakSvc
 @inject ExamSubmissionService Submissions
-@inject ToeicAchievementService AchievementService
 @inject NavigationManager NavigationManager
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JS
@@ -198,10 +197,10 @@
                                 </div>
                             </div>
                             <div class="quick-stat-item">
-                                <div class="quick-stat-icon stat-toeic">🎯</div>
+                                <div class="quick-stat-icon stat-hsk">🇨🇳</div>
                                 <div class="quick-stat-info">
-                                    <span class="quick-stat-val">@(GetBestScore("TOEIC") != "--" ? GetBestScore("TOEIC") : "Chưa thi")</span>
-                                    <span class="quick-stat-lbl">Kỷ lục TOEIC</span>
+                                    <span class="quick-stat-val">@(GetBestScore("HSK") != "--" ? GetBestScore("HSK") : "Chưa thi")</span>
+                                    <span class="quick-stat-lbl">Kỷ lục HSK</span>
                                 </div>
                             </div>
                         </div>
@@ -251,53 +250,11 @@
                                     <span class="score-value">@(GetBestScore("IELTS"))</span>
                                     <span class="score-scale">/ 9.0 Band</span>
                                 </div>
-                                <div class="score-card score-toeic">
-                                    <span class="score-prog">TOEIC</span>
-                                    <span class="score-value">@(GetBestScore("TOEIC"))</span>
-                                    <span class="score-scale">/ 990 Điểm</span>
-                                </div>
                                 <div class="score-card score-hsk">
                                     <span class="score-prog">HSK</span>
                                     <span class="score-value">@(GetBestScore("HSK"))</span>
                                     <span class="score-scale">/ 300 Điểm</span>
                                 </div>
-                            </div>
-                        </div>
-
-                        <div class="achievements-modal-block">
-                            <div class="block-header">
-                                <h5 class="block-title"><i class="bi bi-patch-check-fill text-warning"></i> Huy hiệu & Thành tích TOEIC</h5>
-                                <span class="ach-count-badge">@achievements.Count(a => a.Unlocked) / @achievements.Count đã đạt</span>
-                            </div>
-                            <div class="modal-ach-grid">
-                                @foreach (var a in achievements)
-                                {
-                                    <div class="modal-ach-card @(a.Unlocked ? "unlocked" : "locked")">
-                                        <div class="modal-ach-top">
-                                            <div class="modal-ach-icon">@a.Icon</div>
-                                            <div class="modal-ach-status">
-                                                @if (a.Unlocked)
-                                                {
-                                                    <span class="status-badge unlocked"><i class="bi bi-check-circle-fill"></i> Đạt</span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="status-badge locked"><i class="bi bi-lock-fill"></i> Chưa đạt</span>
-                                                }
-                                            </div>
-                                        </div>
-                                        <div class="modal-ach-body">
-                                            <div class="modal-ach-title">@a.Title</div>
-                                            <div class="modal-ach-desc">@a.Description</div>
-                                            <div class="modal-ach-progress-wrap">
-                                                <div class="modal-ach-progress-bar">
-                                                    <div class="modal-ach-progress-fill" style="width: @(a.ProgressPercent)%"></div>
-                                                </div>
-                                                <span class="modal-ach-progress-text">@a.ProgressText</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                }
                             </div>
                         </div>
                     </div>
@@ -374,7 +331,6 @@
 
     private UserProfile profile = new();
     private List<IeltsSubmissionRecord> recentSubmissions = new();
-    private List<ToeicAchievement> achievements = new();
     private string activeTab = "info";
     private string username = "user";
     private string userEmail = "";
@@ -482,15 +438,6 @@
 
             var allSubs = await Submissions.GetAllAsync();
             recentSubmissions = allSubs.OrderByDescending(s => s.SubmittedAt).Take(15).ToList();
-
-            try
-            {
-                achievements = await AchievementService.GetAllAsync();
-            }
-            catch
-            {
-                achievements = new();
-            }
         }
         catch { }
     }

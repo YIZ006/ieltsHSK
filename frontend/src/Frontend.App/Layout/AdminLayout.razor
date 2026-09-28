@@ -62,8 +62,7 @@ else
         <header class="admin-topbar">
             <div class="topbar-logo" @onclick='() => NavigationManager.NavigateTo("/portal-hub")'>
                 <span class="logo-icon">
-                    @if (activeDomain == "TOEIC") { <span>🏆</span> }
-                    else if (activeDomain == "HSK") { <span>🇨🇳</span> }
+                    @if (activeDomain == "HSK") { <span>🇨🇳</span> }
                     else if (activeDomain == "USERS") { <span>👥</span> }
                     else { <span>🇬🇧</span> }
                 </span>
@@ -73,9 +72,6 @@ else
             <nav class="topbar-nav">
                 <button class="nav-tab tab-ielts @(activeDomain == "IELTS" ? "active" : "")" @onclick='() => SwitchDomain("IELTS")'>
                     <span class="tab-icon">🇬🇧</span> IELTS
-                </button>
-                <button class="nav-tab tab-toeic @(activeDomain == "TOEIC" ? "active" : "")" @onclick='() => SwitchDomain("TOEIC")'>
-                    <span class="tab-icon">🏆</span> TOEIC
                 </button>
                 <button class="nav-tab tab-hsk @(activeDomain == "HSK" ? "active" : "")" @onclick='() => SwitchDomain("HSK")'>
                     <span class="tab-icon">🇨🇳</span> HSK
@@ -170,29 +166,6 @@ else
                             </a>
                         </li>
                     }
-                    else if (activeDomain == "TOEIC")
-                    {
-                        <li class="menu-item @(IsActive("/portal-hub/toeic-mock-tests") ? "active" : "")">
-                            <a href="/portal-hub/toeic-mock-tests">
-                                <i class="bi bi-journal-text"></i> Quản lý đề thi TOEIC
-                            </a>
-                        </li>
-                        <li class="menu-item @(IsActive("/portal-hub/toeic-builder") ? "active" : "")">
-                            <a href="/portal-hub/toeic-builder">
-                                <i class="bi bi-pencil-square"></i> Tạo & Sửa đề TOEIC
-                            </a>
-                        </li>
-                        <li class="menu-item @(IsActive("/portal-hub/navigation") ? "active" : "")">
-                            <a href="/portal-hub/navigation">
-                                <i class="bi bi-list-nested"></i> Cấu hình Menu (Navigation)
-                            </a>
-                        </li>
-                        <li class="menu-item @(IsActive("/portal-hub/users") && NavigationManager.Uri.Contains("toeic") ? "active" : "")">
-                            <a href="/portal-hub/users?domain=toeic">
-                                <i class="bi bi-people-fill"></i> Học viên TOEIC
-                            </a>
-                        </li>
-                    }
                     else if (activeDomain == "HSK")
                     {
                         <li class="menu-item @(IsActive("/portal-hub/hsk-mock-tests") ? "active" : "")">
@@ -226,11 +199,6 @@ else
                         <li class="menu-item @(NavigationManager.Uri.Contains("domain=ielts") ? "active" : "")">
                             <a href="/portal-hub/users?domain=ielts">
                                 <i class="bi bi-mortarboard-fill text-primary"></i> Học viên IELTS
-                            </a>
-                        </li>
-                        <li class="menu-item @(NavigationManager.Uri.Contains("domain=toeic") ? "active" : "")">
-                            <a href="/portal-hub/users?domain=toeic">
-                                <i class="bi bi-trophy-fill text-warning"></i> Học viên TOEIC
                             </a>
                         </li>
                         <li class="menu-item @(NavigationManager.Uri.Contains("domain=hsk") ? "active" : "")">
@@ -379,9 +347,7 @@ else
     {
         if (url.Contains("users", StringComparison.OrdinalIgnoreCase))
         {
-            if (NavigationManager.Uri.Contains("domain=toeic", StringComparison.OrdinalIgnoreCase))
-                activeDomain = "TOEIC";
-            else if (NavigationManager.Uri.Contains("domain=hsk", StringComparison.OrdinalIgnoreCase))
+            if (NavigationManager.Uri.Contains("domain=hsk", StringComparison.OrdinalIgnoreCase))
                 activeDomain = "HSK";
             else if (NavigationManager.Uri.Contains("domain=ielts", StringComparison.OrdinalIgnoreCase))
                 activeDomain = "IELTS";
@@ -391,10 +357,6 @@ else
         else if (url.Contains("hsk", StringComparison.OrdinalIgnoreCase))
         {
             activeDomain = "HSK";
-        }
-        else if (url.Contains("toeic", StringComparison.OrdinalIgnoreCase))
-        {
-            activeDomain = "TOEIC";
         }
         else
         {
@@ -407,8 +369,6 @@ else
         activeDomain = domain;
         if (domain == "IELTS")
             NavigationManager.NavigateTo("/portal-hub/mock-tests");
-        else if (domain == "TOEIC")
-            NavigationManager.NavigateTo("/portal-hub/toeic-mock-tests");
         else if (domain == "HSK")
             NavigationManager.NavigateTo("/portal-hub/hsk-mock-tests");
         else

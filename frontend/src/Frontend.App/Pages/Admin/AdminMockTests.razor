@@ -243,12 +243,9 @@
         isLoading = true;
         var allTests = await MockTestService.GetMockTestsAsync();
         tests = allTests.Where(t => 
-            string.IsNullOrEmpty(t.ToeicUrl) && 
             string.IsNullOrEmpty(t.HskUrl) &&
             !(t.Title != null && t.Title.Contains("HSK", StringComparison.OrdinalIgnoreCase)) &&
-            !(t.CollectionName != null && t.CollectionName.Contains("HSK", StringComparison.OrdinalIgnoreCase)) &&
-            !(t.Title != null && t.Title.Contains("TOEIC", StringComparison.OrdinalIgnoreCase)) &&
-            !(t.CollectionName != null && t.CollectionName.Contains("TOEIC", StringComparison.OrdinalIgnoreCase))
+            !(t.CollectionName != null && t.CollectionName.Contains("HSK", StringComparison.OrdinalIgnoreCase))
         ).ToList();
         isLoading = false;
     }

@@ -237,7 +237,6 @@ app.MapAuthEndpoints();
 app.MapAiEndpoints();
 app.MapIeltsEndpoints();
 app.MapHskEndpoints();
-app.MapToeicEndpoints();
 app.MapExamSubmissionEndpoints();
 app.MapStoryEndpoints();
 app.MapGrammarEndpoints();

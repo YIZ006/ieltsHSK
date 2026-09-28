@@ -21,7 +21,6 @@ public class DashboardStatsDto
 
     // Mock Tests
     public int TotalIeltsTests { get; set; }
-    public int TotalToeicTests { get; set; }
     public int TotalHskTests { get; set; }
 
     // Content Materials

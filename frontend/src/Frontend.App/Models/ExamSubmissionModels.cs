@@ -25,7 +25,7 @@ public sealed class IeltsSubmissionRecord
     public IeltsScoreReport? Score { get; set; }
     public string? TeacherFeedback { get; set; }
 
-    // Điểm riêng cho TOEIC (null với bài IELTS cũ)
+    // Điểm bổ sung (trắc nghiệm / câu đúng / HSK)
     public int? CorrectCount { get; set; }
     public int? TotalQuestions { get; set; }
     public int? ListeningScore { get; set; }

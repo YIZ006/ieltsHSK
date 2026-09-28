@@ -283,31 +283,6 @@ public static class DependencyInjection
                         CONSTRAINT uq_user_study_activities_user_date UNIQUE (user_id, activity_date)
                     );
 
-                    -- 6. Bảng toeic_vocabularies
-                    CREATE TABLE IF NOT EXISTS toeic_vocabularies (
-                        id SERIAL PRIMARY KEY,
-                        word TEXT NOT NULL,
-                        ipa TEXT NOT NULL DEFAULT '',
-                        meaning TEXT NOT NULL,
-                        example TEXT,
-                        topic TEXT NOT NULL DEFAULT 'Khác',
-                        is_custom BOOLEAN NOT NULL DEFAULT FALSE,
-                        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                    );
-                    CREATE INDEX IF NOT EXISTS ix_toeic_vocabularies_topic ON toeic_vocabularies(topic);
-
-                    -- 7. Bảng toeic_vocabulary_progresses
-                    CREATE TABLE IF NOT EXISTS toeic_vocabulary_progresses (
-                        id SERIAL PRIMARY KEY,
-                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                        vocabulary_id INTEGER NOT NULL REFERENCES toeic_vocabularies(id) ON DELETE CASCADE,
-                        status TEXT NOT NULL DEFAULT 'Learned',
-                        learned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                        CONSTRAINT uq_toeic_vocab_progress_user_vocab UNIQUE (user_id, vocabulary_id)
-                    );
-
                     -- 8. Bảng user_game_progresses
                     CREATE TABLE IF NOT EXISTS user_game_progresses (
                         id SERIAL PRIMARY KEY,
@@ -425,24 +400,12 @@ public static class DependencyInjection
                     new Notification
                     {
                         Title = "Chào mừng bạn đến với ieltsHSK!",
-                        Message = "Chúc bạn có những giờ học tập và luyện thi hiệu quả với hệ thống đề thi chuẩn IELTS, TOEIC và HSK.",
+                        Message = "Chúc bạn có những giờ học tập và luyện thi hiệu quả với hệ thống đề thi chuẩn IELTS và HSK.",
                         Type = "system",
                         Icon = "bi-stars",
                         TargetUrl = "/",
                         CreatedAt = DateTime.UtcNow,
                         CreatedByAdmin = "Hệ thống",
-                        IsBroadcast = true,
-                        IsActive = true
-                    },
-                    new Notification
-                    {
-                        Title = "Bộ đề thi TOEIC ETS mới đã sẵn sàng",
-                        Message = "Luyện thi trọn bộ Listening & Reading chuẩn format quốc tế với đồng hồ bấm giờ và chấm điểm tự động.",
-                        Type = "exam",
-                        Icon = "bi-journal-check",
-                        TargetUrl = "/toeic/test",
-                        CreatedAt = DateTime.UtcNow.AddMinutes(-30),
-                        CreatedByAdmin = "Admin",
                         IsBroadcast = true,
                         IsActive = true
                     },
@@ -551,19 +514,6 @@ public static class DependencyInjection
                 });
                 await dbContext.SaveChangesAsync();
             }
-
-            // Seed TOEIC LearningSections
-            if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "TOEIC"))
-            {
-                dbContext.LearningSections.AddRange(
-                    new LearningSection { Name = "Dashboard", Description = "Tổng quan TOEIC", Icon = "bi-speedometer2", Route = "/toeic", Language = "TOEIC", OrderIndex = 1 },
-                    new LearningSection { Name = "Luyện đề", Description = "Đề thi chuẩn ETS", Icon = "bi-journal-text", Route = "/toeic/test", Language = "TOEIC", OrderIndex = 2 },
-                    new LearningSection { Name = "Từ vựng", Description = "Flashcard 70 từ", Icon = "bi-layers", Route = "/toeic/flashcards", Language = "TOEIC", OrderIndex = 3 },
-                    new LearningSection { Name = "Nghe Part 1-4", Description = "Luyện Listening", Icon = "bi-headphones", Route = "/toeic/listening", Language = "TOEIC", OrderIndex = 4 },
-                    new LearningSection { Name = "Đọc Part 5-7", Description = "Luyện Reading", Icon = "bi-book", Route = "/toeic/reading", Language = "TOEIC", OrderIndex = 5 }
-                );
-                await dbContext.SaveChangesAsync();
-            }
         }
 
             // Ensure Ngữ pháp exists for IELTS
@@ -589,7 +539,7 @@ public static class DependencyInjection
                 await dbContext.SaveChangesAsync();
             }
 
-            // Ensure Trò chơi (/games) exists for IELTS, HSK, TOEIC
+            // Ensure Trò chơi (/games) exists for IELTS, HSK
             bool hasNewGames = false;
             if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "IELTS" && s.Route == "/games"))
             {
@@ -602,13 +552,6 @@ public static class DependencyInjection
             {
                 dbContext.LearningSections.Add(
                     new LearningSection { Name = "Trò chơi", Description = "Game học từ & phản xạ", Icon = "bi-controller", Route = "/games", Language = "HSK", OrderIndex = 10 }
-                );
-                hasNewGames = true;
-            }
-            if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "TOEIC" && s.Route == "/games"))
-            {
-                dbContext.LearningSections.Add(
-                    new LearningSection { Name = "Trò chơi", Description = "Game học từ & phản xạ", Icon = "bi-controller", Route = "/games", Language = "TOEIC", OrderIndex = 10 }
                 );
                 hasNewGames = true;
             }
@@ -675,9 +618,6 @@ public static class DependencyInjection
         {
             Console.WriteLine($"[SeedData] GrammarStructures table creation note: {ex.Message}");
         }
-        // Seed TOEIC Vocabulary
-        await ToeicVocabSeedData.SeedToeicVocabularyAsync(dbContext);
-
         // Seed Graded Reader Stories
         try
         {

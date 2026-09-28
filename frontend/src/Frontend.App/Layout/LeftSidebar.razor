@@ -75,7 +75,7 @@
 
                     @foreach (var item in g)
                     {
-                        var isRootDashboard = item.Route == "/toeic" || item.Route == "/ielts" || item.Route == "/hsk" || item.Route == "/ielts/dashboard";
+                        var isRootDashboard = item.Route == "/ielts" || item.Route == "/hsk" || item.Route == "/ielts/dashboard";
                         var matchMode = isRootDashboard ? NavLinkMatch.All : NavLinkMatch.Prefix;
 
                         <NavLink href="@item.Route" class="sb-item" Match="@matchMode" data-tooltip="@item.Name" title="@(isCollapsed ? item.Name : "")">
@@ -168,21 +168,6 @@
 @code {
     private static readonly Dictionary<string, List<LearningSectionDto>> PredefinedMenus = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["TOEIC"] = new()
-        {
-            // ── Tổng quan ──
-            new LearningSectionDto{ Name="Trang chủ", Route="/toeic", Icon="bi-house-door-fill", Language="TOEIC", Category="Tổng quan", OrderIndex=1, Description="Dashboard tổng quan" },
-
-            // ── Học tập ──
-            new LearningSectionDto{ Name="Từ vựng", Route="/toeic/flashcards?mode=table", Icon="bi-book-half", Language="TOEIC", Category="Học tập", OrderIndex=2, Description="Bảng từ tra cứu chi tiết" },
-            new LearningSectionDto{ Name="Flashcard 3D", Route="/toeic/flashcards", Icon="bi-layers-fill", Language="TOEIC", Category="Học tập", OrderIndex=3, Description="Thẻ lật 3D thông minh" },
-            new LearningSectionDto{ Name="Luyện nghe", Route="/toeic/test", Icon="bi-headphones", Language="TOEIC", Category="Học tập", OrderIndex=4, Description="Part 1–4 Listening" },
-            new LearningSectionDto{ Name="Luyện đọc", Route="/toeic/test", Icon="bi-file-earmark-text-fill", Language="TOEIC", Category="Học tập", OrderIndex=5, Description="Part 5–7 Reading" },
-
-            // ── Luyện tập & Thi thử ──
-            new LearningSectionDto{ Name="Đề thi ETS", Route="/toeic/test", Icon="bi-journal-check", Language="TOEIC", Category="Luyện tập", OrderIndex=6, Description="ETS 2024 & ETS 2026" },
-            new LearningSectionDto{ Name="Trò chơi", Route="/toeic/games", Icon="bi-controller", Language="TOEIC", Category="Luyện tập", OrderIndex=7, Description="Game từ vựng & phản xạ" },
-        },
         ["IELTS"] = new()
         {
             new LearningSectionDto{ Name="Trang chủ", Route="/ielts/dashboard", Icon="bi-house-door-fill", Language="IELTS", Category="Tổng quan", OrderIndex=0, Description="Dashboard tổng quan" },
@@ -212,7 +197,6 @@
 
     private static readonly (string Key, string Label, string Color, string Route)[] Programs =
     {
-        ("TOEIC", "TOEIC", "#6c63ff", "/toeic"),
         ("IELTS", "IELTS", "#0ea5e9", "/ielts/dashboard"),
         ("HSK",   "HSK",   "#ef4444", "/hsk"),
     };
@@ -260,8 +244,7 @@
         // Pre-warm background cache for all programs
         _ = Task.WhenAll(
             NavService.GetAsync("IELTS"),
-            NavService.GetAsync("HSK"),
-            NavService.GetAsync("TOEIC")
+            NavService.GetAsync("HSK")
         );
 
         NavManager.LocationChanged += OnLocationChanged;
@@ -286,10 +269,6 @@
         else if (relative.StartsWith("ielts"))
         {
             targetProg = "IELTS";
-        }
-        else if (relative.StartsWith("toeic"))
-        {
-            targetProg = "TOEIC";
         }
 
         if (targetProg != null)
@@ -334,7 +313,7 @@
             // Normalize any generic or other-program game routes to current program
             foreach (var item in menuItems)
             {
-                if (item.Route == "/games" || item.Route == "/tro-choi" || item.Route == "/ielts/games" || item.Route == "/toeic/games" || item.Route == "/hsk/games")
+                if (item.Route == "/games" || item.Route == "/tro-choi" || item.Route == "/ielts/games" || item.Route == "/hsk/games")
                 {
                     item.Route = gameRoute;
                 }

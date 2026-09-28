@@ -10,8 +10,8 @@ public sealed class UserProfile
     public string AvatarColor { get; set; } = "#6c5ce7";
     public string DisplayName { get; set; } = "";
     public string Bio { get; set; } = "";
-    public string TargetExam { get; set; } = "TOEIC";
-    public string TargetScore { get; set; } = "800";
+    public string TargetExam { get; set; } = "IELTS";
+    public string TargetScore { get; set; } = "7.0";
     public DateTime? TargetDeadline { get; set; }
     public string? IeltsLevel { get; set; }
     public string? HskLevel { get; set; }

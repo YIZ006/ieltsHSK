@@ -66,7 +66,6 @@
                     <select @bind="selectedExam">
                         <option value="">Mọi kỳ thi</option>
                         <option value="IELTS">IELTS Academic</option>
-                        <option value="TOEIC">TOEIC Speaking & Writing</option>
                         <option value="CAMBRIDGE">Cambridge FCE/CAE</option>
                         <option value="VSTEP">VSTEP B1-C1</option>
                     </select>
@@ -167,7 +166,7 @@
                                 <th style="width: 10%; text-align: center;">CEFR</th>
                                 <th style="width: 32%;">NGHĨA VIỆT</th>
                                 <th style="width: 22%;">CHỦ ĐỀ</th>
-                                <th style="width: 12%; text-align: center;">IELTS·CA·TOEIC</th>
+                                <th style="width: 12%; text-align: center;">IELTS·CA</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -555,8 +554,7 @@
         int hash = Math.Abs(item.Word.GetHashCode());
         int ielts = (hash % 2) + 1;
         int ca = ((hash / 3) % 2) + 1;
-        int toeic = ((hash / 7) % 2) + 1;
-        return $"{ielts}·{ca}·{toeic}";
+        return $"{ielts}·{ca}";
     }
 
     private bool IsTrickyWord(IeltsVocabularyItem item)

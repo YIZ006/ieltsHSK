@@ -85,9 +85,7 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
         "hsk_learned_HSK9",
         // Profile & Streak
         "user_profile",
-        "streak_active_days",
-        // TOEIC
-        "toeic_flashcards_v1",
+        "streak_active_days"
     ];
 
     private async Task ClearUserDataAsync()

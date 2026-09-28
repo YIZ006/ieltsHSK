@@ -88,7 +88,6 @@ builder.Services.AddScoped(sp =>
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
     return new ProfileService(localStorage, httpClient);
 });
-builder.Services.AddScoped<ToeicAchievementService>();
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
@@ -106,16 +105,7 @@ builder.Services.AddScoped(sp =>
     };
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
     var streakService = sp.GetRequiredService<StreakService>();
-    return new ToeicStudyTrackerService(localStorage, streakService, httpClient);
-});
-builder.Services.AddScoped(sp =>
-{
-    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
-    {
-        BaseAddress = new Uri(backendApiBaseUrl)
-    };
-    var localStorage = sp.GetRequiredService<ILocalStorageService>();
-    return new ToeicVocabularyService(httpClient, localStorage);
+    return new UserGameProgressService(httpClient, localStorage);
 });
 builder.Services.AddScoped(sp =>
 {
@@ -208,23 +198,6 @@ builder.Services.AddScoped(sp =>
     var httpClient = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
     var offlineStorage = sp.GetRequiredService<OfflineStorageService>();
     return new AnswerKeyService(httpClient, offlineStorage);
-});
-
-// ToeicService: load đề thi TOEIC từ wwwroot/sample-data hoặc Cloudflare R2
-builder.Services.AddScoped(sp =>
-{
-    var httpClient = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
-    return new ToeicService(httpClient);
-});
-
-// ToeicBuilderService: upload ảnh/audio per câu, lưu đề thi JSON lên Cloudflare R2
-builder.Services.AddScoped(sp =>
-{
-    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
-    {
-        BaseAddress = new Uri(backendApiBaseUrl)
-    };
-    return new ToeicBuilderService(httpClient);
 });
 
 // StoryService: quản lý và đọc truyện tiếng Anh (Graded Readers)

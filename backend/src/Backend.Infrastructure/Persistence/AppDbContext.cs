@@ -26,8 +26,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<IeltsVocabulary> IeltsVocabularies { get; set; }
     public DbSet<IeltsVocabularyImport> IeltsVocabularyImports { get; set; }
     public DbSet<IeltsVocabularyProgress> IeltsVocabularyProgresses { get; set; }
-    public DbSet<ToeicVocabulary> ToeicVocabularies { get; set; }
-    public DbSet<ToeicVocabularyProgress> ToeicVocabularyProgresses { get; set; }
     public DbSet<UserStudyActivity> UserStudyActivities { get; set; }
     public DbSet<UserGameProgress> UserGameProgresses { get; set; }
     public DbSet<ExamCheckpoint> ExamCheckpoints { get; set; }
@@ -151,31 +149,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(a => a.User)
                 .WithMany(u => u.StudyActivities)
                 .HasForeignKey(a => a.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        // ToeicVocabulary
-        modelBuilder.Entity<ToeicVocabulary>(entity =>
-        {
-            entity.HasIndex(v => v.Topic);
-            entity.HasIndex(v => new { v.Word, v.Meaning });
-            entity.HasOne(v => v.User)
-                .WithMany()
-                .HasForeignKey(v => v.UserId)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
-
-        // ToeicVocabularyProgress
-        modelBuilder.Entity<ToeicVocabularyProgress>(entity =>
-        {
-            entity.HasIndex(p => new { p.UserId, p.VocabularyId }).IsUnique();
-            entity.HasOne(p => p.User)
-                .WithMany(u => u.ToeicVocabularyProgresses)
-                .HasForeignKey(p => p.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(p => p.Vocabulary)
-                .WithMany(v => v.Progresses)
-                .HasForeignKey(p => p.VocabularyId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

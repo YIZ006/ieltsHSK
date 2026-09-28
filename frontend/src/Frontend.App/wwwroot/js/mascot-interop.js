@@ -115,7 +115,7 @@ window.MascotManager = (function () {
 
     const PAGE_GUIDANCE = {
         home: [
-            { text: "Chào mừng bạn trở lại! 🐺✨", sub: "Hôm nay bạn muốn luyện IELTS, HSK hay TOEIC nào?", reaction: "delighted" },
+            { text: "Chào mừng bạn trở lại! 🐺✨", sub: "Hôm nay bạn muốn luyện IELTS hay HSK nào?", reaction: "delighted" },
             { text: "Mỗi ngày 15 phút là đủ tạo kỳ tích! 🚀", sub: "Chọn một kỹ năng và bắt đầu ngay thôi bạn ơi!", reaction: "wink" },
             { text: "Duy trì chuỗi học tập (Streak) nhé! 🔥", sub: "Sói Tuyết luôn đồng hành tiếp lửa cùng bạn!", reaction: "sparkle" },
             { text: "Cần trợ giúp gì, cứ bấm vào mình nha! ❤️", sub: "Mình sẽ mách nước cho bạn rất nhiều mẹo hay!", reaction: "heart" }
@@ -192,11 +192,6 @@ window.MascotManager = (function () {
             { text: "Khu trò chơi luyện phản xạ từ vựng siêu cuốn! 🎮👾", sub: "Học mà chơi, chơi mà học - cách nạp từ không hề nhàm chán!", reaction: "delighted" },
             { text: "Vocab Shooter: Gõ đúng pinyin để tiêu diệt tàu địch! 🚀💥", sub: "Duy trì chuỗi combo để nhân đôi nhân ba điểm số nhé!", reaction: "wink" },
             { text: "Sói Tuyết đồng hành làm Co-pilot bắn hạ mọi quái vật! 🐺✈️", sub: "Ngón tay đặt sẵn trên bàn phím và sẵn sàng xuất kích!", reaction: "sparkle" }
-        ],
-        toeic: [
-            { text: "Góc luyện thi TOEIC Listening & Reading cấp tốc! 💼🎯", sub: "Bộ câu hỏi sát thực tế môi trường công sở quốc tế!", reaction: "delighted" },
-            { text: "Mẹo Part 5 & 6: Nhận diện nhanh từ loại trong 10-15 giây! ⏱️", sub: "Dành thời gian quý báu để đọc hiểu kỹ các đoạn văn dài ở Part 7!", reaction: "wink" },
-            { text: "Chinh phục mốc điểm 750+ TOEIC để tự tin hội nhập! 🚀", sub: "Sói Tuyết luôn tiếp sức cho bạn trên từng chặng đường!", reaction: "sparkle" }
         ],
         profile: [
             { text: "Hồ sơ cá nhân và bảng thành tích học tập! 🏆👤", sub: "Xem lại chuỗi ngày học liên tục (Streak) và các huy hiệu đạt được nhé!", reaction: "delighted" },
@@ -667,7 +662,6 @@ window.MascotManager = (function () {
         if (path.includes('/admin') || path.includes('/portal-hub')) return 'admin';
         if (path.includes('/profile')) return 'profile';
         if (path.includes('/games') || path.includes('/tro-choi') || path.includes('/vocab-shooter')) return 'games';
-        if (path.includes('/toeic')) return 'toeic';
 
         // HSK routes
         if (path.includes('/hsk')) {

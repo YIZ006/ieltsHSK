@@ -771,8 +771,6 @@ public static class IeltsEndpoints
             return Results.File(stream, "audio/webm", enableRangeProcessing: true);
         });
 
-        // ─── TOEIC: Upload media (ảnh/audio) lên R2 ───
-
         app.MapGet("/api/ielts/vocab", async (string? topic, string? search, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
         {
             const string cacheKey = "ielts:vocab:all";

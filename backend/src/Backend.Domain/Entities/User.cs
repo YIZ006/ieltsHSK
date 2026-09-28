@@ -33,7 +33,6 @@ public class User
     public ICollection<TestSubmission> TestSubmissions { get; set; } = new List<TestSubmission>();
     public ICollection<HskVocabularyProgress> HskVocabularyProgresses { get; set; } = new List<HskVocabularyProgress>();
     public ICollection<IeltsVocabularyProgress> IeltsVocabularyProgresses { get; set; } = new List<IeltsVocabularyProgress>();
-    public ICollection<ToeicVocabularyProgress> ToeicVocabularyProgresses { get; set; } = new List<ToeicVocabularyProgress>();
     public ICollection<UserStudyActivity> StudyActivities { get; set; } = new List<UserStudyActivity>();
     public ICollection<UserGameProgress> GameProgresses { get; set; } = new List<UserGameProgress>();
     public ICollection<ListenVideo> ListenVideos { get; set; } = new List<ListenVideo>();

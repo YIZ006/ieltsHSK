@@ -529,7 +529,7 @@ public static class AuthEndpoints
         });
 
         // ==========================================
-        // TOEIC VOCABULARY & PROGRESS ENDPOINTS
+        // GAME PROGRESS ENDPOINTS
         // ==========================================
 
         app.MapGet("/api/user/game-progress", [Microsoft.AspNetCore.Authorization.Authorize] async (string? gameType, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>

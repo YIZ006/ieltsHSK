@@ -65,7 +65,6 @@
                         <select @bind="form.Language" class="form-input-custom form-select-custom">
                             <option value="HSK">🇨🇳 HSK (Tiếng Trung)</option>
                             <option value="IELTS">🇬🇧 IELTS (Tiếng Anh)</option>
-                            <option value="TOEIC">🏆 TOEIC (Tiếng Anh)</option>
                         </select>
                     </div>
 
@@ -134,11 +133,6 @@
                 <span class="pill-icon">🇬🇧</span>
                 <span>IELTS</span>
                 <span class="pill-count">@items.Count(x => x.Language == "IELTS")</span>
-            </button>
-            <button class="filter-pill pill-toeic @(filterLang == "TOEIC" ? "active" : "")" @onclick='() => filterLang = "TOEIC"'>
-                <span class="pill-icon">🏆</span>
-                <span>TOEIC</span>
-                <span class="pill-count">@items.Count(x => x.Language == "TOEIC")</span>
             </button>
         </div>
 
@@ -219,8 +213,7 @@
                                 <td>
                                     <span class="program-badge prog-@item.Language.ToLower()">
                                         @if (item.Language == "HSK") { <span>🇨🇳 HSK</span> }
-                                        else if (item.Language == "IELTS") { <span>🇬🇧 IELTS</span> }
-                                        else { <span>🏆 TOEIC</span> }
+                                        else { <span>🇬🇧 IELTS</span> }
                                     </span>
                                 </td>
                                 <td style="text-align: center;">
@@ -287,7 +280,7 @@
         if (item == null)
         {
             editId = null;
-            form = new LearningSectionDto { Language = "TOEIC", Icon = "bi-circle", OrderIndex = items.Count + 1 };
+            form = new LearningSectionDto { Language = "IELTS", Icon = "bi-circle", OrderIndex = items.Count + 1 };
         }
         else
         {

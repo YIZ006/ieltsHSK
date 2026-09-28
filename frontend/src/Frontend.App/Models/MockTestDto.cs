@@ -13,7 +13,6 @@ public class MockTestDto
     public string? ReadingAnswerUrl { get; set; }
     public string? WritingAnswerUrl { get; set; }
     public string? SpeakingAnswerUrl { get; set; }
-    public string? ToeicUrl { get; set; }
     public string? HskUrl { get; set; }
 }
 
@@ -29,7 +28,6 @@ public class CreateMockTestRequest
     public string? ReadingAnswerUrl { get; set; }
     public string? WritingAnswerUrl { get; set; }
     public string? SpeakingAnswerUrl { get; set; }
-    public string? ToeicUrl { get; set; }
     public string? HskUrl { get; set; }
 }
 

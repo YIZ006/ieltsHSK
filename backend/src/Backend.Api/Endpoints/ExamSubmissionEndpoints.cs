@@ -162,14 +162,11 @@ public static class ExamSubmissionEndpoints
                 ReadingAnswerUrl = m.ReadingAnswerUrl,
                 WritingAnswerUrl = m.WritingAnswerUrl,
                 SpeakingAnswerUrl = m.SpeakingAnswerUrl,
-                ToeicUrl = m.ToeicUrl,
                 HskUrl = m.HskUrl
             }).ToList();
     
             return Results.Ok(dtos);
         });
-
-        // TOEIC R2 TESTS API: Quét động toàn bộ đề thi (.json) trong folder R2 Cuongkeng/Toeic Data/
 
         app.MapPost("/api/mock-tests",
                 [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (Backend.Application.DTOs.CreateMockTestRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
@@ -186,7 +183,6 @@ public static class ExamSubmissionEndpoints
                 ReadingAnswerUrl = request.ReadingAnswerUrl,
                 WritingAnswerUrl = request.WritingAnswerUrl,
                 SpeakingAnswerUrl = request.SpeakingAnswerUrl,
-                ToeicUrl = request.ToeicUrl,
                 HskUrl = request.HskUrl
             };
     
@@ -213,7 +209,6 @@ public static class ExamSubmissionEndpoints
             test.ReadingAnswerUrl = request.ReadingAnswerUrl;
             test.WritingAnswerUrl = request.WritingAnswerUrl;
             test.SpeakingAnswerUrl = request.SpeakingAnswerUrl;
-            test.ToeicUrl = request.ToeicUrl;
             test.HskUrl = request.HskUrl;
 
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -228,7 +223,6 @@ public static class ExamSubmissionEndpoints
             if (test == null) return Results.NotFound();
 
             // Delete associated files from Cloudflare R2 if they exist
-            if (!string.IsNullOrEmpty(test.ToeicUrl)) await r2Service.DeleteFileAsync(test.ToeicUrl, cancellationToken);
             if (!string.IsNullOrEmpty(test.ListeningUrl)) await r2Service.DeleteFileAsync(test.ListeningUrl, cancellationToken);
             if (!string.IsNullOrEmpty(test.ReadingUrl)) await r2Service.DeleteFileAsync(test.ReadingUrl, cancellationToken);
             if (!string.IsNullOrEmpty(test.WritingUrl)) await r2Service.DeleteFileAsync(test.WritingUrl, cancellationToken);

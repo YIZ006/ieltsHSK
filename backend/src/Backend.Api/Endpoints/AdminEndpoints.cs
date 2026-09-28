@@ -59,9 +59,7 @@ public static class AdminEndpoints
 
             // 3. Mock Tests Count
             var totalIeltsTests = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
-                dbContext.MockTests.Where(m => m.IsActive && m.ToeicUrl == null && m.HskUrl == null), cancellationToken);
-            var totalToeicTests = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
-                dbContext.MockTests.Where(m => m.IsActive && m.ToeicUrl != null), cancellationToken);
+                dbContext.MockTests.Where(m => m.IsActive && m.HskUrl == null), cancellationToken);
             var totalHskTests = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(dbContext.HskMockTests, cancellationToken);
 
             // 4. Content & Materials Count
@@ -125,7 +123,6 @@ public static class AdminEndpoints
                 GradedSubmissions = gradedSubmissions,
 
                 TotalIeltsTests = totalIeltsTests,
-                TotalToeicTests = totalToeicTests,
                 TotalHskTests = totalHskTests,
 
                 TotalIeltsVocab = totalIeltsVocab,
@@ -335,7 +332,7 @@ public static class AdminEndpoints
                     Color = "#a855f7"
                 },
                 new {
-                    ItemName = "Luyện đề IELTS / TOEIC / HSK",
+                    ItemName = "Luyện đề IELTS / HSK",
                     Tokens = examTokens,
                     Percentage = Math.Round((double)examTokens / grandTotalTokens * 100, 1),
                     Icon = "bi-journal-check",

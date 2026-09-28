@@ -60,7 +60,7 @@
                                 <div class="hero-form-col">
                                     <label class="hero-form-label">Mục tiêu thi</label>
                                     <div class="form-select-group">
-                                        @foreach (var exam in new[] { "TOEIC", "IELTS", "HSK" })
+                                        @foreach (var exam in new[] { "IELTS", "HSK" })
                                         {
                                             <button class="select-chip @(editedTarget == exam ? "active" : "")" @onclick="() => editedTarget = exam">@exam</button>
                                         }
@@ -238,11 +238,11 @@
 
                 @* Score Summary Cards *@
                 <div class="score-summary-grid">
-                    <div class="score-card toeic-card">
-                        <div class="score-card-icon">🎧</div>
+                    <div class="score-card hsk-card">
+                        <div class="score-card-icon">🇨🇳</div>
                         <div class="score-card-info">
-                            <p class="score-card-label">TOEIC tốt nhất</p>
-                            <p class="score-card-val">@(bestToeicScore > 0 ? bestToeicScore.ToString() : "—")<span class="score-card-unit">@(bestToeicScore > 0 ? "/990" : "")</span></p>
+                            <p class="score-card-label">HSK tốt nhất</p>
+                            <p class="score-card-val">@(bestHskScore > 0 ? bestHskScore.ToString() : "—")<span class="score-card-unit">@(bestHskScore > 0 ? "/300" : "")</span></p>
                         </div>
                     </div>
                     <div class="score-card ielts-card">
@@ -279,7 +279,7 @@
                     {
                         <div class="empty-activity">
                             <div class="empty-icon">📝</div>
-                            <p>Chưa có bài thi nào. <a href="/toeic" class="start-link">Bắt đầu ngay!</a></p>
+                            <p>Chưa có bài thi nào. <a href="/ielts" class="start-link">Bắt đầu ngay!</a></p>
                         </div>
                     }
                     else
@@ -296,13 +296,13 @@
                                         <p class="activity-meta">@GetSkillLabel(sub.Skill) · @sub.SubmittedAt.LocalDateTime.ToString("dd/MM/yyyy HH:mm")</p>
                                     </div>
                                     <div class="activity-score">
-                                        @if (sub.TotalScore.HasValue)
-                                        {
-                                            <span class="score-badge toeic-badge">@sub.TotalScore/990</span>
-                                        }
-                                        else if (sub.Score != null)
+                                        @if (sub.Score != null)
                                         {
                                             <span class="score-badge ielts-badge">@sub.Score.Overall.ToString("0.0")</span>
+                                        }
+                                        else if (sub.TotalScore.HasValue)
+                                        {
+                                            <span class="score-badge generic-badge">@sub.TotalScore Điểm</span>
                                         }
                                         else if (sub.CorrectCount.HasValue && sub.TotalQuestions.HasValue)
                                         {
@@ -354,7 +354,7 @@
     private HashSet<DateTime> activeDays = new();
     private List<IeltsSubmissionRecord> recentSubmissions = new();
     private int totalSubmissions;
-    private int bestToeicScore;
+    private int bestHskScore;
     private double bestIeltsScore;
 
     // Editing states
@@ -362,7 +362,7 @@
     private bool editingProfile;
     private string editedFullName = "";
     private string editedBio = "";
-    private string editedTarget = "TOEIC";
+    private string editedTarget = "IELTS";
     private string editedScore = "";
     private string editedLevel = "Intermediate";
 
@@ -393,7 +393,7 @@
     private List<(string Skill, int Count, string Color, string Icon)> SkillProgress =>
         new()
         {
-            ("TOEIC", recentSubmissions.Count(s => s.Skill == "Toeic"), "#6c5ce7", "🎧"),
+            ("HSK", recentSubmissions.Count(s => (s.Skill != null && s.Skill.Contains("HSK", StringComparison.OrdinalIgnoreCase)) || (s.ExamTitle != null && s.ExamTitle.Contains("HSK", StringComparison.OrdinalIgnoreCase))), "#e11d48", "🇨🇳"),
             ("IELTS Listening", recentSubmissions.Count(s => s.Skill == "Listening"), "#0984e3", "👂"),
             ("IELTS Reading", recentSubmissions.Count(s => s.Skill == "Reading"), "#00b894", "📖"),
             ("IELTS Writing", recentSubmissions.Count(s => s.Skill == "Writing"), "#fdcb6e", "✍️"),
@@ -429,9 +429,9 @@
         totalSubmissions = all.Count;
         recentSubmissions = all.Take(8).ToList();
 
-        bestToeicScore = all.Where(s => s.TotalScore.HasValue)
-                            .Select(s => s.TotalScore!.Value)
-                            .DefaultIfEmpty(0).Max();
+        bestHskScore = all.Where(s => (s.ExamTitle != null && s.ExamTitle.Contains("HSK", StringComparison.OrdinalIgnoreCase)) && s.TotalScore.HasValue)
+                          .Select(s => s.TotalScore!.Value)
+                          .DefaultIfEmpty(0).Max();
         bestIeltsScore = all.Where(s => s.Score != null)
                             .Select(s => s.Score!.Overall)
                             .DefaultIfEmpty(0).Max();
@@ -513,7 +513,7 @@
 
     private static string GetSkillIcon(string skill) => skill switch
     {
-        "Toeic" => "🎧",
+        "HSK" => "🇨🇳",
         "Listening" => "👂",
         "Reading" => "📖",
         "Writing" => "✍️",
@@ -523,7 +523,7 @@
 
     private static string GetSkillLabel(string skill) => skill switch
     {
-        "Toeic" => "TOEIC",
+        "HSK" => "HSK",
         "Listening" => "IELTS Listening",
         "Reading" => "IELTS Reading",
         "Writing" => "IELTS Writing",
