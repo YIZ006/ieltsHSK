@@ -1,35 +1,444 @@
 @page "/"
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavManager
+@implements IAsyncDisposable
+
 <PageTitle>Master Your Languages - IELTS & HSK</PageTitle>
 
-<div class="landing-container">
+<HomeDocNav />
+
+<div id="homeLandingContainer" class="landing-container" style="--rot-x: 0deg; --rot-y: 0deg; --mouse-x: 0px; --mouse-y: 0px; --mouse-x-pct: 50%; --mouse-y-pct: 45%;">
+    <!-- Ambient Volumetric Lights -->
+    <div class="ambient-beam beam-1"></div>
+    <div class="ambient-beam beam-2"></div>
+
     <div class="header">
         <h1 class="main-title">Master Your Languages</h1>
         <p class="subtitle">Your ultimate platform for IELTS and HSK preparation. Choose your path and start learning today.</p>
     </div>
 
-    <div class="cards-wrapper">
-        <!-- IELTS Card -->
-        <a href="/ielts/dashboard" class="path-card ielts-card">
-            <div class="card-content">
-                <div class="icon-wrapper ielts-icon">
-                    <i class="bi bi-book"></i>
-                </div>
-                <h2>English (IELTS)</h2>
-                <p>Comprehensive resources, practice tests, and vocabulary for IELTS preparation.</p>
-                <div class="explore-btn">Explore IELTS</div>
-            </div>
-        </a>
+    <!-- 3D Perspective Stage -->
+    <div class="cards-stage">
+        <!-- Ambient Stage Grid (Faint grid visible through the frosted glass) -->
+        <div class="stage-ambient-grid"></div>
 
-        <!-- HSK Card -->
-        <a href="/hsk" class="path-card hsk-card">
-            <div class="card-content">
-                <div class="icon-wrapper hsk-icon">
-                    <i class="bi bi-translate"></i>
-                </div>
-                <h2>Chinese (HSK)</h2>
-                <p>HSK 3.0 (1-9 levels) full practice tests, vocabulary lists, and learning tools for your Chinese journey.</p>
-                <div class="explore-btn">Explore HSK</div>
+        <div class="cards-tilt-rig">
+            <!-- IELTS Monolith Card Rig -->
+            <div class="card-rig-item">
+                <!-- Glowing Aurora Orb behind the glass -->
+                <div class="card-backdrop-orb ielts-backdrop-orb"></div>
+
+                <a href="/ielts/dashboard" class="monolith-card ielts-card" @onclick='() => NavManager.NavigateTo("/ielts/dashboard")'>
+                    <div class="card-glass-specular"></div>
+                    <div class="card-dynamic-spotlight"></div>
+                    <div class="card-mirror-flare"></div>
+                    <div class="card-glow-overlay"></div>
+                    <div class="card-content">
+                        <div class="card-badge ielts-badge">
+                            <i class="bi bi-patch-check-fill me-1"></i> ENGLISH (IELTS)
+                        </div>
+                        <div class="icon-orb ielts-orb">
+                            <i class="bi bi-book"></i>
+                        </div>
+                        <h2>English (IELTS)</h2>
+                        <p>Comprehensive resources, practice tests, and vocabulary for IELTS preparation.</p>
+                        <div class="explore-btn ielts-btn">
+                            <span>Explore IELTS</span>
+                            <span class="btn-arrow">→</span>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Ground Light Cast & Dynamic Shadow (Exact from user React code) -->
+                <div class="ground-light-cast ielts-ground-glow"></div>
+                <div class="ground-shadow"></div>
             </div>
-        </a>
+
+            <!-- HSK Monolith Card Rig -->
+            <div class="card-rig-item">
+                <!-- Glowing Aurora Orb behind the glass -->
+                <div class="card-backdrop-orb hsk-backdrop-orb"></div>
+
+                <a href="/hsk" class="monolith-card hsk-card" @onclick='() => NavManager.NavigateTo("/hsk")'>
+                    <div class="card-glass-specular"></div>
+                    <div class="card-dynamic-spotlight"></div>
+                    <div class="card-mirror-flare"></div>
+                    <div class="card-glow-overlay"></div>
+                    <div class="card-content">
+                        <div class="card-badge hsk-badge">
+                            <i class="bi bi-translate me-1"></i> CHINESE (HSK)
+                        </div>
+                        <div class="icon-orb hsk-orb">
+                            <i class="bi bi-translate"></i>
+                        </div>
+                        <h2>Chinese (HSK)</h2>
+                        <p>HSK 3.0 (1-9 levels) full practice tests, vocabulary lists, and learning tools for your Chinese journey.</p>
+                        <div class="explore-btn hsk-btn">
+                            <span>Explore HSK</span>
+                            <span class="btn-arrow">→</span>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Ground Light Cast & Dynamic Shadow (Exact from user React code) -->
+                <div class="ground-light-cast hsk-ground-glow"></div>
+                <div class="ground-shadow"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liquid Water Droplet Scroll Down Indicator (Thanh kéo cuộn giọt nước di chuyển xuống dần) -->
+    <div class="water-drop-scroll-indicator" @onclick="ScrollDownAsync" role="button" tabindex="0" title="Cuộn xuống khám phá" @onkeydown="@(async e => { if (e.Key == "Enter" || e.Key == " ") await ScrollDownAsync(); })">
+        <div class="water-drop-capsule">
+            <div class="water-drop-groove"></div>
+            <div class="water-droplet"></div>
+            <div class="water-drop-splash"></div>
+        </div>
+        <div class="water-drop-label">
+            <span>Cuộn xuống</span>
+            <i class="bi bi-chevron-down"></i>
+        </div>
     </div>
 </div>
+
+<!-- CÁC SECTION DỮ LIỆU MẪU DÀI ĐỂ REVIEW THANH CUỘN GIỌT NƯỚC (DROPLET SCROLLBAR) -->
+<div id="homeFeaturesSection" class="home-sections-wrapper">
+    <!-- 1. Stats Counter Row -->
+    <section id="homeStatsSection" class="home-section stats-section">
+        <div class="section-container">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon stat-blue"><i class="bi bi-journal-text"></i></div>
+                    <div class="stat-number">9,800+</div>
+                    <div class="stat-label">Từ vựng IELTS &amp; HSK 3.0</div>
+                    <div class="stat-desc">Đầy đủ Pinyin, audio phát âm và câu ví dụ ngữ cảnh</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon stat-rose"><i class="bi bi-award"></i></div>
+                    <div class="stat-number">160+</div>
+                    <div class="stat-label">Đề thi thử chuẩn quốc tế</div>
+                    <div class="stat-desc">Mô phỏng 100% giao diện thi thật Cambridge &amp; Hanban</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon stat-amber"><i class="bi bi-cpu"></i></div>
+                    <div class="stat-number">AI 4.0</div>
+                    <div class="stat-label">Chấm điểm &amp; Sửa lỗi tức thì</div>
+                    <div class="stat-desc">Phân tích chi tiết ngữ pháp, phát âm và từ vựng</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon stat-emerald"><i class="bi bi-fire"></i></div>
+                    <div class="stat-number">98.6%</div>
+                    <div class="stat-label">Học viên đạt mục tiêu</div>
+                    <div class="stat-desc">Phương pháp lặp lại ngắt quãng SRS tối ưu phản xạ</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. Core Features Grid -->
+    <section id="homeCoreFeatures" class="home-section features-section">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-badge">Hệ sinh thái học tập 2026</span>
+                <h2 class="section-title">Công nghệ hiện đại phục vụ việc học</h2>
+                <p class="section-subtitle">Tích hợp AI cùng các phương pháp sư phạm tiên tiến giúp bạn tối ưu hóa 300% thời gian ôn luyện.</p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-badge ielts-subtle-badge">IELTS Engine</div>
+                    <div class="feature-icon ielts-color"><i class="bi bi-book-half"></i></div>
+                    <h3>Luyện thi IELTS 4 Kỹ năng</h3>
+                    <p>Hệ thống chia đôi màn hình độc quyền cho Reading, tự động tua âm thanh thông minh cho Listening, và phòng thu chấm phát âm Speaking AI.</p>
+                    <ul class="feature-list">
+                        <li><i class="bi bi-check2"></i> Giao diện thi Computer-Delivered chuẩn IDP/BC</li>
+                        <li><i class="bi bi-check2"></i> Tra cứu từ vựng trực tiếp khi đang đọc bài</li>
+                        <li><i class="bi bi-check2"></i> Phân tích band điểm theo tiêu chuẩn Cambridge</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-badge hsk-subtle-badge">HSK 3.0 Matrix</div>
+                    <div class="feature-icon hsk-color"><i class="bi bi-translate"></i></div>
+                    <h3>Chinh phục HSK 3.0 (Cấp 1-9)</h3>
+                    <p>Cập nhật toàn diện khung đánh giá HSK 3.0 mới nhất gồm cả 3 giai đoạn: Sơ cấp (1-3), Trung cấp (4-6) và Cao cấp (7-9).</p>
+                    <ul class="feature-list">
+                        <li><i class="bi bi-check2"></i> Đầy đủ Hán tự, Pinyin, Hán Việt và nghĩa ngữ cảnh</li>
+                        <li><i class="bi bi-check2"></i> Mô phỏng bài thi Nghe - Đọc - Viết trên máy tính</li>
+                        <li><i class="bi bi-check2"></i> Phân loại cấp bậc từ vựng trọng tâm dễ nhớ</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-badge game-subtle-badge">Game Arena</div>
+                    <div class="feature-icon game-color"><i class="bi bi-controller"></i></div>
+                    <h3>Đấu trường Game Hóa Học Tập</h3>
+                    <p>Học từ vựng không còn nhàm chán với các tựa game arcade kích thích phản xạ thị giác và trí nhớ ngắn hạn.</p>
+                    <ul class="feature-list">
+                        <li><i class="bi bi-check2"></i> HSK Vocab Shooter: Đại chiến Ma Vương Hán Tự</li>
+                        <li><i class="bi bi-check2"></i> Quantum Cipher: Wordle bẻ khóa bom lượng tử</li>
+                        <li><i class="bi bi-check2"></i> Âm thanh cơ học SFX &amp; giọng nói nhân vật lôi cuốn</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-badge srs-subtle-badge">Smart SRS</div>
+                    <div class="feature-icon srs-color"><i class="bi bi-lightning-charge"></i></div>
+                    <h3>Trí nhớ ngắt quãng Spaced Repetition</h3>
+                    <p>Thuật toán tự động tính toán chu kỳ quên lãng và đưa từ vựng cần ôn lại đúng thời điểm vàng trước khi não bộ lãng quên.</p>
+                    <ul class="feature-list">
+                        <li><i class="bi bi-check2"></i> Theo dõi chuỗi học tập Streak rực lửa mỗi ngày</li>
+                        <li><i class="bi bi-check2"></i> Kho thẻ ghi nhớ Flashcard 3D lật mở mượt mà</li>
+                        <li><i class="bi bi-check2"></i> Báo cáo tiến độ trực quan theo từng tuần</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. Roadmap Section -->
+    <section id="homeRoadmapSection" class="home-section roadmap-section">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-badge">Lộ trình học tập</span>
+                <h2 class="section-title">5 Bước Chinh Phục Điểm Số Mơ Ước</h2>
+                <p class="section-subtitle">Phương pháp tiếp cận khoa học, cá nhân hóa lộ trình dựa trên năng lực thực tế của bạn.</p>
+            </div>
+
+            <div class="roadmap-track">
+                <div class="roadmap-step">
+                    <div class="step-marker">01</div>
+                    <div class="step-card">
+                        <h4>Đánh giá năng lực ban đầu</h4>
+                        <p>Làm bài kiểm tra phân loại trình độ chẩn đoán (Diagnostic Scoring) để xác định chính xác điểm mạnh và lỗ hổng kiến thức.</p>
+                    </div>
+                </div>
+                <div class="roadmap-step">
+                    <div class="step-marker">02</div>
+                    <div class="step-card">
+                        <h4>Nạp từ vựng &amp; cấu trúc nền tảng</h4>
+                        <p>Học theo các cụm chủ đề chuyên biệt với Flashcard, phát âm chuẩn người bản xứ và ghi nhớ cấu trúc câu ngữ pháp.</p>
+                    </div>
+                </div>
+                <div class="roadmap-step">
+                    <div class="step-marker">03</div>
+                    <div class="step-card">
+                        <h4>Rèn luyện phản xạ qua Mini-games</h4>
+                        <p>Tăng tốc độ nhận diện mặt chữ Hán và chính tả từ vựng tiếng Anh qua các đấu trường trò chơi đối kháng kích thích.</p>
+                    </div>
+                </div>
+                <div class="roadmap-step">
+                    <div class="step-marker">04</div>
+                    <div class="step-card">
+                        <h4>Cọ xát phòng thi áp lực thời gian</h4>
+                        <p>Làm đề thi thử trọn vẹn bấm giờ tự động, làm quen với áp lực phòng thi thật và quản lý phân bổ thời gian từng phần.</p>
+                    </div>
+                </div>
+                <div class="roadmap-step">
+                    <div class="step-marker">05</div>
+                    <div class="step-card">
+                        <h4>Cán đích chứng chỉ mục tiêu</h4>
+                        <p>Nhận phân tích chi tiết, khắc phục lỗi sai sót cuối cùng và tự tin bước vào kỳ thi chính thức đạt band điểm kỳ vọng.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. Student Reviews Section -->
+    <section id="homeReviewsSection" class="home-section reviews-section">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-badge">Cộng đồng học viên</span>
+                <h2 class="section-title">Học Viên Nói Gì Về ieltsHSK?</h2>
+                <p class="section-subtitle">Hơn 50,000 học viên đã tin tưởng và đồng hành cùng hệ thống trên hành trình song ngữ.</p>
+            </div>
+
+            <div class="reviews-grid">
+                <div class="review-card">
+                    <div class="review-stars">
+                        <i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i>
+                    </div>
+                    <p class="review-quote">"Phần Reading IELTS chia đôi màn hình cực kỳ tiện lợi, giống y hệt thi trên máy tính của BC. Mình vừa thi đạt 8.0 Reading sau 2 tháng luyện tập liên tục!"</p>
+                    <div class="review-author">
+                        <div class="author-avatar avatar-1">TN</div>
+                        <div>
+                            <div class="author-name">Trần Nhật Minh</div>
+                            <div class="author-tag">IELTS Overall 8.0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="review-card">
+                    <div class="review-stars">
+                        <i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i>
+                    </div>
+                    <p class="review-quote">"Mình rất sợ học từ vựng chữ Hán vì hay quên, nhưng từ ngày chơi game HSK Vocab Shooter bắn Boss Ma Vương mỗi ngày, phản xạ gõ Pinyin và nhận diện chữ tăng vượt bậc!"</p>
+                    <div class="review-author">
+                        <div class="author-avatar avatar-2">LH</div>
+                        <div>
+                            <div class="author-name">Lê Hoàng Lan</div>
+                            <div class="author-tag">HSK 5 (278/300)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="review-card">
+                    <div class="review-stars">
+                        <i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i><i class="bi bi-star-fill"></i>
+                    </div>
+                    <p class="review-quote">"Giao diện hiện đại, chế độ Tối Dark Mode làm bài đêm không bị chói mắt. Thanh cuộn giọt nước mượt mà tạo cảm giác thích thú khi lướt web mỗi ngày."</p>
+                    <div class="review-author">
+                        <div class="author-avatar avatar-3">ĐK</div>
+                        <div>
+                            <div class="author-name">Đặng Quốc Khánh</div>
+                            <div class="author-tag">IELTS 7.5 &amp; HSK 4</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. FAQ Section -->
+    <section id="homeFaqSection" class="home-section faq-section">
+        <div class="section-container">
+            <div class="section-header">
+                <span class="section-badge">Hỏi &amp; Đáp</span>
+                <h2 class="section-title">Câu Hỏi Thường Gặp</h2>
+                <p class="section-subtitle">Mọi giải đáp về hệ thống ôn luyện và kỳ thi chuẩn hóa quốc tế.</p>
+            </div>
+
+            <div class="faq-list">
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span><i class="bi bi-question-circle text-primary me-2"></i> Hệ thống thi thử IELTS có giống bài thi thực tế không?</span>
+                    </div>
+                    <div class="faq-answer">
+                        Có. Giao diện làm bài được thiết kế mô phỏng 100% phần mềm thi máy tính chính thức của IDP và British Council (gồm đánh dấu câu hỏi, đổi màu nền, chỉnh cỡ chữ, đồng hồ đếm ngược).
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span><i class="bi bi-question-circle text-danger me-2"></i> HSK 3.0 khác gì so với phiên bản HSK cũ?</span>
+                    </div>
+                    <div class="faq-answer">
+                        Khung HSK 3.0 phân bổ lại toàn bộ lượng từ vựng từ cấp 1 đến 9 theo tiêu chuẩn mới, tập trung vào khả năng ứng dụng thực tế và bổ sung cấp độ cao cấp (HSK 7-9). Nền tảng đã cập nhật toàn diện dữ liệu theo chuẩn này.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span><i class="bi bi-question-circle text-info me-2"></i> Tôi có thể học offline hoặc cài ứng dụng lên máy tính không?</span>
+                    </div>
+                    <div class="faq-answer">
+                        Có. Trang web hỗ trợ PWA (Progressive Web App). Bạn có thể bấm nút Cài đặt trên thanh địa chỉ trình duyệt để cài trực tiếp về màn hình Desktop máy tính hoặc điện thoại.
+                    </div>
+                </div>
+
+                <div class="faq-item">
+                    <div class="faq-question">
+                        <span><i class="bi bi-question-circle text-success me-2"></i> Dữ liệu học tập và chuỗi ngày Streak có được đồng bộ không?</span>
+                    </div>
+                    <div class="faq-answer">
+                        Mỗi khi bạn hoàn thành bài tập hoặc làm bài thi thử, kết quả sẽ được đồng bộ tức thì lên tài khoản đám mây giúp bạn theo dõi tiến độ mọi lúc mọi nơi.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 6. Bottom Call To Action Banner -->
+    <section id="homeCtaSection" class="home-section cta-section">
+        <div class="section-container">
+            <div class="cta-banner">
+                <div class="cta-glow"></div>
+                <div class="cta-content">
+                    <h2 class="cta-title">Sẵn Sàng Bứt Phá Điểm Số Cùng ieltsHSK?</h2>
+                    <p class="cta-subtitle">Tham gia ngay hôm nay để trải nghiệm hệ sinh thái luyện thi thông minh hoàn toàn miễn phí.</p>
+                    <div class="cta-actions">
+                        <a href="/ielts/dashboard" class="cta-btn btn-ielts-cta">
+                            <i class="bi bi-patch-check-fill me-2"></i> Khám phá IELTS
+                        </a>
+                        <a href="/hsk" class="cta-btn btn-hsk-cta">
+                            <i class="bi bi-translate me-2"></i> Chinh phục HSK
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("eval", @"
+                    (function() {
+                        const container = document.getElementById('homeLandingContainer') || document.querySelector('.landing-container');
+                        if (!container) return;
+
+                        if (window._homeMouseMoveHandler) {
+                            window.removeEventListener('mousemove', window._homeMouseMoveHandler);
+                        }
+
+                        window._homeMouseMoveHandler = function(e) {
+                            const rect = container.getBoundingClientRect();
+                            if (!rect.width || !rect.height) return;
+
+                            const mouseX = e.clientX - rect.left;
+                            const mouseY = e.clientY - rect.top;
+                            const pctX = Math.max(0, Math.min(100, (mouseX / rect.width) * 100));
+                            const pctY = Math.max(0, Math.min(100, (mouseY / rect.height) * 100));
+
+                            const normX = (mouseX - rect.width / 2) / (rect.width / 2);
+                            const normY = (mouseY - rect.height / 2) / (rect.height / 2);
+
+                            // Clamped 3D tilt angles between -14deg and 14deg
+                            const rotX = Math.max(Math.min(-normY * 14, 14), -14);
+                            const rotY = Math.max(Math.min(normX * 14, 14), -14);
+
+                            container.style.setProperty('--rot-x', rotX.toFixed(2) + 'deg');
+                            container.style.setProperty('--rot-y', rotY.toFixed(2) + 'deg');
+                            container.style.setProperty('--mouse-x', (normX * 36).toFixed(2) + 'px');
+                            container.style.setProperty('--mouse-y', (normY * 36).toFixed(2) + 'px');
+                            container.style.setProperty('--mouse-x-pct', pctX.toFixed(1) + '%');
+                            container.style.setProperty('--mouse-y-pct', pctY.toFixed(1) + '%');
+                        };
+
+                        window.addEventListener('mousemove', window._homeMouseMoveHandler, { passive: true });
+                    })();
+                ");
+            }
+            catch { }
+        }
+    }
+
+    private async Task ScrollDownAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("scrollToElementId", "homeFeaturesSection");
+        }
+        catch { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("eval", @"
+                if (window._homeMouseMoveHandler) {
+                    window.removeEventListener('mousemove', window._homeMouseMoveHandler);
+                    window._homeMouseMoveHandler = null;
+                }
+            ");
+        }
+        catch { }
+    }
+}

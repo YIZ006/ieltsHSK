@@ -209,8 +209,48 @@
 }
 
 .font-size-group {
-    display: flex;
-    gap: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(0, 0, 0, 0.03);
+    padding: 2px 4px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.font-size-badge {
+    font-size: 0.76rem;
+    font-weight: 800;
+    color: #475569;
+    padding: 0 4px;
+    min-width: 38px;
+    text-align: center;
+    user-select: none;
+    letter-spacing: -0.2px;
+}
+
+.theme-dark .font-size-group {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: #334155;
+}
+
+.theme-dark .font-size-badge {
+    color: #cbd5e1;
+}
+
+.theme-paper .font-size-group {
+    background: #f4ecdc;
+    border-color: #d9ceb8;
+}
+
+.theme-paper .font-size-badge {
+    color: #451a03;
+}
+
+.ctrl-btn-icon:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 .ctrl-btn-icon {
@@ -387,11 +427,12 @@
 
 .story-lead-summary {
     font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
-    font-size: 0.94rem;
-    line-height: 1.6;
+    font-size: calc(var(--reader-font-size, 18px) * 0.92);
+    line-height: 1.65;
     color: #475569;
     margin: 0;
     font-style: italic;
+    transition: font-size 0.15s ease;
 }
 
 .theme-paper .story-summary-box {
@@ -569,10 +610,11 @@
 }
 
 .paragraph-en {
-    font-size: 1.05rem;
+    font-size: var(--reader-font-size, 1.125rem) !important;
     line-height: 1.82;
     color: #1e293b;
     letter-spacing: 0.01em;
+    transition: font-size 0.15s ease;
 }
 
 .theme-paper .paragraph-en {
@@ -700,9 +742,10 @@
     padding-top: 10px;
     border-top: 1px dashed rgba(2, 132, 199, 0.2);
     color: #0284c7;
-    font-size: 0.95em;
+    font-size: calc(var(--reader-font-size, 18px) * 0.9) !important;
     line-height: 1.7;
     font-style: normal;
+    transition: font-size 0.15s ease;
 }
 
 .theme-paper .paragraph-vi {
@@ -1975,7 +2018,7 @@
     background: #0f172a;
 }
 
-/* Custom Slim Scrollbars for Independent Scrolling */
+/* Custom Slim Scrollbars for Independent Scrolling (Liquid Water Droplet) */
 .ielts-passage-pane::-webkit-scrollbar,
 .ielts-questions-pane::-webkit-scrollbar {
     width: 7px;
@@ -1984,27 +2027,20 @@
 .ielts-passage-pane::-webkit-scrollbar-track,
 .ielts-questions-pane::-webkit-scrollbar-track {
     background: transparent;
+    border-radius: 9999px;
 }
 
 .ielts-passage-pane::-webkit-scrollbar-thumb,
 .ielts-questions-pane::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
+    background: var(--water-drop-thumb);
+    border-radius: 9999px;
+    box-shadow: var(--water-drop-shadow);
 }
 
 .ielts-passage-pane::-webkit-scrollbar-thumb:hover,
 .ielts-questions-pane::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
-
-.theme-paper .ielts-passage-pane::-webkit-scrollbar-thumb,
-.theme-paper .ielts-questions-pane::-webkit-scrollbar-thumb {
-    background: #d5cbba;
-}
-
-.theme-dark .ielts-passage-pane::-webkit-scrollbar-thumb,
-.theme-dark .ielts-questions-pane::-webkit-scrollbar-thumb {
-    background: #334155;
+    background: var(--water-drop-hover);
+    box-shadow: var(--water-drop-hover-shadow);
 }
 
 /* Questions Pane Header */
@@ -2402,5 +2438,551 @@
     .ielts-bottom-vocab-section {
         padding: 30px 16px 60px 16px;
     }
+}
+
+/* ========================================================================= */
+/* READER INDEPENDENT VIEWPORT THEMES (KINDLE / APPLE BOOKS STANDARD)         */
+/* ========================================================================= */
+
+/* --- 1. DARK THEME --- */
+.story-reader-wrapper.theme-dark {
+    background-color: #0b1325 !important;
+    color: #f8fafc !important;
+}
+
+.story-reader-wrapper.theme-dark .reader-topbar {
+    background: rgba(17, 29, 51, 0.94) !important;
+    border-bottom-color: #223554 !important;
+}
+
+.story-reader-wrapper.theme-dark .ielts-passage-pane {
+    background-color: #0b1325 !important;
+    color: #f8fafc !important;
+}
+
+.story-reader-wrapper.theme-dark .ielts-split-view {
+    background: #0b1325 !important;
+    border-bottom-color: #223554 !important;
+}
+
+.story-reader-wrapper.theme-dark .ielts-split-divider {
+    background: #223554 !important;
+}
+
+.story-reader-wrapper.theme-dark .ielts-questions-pane {
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+.story-reader-wrapper.theme-dark .story-main-title,
+.story-reader-wrapper.theme-dark .pane-title {
+    color: #f8fafc !important;
+}
+
+.story-reader-wrapper.theme-dark .pane-subtitle {
+    color: #94a3b8 !important;
+}
+
+.story-reader-wrapper.theme-dark .paragraph-en {
+    color: #e2e8f0 !important;
+}
+
+.story-reader-wrapper.theme-dark .story-summary-box {
+    background: #111d33 !important;
+    border-color: #223554 !important;
+    border-left-color: #38bdf8 !important;
+    color: #cbd5e1 !important;
+}
+
+.story-reader-wrapper.theme-dark .story-lead-summary {
+    color: #cbd5e1 !important;
+}
+
+.story-reader-wrapper.theme-dark .reading-guide-pill {
+    background: #111d33 !important;
+    border-color: #223554 !important;
+    color: #cbd5e1 !important;
+}
+
+.story-reader-wrapper.theme-dark .ielts-group-banner {
+    background: #15243f !important;
+    border-color: #223554 !important;
+    color: #f8fafc !important;
+}
+
+.story-reader-wrapper.theme-dark .range-pill {
+    color: #f8fafc !important;
+}
+
+.story-reader-wrapper.theme-dark .quiz-card {
+    background: #15243f !important;
+    border-color: #223554 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+}
+
+.story-reader-wrapper.theme-dark .quiz-statement-text {
+    color: #f1f5f9 !important;
+}
+
+.story-reader-wrapper.theme-dark .paragraph-block {
+    background: #15243f !important;
+    border-color: #223554 !important;
+    color: #f8fafc !important;
+}
+
+.story-reader-wrapper.theme-dark .tfng-chip {
+    background: #111d33 !important;
+    border-color: #223554 !important;
+    color: #cbd5e1 !important;
+}
+
+.story-reader-wrapper.theme-dark .tfng-chip:hover {
+    border-color: #38bdf8 !important;
+    color: #38bdf8 !important;
+}
+
+.story-reader-wrapper.theme-dark .gap-input {
+    background: #111d33 !important;
+    border-color: #223554 !important;
+    color: #f8fafc !important;
+}
+
+.story-reader-wrapper.theme-dark .recap-vocab-item {
+    background: #15243f !important;
+    border-color: #223554 !important;
+    color: #f8fafc !important;
+}
+
+.story-reader-wrapper.theme-dark .recap-word {
+    color: #f8fafc !important;
+}
+
+.story-reader-wrapper.theme-dark .recap-meaning {
+    color: #cbd5e1 !important;
+}
+
+.story-reader-wrapper.theme-dark .vocab-popup-card {
+    background: #15243f !important;
+    border-color: #223554 !important;
+    color: #f8fafc !important;
+}
+
+.story-reader-wrapper.theme-dark .vocab-popup-header {
+    border-bottom-color: #223554 !important;
+}
+
+.story-reader-wrapper.theme-dark .vocab-word-large {
+    color: #f8fafc !important;
+}
+
+.story-reader-wrapper.theme-dark .vocab-meaning-text {
+    color: #cbd5e1 !important;
+}
+
+
+/* --- 2. SEPIA PAPER THEME --- */
+.story-reader-wrapper.theme-paper {
+    background-color: #fbf7ee !important;
+    color: #2c251e !important;
+}
+
+.story-reader-wrapper.theme-paper .reader-topbar {
+    background: rgba(251, 247, 238, 0.95) !important;
+    border-bottom-color: rgba(217, 206, 184, 0.8) !important;
+}
+
+.story-reader-wrapper.theme-paper .btn-back {
+    background: #fef3c7 !important;
+    border-color: #fde68a !important;
+    color: #b45309 !important;
+}
+
+.story-reader-wrapper.theme-paper .btn-back:hover {
+    background: #fde68a !important;
+    color: #92400e !important;
+}
+
+.story-reader-wrapper.theme-paper .topbar-divider {
+    color: #d9ceb8 !important;
+}
+
+.story-reader-wrapper.theme-paper .story-category-tag {
+    color: #786450 !important;
+}
+
+.story-reader-wrapper.theme-paper .ctrl-btn,
+.story-reader-wrapper.theme-paper .ctrl-btn-icon,
+.story-reader-wrapper.theme-paper .speed-select {
+    background: #fbf7ee !important;
+    border-color: #d9ceb8 !important;
+    color: #451a03 !important;
+}
+
+.story-reader-wrapper.theme-paper .ctrl-btn:hover,
+.story-reader-wrapper.theme-paper .ctrl-btn-icon:hover {
+    background: #f5eedc !important;
+    border-color: #d97706 !important;
+    color: #d97706 !important;
+}
+
+.story-reader-wrapper.theme-paper .ctrl-btn.active {
+    background: #d97706 !important;
+    border-color: #d97706 !important;
+    color: #ffffff !important;
+}
+
+.story-reader-wrapper.theme-paper .theme-switcher {
+    background: #f4ecdc !important;
+    border-color: #d9ceb8 !important;
+}
+
+.story-reader-wrapper.theme-paper .theme-dot.active {
+    box-shadow: 0 0 0 2px #d97706 !important;
+}
+
+.story-reader-wrapper.theme-paper .ielts-passage-pane {
+    background-color: #fbf7ee !important;
+    color: #2c251e !important;
+}
+
+.story-reader-wrapper.theme-paper .ielts-split-view {
+    background: #fdfbf7 !important;
+    border-bottom-color: #f1e9dc !important;
+}
+
+.story-reader-wrapper.theme-paper .ielts-split-divider {
+    background: #e7dfd1 !important;
+}
+
+.story-reader-wrapper.theme-paper .ielts-questions-pane {
+    background: #f9f6ef !important;
+    color: #2c251e !important;
+}
+
+.story-reader-wrapper.theme-paper .story-main-title,
+.story-reader-wrapper.theme-paper .pane-title {
+    color: #2c251e !important;
+}
+
+.story-reader-wrapper.theme-paper .pane-subtitle {
+    color: #786450 !important;
+}
+
+.story-reader-wrapper.theme-paper .paragraph-en {
+    color: #2c251e !important;
+}
+
+.story-reader-wrapper.theme-paper .paragraph-block {
+    background: transparent !important;
+    border-color: transparent !important;
+    color: #2c251e !important;
+}
+
+.story-reader-wrapper.theme-paper .paragraph-block:hover {
+    background: rgba(0, 0, 0, 0.03) !important;
+    border-left-color: #d97706 !important;
+}
+
+.story-reader-wrapper.theme-paper .paragraph-block.is-active-reading {
+    background: rgba(217, 119, 6, 0.08) !important;
+    border-left-color: #d97706 !important;
+}
+
+.story-reader-wrapper.theme-paper .story-summary-box {
+    background: #f5eedc !important;
+    border-color: #e6dfcf !important;
+    border-left: 4px solid #d97706 !important;
+    color: #451a03 !important;
+}
+
+.story-reader-wrapper.theme-paper .story-lead-summary {
+    color: #451a03 !important;
+}
+
+.story-reader-wrapper.theme-paper .reading-guide-pill {
+    background: #fef3c7 !important;
+    border-color: #fde68a !important;
+    color: #92400e !important;
+}
+
+.story-reader-wrapper.theme-paper .ielts-group-banner {
+    background: #faf6ed !important;
+    border-color: #e6dfcf !important;
+    color: #2c251e !important;
+}
+
+.story-reader-wrapper.theme-paper .quiz-card {
+    background: #ffffff !important;
+    border-color: #e6dfcf !important;
+    color: #2c251e !important;
+    box-shadow: 0 4px 16px rgba(44, 37, 30, 0.05) !important;
+}
+
+.story-reader-wrapper.theme-paper .quiz-statement-text {
+    color: #2c251e !important;
+}
+
+.story-reader-wrapper.theme-paper .tfng-chip {
+    background: #fdfbf7 !important;
+    border-color: #d9ceb8 !important;
+    color: #451a03 !important;
+}
+
+.story-reader-wrapper.theme-paper .tfng-chip:hover {
+    border-color: #d97706 !important;
+    color: #d97706 !important;
+}
+
+.story-reader-wrapper.theme-paper .tfng-chip.selected {
+    background: #fef3c7 !important;
+    border-color: #d97706 !important;
+    color: #b45309 !important;
+}
+
+.story-reader-wrapper.theme-paper .quiz-option {
+    background: #fdfbf7 !important;
+    border-color: #e6dfcf !important;
+    color: #451a03 !important;
+}
+
+.story-reader-wrapper.theme-paper .quiz-option:hover {
+    background: #fcf4e6 !important;
+    border-color: #d97706 !important;
+    color: #d97706 !important;
+}
+
+.story-reader-wrapper.theme-paper .quiz-option.selected {
+    background: #fef3c7 !important;
+    border-color: #d97706 !important;
+    color: #b45309 !important;
+}
+
+.story-reader-wrapper.theme-paper .gap-input {
+    background: #ffffff !important;
+    border-color: #d9ceb8 !important;
+    color: #2c251e !important;
+}
+
+.story-reader-wrapper.theme-paper .recap-filter-chip {
+    background: #fdfbf7 !important;
+    border-color: #e6dfcf !important;
+    color: #451a03 !important;
+}
+
+.story-reader-wrapper.theme-paper .recap-filter-chip:hover {
+    background: #fcf4e6 !important;
+    border-color: #d97706 !important;
+    color: #d97706 !important;
+}
+
+.story-reader-wrapper.theme-paper .recap-filter-chip.active {
+    background: #d97706 !important;
+    border-color: #d97706 !important;
+    color: #ffffff !important;
+}
+
+.story-reader-wrapper.theme-paper .recap-vocab-item {
+    background: #ffffff !important;
+    border-color: #e6dfcf !important;
+    color: #2c251e !important;
+}
+
+.story-reader-wrapper.theme-paper .recap-word {
+    color: #2c251e !important;
+}
+
+.story-reader-wrapper.theme-paper .recap-meaning {
+    color: #451a03 !important;
+}
+
+.story-reader-wrapper.theme-paper .vocab-popup-card {
+    background: #fdfbf7 !important;
+    border-color: #e6dfcf !important;
+    color: #2c251e !important;
+}
+
+.story-reader-wrapper.theme-paper .vocab-popup-header {
+    border-bottom-color: #e6dfcf !important;
+}
+
+.story-reader-wrapper.theme-paper .vocab-word-large {
+    color: #2c251e !important;
+}
+
+.story-reader-wrapper.theme-paper .vocab-meaning-text {
+    color: #451a03 !important;
+}
+
+
+/* --- 3. LIGHT THEME --- */
+.story-reader-wrapper.theme-light {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+}
+
+.story-reader-wrapper.theme-light .reader-topbar {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border-bottom-color: rgba(226, 232, 240, 0.8) !important;
+}
+
+.story-reader-wrapper.theme-light .btn-back {
+    background: #f0f9ff !important;
+    border-color: #bae6fd !important;
+    color: #0284c7 !important;
+}
+
+.story-reader-wrapper.theme-light .topbar-divider {
+    color: #cbd5e1 !important;
+}
+
+.story-reader-wrapper.theme-light .story-category-tag {
+    color: #64748b !important;
+}
+
+.story-reader-wrapper.theme-light .ctrl-btn,
+.story-reader-wrapper.theme-light .ctrl-btn-icon,
+.story-reader-wrapper.theme-light .speed-select {
+    background: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    color: #334155 !important;
+}
+
+.story-reader-wrapper.theme-light .ctrl-btn:hover,
+.story-reader-wrapper.theme-light .ctrl-btn-icon:hover {
+    background: #f8fafc !important;
+    border-color: #0284c7 !important;
+    color: #0284c7 !important;
+}
+
+.story-reader-wrapper.theme-light .ctrl-btn.active {
+    background: #0284c7 !important;
+    border-color: #0284c7 !important;
+    color: #ffffff !important;
+}
+
+.story-reader-wrapper.theme-light .theme-switcher {
+    background: #f1f5f9 !important;
+    border-color: #e2e8f0 !important;
+}
+
+.story-reader-wrapper.theme-light .ielts-passage-pane {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+}
+
+.story-reader-wrapper.theme-light .ielts-split-view {
+    background: #ffffff !important;
+    border-bottom-color: #e2e8f0 !important;
+}
+
+.story-reader-wrapper.theme-light .ielts-split-divider {
+    background: #e2e8f0 !important;
+}
+
+.story-reader-wrapper.theme-light .ielts-questions-pane {
+    background: #f8fafc !important;
+    color: #0f172a !important;
+}
+
+.story-reader-wrapper.theme-light .story-main-title,
+.story-reader-wrapper.theme-light .pane-title {
+    color: #0f172a !important;
+}
+
+.story-reader-wrapper.theme-light .pane-subtitle {
+    color: #64748b !important;
+}
+
+.story-reader-wrapper.theme-light .paragraph-en {
+    color: #1e293b !important;
+}
+
+.story-reader-wrapper.theme-light .paragraph-block {
+    background: transparent !important;
+    border-color: transparent !important;
+    color: #0f172a !important;
+}
+
+.story-reader-wrapper.theme-light .paragraph-block:hover {
+    background: rgba(2, 132, 199, 0.03) !important;
+}
+
+.story-reader-wrapper.theme-light .story-summary-box {
+    background: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+    border-left: 4px solid #0284c7 !important;
+    color: #334155 !important;
+}
+
+.story-reader-wrapper.theme-light .story-lead-summary {
+    color: #334155 !important;
+}
+
+.story-reader-wrapper.theme-light .reading-guide-pill {
+    background: #f0f9ff !important;
+    border-color: #bae6fd !important;
+    color: #0369a1 !important;
+}
+
+.story-reader-wrapper.theme-light .ielts-group-banner {
+    background: #f1f5f9 !important;
+    border-color: #e2e8f0 !important;
+    color: #0f172a !important;
+}
+
+.story-reader-wrapper.theme-light .quiz-card {
+    background: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    color: #0f172a !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05) !important;
+}
+
+.story-reader-wrapper.theme-light .quiz-statement-text {
+    color: #0f172a !important;
+}
+
+.story-reader-wrapper.theme-light .tfng-chip {
+    background: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    color: #334155 !important;
+}
+
+.story-reader-wrapper.theme-light .gap-input {
+    background: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+}
+
+.story-reader-wrapper.theme-light .recap-vocab-item {
+    background: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+    color: #0f172a !important;
+}
+
+.story-reader-wrapper.theme-light .recap-word {
+    color: #0f172a !important;
+}
+
+.story-reader-wrapper.theme-light .recap-meaning {
+    color: #475569 !important;
+}
+
+.story-reader-wrapper.theme-light .vocab-popup-card {
+    background: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    color: #0f172a !important;
+}
+
+.story-reader-wrapper.theme-light .vocab-popup-header {
+    border-bottom-color: #f1f5f9 !important;
+}
+
+.story-reader-wrapper.theme-light .vocab-word-large {
+    color: #0f172a !important;
+}
+
+.story-reader-wrapper.theme-light .vocab-meaning-text {
+    color: #334155 !important;
 }
 

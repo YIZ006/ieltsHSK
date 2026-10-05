@@ -8,16 +8,41 @@
 @inject StreakService StreakSvc
 @inject NotificationService NotifSvc
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
 @implements IDisposable
 
 <nav class="navbar">
-    @if (IsHomePage)
+    @if (IsStandalonePage)
     {
         <div class="navbar-brand-area">
             <a href="/" class="topbar-brand" title="ieltsHSK - Trang chủ">
-                <img src="images/ieltsHSK-logo.png" alt="ieltsHSK" class="topbar-brand-img" />
+                <img src="images/ieltsHSK-logo.png" alt="ieltsHSK" class="topbar-brand-img brand-logo-light" />
+                <img src="images/ieltsHSK-logo-white.png" alt="ieltsHSK" class="topbar-brand-img brand-logo-dark" />
             </a>
         </div>
+
+        <nav class="home-nav-links" aria-label="Home Navigation">
+            <a href="/ielts/dashboard" class="home-nav-link">
+                <span>IELTS Engine</span>
+            </a>
+            <a href="/hsk" class="home-nav-link hsk-matrix-link">
+                <span>HSK 3.0 Matrix</span>
+                <span class="home-badge-new">New</span>
+            </a>
+            <a href="/ielts/mock-test" class="home-nav-link">
+                <span>Mock Tests</span>
+            </a>
+            <a href="/ielts/tu-vung" class="home-nav-link">
+                <span>Vocabulary Vault</span>
+            </a>
+            <a href="/ielts/dashboard" class="home-nav-link">
+                <span>Diagnostic Scoring</span>
+            </a>
+        </nav>
+
+        <button type="button" class="home-mobile-toggle" @onclick="ToggleMobileHomeMenu" aria-label="Toggle navigation menu">
+            <i class="bi @(showMobileHomeMenu ? "bi-x-lg" : "bi-list")"></i>
+        </button>
     }
 
     <div class="navbar-collapse">
@@ -36,6 +61,22 @@
         </div>
 
         <ul class="navbar-nav auth-nav ms-auto">
+            @if (IsStandalonePage)
+            {
+                <li class="nav-item theme-switcher-container">
+                    <div class="theme-switch-pill" role="group" aria-label="Giao diện sáng tối">
+                        <button type="button" class="theme-btn @(!isDarkMode ? "active" : "")" @onclick="(e) => SetThemeWithCoords(false, e)" title="Chế độ Sáng">
+                            <i class="bi bi-sun-fill theme-sun-icon"></i>
+                            <span class="theme-text">Sáng</span>
+                        </button>
+                        <button type="button" class="theme-btn @(isDarkMode ? "active" : "")" @onclick="(e) => SetThemeWithCoords(true, e)" title="Chế độ Tối">
+                            <i class="bi bi-moon-stars-fill theme-moon-icon"></i>
+                            <span class="theme-text">Tối</span>
+                        </button>
+                    </div>
+                </li>
+            }
+
             <AuthorizeView>
                 <Authorized>
                     <li class="nav-item streak-menu">
@@ -294,19 +335,63 @@
                 </Authorized>
                 <NotAuthorized>
                     <li class="nav-item">
-                        <button class="nav-link btn-auth" @onclick="() => OnShowLogin.InvokeAsync()" @onclick:stopPropagation>
-                            Login
+                        <button class="btn-signin" @onclick="() => OnShowLogin.InvokeAsync()" @onclick:stopPropagation>
+                            Sign In
                         </button>
                     </li>
                     <li class="nav-item">
-                        <button class="nav-link btn-auth btn-register" @onclick="() => OnShowRegister.InvokeAsync()" @onclick:stopPropagation>
-                            Register
+                        <button class="btn-get-started" @onclick="() => OnShowRegister.InvokeAsync()" @onclick:stopPropagation>
+                            Get Started Free
                         </button>
                     </li>
                 </NotAuthorized>
             </AuthorizeView>
         </ul>
     </div>
+
+    @if (IsStandalonePage && showMobileHomeMenu)
+    {
+        <div class="home-mobile-backdrop" @onclick="() => showMobileHomeMenu = false"></div>
+        <div class="home-mobile-drawer">
+            <a href="/ielts/dashboard" class="home-mobile-link" @onclick="() => showMobileHomeMenu = false">
+                <span>IELTS Engine</span>
+                <i class="bi bi-arrow-right"></i>
+            </a>
+            <a href="/hsk" class="home-mobile-link" @onclick="() => showMobileHomeMenu = false">
+                <span class="d-inline-flex align-items-center gap-2">
+                    HSK 3.0 Matrix
+                    <span class="home-badge-new">New</span>
+                </span>
+                <i class="bi bi-arrow-right"></i>
+            </a>
+            <a href="/ielts/mock-test" class="home-mobile-link" @onclick="() => showMobileHomeMenu = false">
+                <span>Mock Tests</span>
+                <i class="bi bi-arrow-right"></i>
+            </a>
+            <a href="/ielts/tu-vung" class="home-mobile-link" @onclick="() => showMobileHomeMenu = false">
+                <span>Vocabulary Vault</span>
+                <i class="bi bi-arrow-right"></i>
+            </a>
+            <a href="/ielts/dashboard" class="home-mobile-link" @onclick="() => showMobileHomeMenu = false">
+                <span>Diagnostic Scoring</span>
+                <i class="bi bi-arrow-right"></i>
+            </a>
+
+            <div class="home-mobile-theme-row">
+                <span class="theme-mobile-label">Giao diện:</span>
+                <div class="theme-switch-pill" role="group" aria-label="Chế độ sáng tối">
+                    <button type="button" class="theme-btn @(!isDarkMode ? "active" : "")" @onclick="(e) => SetThemeWithCoords(false, e)" title="Chế độ Sáng">
+                        <i class="bi bi-sun-fill theme-sun-icon"></i>
+                        <span class="theme-text">Sáng</span>
+                    </button>
+                    <button type="button" class="theme-btn @(isDarkMode ? "active" : "")" @onclick="(e) => SetThemeWithCoords(true, e)" title="Chế độ Tối">
+                        <i class="bi bi-moon-stars-fill theme-moon-icon"></i>
+                        <span class="theme-text">Tối</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
 
     <div class="exam-toolbar exam-toolbar-mobile">
         @if (ExamHeader.Visible)
@@ -343,10 +428,54 @@
     private bool showUserMenu = false;
     private bool showStreakMenu = false;
     private bool showNotifMenu = false;
+    private bool showMobileHomeMenu = false;
+    private bool isDarkMode = false;
     private bool isLoadingNotifs = false;
     private List<NotificationDto> notifications = new();
     private int unreadNotifCount => notifications.Count(n => !n.IsRead);
     private HashSet<int> expandedNotifIds = new();
+
+    private void ToggleMobileHomeMenu()
+    {
+        showMobileHomeMenu = !showMobileHomeMenu;
+    }
+
+    private async Task SetThemeWithCoords(bool dark, MouseEventArgs e)
+    {
+        isDarkMode = dark;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("toggleAppThemeWithRipple", dark, e.ClientX, e.ClientY);
+        }
+        catch
+        {
+            await JSRuntime.InvokeVoidAsync("setAppTheme", dark ? "dark" : "light");
+        }
+    }
+
+    private async Task SetTheme(bool dark)
+    {
+        isDarkMode = dark;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("setAppTheme", dark ? "dark" : "light");
+        }
+        catch { }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var theme = await JSRuntime.InvokeAsync<string>("getAppTheme");
+                isDarkMode = theme == "dark";
+                StateHasChanged();
+            }
+            catch { }
+        }
+    }
 
     private string welcomeName = !string.IsNullOrEmpty(_cachedWelcomeName) ? _cachedWelcomeName : "Học viên";
     private string userEmail = _cachedUserEmail;
@@ -416,6 +545,25 @@
         _ = LoadNotificationsAsync();
     }
 
+    private static readonly HashSet<string> StandaloneRoutes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "",
+        "privacy",
+        "terms",
+        "curriculum",
+        "contact"
+    };
+
+    private bool IsStandalonePage
+    {
+        get
+        {
+            var rel = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+            var path = rel.Split('?', '#')[0].Trim('/');
+            return StandaloneRoutes.Contains(path);
+        }
+    }
+
     private bool IsHomePage
     {
         get
@@ -431,6 +579,7 @@
         showUserMenu = false;
         showStreakMenu = false;
         showNotifMenu = false;
+        showMobileHomeMenu = false;
         InvokeAsync(StateHasChanged);
     }
 

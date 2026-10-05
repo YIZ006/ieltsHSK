@@ -14,6 +14,14 @@
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     pointer-events: none;
     user-select: none;
+    transition: bottom 0.25s ease;
+}
+
+/* Lift above bottom navigator bar during exams */
+.exam-shell ~ .mascot-widget-wrapper,
+body:has(.q-navigator-bar) .mascot-widget-wrapper,
+body:has(.reading-bottom-nav) .mascot-widget-wrapper {
+    bottom: 64px;
 }
 
 /* ---------------------------------------------------------
@@ -78,6 +86,26 @@
     border-right: 1px solid rgba(226, 232, 240, 0.9);
     border-bottom: 1px solid rgba(226, 232, 240, 0.9);
     transform: rotate(45deg);
+}
+
+[data-theme="dark"] .mascot-speech-bubble {
+    background: rgba(21, 36, 63, 0.96);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.45), 0 4px 12px -2px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="dark"] .mascot-bubble-text {
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .mascot-bubble-sub {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .mascot-bubble-arrow {
+    background: #15243f;
+    border-right-color: rgba(255, 255, 255, 0.12);
+    border-bottom-color: rgba(255, 255, 255, 0.12);
 }
 
 /* ---------------------------------------------------------

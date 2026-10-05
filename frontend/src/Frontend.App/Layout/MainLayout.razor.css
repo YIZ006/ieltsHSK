@@ -55,6 +55,17 @@
 
 .sb-mobile-toggle:hover { background: #ede9fe; }
 
+[data-theme="dark"] .sb-mobile-toggle {
+    background: rgba(30, 41, 59, 0.8);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #a5b4fc;
+}
+
+[data-theme="dark"] .sb-mobile-toggle:hover {
+    background: rgba(49, 46, 129, 0.5);
+    color: #c7d2fe;
+}
+
 main {
     flex: 1;
     display: flex;
@@ -72,11 +83,20 @@ article.content {
     }
 }
 
-.no-sidebar article.content,
 article.content.home-content {
     padding: 0 !important;
     display: flex;
     flex-direction: column;
+}
+
+article.content.standalone-content {
+    padding: 2.5rem 1.5rem 4rem !important;
+    display: flex;
+    flex-direction: column;
+    max-width: 1040px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 @media (max-width: 900px) {

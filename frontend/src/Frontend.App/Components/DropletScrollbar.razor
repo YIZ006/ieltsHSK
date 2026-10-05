@@ -1,0 +1,92 @@
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+<div @ref="wrapRef" id="dropletScrollWrap" class="drop-scroll" aria-hidden="true" title="Thanh cuộn giọt nước thông minh">
+    <div class="drop-scroll__track" title="Rãnh trượt thủy tinh"></div>
+    <div class="drop-scroll__drop" id="dropletScrollDrop">
+        <svg width="40" height="88" viewBox="-20 -44 40 88">
+            <defs>
+                <!-- Dark Mode Translucent Liquid Glass Gradient (xuyên thấu ánh sáng neon) -->
+                <linearGradient id="dropFillDark" x1="0.15" y1="0" x2="0.85" y2="1">
+                    <stop offset="0%" stop-color="#bae6fd" stop-opacity="0.85" />
+                    <stop offset="30%" stop-color="#38bdf8" stop-opacity="0.48" />
+                    <stop offset="70%" stop-color="#0284c7" stop-opacity="0.72" />
+                    <stop offset="100%" stop-color="#0c4a6e" stop-opacity="0.94" />
+                </linearGradient>
+
+                <!-- Light Mode Translucent Liquid Glass Gradient (trong suốt khúc xạ pha lê) -->
+                <linearGradient id="dropFillLight" x1="0.15" y1="0" x2="0.85" y2="1">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.94" />
+                    <stop offset="28%" stop-color="#bae6fd" stop-opacity="0.55" />
+                    <stop offset="70%" stop-color="#0284c7" stop-opacity="0.75" />
+                    <stop offset="100%" stop-color="#0369a1" stop-opacity="0.95" />
+                </linearGradient>
+
+                <!-- Glass Rim Specular Highlight (viền kính khúc xạ ánh sáng 3D) -->
+                <linearGradient id="dropRimGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
+                    <stop offset="35%" stop-color="#ffffff" stop-opacity="0.4" />
+                    <stop offset="65%" stop-color="#38bdf8" stop-opacity="0.35" />
+                    <stop offset="100%" stop-color="#ffffff" stop-opacity="0.8" />
+                </linearGradient>
+
+                <!-- Primary Glossy Flare (vết loé sáng phản quang xiên như thẻ IELTS/HSK) -->
+                <linearGradient id="dropFlareGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.98" />
+                    <stop offset="50%" stop-color="#ffffff" stop-opacity="0.45" />
+                    <stop offset="100%" stop-color="#ffffff" stop-opacity="0.05" />
+                </linearGradient>
+
+                <!-- Internal Caustic Glow (khúc xạ thể tích nước bên trong) -->
+                <radialGradient id="dropCaustic" cx="35%" cy="35%" r="65%">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6" />
+                    <stop offset="45%" stop-color="#7dd3fc" stop-opacity="0.2" />
+                    <stop offset="100%" stop-color="transparent" stop-opacity="0" />
+                </radialGradient>
+            </defs>
+
+            <!-- 1. Thân giọt nước thủy tinh lỏng xuyên thấu (mặc định hình tròn hoàn hảo R=12.5) -->
+            <path id="dropletScrollPath" class="drop-path"
+                  d="M 0 -12.50 C 6.90 -12.50, 12.50 -6.90, 12.50 0.00 C 12.50 6.90, 6.90 12.50, 0 12.50 C -6.90 12.50, -12.50 6.90, -12.50 0.00 C -12.50 -6.90, -6.90 -12.50, 0 -12.50 Z" />
+
+            <!-- 2. Lớp khúc xạ ánh sáng lòng trong (Caustic Sheen) -->
+            <path id="dropletScrollCaustic" class="drop-caustic"
+                  d="M 0 -12.50 C 6.90 -12.50, 12.50 -6.90, 12.50 0.00 C 12.50 6.90, 6.90 12.50, 0 12.50 C -6.90 12.50, -12.50 6.90, -12.50 0.00 C -12.50 -6.90, -6.90 -12.50, 0 -12.50 Z"
+                  fill="url(#dropCaustic)" />
+
+            <!-- 3. Tâm tụ quang lỏng (Liquid Core Lens) -->
+            <circle cx="-0.8" cy="-0.8" r="4.6" fill="rgba(255, 255, 255, 0.15)" class="drop-core-glow" pointer-events="none" />
+
+            <!-- 4. Đốm sáng phản quang xiên (Specular Highlight như mặt kính thẻ IELTS/HSK) -->
+            <ellipse id="dropletSpecular" cx="-3.6" cy="-3.6" rx="2.8" ry="4.2" transform="rotate(-26 -3.6 -3.6)" fill="url(#dropFlareGrad)" class="drop-specular" />
+
+            <!-- 5. Tia khúc xạ phụ viền dưới (Bottom Rim Caustic Glint) -->
+            <ellipse id="dropletBottomGlint" cx="3.2" cy="4.2" rx="2.4" ry="1.4" fill="#ffffff" class="drop-bottom-glint" />
+        </svg>
+    </div>
+</div>
+
+@code {
+    private ElementReference wrapRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("initDropletScrollbar", wrapRef);
+            }
+            catch { }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("disposeDropletScrollbar");
+        }
+        catch { }
+    }
+}

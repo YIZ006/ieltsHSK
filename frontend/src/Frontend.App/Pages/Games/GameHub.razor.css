@@ -458,6 +458,98 @@
     margin-bottom: 0.75rem;
 }
 
+.cefr-btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+}
+
+.cefr-chip {
+    padding: 0.55rem 0.95rem;
+    border-radius: 10px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.cefr-chip:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+.cefr-chip.active {
+    background: #0f172a;
+    border-color: #0f172a;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+}
+
+.test-mode-toggle-card {
+    margin-top: 1rem;
+    padding: 0.8rem 1rem;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.test-mode-toggle-card:hover {
+    background: #f1f5f9;
+    border-color: #f59e0b;
+}
+
+.test-mode-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.test-mode-left i {
+    font-size: 1.25rem;
+}
+
+.test-mode-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.test-mode-desc {
+    font-size: 0.76rem;
+    color: #64748b;
+}
+
+.test-mode-badge {
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 0.25rem 0.65rem;
+    border-radius: 6px;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+
+.test-mode-badge.badge-on {
+    background: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+}
+
+.test-mode-badge.badge-off {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #cbd5e1;
+}
+
 .diff-btn-group {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -579,5 +671,235 @@
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* ==========================================================================
+   DARK MODE OVERRIDES (OBSIDIAN NAVY THEME)
+   ========================================================================== */
+[data-theme="dark"] .game-hub-page {
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .section-title-row h2 {
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .section-title-row h2 i {
+    color: #38bdf8;
+}
+
+[data-theme="dark"] .text-muted {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .game-card {
+    background: #15243f;
+    border-color: #223554;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="dark"] .game-card.featured,
+[data-theme="dark"] .game-card.hsk-card {
+    background: #15243f;
+}
+
+[data-theme="dark"] .game-card:hover {
+    border-color: #38bdf8;
+    box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .game-card h3 {
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .game-desc {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .game-tag {
+    background: #111d33;
+    border-color: #223554;
+    color: #cbd5e1;
+}
+
+[data-theme="dark"] .badge-player-count {
+    background: #111d33;
+    color: #94a3b8;
+    border: 1px solid #223554;
+}
+
+[data-theme="dark"] .btn-play-game {
+    background: #111d33;
+    border-color: #223554;
+    color: #38bdf8;
+}
+
+[data-theme="dark"] .btn-play-game:hover {
+    background: #38bdf8;
+    color: #0b1325;
+}
+
+[data-theme="dark"] .hub-rules-card {
+    background: #15243f;
+    border-color: #223554;
+}
+
+[data-theme="dark"] .rule-card-item {
+    background: #111d33;
+    border-color: #223554;
+}
+
+[data-theme="dark"] .rule-card-item h4 {
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .rule-card-item p {
+    color: #94a3b8;
+}
+
+/* ── Game Info Modal Dark Mode ── */
+[data-theme="dark"] .game-info-modal {
+    background: #0f172a;
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .btn-close-modal-top {
+    background: #1e293b;
+    border-color: #334155;
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .btn-close-modal-top:hover {
+    background: #334155;
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .info-header {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .info-header h2 {
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .info-sub {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .info-tag {
+    background: #1e293b;
+    border-color: #334155;
+    color: #cbd5e1;
+}
+
+[data-theme="dark"] .how-to-play-section h4 {
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .rule-box {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+[data-theme="dark"] .rule-badge {
+    background: #38bdf8;
+    color: #0f172a;
+}
+
+[data-theme="dark"] .rule-content {
+    color: #cbd5e1;
+}
+
+[data-theme="dark"] .options-label {
+    color: #cbd5e1;
+}
+
+[data-theme="dark"] .diff-btn {
+    background: #1e293b;
+    border-color: #334155;
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .diff-btn:hover {
+    background: #334155;
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .diff-btn.active {
+    background: #0ea5e9;
+    border-color: #0ea5e9;
+    color: #ffffff;
+}
+
+[data-theme="dark"] .cefr-chip {
+    background: #1e293b;
+    border-color: #334155;
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .cefr-chip:hover {
+    background: #334155;
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .cefr-chip.active {
+    background: #0ea5e9;
+    border-color: #0ea5e9;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
+}
+
+[data-theme="dark"] .test-mode-toggle-card {
+    background: rgba(15, 23, 42, 0.7);
+    border-color: rgba(245, 158, 11, 0.4);
+}
+
+[data-theme="dark"] .test-mode-toggle-card:hover {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: #f59e0b;
+}
+
+[data-theme="dark"] .test-mode-title {
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .test-mode-desc {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .test-mode-badge.badge-on {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border-color: rgba(52, 211, 153, 0.4);
+}
+
+[data-theme="dark"] .test-mode-badge.badge-off {
+    background: rgba(100, 116, 139, 0.2);
+    color: #94a3b8;
+    border-color: #334155;
+}
+
+[data-theme="dark"] .btn-cancel-game {
+    background: #1e293b;
+    border-color: #334155;
+    color: #cbd5e1;
+}
+
+[data-theme="dark"] .btn-cancel-game:hover {
+    background: #334155;
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .info-options-box {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+[data-theme="dark"] .card-badge {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #cbd5e1;
 }
 

@@ -1,35 +1,607 @@
 html, body {
-    font-family: 'Be Vietnam Pro', 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Plus Jakarta Sans', 'Be Vietnam Pro', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background-color: var(--ig-bg);
     color: var(--ig-text);
     margin: 0;
     padding: 0;
     min-height: 100%;
+    scroll-behavior: smooth;
 }
 
-:root {
-    --ig-bg: #ffffff;
-    --ig-text: #262626;
-    --ig-text-secondary: #8e8e8e;
-    --ig-border: #dbdbdb;
-    --ig-primary: #0095f6;
-    --ig-primary-hover: #1877f2;
+:root, [data-theme="light"] {
+    --ig-bg: #f8fafc;
+    --ig-surface: #ffffff;
+    --ig-text: #0f172a;
+    --ig-text-secondary: #475569;
+    --ig-border: #e2e8f0;
+    --ig-primary: #0284c7;
+    --ig-primary-hover: #0369a1;
     --ig-card-bg: #ffffff;
-    --ig-danger: #ed4956;
+    --ig-danger: #ef4444;
+
+    --landing-bg: radial-gradient(circle at 50% 8%, #ffffff 0%, #f8fafc 55%, #f1f5f9 100%);
+    --landing-text: #0f172a;
+    --landing-title: #0f172a;
+    --landing-subtitle: #475569;
+    --landing-card-bg: #ffffff;
+
+    /* Liquid Water Droplet Scrollbar (Light Mode) */
+    --water-scroll-width: 9px;
+    --water-track-bg: rgba(2, 132, 199, 0.04);
+    --water-drop-thumb: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.95) 0%,
+        rgba(186, 230, 253, 0.95) 12%,
+        rgba(56, 189, 248, 0.85) 35%,
+        rgba(2, 132, 199, 0.9) 75%,
+        rgba(3, 105, 161, 0.95) 100%
+    );
+    --water-drop-shadow: 
+        inset 0 2px 3px rgba(255, 255, 255, 0.95),
+        inset 0 -2px 3px rgba(3, 105, 161, 0.4),
+        0 2px 8px rgba(2, 132, 199, 0.35);
+    --water-drop-hover: linear-gradient(
+        180deg,
+        #ffffff 0%,
+        #7dd3fc 15%,
+        #0ea5e9 45%,
+        #0284c7 100%
+    );
+    --water-drop-hover-shadow: 
+        inset 0 2px 4px #ffffff,
+        0 0 14px rgba(2, 132, 199, 0.6);
+}
+
+[data-theme="dark"] {
+    --ig-bg: #0b0d13;
+    --ig-surface: #12151e;
+    --ig-text: #f8fafc;
+    --ig-text-secondary: #94a3b8;
+    --ig-border: #232838;
+    --ig-primary: #38bdf8;
+    --ig-primary-hover: #0ea5e9;
+    --ig-card-bg: #141721;
+    --ig-danger: #f87171;
+
+    --landing-bg: radial-gradient(circle at 50% 8%, #141721 0%, #0b0d13 55%, #06070a 100%);
+    --landing-text: #f8fafc;
+    --landing-title: #f8fafc;
+    --landing-subtitle: #94a3b8;
+    --landing-card-bg: #141721;
+
+    /* Liquid Water Droplet Scrollbar (Dark Mode) */
+    --water-scroll-width: 9px;
+    --water-track-bg: rgba(56, 189, 248, 0.03);
+    --water-drop-thumb: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.95) 0%,
+        rgba(186, 230, 253, 0.85) 10%,
+        rgba(56, 189, 248, 0.8) 32%,
+        rgba(14, 165, 233, 0.85) 65%,
+        rgba(2, 132, 199, 0.9) 100%
+    );
+    --water-drop-shadow: 
+        inset 0 2px 4px rgba(255, 255, 255, 0.9),
+        inset 0 -2px 4px rgba(7, 12, 24, 0.6),
+        0 2px 12px rgba(56, 189, 248, 0.55);
+    --water-drop-hover: linear-gradient(
+        180deg,
+        #ffffff 0%,
+        #bae6fd 12%,
+        #38bdf8 38%,
+        #0ea5e9 75%,
+        #0284c7 100%
+    );
+    --water-drop-hover-shadow: 
+        inset 0 2px 5px #ffffff,
+        0 0 16px rgba(56, 189, 248, 0.85);
 }
 
 @media (prefers-color-scheme: dark) {
-    :root {
-        --ig-bg: #000000;
-        --ig-text: #f5f5f5;
-        --ig-text-secondary: #a8a8a8;
-        --ig-border: #363636;
-        --ig-primary: #0095f6;
-        --ig-primary-hover: #1877f2;
-        --ig-card-bg: #000000;
-        --ig-danger: #ed4956;
+    :root:not([data-theme="light"]) {
+        --ig-bg: #0b0d13;
+        --ig-surface: #12151e;
+        --ig-text: #f8fafc;
+        --ig-text-secondary: #94a3b8;
+        --ig-border: #232838;
+        --ig-primary: #38bdf8;
+        --ig-primary-hover: #0ea5e9;
+        --ig-card-bg: #141721;
+        --ig-danger: #f87171;
+
+        --landing-bg: radial-gradient(circle at 50% 8%, #141721 0%, #0b0d13 55%, #06070a 100%);
+        --landing-text: #f8fafc;
+        --landing-title: #f8fafc;
+        --landing-subtitle: #94a3b8;
+        --landing-card-bg: #0f172a;
+
+        /* Liquid Water Droplet Scrollbar (Dark Mode) */
+        --water-scroll-width: 9px;
+        --water-track-bg: rgba(56, 189, 248, 0.03);
+        --water-drop-thumb: linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.95) 0%,
+            rgba(186, 230, 253, 0.85) 10%,
+            rgba(56, 189, 248, 0.8) 32%,
+            rgba(14, 165, 233, 0.85) 65%,
+            rgba(2, 132, 199, 0.9) 100%
+        );
+        --water-drop-shadow: 
+            inset 0 2px 4px rgba(255, 255, 255, 0.9),
+            inset 0 -2px 4px rgba(7, 12, 24, 0.6),
+            0 2px 12px rgba(56, 189, 248, 0.55);
+        --water-drop-hover: linear-gradient(
+            180deg,
+            #ffffff 0%,
+            #bae6fd 12%,
+            #38bdf8 38%,
+            #0ea5e9 75%,
+            #0284c7 100%
+        );
+        --water-drop-hover-shadow: 
+            inset 0 2px 5px #ffffff,
+            0 0 16px rgba(56, 189, 248, 0.85);
     }
 }
+
+/* ── VIEW TRANSITIONS EXPANDING CIRCLE FROM BUTTON ── */
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+    z-index: 1;
+}
+
+::view-transition-new(root) {
+    z-index: 99999;
+}
+
+/* ── LOGO SWITCHING (LIGHT VS DARK) ── */
+.brand-logo-light {
+    display: block !important;
+}
+
+.brand-logo-dark {
+    display: none !important;
+}
+
+[data-theme="dark"] .brand-logo-light {
+    display: none !important;
+}
+
+[data-theme="dark"] .brand-logo-dark {
+    display: block !important;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .brand-logo-light {
+        display: none !important;
+    }
+    :root:not([data-theme="light"]) .brand-logo-dark {
+        display: block !important;
+    }
+}
+
+/* ══════════════════════════════════════════════════════════════════════ */
+/* LIQUID WATER DROPLET SCROLLBAR (THANH CUỘN HIỆU ỨNG GIỌT NƯỚC DI CHUYỂN DẦN) */
+/* ══════════════════════════════════════════════════════════════════════ */
+
+/* Ẩn thanh cuộn mặc định của trình duyệt khi trang kích hoạt DropletScrollbar giọt nước */
+html.has-droplet-scrollbar {
+    scrollbar-width: none;
+}
+html.has-droplet-scrollbar::-webkit-scrollbar,
+html.has-droplet-scrollbar body::-webkit-scrollbar {
+    display: none;
+}
+
+/* Thanh cuộn cho các khung cuộn nội bộ (Modal, bảng tra cứu, sidebar) */
+::-webkit-scrollbar {
+    width: var(--water-scroll-width, 7px);
+    height: var(--water-scroll-width, 7px);
+}
+
+::-webkit-scrollbar-track {
+    background: var(--water-track-bg, transparent);
+    border-radius: 9999px;
+    margin: 4px 0;
+}
+
+/* Giọt nước (Scrollbar Thumb) với phản quang và khúc xạ chất lỏng */
+::-webkit-scrollbar-thumb {
+    background: var(--water-drop-thumb);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    box-shadow: var(--water-drop-shadow);
+    min-height: 48px;
+    transition: background 0.25s ease, box-shadow 0.25s ease;
+    cursor: grab;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--water-drop-hover);
+    box-shadow: var(--water-drop-hover-shadow);
+}
+
+::-webkit-scrollbar-thumb:active {
+    background: var(--water-drop-hover);
+    box-shadow: 0 0 22px rgba(56, 189, 248, 0.95), inset 0 2px 6px #ffffff;
+    cursor: grabbing;
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* Chuẩn Firefox hiện đại cho các khung cuộn nội bộ */
+.scrollable-content,
+.modal-body,
+.sb-nav {
+    scrollbar-width: thin;
+    scrollbar-color: #38bdf8 transparent;
+}
+
+[data-theme="light"] .scrollable-content,
+[data-theme="light"] .modal-body,
+[data-theme="light"] .sb-nav {
+    scrollbar-color: #0284c7 transparent;
+}
+
+/* ── GLOBAL HOME LANDING DARK THEME RULES ── */
+[data-theme="dark"] .landing-container {
+    background: radial-gradient(circle at 50% 8%, #0f172a 0%, #090d16 55%, #050811 100%) !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .main-title {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .subtitle {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .monolith-card {
+    background: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .card-content h2 {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .card-content p {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .ielts-card {
+    border-color: rgba(56, 189, 248, 0.4) !important;
+    box-shadow: 0 20px 45px -15px rgba(2, 132, 199, 0.4), 0 0 25px rgba(56, 189, 248, 0.25) !important;
+}
+
+[data-theme="dark"] .hsk-card {
+    border-color: rgba(244, 63, 94, 0.4) !important;
+    box-shadow: 0 20px 45px -15px rgba(239, 68, 68, 0.4), 0 0 25px rgba(244, 63, 94, 0.25) !important;
+}
+
+[data-theme="dark"] .ielts-btn {
+    color: #38bdf8 !important;
+    border-color: rgba(56, 189, 248, 0.3) !important;
+    background: rgba(56, 189, 248, 0.08) !important;
+}
+
+[data-theme="dark"] .ielts-btn:hover {
+    background: rgba(56, 189, 248, 0.18) !important;
+    border-color: #38bdf8 !important;
+}
+
+[data-theme="dark"] .hsk-btn {
+    color: #fb7185 !important;
+    border-color: rgba(244, 63, 94, 0.3) !important;
+    background: rgba(244, 63, 94, 0.08) !important;
+}
+
+[data-theme="dark"] .hsk-btn:hover {
+    background: rgba(244, 63, 94, 0.18) !important;
+    border-color: #fb7185 !important;
+}
+
+/* ── UNIVERSAL WORKSPACE EYE-COMFORT & THEME RULES ── */
+[data-theme="dark"] .page-title,
+[data-theme="dark"] h1.page-title,
+[data-theme="dark"] .section-heading,
+[data-theme="dark"] h2.section-heading,
+[data-theme="dark"] .topic-title,
+[data-theme="dark"] .audio-card-title,
+[data-theme="dark"] .exercise-video-title,
+[data-theme="dark"] .question-title,
+[data-theme="dark"] .vocab-title,
+[data-theme="dark"] .vocab-preview-header h3,
+[data-theme="dark"] .card-icon-header h3,
+[data-theme="dark"] .section-title-wrap h3,
+[data-theme="dark"] .story-title,
+[data-theme="dark"] .module-info h4,
+[data-theme="dark"] .goal-section h3,
+[data-theme="dark"] .chip-word,
+[data-theme="dark"] .sp-q-text h3,
+[data-theme="dark"] .title-section h1,
+[data-theme="dark"] .audio-modal-title h3 {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .page-subtitle,
+[data-theme="dark"] .section-desc,
+[data-theme="dark"] .topic-sub,
+[data-theme="dark"] .audio-card-desc,
+[data-theme="dark"] .audio-unit-count,
+[data-theme="dark"] .date-subtitle,
+[data-theme="dark"] .vocab-subtitle,
+[data-theme="dark"] .story-excerpt,
+[data-theme="dark"] .module-info p,
+[data-theme="dark"] .submission-meta,
+[data-theme="dark"] .audio-modal-sub {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .audio-lesson-card,
+[data-theme="dark"] .topic-card,
+[data-theme="dark"] .panel-card,
+[data-theme="dark"] .engnovate-video-card,
+[data-theme="dark"] .engnovate-transcript-wrapper,
+[data-theme="dark"] .flashcard-nav-header,
+[data-theme="dark"] .engnovate-header-bar,
+[data-theme="dark"] .audio-modal-card,
+[data-theme="dark"] .dictation-card-wrapper,
+[data-theme="dark"] .dashboard-card,
+[data-theme="dark"] .module-card,
+[data-theme="dark"] .goal-section,
+[data-theme="dark"] .latest-result,
+[data-theme="dark"] .vocab-preview-section,
+[data-theme="dark"] .story-card,
+[data-theme="dark"] .review-header-card,
+[data-theme="dark"] .filter-panel-card,
+[data-theme="dark"] .vocab-header-card,
+[data-theme="dark"] .vocab-table-container,
+[data-theme="dark"] .master-table-wrapper,
+[data-theme="dark"] .featured-table-wrapper,
+[data-theme="dark"] .lesson-hero-compact,
+[data-theme="dark"] .lesson-section,
+[data-theme="dark"] .formula-card,
+[data-theme="dark"] .exercise-section-enhanced,
+[data-theme="dark"] .exercise-card,
+[data-theme="dark"] .mocktest-controls-bar,
+[data-theme="dark"] .collection-title-bar,
+[data-theme="dark"] .test-block,
+[data-theme="dark"] .skill-card,
+[data-theme="dark"] .skill-card-summary,
+[data-theme="dark"] .summary-loading,
+[data-theme="dark"] .summary-empty,
+[data-theme="dark"] .task-card,
+[data-theme="dark"] .history-table-wrap,
+[data-theme="dark"] .diagnostic-card,
+[data-theme="dark"] .checklist-card,
+[data-theme="dark"] .game-card,
+[data-theme="dark"] .hub-rules-card,
+[data-theme="dark"] .question-block,
+[data-theme="dark"] .task-instruction,
+[data-theme="dark"] .sample-essay-card,
+[data-theme="dark"] .avatar-picker-panel,
+[data-theme="dark"] .sp-think-card,
+[data-theme="dark"] .sp-result-card,
+[data-theme="dark"] .sp-setup-card,
+[data-theme="dark"] .stat-card,
+[data-theme="dark"] .profile-card,
+[data-theme="dark"] .profile-section,
+[data-theme="dark"] .test-card,
+[data-theme="dark"] .exam-card,
+[data-theme="dark"] .grammar-card,
+[data-theme="dark"] .activity-item,
+[data-theme="dark"] .audio-player-box {
+    background-color: var(--ig-card-bg) !important;
+    border-color: var(--ig-border) !important;
+    color: var(--ig-text) !important;
+}
+
+[data-theme="dark"] .user-speech-card,
+[data-theme="dark"] .speech-display-box,
+[data-theme="dark"] .dictation-diff-box,
+[data-theme="dark"] .user-audio-review-bar,
+[data-theme="dark"] .engnovate-audio-player-box {
+    background-color: #111d33 !important;
+    border-color: var(--ig-border) !important;
+    color: var(--ig-text) !important;
+}
+
+[data-theme="dark"] .overall-progress-chip,
+[data-theme="dark"] .btn-corner-mic-test,
+[data-theme="dark"] .btn-back-to-topics,
+[data-theme="dark"] .btn-engnovate-back,
+[data-theme="dark"] .stepper-btn,
+[data-theme="dark"] .speed-chip,
+[data-theme="dark"] .engnovate-ctrl-btn,
+[data-theme="dark"] .unit-counter-pill,
+[data-theme="dark"] .segment-timing-pill,
+[data-theme="dark"] .level-tab-btn,
+[data-theme="dark"] .btn-card-action,
+[data-theme="dark"] .btn-start-test-mini,
+[data-theme="dark"] .sp-btn-secondary {
+    background-color: var(--ig-card-bg) !important;
+    border-color: var(--ig-border) !important;
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .overall-progress-chip:hover,
+[data-theme="dark"] .btn-corner-mic-test:hover,
+[data-theme="dark"] .btn-back-to-topics:hover,
+[data-theme="dark"] .btn-engnovate-back:hover,
+[data-theme="dark"] .stepper-btn:hover:not(:disabled),
+[data-theme="dark"] .speed-chip:hover,
+[data-theme="dark"] .engnovate-ctrl-btn:hover:not(:disabled),
+[data-theme="dark"] .level-tab-btn:hover,
+[data-theme="dark"] .btn-start-test-mini:hover,
+[data-theme="dark"] .sp-btn-secondary:hover {
+    background-color: #1a2c4c !important;
+    border-color: #38bdf8 !important;
+    color: #f8fafc !important;
+}
+
+/* Inputs & Selects */
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="search"],
+[data-theme="dark"] input[type="date"],
+[data-theme="dark"] select,
+[data-theme="dark"] textarea,
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .search-input-wrapper input,
+[data-theme="dark"] .search-input-group input,
+[data-theme="dark"] .category-select-wrapper select {
+    background-color: #111d33 !important;
+    border-color: var(--ig-border) !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+    color: #64748b !important;
+}
+
+/* View Mode Toggles & Tabs */
+[data-theme="dark"] .part-selector-tabs,
+[data-theme="dark"] .view-mode-toggle {
+    background-color: var(--ig-surface) !important;
+    border-color: var(--ig-border) !important;
+}
+
+[data-theme="dark"] .part-tab-num {
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .part-tab-label,
+[data-theme="dark"] .toggle-btn {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .part-tab-btn:hover,
+[data-theme="dark"] .toggle-btn:hover {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+[data-theme="dark"] .part-tab-btn.active,
+[data-theme="dark"] .toggle-btn.active {
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .part-tab-btn.active .part-tab-num,
+[data-theme="dark"] .part-tab-btn.active .part-tab-label {
+    color: #ffffff !important;
+}
+
+/* Sp Speaking Exam Room */
+[data-theme="dark"] .sp-body {
+    background: #0b1325 !important;
+}
+
+/* Vocab chip on Dashboard */
+[data-theme="dark"] .vocab-chip {
+    background: #111d33 !important;
+    border-color: #233554 !important;
+}
+[data-theme="dark"] .chip-meaning {
+    color: #cbd5e1 !important;
+}
+[data-theme="dark"] .chip-topic {
+    background: #15243f !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+/* Global Bootstrap Dark Mode Utility Overrides */
+[data-theme="dark"] .text-primary {
+    color: #38bdf8 !important;
+}
+
+[data-theme="dark"] .text-dark,
+[data-theme="dark"] .text-body,
+[data-theme="dark"] .text-black {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .text-secondary,
+[data-theme="dark"] .text-muted {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .bg-white {
+    background-color: #141721 !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .bg-light {
+    background-color: #12151e !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .border {
+    border-color: #232838 !important;
+}
+
+[data-theme="dark"] .border-top {
+    border-top-color: #232838 !important;
+}
+
+[data-theme="dark"] .border-bottom {
+    border-bottom-color: #232838 !important;
+}
+
+[data-theme="dark"] .table {
+    color: #f8fafc !important;
+    border-color: #232838 !important;
+}
+
+[data-theme="dark"] .table > :not(caption) > * > * {
+    background-color: transparent !important;
+    color: #f8fafc !important;
+    border-bottom-color: #232838 !important;
+}
+
+[data-theme="dark"] .card {
+    background-color: #141721 !important;
+    border-color: #232838 !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .modal-content {
+    background-color: #141721 !important;
+    border-color: #232838 !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .dropdown-menu {
+    background-color: #141721 !important;
+    border-color: #232838 !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .dropdown-item {
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .dropdown-item:hover,
+[data-theme="dark"] .dropdown-item:focus {
+    background-color: #1d2230 !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .list-group-item {
+    background-color: #141721 !important;
+    border-color: #232838 !important;
+    color: #f8fafc !important;
+}
+
 
 h1:focus {
     outline: none;
@@ -532,53 +1104,6 @@ code {
     color: #fde047 !important;
 }
 
-/* HSK Level Selector Box */
-.left-sidebar .sb-hsk-level-box {
-    margin: 8px 10px 4px !important;
-    padding: 10px !important;
-    background: rgba(0, 0, 0, 0.22) !important;
-    border: 1px solid rgba(250, 204, 21, 0.25) !important;
-    border-radius: 12px !important;
-    backdrop-filter: blur(8px);
-}
-
-.left-sidebar .sb-hsk-level-header {
-    font-size: 0.72rem !important;
-    font-weight: 800 !important;
-    color: #facc15 !important;
-    margin-bottom: 6px !important;
-}
-
-.left-sidebar .sb-hsk-dot {
-    background: #facc15 !important;
-    box-shadow: 0 0 6px #facc15 !important;
-}
-
-.left-sidebar .sb-hsk-pill {
-    padding: 5px !important;
-    border-radius: 8px !important;
-    border: 1px solid rgba(255, 255, 255, 0.18) !important;
-    background: rgba(0, 0, 0, 0.28) !important;
-    color: #ffffff !important;
-    font-size: 0.72rem !important;
-    font-weight: 700 !important;
-    transition: all 0.2s ease !important;
-}
-
-.left-sidebar .sb-hsk-pill:hover {
-    background: #dc2626 !important;
-    border-color: #facc15 !important;
-    color: #ffffff !important;
-    transform: translateY(-1px) !important;
-}
-
-.left-sidebar .sb-hsk-pill.active {
-    background: linear-gradient(135deg, #f59e0b, #d97706) !important;
-    color: #451a03 !important;
-    border-color: #fde68a !important;
-    font-weight: 800 !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
-}
 
 /* ========================================================================= */
 /* 2. IELTS THEME (DEEP OCEAN NAVY BLUE & BRIGHT SKY/CYAN ACCENTS)           */
@@ -648,6 +1173,101 @@ code {
 
 .left-sidebar.theme-ielts .sb-nav .sb-item.active .sb-item-desc {
     color: #7dd3fc !important;
+}
+
+/* ========================================================================= */
+/* OBSIDIAN MIDNIGHT SIDEBAR — CHỈ ÁP DỤNG CHO HSK (DARK MODE)              */
+/* ========================================================================= */
+[data-theme="dark"] .left-sidebar.theme-hsk,
+[data-theme="dark"].theme-hsk .left-sidebar {
+    background: #090b10 !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.45) !important;
+}
+
+[data-theme="dark"] .left-sidebar .sb-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* HSK Dark Mode Sidebar Accents */
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-brand-icon {
+    background: linear-gradient(135deg, #be123c 0%, #9f1239 100%) !important;
+    color: #ffffff !important;
+    box-shadow: 0 3px 10px rgba(190, 18, 60, 0.35) !important;
+}
+
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-brand-badge {
+    background: #be123c !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-section-label,
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-switcher-label {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-nav .sb-item:hover,
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-nav a.sb-item:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+    transform: translateX(3px) !important;
+    box-shadow: none !important;
+}
+
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-nav .sb-item:hover .sb-item-icon {
+    background: rgba(244, 63, 94, 0.2) !important;
+    color: #f43f5e !important;
+    border-color: rgba(244, 63, 94, 0.4) !important;
+}
+
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-nav .sb-item:hover .sb-item-desc {
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-nav .sb-item.active,
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-nav a.sb-item.active {
+    background: rgba(190, 18, 60, 0.16) !important;
+    border: 1px solid rgba(244, 63, 94, 0.4) !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 16px rgba(190, 18, 60, 0.15) !important;
+}
+
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-nav .sb-item.active .sb-item-icon {
+    background: linear-gradient(135deg, #be123c, #9f1239) !important;
+    color: #ffffff !important;
+    border-color: #f43f5e !important;
+    box-shadow: 0 0 12px rgba(244, 63, 94, 0.4) !important;
+}
+
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-nav .sb-item.active .sb-item-desc {
+    color: #fda4af !important;
+}
+
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-bottom {
+    background: #090b10 !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-switcher-card {
+    background: #12151e !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-switcher {
+    background: #090b10 !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-switch-btn {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .left-sidebar.theme-hsk .sb-switch-btn.active {
+    background: #be123c !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(190, 18, 60, 0.4) !important;
 }
 
 /* ─── COLLAPSED SIDEBAR OPTIMIZATIONS ─── */
@@ -896,4 +1516,4 @@ body:has(#app-loader:not(.fade-out):not([style*="display: none"])) .mascot-widge
 }
 
 
-
+

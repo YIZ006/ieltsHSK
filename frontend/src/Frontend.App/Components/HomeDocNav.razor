@@ -1,0 +1,64 @@
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+<nav class="home-quick-toc" aria-label="Điều hướng nhanh trang chủ">
+    <div class="toc-list">
+        @foreach (var item in Sections)
+        {
+            <button type="button"
+                    class="toc-item"
+                    data-target="@item.Id"
+                    @onclick="() => ScrollTo(item.Id)">
+                <span class="toc-num">@item.Num</span>
+                <span class="toc-dash"></span>
+                <span class="toc-text">@item.Title</span>
+            </button>
+        }
+    </div>
+</nav>
+
+@code {
+    private record SectionLink(string Num, string Id, string Title);
+
+    private readonly List<SectionLink> Sections = new()
+    {
+        new("01", "homeLandingContainer", "Cổng chọn lộ trình"),
+        new("02", "homeStatsSection", "Số liệu hệ sinh thái"),
+        new("03", "homeCoreFeatures", "Công nghệ cốt lõi"),
+        new("04", "homeRoadmapSection", "Lộ trình 5 bước"),
+        new("05", "homeReviewsSection", "Đánh giá học viên"),
+        new("06", "homeFaqSection", "Hỏi & Đáp"),
+        new("07", "homeCtaSection", "Bắt đầu ngay")
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var ids = Sections.Select(s => s.Id).ToArray();
+                await JSRuntime.InvokeVoidAsync("initHomeDocNav", ids);
+            }
+            catch { }
+        }
+    }
+
+    private async Task ScrollTo(string elementId)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("docScrollToSection", elementId);
+        }
+        catch { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("disposeHomeDocNav");
+        }
+        catch { }
+    }
+}

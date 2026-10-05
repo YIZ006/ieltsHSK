@@ -149,36 +149,45 @@ else
     @* ── AUDIO PLAYER AND QUESTIONS LAYOUT ── *@
     <div class="listening-layout">
         
-        <div class="custom-audio-player">
-            @if (!string.IsNullOrEmpty(CurrentAudioUrl))
-            {
-                <div id="yt-hidden-player" style="position:absolute; width:1px; height:1px; top:-9999px;"></div>
-                
-                <button class="player-btn" @onclick="TogglePlay">
-                    @if(isPlaying)
-                    {
-                        <i class="bi bi-pause-fill"></i>
-                    }
-                    else
-                    {
-                        <i class="bi bi-play-fill"></i>
-                    }
-                </button>
-                
-                <div class="progress-container" @onclick="SeekAudio">
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar-fill" style="width: @(ProgressPercent)%"></div>
+        <div class="audio-sticky-bar">
+            <div class="custom-audio-player">
+                @if (!string.IsNullOrEmpty(CurrentAudioUrl))
+                {
+                    <div id="yt-hidden-player" style="position:absolute; width:1px; height:1px; top:-9999px;"></div>
+                    
+                    <button class="player-btn" @onclick="TogglePlay" title="@(isPlaying ? "Tạm dừng" : "Phát bài nghe")">
+                        @if(isPlaying)
+                        {
+                            <i class="bi bi-pause-fill"></i>
+                        }
+                        else
+                        {
+                            <i class="bi bi-play-fill"></i>
+                        }
+                    </button>
+
+                    <div class="player-audio-badge">
+                        <i class="bi bi-headphones"></i>
+                        <span>Audio</span>
                     </div>
-                </div>
-                
-                <div class="time-display">
-                    @FormatTime(currentTime) / @FormatTime(totalDuration)
-                </div>
-            }
-            else
-            {
-                <div class="audio-placeholder">Không tìm thấy file nghe cho đề này.</div>
-            }
+                    
+                    <div class="progress-container" @onclick="SeekAudio" title="Tua thanh tiến độ">
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" style="width: @(ProgressPercent)%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="time-display">
+                        @FormatTime(currentTime) / @FormatTime(totalDuration)
+                    </div>
+                }
+                else
+                {
+                    <div class="audio-placeholder">
+                        <i class="bi bi-info-circle me-1"></i> Không tìm thấy file nghe cho đề này.
+                    </div>
+                }
+            </div>
         </div>
 
         <div class="questions-col listening-questions" id="questions-scroll">
@@ -466,7 +475,7 @@ else
         _timer = new System.Threading.Timer(_ => _ = UpdateTimerAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
 
-    private void RestoreCheckpoint()
+    private async Task RestoreCheckpoint()
     {
         if (pendingCheckpoint == null || exam == null) return;
         
@@ -495,7 +504,7 @@ else
 
         if (pendingCheckpoint.ActivePartIndex >= 0 && pendingCheckpoint.ActivePartIndex < exam.Parts.Count)
         {
-            ChangePart(pendingCheckpoint.ActivePartIndex);
+            await ChangePart(pendingCheckpoint.ActivePartIndex);
         }
 
         pendingCheckpoint = null;
@@ -749,7 +758,7 @@ else
                     {
                         Skill = "Listening",
                         ExamTitle = exam?.Title ?? QueryTitle ?? "IELTS Listening",
-                        ExamUrl = _examUrlLoaded,
+                        ExamUrl = _examUrlLoaded ?? "",
                         SessionId = TestSessionId,
                         MockTestId = QueryMockTestId,
                         CollectionName = QueryCollectionName,

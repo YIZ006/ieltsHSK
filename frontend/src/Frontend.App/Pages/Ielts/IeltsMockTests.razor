@@ -20,8 +20,8 @@
 
         @if (!isOnline)
         {
-            <div class="alert alert-warning d-flex align-items-center mb-4" role="alert" style="border-radius: 12px; font-weight: 600; background: #fffbeb; border: 1px solid #fef3c7; color: #92400e; padding: 12px 18px; margin-top: 16px;">
-                <i class="bi bi-wifi-off me-2 fs-5" style="color: #f59e0b;"></i>
+            <div class="alert mocktest-offline-banner d-flex align-items-center mb-4" role="alert">
+                <i class="bi bi-wifi-off me-2 fs-5"></i>
                 <div>
                     <strong>Chế độ Ngoại tuyến (Offline):</strong> Bạn đang mất kết nối Internet. Bạn có thể làm các đề thi đã tải về máy (được đánh dấu <span class="badge bg-success" style="vertical-align: middle;">Sẵn sàng Offline</span>).
                 </div>
@@ -236,13 +236,13 @@
                                                 <h2 style="margin: 0;">@test.Title</h2>
                                                 @if (attemptedSkills > 0)
                                                 {
-                                                    <span class="badge" style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; font-size: 0.74rem; font-weight: 700; padding: 3px 8px; border-radius: 8px;">
+                                                    <span class="badge test-badge-done">
                                                         <i class="bi bi-check-circle-fill"></i> Đã làm @attemptedSkills/4 kỹ năng
                                                     </span>
                                                 }
                                                 else
                                                 {
-                                                    <span class="badge" style="background: #f1f5f9; color: #64748b; font-size: 0.74rem; font-weight: 600; padding: 3px 8px; border-radius: 8px;">
+                                                    <span class="badge test-badge-pending">
                                                         Chưa làm
                                                     </span>
                                                 }
@@ -251,7 +251,7 @@
                                         <div class="test-header-actions" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                             @if (downloadingStatus.TryGetValue(test.Id, out var dlState))
                                             {
-                                                <div class="offline-downloading-pill" style="background: #eff6ff; color: #1d4ed8; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 6px; border: 1px solid #bfdbfe;">
+                                                <div class="offline-downloading-pill test-downloading-pill">
                                                     <span class="spinner-border spinner-border-sm" role="status" style="width: 0.85rem; height: 0.85rem;"></span>
                                                     <span>@dlState.status (@dlState.progress%)</span>
                                                 </div>
@@ -259,7 +259,7 @@
                                             else if (downloadedTestIds.Contains(test.Id))
                                             {
                                                 <div style="display: inline-flex; align-items: center; gap: 6px;">
-                                                    <span class="badge" style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 6px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                                                    <span class="badge test-badge-offline">
                                                         <i class="bi bi-check-circle-fill"></i> Sẵn sàng Offline
                                                     </span>
                                                     <button type="button" class="btn btn-sm btn-outline-danger" title="Xóa bản tải offline của đề này" style="padding: 2px 7px; border-radius: 6px; font-size: 0.78rem;" @onclick="() => DeleteDownloadedTest(test)">
@@ -275,7 +275,7 @@
                                             }
                                             else
                                             {
-                                                <span class="badge" style="background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600;">
+                                                <span class="badge test-badge-not-dl">
                                                     <i class="bi bi-cloud-slash me-1"></i> Chưa tải về
                                                 </span>
                                             }

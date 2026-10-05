@@ -1,0 +1,201 @@
+/* ══════════════════════════════════════════════════════════════ */
+/* THANH BẤM NHANH TỐI GIẢN — FOCUS DIMMING & EXPAND ANIMATION     */
+/* Đánh số to rõ, mờ các phần xung quanh, chỉ hiện chữ khi hover   */
+/* ══════════════════════════════════════════════════════════════ */
+
+.home-quick-toc {
+    position: fixed;
+    left: 28px;
+    top: 130px;
+    z-index: 450;
+    display: flex;
+    flex-direction: column;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 8px 6px;
+    margin: 0;
+    pointer-events: auto;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.toc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: relative;
+}
+
+/* Các mục gạch bấm nhanh - Hiển thị tất cả chữ, mờ nhẹ các mục chưa active */
+.toc-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    padding: 6px 8px;
+    color: var(--ig-text-secondary, #94a3b8);
+    font-size: 0.94rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+    opacity: 0.35; /* Các mục xung quanh mờ đi để làm nổi bật mục active */
+    transform: translateX(0);
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                color 0.2s ease;
+}
+
+/* Con số đánh dấu: to, rõ nét */
+.toc-num {
+    font-family: 'JetBrains Mono', 'Roboto Mono', 'Plus Jakarta Sans', monospace;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: currentColor;
+    opacity: 0.85;
+    flex-shrink: 0;
+    transition: transform 0.25s ease, opacity 0.25s ease, color 0.25s ease;
+}
+
+/* Gạch mục lục: gọn gàng */
+.toc-dash {
+    width: 16px;
+    height: 2px;
+    border-radius: 9999px;
+    background: currentColor;
+    opacity: 0.45;
+    flex-shrink: 0;
+    transition: width 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+                background 0.22s ease,
+                box-shadow 0.22s ease,
+                opacity 0.22s ease;
+}
+
+/* Chữ tiêu đề: Hiển thị đầy đủ tất cả như ban đầu */
+.toc-text {
+    display: inline-block;
+    color: currentColor;
+    font-size: 0.93rem;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    transition: color 0.2s ease, font-weight 0.2s ease;
+}
+
+/* ── TRẠNG THÁI ACTIVE (Đang đứng ở phần này thì sáng rõ 100% và thò ra để nhận biết) ── */
+.toc-item.active {
+    opacity: 1 !important; /* Sáng rõ 100% */
+    color: #f8fafc;
+    font-weight: 700;
+    transform: translateX(14px); /* Tự thò ra ngoài */
+}
+
+.toc-item.active .toc-num {
+    color: var(--ig-primary, #38bdf8);
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.toc-item.active .toc-dash {
+    width: 32px; /* Gạch dài ra rõ rệt */
+    height: 2.5px;
+    opacity: 1;
+    background: var(--ig-primary, #38bdf8);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.75);
+}
+
+.toc-item.active .toc-text {
+    color: #f8fafc;
+    font-weight: 700;
+}
+
+/* ── KHI DI CHUỘT LÊN XUỐNG CÁC PHẦN (Chuột di tới phần nào phần đó tự thò ra) ── */
+.toc-item:hover {
+    opacity: 1 !important;
+    color: #f8fafc;
+    transform: translateX(16px); /* Chuột di tới đâu thì mục đó tự thò ra */
+}
+
+.toc-item:hover .toc-num {
+    color: var(--ig-primary, #38bdf8);
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.toc-item:hover .toc-dash {
+    width: 30px;
+    background: var(--ig-primary, #38bdf8);
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.65);
+}
+
+.toc-item:hover .toc-text {
+    color: #f8fafc;
+    font-weight: 600;
+}
+
+/* Khi mục active được hover trực tiếp */
+.toc-item.active:hover {
+    transform: translateX(18px);
+}
+
+/* ══════════════════════════════════════════════════════════════ */
+/* CHẾ ĐỘ SÁNG (LIGHT MODE) */
+/* ══════════════════════════════════════════════════════════════ */
+
+[data-theme="light"] .toc-item {
+    color: #64748b;
+}
+
+[data-theme="light"] .toc-item.active {
+    color: #0f172a;
+}
+
+[data-theme="light"] .toc-item.active .toc-num {
+    color: #0284c7;
+}
+
+[data-theme="light"] .toc-item.active .toc-dash {
+    background: #0284c7;
+    box-shadow: 0 0 10px rgba(2, 132, 199, 0.5);
+}
+
+[data-theme="light"] .toc-item.active .toc-text {
+    color: #0f172a;
+}
+
+[data-theme="light"] .toc-item:hover {
+    color: #0f172a;
+}
+
+[data-theme="light"] .toc-item:hover .toc-num {
+    color: #0284c7;
+}
+
+[data-theme="light"] .toc-item:hover .toc-dash {
+    background: #0284c7;
+    box-shadow: 0 0 8px rgba(2, 132, 199, 0.4);
+}
+
+[data-theme="light"] .toc-item:hover .toc-text {
+    color: #0f172a;
+}
+
+/* ══════════════════════════════════════════════════════════════ */
+/* RESPONSIVE */
+/* ══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1260px) {
+    .home-quick-toc {
+        left: 14px;
+    }
+}
+
+@media (max-width: 980px) {
+    .home-quick-toc {
+        display: none !important;
+    }
+}

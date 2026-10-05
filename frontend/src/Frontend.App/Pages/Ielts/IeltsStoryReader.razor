@@ -30,7 +30,7 @@ else if (story == null)
 }
 else
 {
-    <div class="story-reader-wrapper theme-@currentTheme font-@fontFamily">
+    <div class="story-reader-wrapper theme-@currentTheme font-@fontFamily" style="--reader-font-size: @(fontSize)px;">
         <!-- Top Sticky Control Bar -->
         <div class="reader-topbar">
             <div class="topbar-left">
@@ -64,15 +64,16 @@ else
                     <span>Song ngữ</span>
                 </button>
 
-                <!-- Font Family Toggle -->
-                <button class="ctrl-btn-icon btn-font-family" @onclick="ToggleFontFamily" title="Đổi kiểu font (Sans / Serif)">
+                <!-- Font Family Toggle (Sans-serif vs Serif) -->
+                <button class="ctrl-btn-icon btn-font-family" @onclick="ToggleFontFamily" title="Đổi kiểu font: @(fontFamily == "sans" ? "Sans-serif (Hiện đại, không chân)" : "Serif (Sách báo, có chân)")">
                     @(fontFamily == "sans" ? "Aa" : "𝒯")
                 </button>
 
-                <!-- Font Size -->
+                <!-- Font Size Scaling -->
                 <div class="font-size-group">
-                    <button class="ctrl-btn-icon" @onclick="DecreaseFontSize" title="Giảm cỡ chữ">A-</button>
-                    <button class="ctrl-btn-icon" @onclick="IncreaseFontSize" title="Tăng cỡ chữ">A+</button>
+                    <button class="ctrl-btn-icon" @onclick="DecreaseFontSize" title="Giảm cỡ chữ" disabled="@(fontSize <= 14)">A-</button>
+                    <span class="font-size-badge" title="Cỡ chữ hiện tại">@(fontSize)px</span>
+                    <button class="ctrl-btn-icon" @onclick="IncreaseFontSize" title="Tăng cỡ chữ" disabled="@(fontSize >= 28)">A+</button>
                 </div>
 
                 <!-- Theme Switcher -->
@@ -99,7 +100,7 @@ else
         }
 
         <!-- IELTS Split Reading View Container (Left: Passage, Right: Questions) -->
-        <div class="ielts-split-view" style="font-size: @(fontSize)px;">
+        <div class="ielts-split-view" style="font-size: @(fontSize)px; --reader-font-size: @(fontSize)px;">
             <!-- LEFT PANE: Reading Passage (Independent Scroll) -->
             <section class="ielts-passage-pane">
                 <!-- Story Header -->
@@ -752,6 +753,36 @@ else
             try
             {
                 await JSRuntime.InvokeVoidAsync("initReadingProgressBar", dotNetHelper);
+                var savedReaderTheme = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "ielts_reader_theme");
+                if (!string.IsNullOrEmpty(savedReaderTheme) && (savedReaderTheme == "light" || savedReaderTheme == "paper" || savedReaderTheme == "dark"))
+                {
+                    if (currentTheme != savedReaderTheme)
+                    {
+                        currentTheme = savedReaderTheme;
+                    }
+                }
+                else
+                {
+                    var currentGlobalTheme = await JSRuntime.InvokeAsync<string>("getAppTheme");
+                    if (currentGlobalTheme == "dark" && currentTheme == "light")
+                    {
+                        currentTheme = "dark";
+                    }
+                }
+
+                var savedFontSize = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "ielts_reader_font_size");
+                if (int.TryParse(savedFontSize, out int parsedSize) && parsedSize >= 14 && parsedSize <= 28)
+                {
+                    fontSize = parsedSize;
+                }
+
+                var savedFontFamily = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "ielts_reader_font_family");
+                if (!string.IsNullOrEmpty(savedFontFamily) && (savedFontFamily == "sans" || savedFontFamily == "serif"))
+                {
+                    fontFamily = savedFontFamily;
+                }
+
+                StateHasChanged();
             }
             catch { }
         }
@@ -835,10 +866,38 @@ else
     }
 
     private void ToggleBilingual() => showBilingual = !showBilingual;
-    private void ToggleFontFamily() => fontFamily = fontFamily == "sans" ? "serif" : "sans";
-    private void IncreaseFontSize() { if (fontSize < 28) fontSize += 2; }
-    private void DecreaseFontSize() { if (fontSize > 14) fontSize -= 2; }
-    private void ChangeTheme(string theme) => currentTheme = theme;
+    private async Task ToggleFontFamily()
+    {
+        fontFamily = fontFamily == "sans" ? "serif" : "sans";
+        try { await JSRuntime.InvokeVoidAsync("localStorage.setItem", "ielts_reader_font_family", fontFamily); } catch { }
+    }
+
+    private async Task IncreaseFontSize()
+    {
+        if (fontSize < 28)
+        {
+            fontSize += 2;
+            try { await JSRuntime.InvokeVoidAsync("localStorage.setItem", "ielts_reader_font_size", fontSize.ToString()); } catch { }
+        }
+    }
+
+    private async Task DecreaseFontSize()
+    {
+        if (fontSize > 14)
+        {
+            fontSize -= 2;
+            try { await JSRuntime.InvokeVoidAsync("localStorage.setItem", "ielts_reader_font_size", fontSize.ToString()); } catch { }
+        }
+    }
+    private async Task ChangeTheme(string theme)
+    {
+        currentTheme = theme;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "ielts_reader_theme", theme);
+        }
+        catch { }
+    }
 
     private async Task TogglePlayStory()
     {

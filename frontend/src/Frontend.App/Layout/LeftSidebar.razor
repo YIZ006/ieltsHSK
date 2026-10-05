@@ -26,30 +26,9 @@
         }
     </div>
 
-    @* ── HSK Level Selector (dành cho khóa HSK) ── *@
-    @if (selectedProgram == "HSK" && !isCollapsed)
-    {
-        <div class="sb-hsk-level-box sb-anim-fly-in" @key="@($"hsk-box-{hskLevel}")">
-            <div class="sb-hsk-level-header">
-                <span class="sb-hsk-dot"></span>
-                <span>Mục tiêu HSK: <b>@hskLevel</b></span>
-            </div>
-            <div class="sb-hsk-pills">
-                @for (int i = 1; i <= 6; i++)
-                {
-                    var lvl = $"HSK{i}";
-                    <button class="sb-hsk-pill @(hskLevel == lvl ? "active" : "")"
-                            @onclick="() => ChangeHskLevel(lvl)">
-                        HSK @i
-                    </button>
-                }
-            </div>
-        </div>
-    }
-
     @* ── Navigation ── *@
     <nav class="sb-nav" aria-label="Main navigation">
-        <div class="sb-nav-anim-wrapper" @key="@($"{selectedProgram}_{hskLevel}")">
+        <div class="sb-nav-anim-wrapper" @key="@selectedProgram">
             @* ── Categorized menu items ── *@
             @if (menuItems.Count == 0)
             {
@@ -192,7 +171,6 @@
     private bool isMobileOpen;
     private bool showProgramDropdown;
     private string selectedProgram = "HSK";
-    private string hskLevel = "HSK1";
     private List<LearningSectionDto> menuItems = new();
 
     private static readonly (string Key, string Label, string Color, string Route)[] Programs =
@@ -214,9 +192,6 @@
         {
             var collapsed = await LocalStorage.GetItemAsync<bool?>("sidebar_collapsed");
             if (collapsed.HasValue) isCollapsed = collapsed.Value;
-
-            var lvl = await LocalStorage.GetItemAsync<string>("hsk_level");
-            if (!string.IsNullOrWhiteSpace(lvl)) hskLevel = lvl;
 
             var prog = await LocalStorage.GetItemAsync<string>("sidebar_program");
             if (!string.IsNullOrWhiteSpace(prog) && Programs.Any(p => p.Key == prog))
@@ -334,13 +309,6 @@
 
             StateHasChanged();
         }
-    }
-
-    private async Task ChangeHskLevel(string level)
-    {
-        hskLevel = level;
-        try { await LocalStorage.SetItemAsync("hsk_level", level); } catch { }
-        StateHasChanged();
     }
 
     private async Task ToggleCollapse()

@@ -1,0 +1,50 @@
+@page "/privacy"
+@page "/terms"
+@page "/curriculum"
+@page "/contact"
+@inject HttpClient Http
+@inject NavigationManager Nav
+
+<div class="legal">
+    @if (loading) { <p class="lede">Đang tải…</p> }
+    else if (error != null) { <p class="lede">@error</p> }
+    else { @((MarkupString)html) }
+</div>
+
+@code {
+    private string html = "";
+    private bool loading = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // route cùng component -> chỉ reload khi slug đổi
+        var slug = Slug();
+        if (slug != lastSlug) await LoadAsync();
+    }
+
+    private string? lastSlug;
+
+    private string Slug() => Nav.ToBaseRelativePath(Nav.Uri).Split('/')[0];
+
+    private async Task LoadAsync()
+    {
+        loading = true; error = null; StateHasChanged();
+        lastSlug = Slug();
+        try
+        {
+            html = await Http.GetStringAsync($"legal/{lastSlug}.html");
+        }
+        catch
+        {
+            error = "Không tải được nội dung trang.";
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,196 @@
+/* Container của thanh cuộn giọt nước */
+.drop-scroll {
+    position: fixed;
+    top: 72px;
+    right: 14px;
+    bottom: 20px;
+    width: 36px;
+    z-index: 995;
+    opacity: 0.78;
+    transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    touch-action: none;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: auto;
+}
+
+.drop-scroll:hover {
+    opacity: 1;
+}
+
+.drop-scroll.is-dragging,
+.drop-scroll:active {
+    cursor: grabbing;
+    opacity: 1;
+}
+
+/* ══════════════════════════════════════════════════════════════ */
+/* RÃNH TRƯỢT THỦY TINH HIỆN ĐẠI (ULTRA-SLEEK FROSTED GLASS RAIL) */
+/* Loại bỏ toàn bộ các dấu chấm dày đặc, thay bằng rãnh nano mờ   */
+/* ══════════════════════════════════════════════════════════════ */
+
+.drop-scroll__track {
+    position: absolute;
+    left: 50%;
+    top: 8px;
+    bottom: 8px;
+    width: 4px;
+    transform: translateX(-50%);
+    background: var(--drop-rail-bg);
+    border: 1px solid var(--drop-rail-border);
+    border-radius: 9999px;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    box-shadow: var(--drop-rail-shadow);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Đầu chặn tinh tế 2 cực (Milestone endpoints) */
+.drop-scroll__track::before,
+.drop-scroll__track::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    background: var(--drop-rail-dot);
+    box-shadow: 0 0 6px var(--drop-rail-glow);
+    opacity: 0.7;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.drop-scroll__track::before {
+    top: -3px;
+}
+
+.drop-scroll__track::after {
+    bottom: -3px;
+}
+
+.drop-scroll:hover .drop-scroll__track,
+.drop-scroll.is-dragging .drop-scroll__track {
+    width: 5px;
+    background: var(--drop-rail-bg-hover);
+    border-color: var(--drop-rail-border-hover);
+    box-shadow: 0 0 14px var(--drop-rail-glow);
+}
+
+.drop-scroll:hover .drop-scroll__track::before,
+.drop-scroll:hover .drop-scroll__track::after,
+.drop-scroll.is-dragging .drop-scroll__track::before,
+.drop-scroll.is-dragging .drop-scroll__track::after {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.2);
+}
+
+/* ══════════════════════════════════════════════════════════════ */
+/* GIỌT NƯỚC THỦY TINH TRONG SUỐT XUYÊN THẤU (GLASSMORPHIC THUMB) */
+/* ══════════════════════════════════════════════════════════════ */
+
+.drop-scroll__drop {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 40px;
+    height: 88px;
+    margin-left: -20px;
+    margin-top: -44px;
+    transform-origin: 50% 50%;
+    will-change: transform;
+    pointer-events: auto;
+    filter: drop-shadow(0 4px 12px var(--drop-glow-ambient)) drop-shadow(0 1px 3px rgba(15, 23, 42, 0.2));
+    transition: filter 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.drop-scroll.is-dragging .drop-scroll__drop,
+.drop-scroll:active .drop-scroll__drop {
+    filter: drop-shadow(0 0 20px var(--drop-glow-active)) drop-shadow(0 6px 14px rgba(15, 23, 42, 0.35));
+}
+
+.drop-path {
+    fill: url(#dropFillLight);
+    stroke: url(#dropRimGrad);
+    stroke-width: 1px;
+    stroke-opacity: 0.85;
+}
+
+.drop-caustic {
+    pointer-events: none;
+}
+
+.drop-specular {
+    pointer-events: none;
+    transition: transform 0.05s ease-out;
+}
+
+.drop-bottom-glint {
+    opacity: 0.45;
+    pointer-events: none;
+    transition: transform 0.05s ease-out;
+}
+
+.drop-core-glow {
+    pointer-events: none;
+}
+
+/* ══════════════════════════════════════════════════════════════ */
+/* CHẾ ĐỘ SÁNG (LIGHT MODE) */
+/* ══════════════════════════════════════════════════════════════ */
+
+:root, [data-theme="light"] {
+    --drop-rail-bg: rgba(2, 132, 199, 0.1);
+    --drop-rail-bg-hover: rgba(2, 132, 199, 0.18);
+    --drop-rail-border: rgba(2, 132, 199, 0.2);
+    --drop-rail-border-hover: rgba(2, 132, 199, 0.45);
+    --drop-rail-dot: #0284c7;
+    --drop-rail-glow: rgba(2, 132, 199, 0.45);
+    --drop-rail-shadow: inset 0 1px 3px rgba(2, 132, 199, 0.1);
+    --drop-glow-ambient: rgba(2, 132, 199, 0.42);
+    --drop-glow-active: rgba(2, 132, 199, 0.75);
+}
+
+/* ══════════════════════════════════════════════════════════════ */
+/* CHẾ ĐỘ TỐI (DARK MODE - ÁNH SÁNG NEON XUYÊN THẤU NHƯ THẺ HSK/IELTS) */
+/* ══════════════════════════════════════════════════════════════ */
+
+[data-theme="dark"],
+:root:not([data-theme="light"]) {
+    --drop-rail-bg: rgba(255, 255, 255, 0.06);
+    --drop-rail-bg-hover: rgba(56, 189, 248, 0.16);
+    --drop-rail-border: rgba(56, 189, 248, 0.22);
+    --drop-rail-border-hover: rgba(56, 189, 248, 0.6);
+    --drop-rail-dot: #38bdf8;
+    --drop-rail-glow: rgba(56, 189, 248, 0.65);
+    --drop-rail-shadow: 0 0 10px rgba(56, 189, 248, 0.15), inset 0 0 4px rgba(56, 189, 248, 0.1);
+    --drop-glow-ambient: rgba(56, 189, 248, 0.65);
+    --drop-glow-active: rgba(56, 189, 248, 0.95);
+}
+
+[data-theme="dark"] .drop-path,
+:root:not([data-theme="light"]) .drop-path {
+    fill: url(#dropFillDark);
+    stroke-opacity: 0.9;
+}
+
+[data-theme="dark"] .drop-bottom-glint,
+:root:not([data-theme="light"]) .drop-bottom-glint {
+    opacity: 0.35;
+}
+
+/* Ẩn khi mở modal */
+:global(body.modal-open) .drop-scroll {
+    display: none !important;
+}
+
+/* Responsive trên màn hình nhỏ */
+@media (max-width: 640px) {
+    .drop-scroll {
+        top: 64px;
+        right: 8px;
+        bottom: 16px;
+        width: 32px;
+    }
+}

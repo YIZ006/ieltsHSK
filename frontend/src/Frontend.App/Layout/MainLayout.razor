@@ -6,8 +6,8 @@
 @inject NavigationManager NavManager
 @implements IDisposable
 
-<div class="app-shell @(isHomePage ? "no-sidebar" : (sidebarCollapsed ? "sidebar-collapsed" : ""))">
-    @if (!isHomePage)
+<div class="app-shell @(isStandalonePage ? "no-sidebar" : (sidebarCollapsed ? "sidebar-collapsed" : ""))">
+    @if (!isStandalonePage)
     {
         <LeftSidebar @ref="leftSidebar" CollapseChanged="OnSidebarCollapseChanged" />
     }
@@ -15,7 +15,7 @@
     <div class="app-main">
         <header class="top-navbar">
             <div class="top-navbar-inner">
-                @if (!isHomePage)
+                @if (!isStandalonePage)
                 {
                     <button class="sb-mobile-toggle" @onclick="ToggleMobileSidebar" title="Menu">
                         <i class="bi bi-list"></i>
@@ -28,23 +28,45 @@
         </header>
 
         <main>
-            <article class="content @(isHomePage ? "home-content" : "px-4")">
+            <article class="content @(isHomePage ? "home-content" : (isStandalonePage ? "standalone-content" : "px-4"))">
                 @Body
             </article>
         </main>
+
+        @if (isStandalonePage)
+        {
+            <AppFooter />
+        }
     </div>
 </div>
 
 <AuthModal @ref="authModal" />
 <ProfileModal @ref="profileModal" />
-<MascotWidget />
+@if (!isStandalonePage)
+{
+    <MascotWidget />
+}
+@if (isHomePage)
+{
+    <DropletScrollbar />
+}
 
 @code {
+    private static readonly HashSet<string> StandaloneRoutes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "",
+        "privacy",
+        "terms",
+        "curriculum",
+        "contact"
+    };
+
     private AuthModal? authModal;
     private ProfileModal? profileModal;
     private LeftSidebar? leftSidebar;
     private bool sidebarCollapsed;
     private bool isHomePage;
+    private bool isStandalonePage;
 
     private void OnSidebarCollapseChanged(bool collapsed) => sidebarCollapsed = collapsed;
     private void ToggleMobileSidebar() => leftSidebar?.OpenMobile();
@@ -79,6 +101,7 @@
         var relativePath = NavManager.ToBaseRelativePath(NavManager.Uri);
         var path = relativePath.Split('?', '#')[0].Trim('/');
         isHomePage = string.IsNullOrEmpty(path);
+        isStandalonePage = StandaloneRoutes.Contains(path);
     }
 
     public void Dispose()

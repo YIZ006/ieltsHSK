@@ -11,12 +11,99 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Orbitron:wght@400;600;700;800;900&family=Rajdhani:wght@500;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/app.css?v=20260917_05" />
+    <link rel="stylesheet" href="css/app.css?v=20260929_13" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="manifest" href="manifest.json" />
     <meta name="theme-color" content="#1f2937" />
     <link rel="stylesheet" href="css/quantum-cipher.css?v=20260905_02" />
-    <link href="Frontend.App.styles.css?v=20260917_05" rel="stylesheet" />
+    <link href="Frontend.App.styles.css?v=20260929_13" rel="stylesheet" />
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('app_theme');
+                if (!saved) {
+                    saved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+                document.documentElement.setAttribute('data-theme', saved);
+            } catch (e) { }
+        })();
+        window.setAppTheme = function (theme) {
+            try {
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('app_theme', theme);
+            } catch (e) { }
+        };
+        window.getAppTheme = function () {
+            try {
+                return document.documentElement.getAttribute('data-theme') || localStorage.getItem('app_theme') || 'light';
+            } catch (e) {
+                return 'light';
+            }
+        };
+        window.toggleAppThemeWithRipple = function (themeOrDark, clientX, clientY) {
+            try {
+                var isDark = typeof themeOrDark === 'boolean' ? themeOrDark : (themeOrDark === 'dark');
+                var targetTheme = isDark ? 'dark' : 'light';
+                var currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+                if (targetTheme === currentTheme) return;
+
+                var x = (typeof clientX === 'number' && clientX > 0) ? clientX : (window.innerWidth - 80);
+                var y = (typeof clientY === 'number' && clientY > 0) ? clientY : 30;
+                var endRadius = Math.hypot(
+                    Math.max(x, window.innerWidth - x),
+                    Math.max(y, window.innerHeight - y)
+                );
+
+                var applyTheme = function () {
+                    document.documentElement.setAttribute('data-theme', targetTheme);
+                    localStorage.setItem('app_theme', targetTheme);
+                };
+
+                if (document.startViewTransition) {
+                    var transition = document.startViewTransition(function () {
+                        applyTheme();
+                    });
+                    transition.ready.then(function () {
+                        document.documentElement.animate(
+                            {
+                                clipPath: [
+                                    'circle(0px at ' + x + 'px ' + y + 'px)',
+                                    'circle(' + endRadius + 'px at ' + x + 'px ' + y + 'px)'
+                                ]
+                            },
+                            {
+                                duration: 550,
+                                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                                pseudoElement: '::view-transition-new(root)'
+                            }
+                        );
+                    }).catch(function () {
+                        applyTheme();
+                    });
+                } else {
+                    var ripple = document.createElement('div');
+                    ripple.className = 'theme-transition-radial-ripple';
+                    ripple.style.cssText = 'position:fixed;left:' + x + 'px;top:' + y + 'px;width:0px;height:0px;border-radius:50%;background-color:' + (isDark ? '#090d16' : '#ffffff') + ';z-index:999999;pointer-events:none;transform:translate(-50%,-50%);transition:width 0.55s cubic-bezier(0.22,1,0.36,1),height 0.55s cubic-bezier(0.22,1,0.36,1),opacity 0.2s ease 0.45s;';
+                    document.body.appendChild(ripple);
+                    requestAnimationFrame(function () {
+                        var d = endRadius * 2.2;
+                        ripple.style.width = d + 'px';
+                        ripple.style.height = d + 'px';
+                    });
+                    setTimeout(function () {
+                        applyTheme();
+                        ripple.style.opacity = '0';
+                        setTimeout(function () {
+                            ripple.remove();
+                        }, 250);
+                    }, 350);
+                }
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', themeOrDark ? 'dark' : 'light');
+                localStorage.setItem('app_theme', themeOrDark ? 'dark' : 'light');
+            }
+        };
+    </script>
 </head>
 
 <body>
@@ -223,11 +310,48 @@
     <script src="js/tab-visibility.js"></script>
     <script src="js/speaking-interop.js"></script>
     <script src="js/speak-along-interop.js"></script>
+    <script src="js/home-tilt.js?v=20260928_01"></script>
+    <script src="js/droplet-scrollbar.js?v=20261005_04"></script>
+    <script src="js/home-doc-nav.js?v=20261005_01"></script>
     <script>
         window.scrollBuilderToTop = () => {
             const el = document.getElementById('builder-main');
             if (el) el.scrollTop = 0;
             else window.scrollTo(0, 0);
+        };
+
+        // 3D Global Tilt & Mouse Tracking matching user React code
+        window.initHomeGlobalTilt = function (containerId) {
+            const container = document.getElementById(containerId) || document.querySelector('.landing-container');
+            if (!container) return;
+
+            if (window._homeMouseMoveHandler) {
+                window.removeEventListener('mousemove', window._homeMouseMoveHandler);
+            }
+
+            window._homeMouseMoveHandler = function (e) {
+                const { innerWidth, innerHeight } = window;
+                if (!innerWidth || !innerHeight) return;
+                const normX = (e.clientX - innerWidth / 2) / (innerWidth / 2);
+                const normY = (e.clientY - innerHeight / 2) / (innerHeight / 2);
+
+                // Clamped 3D tilt angles between -15deg and 15deg
+                const rotX = Math.max(Math.min(-normY * 15, 15), -15);
+                const rotY = Math.max(Math.min(normX * 15, 15), -15);
+
+                container.style.setProperty('--rot-x', `${rotX.toFixed(2)}deg`);
+                container.style.setProperty('--rot-y', `${rotY.toFixed(2)}deg`);
+                container.style.setProperty('--mouse-x', `${(normX * 36).toFixed(2)}px`);
+            };
+
+            window.addEventListener('mousemove', window._homeMouseMoveHandler, { passive: true });
+        };
+
+        window.disposeHomeGlobalTilt = function () {
+            if (window._homeMouseMoveHandler) {
+                window.removeEventListener('mousemove', window._homeMouseMoveHandler);
+                window._homeMouseMoveHandler = null;
+            }
         };
 
         // Web Speech API for Story Reading and Vocabulary pronunciation

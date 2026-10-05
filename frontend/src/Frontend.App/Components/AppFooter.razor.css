@@ -1,0 +1,213 @@
+.app-footer {
+    width: 100%;
+    border-top: 1px solid var(--ig-border, #e2e8f0);
+    background-color: var(--ig-surface, #ffffff);
+    color: var(--ig-text, #0f172a);
+    font-size: 0.875rem;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 10;
+}
+
+.footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px clamp(16px, 4vw, 40px) 24px;
+    box-sizing: border-box;
+}
+
+.footer-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 36px;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+}
+
+/* ── BRAND SECTION ── */
+.footer-brand {
+    max-width: 440px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.footer-brand-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.footer-brand-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+    color: #ffffff;
+    font-size: 1rem;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+
+.footer-brand-title {
+    font-size: 1.2rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--ig-text, #0f172a);
+}
+
+.footer-badge {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--ig-primary, #2563eb);
+    border: 1px solid rgba(37, 99, 235, 0.2);
+}
+
+.footer-desc {
+    margin: 0;
+    color: var(--ig-text-secondary, #475569);
+    font-size: 0.88rem;
+    line-height: 1.6;
+}
+
+/* ── LINKS GRID ── */
+.footer-links-grid {
+    display: flex;
+    gap: 48px;
+    flex-wrap: wrap;
+}
+
+.footer-col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.footer-col-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--ig-text, #0f172a);
+    margin-bottom: 2px;
+}
+
+.footer-item-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--ig-text-secondary, #475569);
+    text-decoration: none !important;
+    font-size: 0.86rem;
+    font-weight: 500;
+    transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.footer-item-link i {
+    font-size: 0.85rem;
+    color: var(--ig-text-secondary, #64748b);
+    transition: color 0.15s ease;
+}
+
+.footer-item-link:hover {
+    color: var(--ig-primary, #2563eb);
+    transform: translateX(2px);
+}
+
+.footer-item-link:hover i {
+    color: var(--ig-primary, #2563eb);
+}
+
+/* ── BOTTOM BAR ── */
+.footer-bottom-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-top: 18px;
+    border-top: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.footer-copy {
+    color: var(--ig-text-secondary, #64748b);
+    font-size: 0.82rem;
+}
+
+.footer-copy-brand {
+    font-weight: 700;
+    color: var(--ig-text, #0f172a);
+}
+
+.footer-cert-tags {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.footer-tag {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--ig-text-secondary, #475569);
+    gap: 4px;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+    .footer-main {
+        flex-direction: column;
+        gap: 24px;
+    }
+    .footer-links-grid {
+        gap: 32px;
+        width: 100%;
+        justify-content: space-between;
+    }
+    .footer-bottom-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+}
+
+/* ── DARK THEME ── */
+[data-theme="dark"] .app-footer {
+    background-color: #090d16;
+    border-top-color: #1e293b;
+}
+
+[data-theme="dark"] .footer-badge {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #60a5fa;
+}
+
+[data-theme="dark"] .footer-bottom-bar {
+    border-top-color: #1e293b;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .app-footer {
+        background-color: #090d16;
+        border-top-color: #1e293b;
+    }
+    :root:not([data-theme="light"]) .footer-badge {
+        background: rgba(59, 130, 246, 0.15);
+        border-color: rgba(59, 130, 246, 0.3);
+        color: #60a5fa;
+    }
+    :root:not([data-theme="light"]) .footer-bottom-bar {
+        border-top-color: #1e293b;
+    }
+}
