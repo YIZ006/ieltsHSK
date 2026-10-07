@@ -29,6 +29,10 @@
 
         <main>
             <article class="content @(isHomePage ? "home-content" : (isStandalonePage ? "standalone-content" : "px-4"))">
+                @if (!isHomePage)
+                {
+                    <GuestWarningBanner OnLoginRequested="() => authModal?.Show(true)" />
+                }
                 @Body
             </article>
         </main>

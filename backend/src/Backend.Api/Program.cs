@@ -67,21 +67,74 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Rate Limiting cho các endpoint xác thực (tối đa 15 request/phút) chống brute-force và DDoS
+// Helper trích xuất địa chỉ IP của Client (hỗ trợ cả Reverse Proxy / Cloudflare)
+static string ResolveClientIp(HttpContext context)
+{
+    var forwardedFor = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+    if (!string.IsNullOrWhiteSpace(forwardedFor))
+    {
+        var firstIp = forwardedFor.Split(',')[0].Trim();
+        if (!string.IsNullOrWhiteSpace(firstIp)) return firstIp;
+    }
+    var cfConnectingIp = context.Request.Headers["CF-Connecting-IP"].FirstOrDefault();
+    if (!string.IsNullOrWhiteSpace(cfConnectingIp)) return cfConnectingIp.Trim();
+
+    return context.Connection.RemoteIpAddress?.ToString() ?? "unknown-client";
+}
+
+// Rate Limiting phân vùng độc lập theo Client IP và User ID chống brute-force và spam
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddFixedWindowLimiter("auth", opt =>
+    options.OnRejected = async (context, token) =>
     {
-        opt.PermitLimit = 15;
-        opt.Window = TimeSpan.FromMinutes(1);
-        opt.QueueLimit = 0;
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "application/json";
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.TotalSeconds).ToString();
+        }
+        else
+        {
+            context.HttpContext.Response.Headers.RetryAfter = "60";
+        }
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            error = "Quá nhiều yêu cầu từ địa chỉ IP của bạn. Vui lòng chờ ít phút trước khi thử lại.",
+            retryAfterSeconds = 60
+        }, token);
+    };
+
+    // Phân vùng "auth": Mỗi Client IP độc lập nhận tối đa 5 request / phút (lần thứ 6 sẽ bị chặn ngay)
+    options.AddPolicy("auth", context =>
+    {
+        var clientIp = ResolveClientIp(context);
+        return RateLimitPartition.GetFixedWindowLimiter(
+            $"auth_ip_{clientIp}",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
     });
-    options.AddFixedWindowLimiter("ai", opt =>
+
+    // Phân vùng "ai": Mỗi User ID (hoặc IP nếu ẩn danh) tối đa 10 request / phút
+    options.AddPolicy("ai", context =>
     {
-        opt.PermitLimit = 10;
-        opt.Window = TimeSpan.FromMinutes(1);
-        opt.QueueLimit = 0;
+        var userId = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var partitionKey = !string.IsNullOrWhiteSpace(userId) 
+            ? $"ai_user_{userId}" 
+            : $"ai_ip_{ResolveClientIp(context)}";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
     });
 });
 

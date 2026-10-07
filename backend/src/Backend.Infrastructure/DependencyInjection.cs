@@ -106,6 +106,7 @@ public static class DependencyInjection
         services.AddSingleton<ICacheService, Backend.Infrastructure.Services.RedisCacheService>();
 
         services.AddScoped<IAuthService, Backend.Infrastructure.Services.AuthService>();
+        services.AddScoped<ICaptchaService, Backend.Infrastructure.Services.CloudflareTurnstileService>();
         services.AddScoped<Backend.Application.Abstractions.IR2StorageService, Backend.Infrastructure.Services.R2StorageService>();
         services.AddScoped<Backend.Application.Abstractions.IAiGradingService, Backend.Infrastructure.Services.AiGradingService>();
         services.AddScoped<Backend.Infrastructure.Services.YoutubeTranscriptService>();

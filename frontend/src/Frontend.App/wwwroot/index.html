@@ -20,6 +20,11 @@
     <script>
         (function () {
             try {
+                var p = (window.location.pathname || '').toLowerCase();
+                var isHome = (p === '/' || p === '' || p === '/index.html');
+                if (!isHome) {
+                    document.documentElement.classList.add('not-home');
+                }
                 var saved = localStorage.getItem('app_theme');
                 if (!saved) {
                     saved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -27,6 +32,32 @@
                 document.documentElement.setAttribute('data-theme', saved);
             } catch (e) { }
         })();
+    </script>
+    <style>
+        /* Khi ở các trang học tập / con: triệt tiêu hoàn toàn màn hình chờ con sói để mở trang ngay lập tức */
+        html.not-home #app-loader {
+            display: none !important;
+        }
+        html:not(.not-home) .fast-top-bar {
+            display: none !important;
+        }
+        .fast-top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            width: 100%;
+            background: linear-gradient(90deg, #38bdf8, #818cf8, #ec4899);
+            z-index: 999999;
+            pointer-events: none;
+            animation: fastTopBarPulse 0.8s ease-in-out infinite alternate;
+        }
+        @keyframes fastTopBarPulse {
+            from { opacity: 0.5; }
+            to { opacity: 1; }
+        }
+    </style>
+    <script>
         window.setAppTheme = function (theme) {
             try {
                 document.documentElement.setAttribute('data-theme', theme);
@@ -40,6 +71,33 @@
                 return 'light';
             }
         };
+
+        // Thông báo console.log có CSS khi truy cập ở chế độ khách (chưa đăng nhập)
+        window.showGuestConsoleWarning = function () {
+            try {
+                var token = localStorage.getItem('authToken');
+                if (!token) {
+                    console.log(
+                        '%c  CHẾ ĐỘ TRẢI NGHIỆM KHÁCH (CHƯA ĐĂNG NHẬP)  %c\n\n' +
+                        '%c⚠ CẢNH BÁO LƯU TRỮ DỮ LIỆU:\n' +
+                        '• Bạn hiện đang truy cập ở chế độ CHƯA ĐĂNG NHẬP.\n' +
+                        '• Toàn bộ kết quả bài thi, lịch sử làm bài và tiến độ học tập CHỈ ĐƯỢC LƯU TẠM TRÊN BỘ NHỚ TRÌNH DUYỆT (LocalStorage/IndexedDB).\n' +
+                        '• Dữ liệu này SẼ KHÔNG ĐƯỢC LƯU HOẶC ĐỒNG BỘ Ở CHẾ ĐỘ ONLINE.\n' +
+                        '• Khi bạn đổi trình duyệt, dọn dẹp lịch sử/cache hoặc đổi máy tính, dữ liệu sẽ bị mất.\n\n' +
+                        '👉 Hãy ĐĂNG NHẬP / ĐĂNG KÝ để kích hoạt lưu trữ đám mây vĩnh viễn và đồng bộ đa thiết bị!\n',
+                        'background: linear-gradient(135deg, #ef4444 0%, #f97316 100%); color: #ffffff; font-size: 13px; font-weight: 800; padding: 7px 16px; border-radius: 6px; text-shadow: 0 1px 2px rgba(0,0,0,0.5); letter-spacing: 0.5px;',
+                        '',
+                        'color: #fbbf24; font-size: 12px; font-weight: 600; line-height: 1.8; font-family: "Segoe UI", system-ui, -apple-system, sans-serif;'
+                    );
+                }
+            } catch (e) { }
+        };
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', window.showGuestConsoleWarning);
+        } else {
+            window.showGuestConsoleWarning();
+        }
+
         window.toggleAppThemeWithRipple = function (themeOrDark, clientX, clientY) {
             try {
                 var isDark = typeof themeOrDark === 'boolean' ? themeOrDark : (themeOrDark === 'dark');
@@ -108,6 +166,7 @@
 
 <body>
     <div id="app"></div>
+    <div id="fast-top-bar" class="fast-top-bar"></div>
 
     <!-- PET LOADER OVERLAY (Khởi động ứng dụng cùng Pet Runner trên thanh tiến trình) -->
     <div id="app-loader" class="pet-loader">
@@ -172,27 +231,37 @@
     <script data-mascot-core="true" src="js/mascot-interop.js?v=20260917_02"></script>
     <script src="_framework/blazor.webassembly.js" autostart="false"></script>
     <script>
-        // Điều phối tiến trình tải mượt mà cùng Pet Runner
+        // Điều phối khởi động nhanh: Chỉ hiển thị con sói chạy ở trang chủ ("/"),
+        // Trên các trang học tập (IELTS, HSK...): bỏ hoàn toàn màn hình chờ, chỉ hiện thanh top-bar mảnh và mở trang tức thì (0ms delay).
         (function () {
-            const loader = document.getElementById('app-loader');
-            const fill = document.getElementById('pet-fill');
-            const runnerWrapper = document.getElementById('pet-runner-wrapper');
-            const runner = document.getElementById('pet-runner');
-            const percentText = document.getElementById('pet-percent');
+            var path = (window.location.pathname || '').toLowerCase();
+            var isHome = (path === '/' || path === '' || path === '/index.html');
 
-            let currentProgress = 0;
-            let targetProgress = 0;
-            let blazorReady = false;
-            let isJumping = false;
-            let isComplete = false;
+            var loader = document.getElementById('app-loader');
+            var topBar = document.getElementById('fast-top-bar');
+
+            if (!isHome && loader) {
+                loader.style.display = 'none';
+            }
+
+            var fill = document.getElementById('pet-fill');
+            var runnerWrapper = document.getElementById('pet-runner-wrapper');
+            var runner = document.getElementById('pet-runner');
+            var percentText = document.getElementById('pet-percent');
+
+            var currentProgress = 0;
+            var targetProgress = isHome ? 30 : 60;
+            var blazorReady = false;
+            var isJumping = false;
+            var isComplete = false;
 
             function updateUI(p) {
-                const rounded = Math.min(100, Math.round(p));
+                if (!isHome) return;
+                var rounded = Math.min(100, Math.round(p));
                 if (fill) fill.style.width = p + '%';
                 if (runnerWrapper) runnerWrapper.style.left = p + '%';
                 if (percentText) percentText.textContent = rounded + '%';
 
-                // Khi tiến độ >= 75%: Pet chuyển sang rướn người và bật vọt lên đỉnh
                 if (p >= 75 && !isJumping && runner) {
                     isJumping = true;
                     runner.classList.add('jumping');
@@ -200,57 +269,68 @@
                     isJumping = false;
                     runner.classList.remove('jumping');
                 }
+            }
 
-                // Khi chạm 100%: Chờ tiếp đất 300ms rồi fade-out êm ái
-                if (p >= 99.5 && !isComplete) {
-                    isComplete = true;
-                    setTimeout(() => {
-                        if (loader) {
-                            loader.classList.add('fade-out');
-                            setTimeout(() => {
-                                loader.style.display = 'none';
-                            }, 500);
-                        }
-                    }, 300);
+            function finishLoader() {
+                if (topBar) {
+                    topBar.style.display = 'none';
+                    topBar.remove();
+                }
+                if (loader) {
+                    if (isHome) {
+                        loader.classList.add('fade-out');
+                        setTimeout(function () {
+                            loader.style.display = 'none';
+                            loader.remove();
+                        }, 180);
+                    } else {
+                        loader.style.display = 'none';
+                        loader.remove();
+                    }
                 }
             }
 
-            // Vòng lặp animation 60FPS nội suy mượt mà
             function tick() {
-                if (!isComplete) {
-                    const diff = targetProgress - currentProgress;
+                if (!isComplete && isHome) {
+                    var diff = targetProgress - currentProgress;
                     if (diff > 0) {
-                        const step = Math.max(0.4, diff * 0.1);
+                        var step = Math.max(1.0, diff * 0.25);
                         currentProgress = Math.min(targetProgress, currentProgress + step);
                         updateUI(currentProgress);
                     }
-                    requestAnimationFrame(tick);
+                    if (currentProgress < 100) {
+                        requestAnimationFrame(tick);
+                    }
                 }
             }
-            requestAnimationFrame(tick);
 
-            // Giả lập tiến trình lướt êm ái ban đầu (giữ ở 95% cho tới khi Blazor tải xong thực sự)
-            targetProgress = 35;
-            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 65); }, 400);
-            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 85); }, 1000);
-            setTimeout(() => { if (!blazorReady) targetProgress = Math.max(targetProgress, 95); }, 2500);
+            if (isHome) {
+                requestAnimationFrame(tick);
+                setTimeout(function () { if (!blazorReady) targetProgress = 70; }, 200);
+                setTimeout(function () { if (!blazorReady) targetProgress = 90; }, 500);
+            }
 
             function startBlazor() {
                 if (window.Blazor && !window._blazorStarted) {
                     window._blazorStarted = true;
-                    Blazor.start().then(() => {
+                    Blazor.start().then(function () {
                         blazorReady = true;
-                        targetProgress = 100;
-                    }).catch(err => {
+                        isComplete = true;
+                        if (isHome) {
+                            targetProgress = 100;
+                            updateUI(100);
+                        }
+                        finishLoader();
+                    }).catch(function (err) {
                         console.error("Blazor boot error:", err);
                         var errUi = document.getElementById('blazor-error-ui');
                         if (errUi) {
                             errUi.style.display = 'block';
                             errUi.innerHTML = '<strong>Không thể khởi chạy:</strong> ' + (err && err.message ? err.message : err) + ' <a href="." class="reload">Tải lại</a>';
                         }
-                        // Vẫn mở màn hình nếu có lỗi để người dùng thấy thông báo thay vì màn hình trống
                         blazorReady = true;
-                        targetProgress = 100;
+                        isComplete = true;
+                        finishLoader();
                     });
                 }
             }
@@ -1601,6 +1681,67 @@
                 });
             });
         }
+    </script>
+    <!-- Cloudflare Turnstile CAPTCHA (Chống bot spam đăng ký tài khoản) -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+    <script>
+        window.turnstileHelper = {
+            render: function (containerId, siteKey, dotNetHelper) {
+                var el = document.getElementById(containerId);
+                if (!el) return;
+                if (el.getAttribute('data-rendered') === 'true') {
+                    return;
+                }
+                var retryCount = 0;
+                function checkAndRender() {
+                    if (typeof window.turnstile === 'undefined' || typeof window.turnstile.render !== 'function') {
+                        if (retryCount++ < 30) {
+                            setTimeout(checkAndRender, 150);
+                        }
+                        return;
+                    }
+                    var currentEl = document.getElementById(containerId);
+                    if (!currentEl || currentEl.getAttribute('data-rendered') === 'true') return;
+                    currentEl.innerHTML = '';
+                    currentEl.setAttribute('data-rendered', 'true');
+                    try {
+                        var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                        var widgetId = window.turnstile.render('#' + containerId, {
+                            sitekey: siteKey,
+                            theme: isDark ? 'dark' : 'light',
+                            callback: function (token) {
+                                dotNetHelper.invokeMethodAsync('OnTurnstileSuccess', token);
+                            },
+                            'error-callback': function () {
+                                dotNetHelper.invokeMethodAsync('OnTurnstileError');
+                            },
+                            'expired-callback': function () {
+                                dotNetHelper.invokeMethodAsync('OnTurnstileExpired');
+                            }
+                        });
+                        currentEl.setAttribute('data-widget-id', widgetId);
+                    } catch (e) {
+                        console.warn('Turnstile render warning:', e);
+                        if (currentEl) currentEl.removeAttribute('data-rendered');
+                    }
+                }
+                checkAndRender();
+            },
+            reset: function (containerId) {
+                var el = document.getElementById(containerId);
+                if (el) {
+                    var widgetId = el.getAttribute('data-widget-id');
+                    if (window.turnstile && widgetId) {
+                        try {
+                            window.turnstile.reset(widgetId);
+                        } catch (e) { }
+                    }
+                    el.removeAttribute('data-rendered');
+                    el.removeAttribute('data-widget-id');
+                    el.innerHTML = '';
+                }
+            }
+        };
     </script>
 </body>
 

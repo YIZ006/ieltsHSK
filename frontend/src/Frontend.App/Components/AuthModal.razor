@@ -26,12 +26,12 @@
 
             @if (IsLogin)
             {
-                <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+                <EditForm Model="loginModel" OnValidSubmit="HandleLogin" OnInvalidSubmit="HandleInvalidLogin">
                     <DataAnnotationsValidator />
                     <div class="form-group">
                         <label>Tên đăng nhập hoặc Email</label>
                         <InputText class="form-control" @bind-Value="loginModel.UsernameOrEmail" placeholder="Nhập tên đăng nhập hoặc email của bạn" />
-                        <ValidationMessage For="@(() => loginModel.UsernameOrEmail)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                        <ValidationMessage For="@(() => loginModel.UsernameOrEmail)" />
                     </div>
                     <div class="form-group">
                         <label>Password</label>
@@ -41,7 +41,10 @@
                                 <i class="bi @(showLoginPassword ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
                             </button>
                         </div>
-                        <ValidationMessage For="@(() => loginModel.Password)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                        <ValidationMessage For="@(() => loginModel.Password)" />
+                    </div>
+                    <div class="turnstile-wrapper" style="margin: 12px 0 8px; display: flex; justify-content: center; height: 42px; max-height: 42px; overflow: hidden; border-radius: 4px;">
+                        <div id="turnstile-login-widget"></div>
                     </div>
                     <button type="submit" class="btn-primary" disabled="@IsLoading">
                         @(IsLoading ? "Processing..." : "Login")
@@ -58,12 +61,12 @@
                     <div class="form-group">
                         <label>Họ và tên</label>
                         <InputText class="form-control" @bind-Value="registerModel.FullName" placeholder="Nhập họ và tên của bạn" />
-                        <ValidationMessage For="@(() => registerModel.FullName)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                        <ValidationMessage For="@(() => registerModel.FullName)" />
                     </div>
                     <div class="form-group">
                         <label>Tên đăng nhập (Username)</label>
                         <InputText class="form-control" @bind-Value="registerModel.Username" placeholder="Nhập tên đăng nhập" @onblur="OnUsernameBlur" />
-                        <ValidationMessage For="@(() => registerModel.Username)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                        <ValidationMessage For="@(() => registerModel.Username)" />
                         @if (!string.IsNullOrEmpty(usernameStatusMessage))
                         {
                             <div style="font-size: 0.8rem; margin-top: 5px; font-weight: 600; color: @(isUsernameTaken ? "var(--ig-danger)" : "#16a34a");">
@@ -74,7 +77,7 @@
                     <div class="form-group">
                         <label>Email</label>
                         <InputText type="email" class="form-control" @bind-Value="registerModel.Email" placeholder="Enter your email" />
-                        <ValidationMessage For="@(() => registerModel.Email)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                        <ValidationMessage For="@(() => registerModel.Email)" />
                     </div>
                     <div class="form-group">
                         <label>Mật khẩu (Password)</label>
@@ -84,7 +87,7 @@
                                 <i class="bi @(showPassword ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
                             </button>
                         </div>
-                        <ValidationMessage For="@(() => registerModel.Password)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                        <ValidationMessage For="@(() => registerModel.Password)" />
                         
                         @if (!string.IsNullOrEmpty(registerModel.Password))
                         {
@@ -107,7 +110,10 @@
                                 <i class="bi @(showConfirmPassword ? "bi-eye-slash-fill" : "bi-eye-fill")"></i>
                             </button>
                         </div>
-                        <ValidationMessage For="@(() => registerModel.ConfirmPassword)" style="color: var(--ig-danger); font-size: 0.8rem; margin-top: 5px; display: block;" />
+                        <ValidationMessage For="@(() => registerModel.ConfirmPassword)" />
+                    </div>
+                    <div class="turnstile-wrapper" style="margin: 12px 0 8px; display: flex; justify-content: center; height: 42px; max-height: 42px; overflow: hidden; border-radius: 4px;">
+                        <div id="turnstile-register-widget"></div>
                     </div>
                     <button type="submit" class="btn-primary" disabled="@IsLoading">
                         @(IsLoading ? "Processing..." : "Register")
@@ -161,6 +167,10 @@
         {
             var clientId = "161879464750-2ssdrim1ltgg2nh7nr5agvrbk52bevih.apps.googleusercontent.com";
             await JS.InvokeVoidAsync("initializeGoogleAuth", objRef, clientId);
+
+            var siteKey = Configuration["Turnstile:SiteKey"] ?? "1x00000000000000000000AA";
+            var activeContainerId = IsLogin ? "turnstile-login-widget" : "turnstile-register-widget";
+            await JS.InvokeVoidAsync("turnstileHelper.render", activeContainerId, siteKey, objRef);
         }
     }
 
@@ -173,6 +183,8 @@
         showLoginPassword = false;
         showPassword = false;
         showConfirmPassword = false;
+        loginModel.CaptchaToken = null;
+        registerModel.CaptchaToken = null;
         IsVisible = true;
         _ = IsVisibleChanged.InvokeAsync(true);
         StateHasChanged();
@@ -181,11 +193,13 @@
     public void Close()
     {
         IsVisible = false;
+        _ = JS.InvokeVoidAsync("turnstileHelper.reset", "turnstile-login-widget");
+        _ = JS.InvokeVoidAsync("turnstileHelper.reset", "turnstile-register-widget");
         _ = IsVisibleChanged.InvokeAsync(false);
         StateHasChanged();
     }
 
-    private void SwitchMode(bool isLogin)
+    private async Task SwitchMode(bool isLogin)
     {
         IsLogin = isLogin;
         ErrorMessage = string.Empty;
@@ -194,6 +208,11 @@
         showLoginPassword = false;
         showPassword = false;
         showConfirmPassword = false;
+        loginModel.CaptchaToken = null;
+        registerModel.CaptchaToken = null;
+        await JS.InvokeVoidAsync("turnstileHelper.reset", "turnstile-login-widget");
+        await JS.InvokeVoidAsync("turnstileHelper.reset", "turnstile-register-widget");
+        StateHasChanged();
     }
 
     private void OnPasswordInput(ChangeEventArgs e)
@@ -290,9 +309,17 @@
     {
         IsLoading = true;
         ErrorMessage = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(loginModel.CaptchaToken))
+        {
+            ErrorMessage = "Vui lòng xác nhận bạn không phải người máy (CAPTCHA) trước khi bấm Đăng nhập.";
+            IsLoading = false;
+            return;
+        }
+
         try
         {
-            var success = await AuthService.LoginAsync(loginModel);
+            var (success, error) = await AuthService.LoginAsync(loginModel);
             if (success)
             {
                 Close();
@@ -300,17 +327,24 @@
             }
             else
             {
-                ErrorMessage = "Tên đăng nhập / Email hoặc mật khẩu không chính xác.";
+                ErrorMessage = !string.IsNullOrWhiteSpace(error) ? error : "Tên đăng nhập / Email hoặc mật khẩu không chính xác.";
+                await JS.InvokeVoidAsync("turnstileHelper.reset", "turnstile-login-widget");
             }
         }
         catch (Exception ex)
         {
             ErrorMessage = "Lỗi đăng nhập: " + ex.Message;
+            await JS.InvokeVoidAsync("turnstileHelper.reset", "turnstile-login-widget");
         }
         finally
         {
             IsLoading = false;
         }
+    }
+
+    private void HandleInvalidLogin()
+    {
+        ErrorMessage = "Vui lòng kiểm tra lại thông tin đăng nhập.";
     }
 
     private async Task HandleRegister()
@@ -321,6 +355,12 @@
 
         try
         {
+            if (string.IsNullOrWhiteSpace(registerModel.CaptchaToken))
+            {
+                ErrorMessage = "Vui lòng xác nhận bạn không phải người máy (CAPTCHA) trước khi bấm Đăng ký.";
+                return;
+            }
+
             // Check username existence before submitting
             isUsernameTaken = await AuthService.CheckUsernameExistsAsync(registerModel.Username.Trim());
             if (isUsernameTaken)
@@ -336,20 +376,53 @@
                 IsLogin = true; // Switch to login after successful registration
                 ErrorMessage = "Đăng ký thành công! Vui lòng đăng nhập.";
                 registerModel = new();
+                await JS.InvokeVoidAsync("turnstileHelper.reset", "turnstile-register-widget");
             }
             else
             {
                 ErrorMessage = !string.IsNullOrEmpty(error) ? error : "Đăng ký thất bại. Email hoặc Tên đăng nhập có thể đã được sử dụng.";
+                await JS.InvokeVoidAsync("turnstileHelper.reset", "turnstile-register-widget");
             }
         }
         catch (Exception ex)
         {
             ErrorMessage = "Lỗi đăng ký: " + ex.Message;
+            await JS.InvokeVoidAsync("turnstileHelper.reset", "turnstile-register-widget");
         }
         finally
         {
             IsLoading = false;
         }
+    }
+
+    [JSInvokable]
+    public void OnTurnstileSuccess(string token)
+    {
+        if (IsLogin)
+        {
+            loginModel.CaptchaToken = token;
+        }
+        else
+        {
+            registerModel.CaptchaToken = token;
+        }
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnTurnstileError()
+    {
+        if (IsLogin) loginModel.CaptchaToken = null;
+        else registerModel.CaptchaToken = null;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnTurnstileExpired()
+    {
+        if (IsLogin) loginModel.CaptchaToken = null;
+        else registerModel.CaptchaToken = null;
+        StateHasChanged();
     }
 
     [JSInvokable]
@@ -373,7 +446,7 @@
                 if (emailParts.Length > 1) 
                 {
                     var email = emailParts[1].Trim('"', '\r', '\n');
-                    SwitchMode(false); // Switch to register mode
+                    await SwitchMode(false); // Switch to register mode
                     registerModel.Email = email;
                     ErrorMessage = "Tài khoản chưa được đăng ký. Vui lòng tạo tài khoản mới.";
                 }

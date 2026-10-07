@@ -29,11 +29,14 @@ public class RegisterRequest
     [Required(ErrorMessage = "Vui lòng xác nhận mật khẩu.")]
     [Compare(nameof(Password), ErrorMessage = "Mật khẩu xác nhận không khớp.")]
     public string ConfirmPassword { get; set; } = string.Empty;
+
+    public string? CaptchaToken { get; set; }
 }
 
 public class LoginRequest
 {
     [Required(ErrorMessage = "Vui lòng nhập Tên đăng nhập hoặc Email.")]
+    [StringLength(50, MinimumLength = 3, ErrorMessage = "Tên đăng nhập hoặc Email phải từ 3 ký tự trở lên.")]
     [RegularExpression(@"^[^<>{}`]+$", ErrorMessage = "Tên đăng nhập / Email không được chứa ký tự mã lệnh.")]
     public string UsernameOrEmail { get; set; } = string.Empty;
 
@@ -44,7 +47,10 @@ public class LoginRequest
     }
 
     [Required(ErrorMessage = "Vui lòng nhập mật khẩu.")]
+    [MinLength(6, ErrorMessage = "Mật khẩu phải từ 6 ký tự trở lên.")]
     public string Password { get; set; } = string.Empty;
+
+    public string? CaptchaToken { get; set; }
 }
 
 public class AuthResponse
@@ -106,6 +112,11 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
         try
         {
             var response = await httpClient.PostAsJsonAsync("api/auth/register", request);
+            if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            {
+                return (false, "Bạn đã thao tác quá nhiều lần liên tiếp (vượt quá 5 lượt/phút). Vui lòng chờ 1 phút trước khi thử lại.");
+            }
+
             if (response.IsSuccessStatusCode)
             {
                 return (true, string.Empty);
@@ -138,18 +149,25 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
         }
     }
 
-    public async Task<bool> LoginAsync(LoginRequest request)
+    public async Task<(bool Success, string? ErrorMessage)> LoginAsync(LoginRequest request)
     {
         try
         {
             var response = await httpClient.PostAsJsonAsync("api/auth/login", request);
+            if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            {
+                return (false, "Bạn đã thao tác quá nhiều lần liên tiếp (vượt quá 5 lượt/phút). Vui lòng chờ 1 phút trước khi thử lại.");
+            }
+
             if (!response.IsSuccessStatusCode)
             {
-                return false;
+                var errContent = await response.Content.ReadAsStringAsync();
+                var cleanErr = !string.IsNullOrWhiteSpace(errContent) ? errContent.Trim('"') : "Tên đăng nhập / Email hoặc mật khẩu không chính xác.";
+                return (false, cleanErr);
             }
 
             var result = await response.Content.ReadFromJsonAsync<AuthResponse>();
-            if (result == null) return false;
+            if (result == null) return (false, "Phản hồi từ máy chủ không hợp lệ.");
 
             // Xóa dữ liệu user cũ trước khi lưu token mới
             await ClearUserDataAsync();
@@ -162,11 +180,11 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
             }
 
             authStateProvider.NotifyUserAuthentication(result.Token);
-            return true;
+            return (true, null);
         }
-        catch
+        catch (Exception ex)
         {
-            return false;
+            return (false, "Lỗi kết nối máy chủ: " + ex.Message);
         }
     }
 

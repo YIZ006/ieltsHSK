@@ -302,3 +302,36 @@
     border-color: rgba(34, 197, 94, 0.3);
     color: #86efac;
 }
+
+/* ══════════════════════════════════════════════════════════════ */
+/* TURNSTILE CAPTCHA WRAPPER & VALIDATION STYLING                */
+/* ══════════════════════════════════════════════════════════════ */
+.turnstile-wrapper {
+    margin: 12px 0 8px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    height: 42px !important;
+    max-height: 42px !important;
+    overflow: hidden !important;
+    border-radius: 4px;
+}
+
+::deep .form-control.invalid {
+    border-color: #ef4444 !important;
+    background-color: #fef2f2 !important;
+}
+
+[data-theme="dark"] ::deep .form-control.invalid {
+    border-color: #ef4444 !important;
+    background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+::deep .validation-message {
+    color: #ef4444;
+    font-size: 0.8rem;
+    margin-top: 5px;
+    display: block;
+    font-weight: 500;
+}
+

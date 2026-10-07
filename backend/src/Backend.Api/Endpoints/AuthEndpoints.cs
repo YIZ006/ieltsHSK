@@ -17,10 +17,19 @@ public static class AuthEndpoints
 {
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/auth/register", async (RegisterRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+        app.MapPost("/api/auth/register", async (RegisterRequest request, IAuthService authService, ICaptchaService captchaService, HttpContext httpContext, CancellationToken cancellationToken) =>
         {
             try
             {
+                var clientIp = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+                    ?? httpContext.Connection.RemoteIpAddress?.ToString();
+
+                var isCaptchaValid = await captchaService.VerifyCaptchaAsync(request.CaptchaToken, clientIp, cancellationToken);
+                if (!isCaptchaValid)
+                {
+                    return Results.BadRequest("Xác thực kiểm tra bảo vệ (CAPTCHA) không thành công hoặc đã hết hạn. Vui lòng thử lại.");
+                }
+
                 var result = await authService.RegisterAsync(request, cancellationToken);
                 return Results.Ok(result);
             }
@@ -39,8 +48,24 @@ public static class AuthEndpoints
         }).RequireRateLimiting("auth");
 
 
-        app.MapPost("/api/auth/login", async (LoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+        app.MapPost("/api/auth/login", async (
+            LoginRequest request,
+            IAuthService authService,
+            ICaptchaService captchaService,
+            HttpContext httpContext,
+            CancellationToken cancellationToken) =>
         {
+            if (!string.IsNullOrWhiteSpace(request.CaptchaToken))
+            {
+                var clientIp = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+                    ?? httpContext.Connection.RemoteIpAddress?.ToString();
+                var isCaptchaValid = await captchaService.VerifyCaptchaAsync(request.CaptchaToken, clientIp, cancellationToken);
+                if (!isCaptchaValid)
+                {
+                    return Results.BadRequest("Xác thực kiểm tra bảo vệ (CAPTCHA) không thành công hoặc đã hết hạn. Vui lòng thử lại.");
+                }
+            }
+
             try
             {
                 var result = await authService.LoginAsync(request, cancellationToken);

@@ -574,6 +574,7 @@
                     ReadingUrl = !string.IsNullOrWhiteSpace(p.ReadingJson) ? $"offline://reading/{p.MockTestId}" : null
                 }).ToList();
 
+                // Offline: dùng cache sẵn có, không cần gọi thêm server
                 submissions = await SubmissionService.GetAllAsync();
             }
         }
@@ -677,7 +678,7 @@
         _lastLoad = DateTimeOffset.UtcNow;
         try
         {
-            submissions = await SubmissionService.GetAllAsync();
+            submissions = await SubmissionService.GetAllAsync(forceRefresh: true);
             await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)

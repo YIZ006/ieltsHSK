@@ -4,6 +4,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject StreakService Streak
 @inject NavigationManager NavManager
+@inject Microsoft.JSInterop.IJSRuntime JSRuntime
 @implements IDisposable
 
 <div class="app-shell @(sidebarCollapsed ? "sidebar-collapsed" : "")">
@@ -23,6 +24,7 @@
 
         <main>
             <article class="content px-4">
+                <GuestWarningBanner OnLoginRequested="() => authModal?.Show(true)" />
                 @Body
             </article>
         </main>
@@ -50,6 +52,10 @@
             if (authState.User.Identity?.IsAuthenticated == true)
             {
                 await Streak.MarkTodayAsync();
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("showGuestConsoleWarning");
             }
         }
         catch

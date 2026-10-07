@@ -1,0 +1,60 @@
+@using Microsoft.AspNetCore.Components.Authorization
+
+<AuthorizeView>
+    <NotAuthorized>
+        @if (!isDismissed)
+        {
+            <aside class="guest-warning-banner" role="alert" aria-live="polite">
+                <div class="guest-warning-glow"></div>
+                <div class="guest-warning-content">
+                    <div class="guest-warning-badge-wrap">
+                        <span class="guest-warning-pill">
+                            <span class="pulsing-radar"></span>
+                            <i class="bi bi-cloud-slash-fill"></i>
+                            <span>CHẾ ĐỘ KHÁCH</span>
+                        </span>
+                    </div>
+
+                    <div class="guest-warning-text-group">
+                        <div class="guest-warning-headline">
+                            <strong>Dữ liệu làm bài KHÔNG được lưu ở chế độ Online</strong>
+                        </div>
+                        <div class="guest-warning-desc">
+                            Bạn đang học tập và làm bài mà chưa đăng nhập. Bài thi, điểm số và từ vựng chỉ lưu tạm trên trình duyệt hiện tại và sẽ mất khi bạn đổi thiết bị hoặc xóa lịch sử duyệt web.
+                            <strong>Hãy đăng nhập ngay</strong> để lưu trữ vĩnh viễn và đồng bộ dữ liệu đa thiết bị!
+                        </div>
+                    </div>
+
+                    <div class="guest-warning-actions">
+                        <button type="button" class="btn-guest-login" @onclick="HandleLoginClick" title="Mở hộp thoại đăng nhập / đăng ký">
+                            <i class="bi bi-box-arrow-in-right"></i>
+                            <span>Đăng nhập ngay</span>
+                        </button>
+                        <button type="button" class="btn-guest-dismiss" @onclick="DismissBanner" title="Tạm đóng thông báo này">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </div>
+            </aside>
+        }
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter] public EventCallback OnLoginRequested { get; set; }
+
+    private bool isDismissed = false;
+
+    private async Task HandleLoginClick()
+    {
+        if (OnLoginRequested.HasDelegate)
+        {
+            await OnLoginRequested.InvokeAsync();
+        }
+    }
+
+    private void DismissBanner()
+    {
+        isDismissed = true;
+    }
+}

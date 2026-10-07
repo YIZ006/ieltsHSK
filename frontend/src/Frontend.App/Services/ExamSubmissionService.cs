@@ -9,6 +9,22 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
 {
     private const string StorageKey = "ielts-exam-submissions";
 
+    // ── In-memory cache (30s TTL) ─────────────────────────────────────────────
+    // Ngăn nhiều component gọi API sync cùng lúc trong cùng một phiên.
+    private static List<IeltsSubmissionRecord>? _cachedSubmissions;
+    private static DateTimeOffset _cacheExpiry = DateTimeOffset.MinValue;
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Xoá cache ngay lập tức. Gọi sau khi lưu bài nộp mới để lần sau
+    /// <see cref="GetAllAsync"/> đồng bộ dữ liệu mới từ server.
+    /// </summary>
+    public static void InvalidateCache()
+    {
+        _cachedSubmissions = null;
+        _cacheExpiry = DateTimeOffset.MinValue;
+    }
+
     public async Task<IeltsSubmissionRecord> SaveAsync(IeltsSubmissionRecord submission)
     {
         submission.Id = string.IsNullOrWhiteSpace(submission.Id) ? Guid.NewGuid().ToString("N") : submission.Id;
@@ -22,6 +38,7 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
         else submissions.Insert(0, submission);
 
         await localStorage.SetItemAsync(StorageKey, submissions);
+        InvalidateCache(); // Xóa cache để lần sau GetAllAsync tự sync từ server
         return submission;
     }
 
@@ -74,8 +91,14 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
         return null;
     }
 
-    public async Task<List<IeltsSubmissionRecord>> GetAllAsync()
+    public async Task<List<IeltsSubmissionRecord>> GetAllAsync(bool forceRefresh = false)
     {
+        // ── Cache hit: trả ngay từ RAM, không cần gọi API ──────────────────────
+        if (!forceRefresh && _cachedSubmissions != null && DateTimeOffset.UtcNow < _cacheExpiry)
+        {
+            return _cachedSubmissions;
+        }
+
         var local = await localStorage.GetItemAsync<List<IeltsSubmissionRecord>>(StorageKey) ?? new();
         try
         {
@@ -95,7 +118,6 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
             if (userId.HasValue) queryParams.Add($"userId={userId.Value}");
             if (!string.IsNullOrWhiteSpace(profile?.FullName)) queryParams.Add($"studentName={Uri.EscapeDataString(profile.FullName)}");
             else if (!string.IsNullOrWhiteSpace(profile?.DisplayName)) queryParams.Add($"studentName={Uri.EscapeDataString(profile.DisplayName)}");
-            queryParams.Add($"_t={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}");
 
             var url = $"api/test-submissions/sync?{string.Join("&", queryParams)}";
             var serverItems = await httpClient.GetFromJsonAsync<List<TestSubmissionSyncDto>>(url);
@@ -242,6 +264,11 @@ public sealed class ExamSubmissionService(ILocalStorageService localStorage, Htt
         {
             Console.WriteLine($"[ExamSubmissionService] Sync error: {ex.Message}");
         }
+
+        // ── Cập nhật cache ──────────────────────────────────────────────────────
+        _cachedSubmissions = local;
+        _cacheExpiry = DateTimeOffset.UtcNow.Add(CacheTtl);
+
         return local;
     }
 
