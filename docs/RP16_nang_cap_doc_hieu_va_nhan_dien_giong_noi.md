@@ -125,7 +125,7 @@ Dựa trên phản hồi và ảnh chụp màn hình kiểm thử thực tế c�
 ## 7. Kết quả Kiểm thử & Trạng thái Hệ thống
 
 - **Biên dịch Frontend**: `dotnet build frontend/src/Frontend.App/Frontend.App.csproj` -> **Thành công 100% (0 Error, 0 Warning)**.
-- **Dữ liệu Database**: Cập nhật hoàn tất và đồng bộ trên Supabase PostgreSQL (`aws-0-ap-northeast-1.pooler.supabase.com`).
+- **Dữ liệu Database**: Cập nhật hoàn tất và đồng bộ trên Supabase PostgreSQL (`<SUPABASE_HOST>`).
 - **Kiểm soát Repository**: `git status --short` chỉ ghi nhận các file mã nguồn chính thống được chỉnh sửa, không có bất kỳ file rác/file nháp nào ở root directory (tuân thủ tuyệt đối quy định repo).
 
 ### Danh sách URL Kiểm thử Thực tế Theo Từng Cấp Độ:
