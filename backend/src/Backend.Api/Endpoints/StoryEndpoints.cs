@@ -388,7 +388,8 @@ public static class StoryEndpoints
             if (file == null || file.Length == 0)
                 return Results.BadRequest(new { Message = "File không hợp lệ hoặc trống." });
 
-            var safeFileName = System.Text.RegularExpressions.Regex.Replace(file.FileName, @"[^a-zA-Z0-9_\.-]", "_");
+            var rawName = Path.GetFileName(file.FileName);
+            var safeFileName = System.Text.RegularExpressions.Regex.Replace(rawName, @"[^a-zA-Z0-9_\.-]", "_").Replace("..", "_");
             var fileName = $"stories/{safeFileName}";
 
             string jsonContent = "";

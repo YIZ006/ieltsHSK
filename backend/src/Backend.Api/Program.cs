@@ -67,20 +67,8 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Helper trích xuất địa chỉ IP của Client (hỗ trợ cả Reverse Proxy / Cloudflare)
-static string ResolveClientIp(HttpContext context)
-{
-    var forwardedFor = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-    if (!string.IsNullOrWhiteSpace(forwardedFor))
-    {
-        var firstIp = forwardedFor.Split(',')[0].Trim();
-        if (!string.IsNullOrWhiteSpace(firstIp)) return firstIp;
-    }
-    var cfConnectingIp = context.Request.Headers["CF-Connecting-IP"].FirstOrDefault();
-    if (!string.IsNullOrWhiteSpace(cfConnectingIp)) return cfConnectingIp.Trim();
-
-    return context.Connection.RemoteIpAddress?.ToString() ?? "unknown-client";
-}
+// Helper trích xuất địa chỉ IP của Client an toàn (chống giả mạo header CF-Connecting-IP và X-Forwarded-For)
+static string ResolveClientIp(HttpContext context) => ClientIpResolver.ResolveClientIp(context);
 
 // Rate Limiting phân vùng độc lập theo Client IP và User ID chống brute-force và spam
 builder.Services.AddRateLimiter(options =>
@@ -136,6 +124,44 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0
             });
     });
+
+    // Phân vùng "submission": Mỗi User ID (hoặc IP nếu ẩn danh) tối đa 10 request / phút chống flood nộp bài thi
+    options.AddPolicy("submission", context =>
+    {
+        var userId = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                     ?? context.User?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+        var partitionKey = !string.IsNullOrWhiteSpace(userId) 
+            ? $"sub_user_{userId}" 
+            : $"sub_ip_{ResolveClientIp(context)}";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+
+    // Phân vùng "user-mutation": Mỗi User ID (hoặc IP nếu ẩn danh) tối đa 30 request / phút cho các thao tác thay đổi trạng thái người dùng
+    options.AddPolicy("user-mutation", context =>
+    {
+        var userId = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                     ?? context.User?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+        var partitionKey = !string.IsNullOrWhiteSpace(userId) 
+            ? $"user_mutation_{userId}" 
+            : $"user_mutation_ip_{ResolveClientIp(context)}";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
 });
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -168,6 +194,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         // Chặn token của tài khoản bị khoá/xoá ngay cả khi JWT còn hạn
         options.Events = new JwtBearerEvents
         {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["token"].FirstOrDefault()
+                    ?? context.Request.Query["access_token"].FirstOrDefault();
+                if (!string.IsNullOrEmpty(accessToken) && string.IsNullOrEmpty(context.Token))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            },
             OnTokenValidated = async context =>
             {
                 var userIdClaim = context.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
@@ -226,29 +262,31 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Khởi chạy kết nối DB, nạp trước model EF Core, kết nối Redis và kiểm tra seed ngầm
-// để Kestrel mở cổng 5101 NGAY LẬP TỨC (< 100ms) mà không chặn các request đầu tiên từ client.
-_ = Task.Run(async () =>
+// Readiness tracking flag
+var isAppReady = false;
+var startupError = string.Empty;
+
+// Khởi tạo Database và Seed Data đồng bộ trước khi Kestrel nhận lưu lượng
+try
 {
-    try
-    {
-        // 1. Kích hoạt mở sẵn kết nối (pre-warm) tới PostgreSQL & nạp model EF Core
-        using var scope = app.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<Backend.Infrastructure.Persistence.AppDbContext>();
-        await dbContext.Database.CanConnectAsync();
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<Backend.Infrastructure.Persistence.AppDbContext>();
+    await dbContext.Database.CanConnectAsync();
 
-        // 2. Kích hoạt kết nối trước tới Redis nếu có bật
-        _ = app.Services.GetService<StackExchange.Redis.IConnectionMultiplexer>();
+    // Khởi tạo kết nối Redis ngầm
+    _ = app.Services.GetService<StackExchange.Redis.IConnectionMultiplexer>();
 
-        // 3. Đồng bộ migration và kiểm tra dữ liệu khởi tạo
-        await app.Services.SeedDataAsync();
-        Console.WriteLine("[Startup] Database connection warmed up & seed data verified.");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[Startup Warning] Background initialization note: {ex.Message}");
-    }
-});
+    // Đồng bộ migration và kiểm tra dữ liệu khởi tạo
+    await app.Services.SeedDataAsync();
+    isAppReady = true;
+    Console.WriteLine("[Startup] Database connection verified & seed data ready.");
+}
+catch (Exception ex)
+{
+    startupError = ex.Message;
+    Console.WriteLine($"[Startup Warning] Database initialization deferred: {ex.Message}");
+    // Ứng dụng vẫn chạy để phản hồi health check và báo 503 Service Unavailable khi chưa sẵn sàng
+}
 
 // Swagger: Chỉ bật trong môi trường Development hoặc khi có cấu hình EnableSwagger = true
 if (app.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("EnableSwagger", false))
@@ -280,8 +318,52 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Root health check endpoint for Render & container monitoring
-app.MapGet("/", () => Results.Ok(new { status = "healthy", app = "IELTS & HSK Backend API", timestamp = DateTime.UtcNow }));
+// ─── HEALTH CHECKS & READINESS GATE ───
+
+// Liveness Probe: Xác nhận tiến trình Kestrel đang chạy
+app.MapGet("/health/live", () => Results.Ok(new { status = "alive", timestamp = DateTime.UtcNow }));
+
+// Readiness Probe: Chứng minh Database & Redis đã kết nối và sẵn sàng nhận traffic
+app.MapGet("/health/ready", async (Backend.Infrastructure.Persistence.AppDbContext db, IServiceProvider sp) =>
+{
+    if (!isAppReady)
+    {
+        return Results.Json(new { status = "unhealthy", reason = startupError }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    try
+    {
+        var dbOk = await db.Database.CanConnectAsync();
+        if (!dbOk)
+        {
+            return Results.Json(new { status = "unhealthy", reason = "Database connection failed" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        var redis = sp.GetService<StackExchange.Redis.IConnectionMultiplexer>();
+        var redisStatus = redis != null ? (redis.IsConnected ? "connected" : "disconnected") : "disabled";
+
+        return Results.Ok(new
+        {
+            status = "ready",
+            database = "connected",
+            redis = redisStatus,
+            timestamp = DateTime.UtcNow
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { status = "unhealthy", error = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+// Root endpoint: Thông tin tổng quan hệ thống
+app.MapGet("/", () => Results.Ok(new
+{
+    status = isAppReady ? "healthy" : "initializing",
+    app = "IELTS & HSK Backend API",
+    version = "1.0.0",
+    timestamp = DateTime.UtcNow
+}));
 
 // ─── MODULAR ENDPOINT REGISTRATIONS ───
 // TUYỆT ĐỐI KHÔNG VIẾT ENDPOINT TRỰC TIẾP VÀO FILE NÀY!
@@ -290,9 +372,102 @@ app.MapAuthEndpoints();
 app.MapAiEndpoints();
 app.MapIeltsEndpoints();
 app.MapHskEndpoints();
+app.MapExamScheduleEndpoints();
 app.MapExamSubmissionEndpoints();
 app.MapStoryEndpoints();
 app.MapGrammarEndpoints();
 app.MapAdminEndpoints();
 
 app.Run();
+
+public static class ClientIpResolver
+{
+    private static readonly System.Net.IPNetwork[] CloudflareNetworks = new[]
+    {
+        System.Net.IPNetwork.Parse("173.245.48.0/20"),
+        System.Net.IPNetwork.Parse("103.21.244.0/22"),
+        System.Net.IPNetwork.Parse("103.22.200.0/22"),
+        System.Net.IPNetwork.Parse("103.31.4.0/22"),
+        System.Net.IPNetwork.Parse("141.101.64.0/18"),
+        System.Net.IPNetwork.Parse("108.162.192.0/18"),
+        System.Net.IPNetwork.Parse("190.93.240.0/20"),
+        System.Net.IPNetwork.Parse("188.114.96.0/20"),
+        System.Net.IPNetwork.Parse("197.234.240.0/22"),
+        System.Net.IPNetwork.Parse("198.41.128.0/17"),
+        System.Net.IPNetwork.Parse("162.158.0.0/15"),
+        System.Net.IPNetwork.Parse("104.16.0.0/13"),
+        System.Net.IPNetwork.Parse("104.24.0.0/14"),
+        System.Net.IPNetwork.Parse("172.64.0.0/13"),
+        System.Net.IPNetwork.Parse("131.0.72.0/22"),
+        System.Net.IPNetwork.Parse("2400:cb00::/32"),
+        System.Net.IPNetwork.Parse("2606:4700::/32"),
+        System.Net.IPNetwork.Parse("2803:f800::/32"),
+        System.Net.IPNetwork.Parse("2405:b500::/32"),
+        System.Net.IPNetwork.Parse("2405:8100::/32"),
+        System.Net.IPNetwork.Parse("2a06:98c0::/29"),
+        System.Net.IPNetwork.Parse("2c0f:f248::/32")
+    };
+
+    public static bool IsCloudflareIp(System.Net.IPAddress? ip)
+    {
+        if (ip == null) return false;
+        var checkIp = ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4() : ip;
+        for (int i = 0; i < CloudflareNetworks.Length; i++)
+        {
+            if (CloudflareNetworks[i].BaseAddress.AddressFamily == checkIp.AddressFamily &&
+                CloudflareNetworks[i].Contains(checkIp))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static bool IsTrustedProxyOrLoopback(System.Net.IPAddress? ip)
+    {
+        if (ip == null) return false;
+        if (System.Net.IPAddress.IsLoopback(ip)) return true;
+        var ipStr = ip.ToString();
+        if (ipStr == "127.0.0.1" || ipStr == "::1") return true;
+        return IsCloudflareIp(ip);
+    }
+
+    public static string ResolveClientIp(HttpContext context)
+    {
+        var remoteIp = context.Connection.RemoteIpAddress;
+        var isTrustedProxy = IsTrustedProxyOrLoopback(remoteIp);
+
+        // 1. Chỉ tin cậy CF-Connecting-IP nếu kết nối đến từ Cloudflare Edge hoặc loopback
+        if (isTrustedProxy)
+        {
+            var cfIp = context.Request.Headers["CF-Connecting-IP"].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(cfIp) && System.Net.IPAddress.TryParse(cfIp.Trim(), out var parsedCfIp))
+            {
+                return parsedCfIp.ToString();
+            }
+        }
+
+        // 2. Chỉ tin cậy X-Forwarded-For nếu kết nối đến từ local proxy/loopback
+        if (remoteIp == null || System.Net.IPAddress.IsLoopback(remoteIp))
+        {
+            var forwardedFor = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(forwardedFor))
+            {
+                var clientCandidate = forwardedFor.Split(',').LastOrDefault()?.Trim();
+                if (!string.IsNullOrWhiteSpace(clientCandidate) && System.Net.IPAddress.TryParse(clientCandidate, out var parsedForwarded))
+                {
+                    return parsedForwarded.ToString();
+                }
+            }
+        }
+
+        // 3. Nếu là external IP không thuộc Cloudflare / proxy tin cậy, tuyệt đối không dùng CF-Connecting-IP; dùng remote IP thực tế từ socket connection
+        return remoteIp?.ToString() ?? "unknown-client";
+    }
+}
+
+public partial class Program
+{
+    public static string ResolveClientIp(HttpContext context) => ClientIpResolver.ResolveClientIp(context);
+    public static bool IsCloudflareIp(System.Net.IPAddress? ip) => ClientIpResolver.IsCloudflareIp(ip);
+}

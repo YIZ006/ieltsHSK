@@ -3,6 +3,7 @@ using Backend.Application.Abstractions;
 using Backend.Application.DTOs;
 using Backend.Domain.Entities;
 using Backend.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -724,7 +725,7 @@ public static class AdminEndpoints
             }).ToList();
 
             return Results.Ok(dtos);
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
         // 5. Admin: Create notification
 
@@ -761,7 +762,7 @@ public static class AdminEndpoints
             await dbContext.SaveChangesAsync(cancellationToken);
 
             return Results.Ok(new { success = true, id = notif.Id });
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
         // 6. Admin: Update notification
 
@@ -788,7 +789,7 @@ public static class AdminEndpoints
 
             await dbContext.SaveChangesAsync(cancellationToken);
             return Results.Ok(new { success = true });
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
         // 7. Admin: Delete notification
 
@@ -806,7 +807,7 @@ public static class AdminEndpoints
             dbContext.Notifications.Remove(notif);
             await dbContext.SaveChangesAsync(cancellationToken);
             return Results.Ok(new { success = true });
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 
         return app;

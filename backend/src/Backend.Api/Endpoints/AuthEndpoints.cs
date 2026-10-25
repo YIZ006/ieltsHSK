@@ -21,8 +21,7 @@ public static class AuthEndpoints
         {
             try
             {
-                var clientIp = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()
-                    ?? httpContext.Connection.RemoteIpAddress?.ToString();
+                var clientIp = Program.ResolveClientIp(httpContext);
 
                 var isCaptchaValid = await captchaService.VerifyCaptchaAsync(request.CaptchaToken, clientIp, cancellationToken);
                 if (!isCaptchaValid)
@@ -55,15 +54,12 @@ public static class AuthEndpoints
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
-            if (!string.IsNullOrWhiteSpace(request.CaptchaToken))
+            var clientIp = Program.ResolveClientIp(httpContext);
+
+            var isCaptchaValid = await captchaService.VerifyCaptchaAsync(request.CaptchaToken, clientIp, cancellationToken);
+            if (!isCaptchaValid)
             {
-                var clientIp = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()
-                    ?? httpContext.Connection.RemoteIpAddress?.ToString();
-                var isCaptchaValid = await captchaService.VerifyCaptchaAsync(request.CaptchaToken, clientIp, cancellationToken);
-                if (!isCaptchaValid)
-                {
-                    return Results.BadRequest("Xác thực kiểm tra bảo vệ (CAPTCHA) không thành công hoặc đã hết hạn. Vui lòng thử lại.");
-                }
+                return Results.BadRequest("Xác thực kiểm tra bảo vệ (CAPTCHA) không thành công, bị thiếu hoặc đã hết hạn. Vui lòng thử lại.");
             }
 
             try
@@ -78,8 +74,24 @@ public static class AuthEndpoints
         }).RequireRateLimiting("auth");
 
 
-        app.MapPost("/api/admin/auth/login", async (LoginRequest request, IAuthService authService, CancellationToken cancellationToken) =>
+        app.MapPost("/api/admin/auth/login", async (
+            LoginRequest request,
+            IAuthService authService,
+            ICaptchaService captchaService,
+            HttpContext httpContext,
+            CancellationToken cancellationToken) =>
         {
+            var clientIp = Program.ResolveClientIp(httpContext);
+
+            // Strictly enforce CAPTCHA verification for admin login
+            {
+                var isCaptchaValid = await captchaService.VerifyCaptchaAsync(request.CaptchaToken, clientIp, cancellationToken);
+                if (!isCaptchaValid)
+                {
+                    return Results.BadRequest("Xác thực kiểm tra bảo vệ (CAPTCHA) không thành công, bị thiếu hoặc đã hết hạn. Vui lòng thử lại.");
+                }
+            }
+
             try
             {
                 var result = await authService.AdminLoginAsync(request, cancellationToken);
@@ -270,7 +282,7 @@ public static class AuthEndpoints
                 }
             }
             return Results.Unauthorized();
-        });
+        }).RequireRateLimiting("user-mutation");
 
 
         app.MapPost("/api/user/streak", [Microsoft.AspNetCore.Authorization.Authorize] async (System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
@@ -300,7 +312,7 @@ public static class AuthEndpoints
                 }
             }
             return Results.Unauthorized();
-        });
+        }).RequireRateLimiting("user-mutation");
 
 
         app.MapPut("/api/user/level", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.UpdateLevelRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
@@ -397,7 +409,7 @@ public static class AuthEndpoints
                 streak = dbUser.Streak,
                 todaySeconds = activity.StudySeconds
             });
-        });
+        }).RequireRateLimiting("user-mutation");
 
 
         app.MapGet("/api/user/study-activity", [Microsoft.AspNetCore.Authorization.Authorize] async (System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
@@ -624,7 +636,7 @@ public static class AuthEndpoints
                 existing.HighScore,
                 existing.UpdatedAt
             ));
-        });
+        }).RequireRateLimiting("user-mutation");
 
 
         app.MapPost("/api/user/game-progress/migrate", [Microsoft.AspNetCore.Authorization.Authorize] async (Backend.Application.DTOs.MigrateGameProgressRequest request, System.Security.Claims.ClaimsPrincipal user, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>

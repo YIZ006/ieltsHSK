@@ -3,6 +3,7 @@ using Backend.Application.Abstractions;
 using Backend.Application.DTOs;
 using Backend.Domain.Entities;
 using Backend.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -299,7 +300,7 @@ public static class IeltsEndpoints
             await dbContext.SaveChangesAsync(cancellationToken);
             await cacheService.RemoveAsync("listen-videos:approved", cancellationToken);
             return Results.Ok(new { Message = "Cập nhật thông tin video thành công", Video = video });
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 
         app.MapGet("/api/admin/listen-videos/template-excel",
@@ -579,7 +580,7 @@ public static class IeltsEndpoints
 
             await dbContext.SaveChangesAsync(cancellationToken);
             return Results.Ok(new { Success = true, R2Url = jsonUrl, Id = exam.Id });
-        }).DisableAntiforgery();
+        }).RequireAuthorization(policy => policy.RequireRole("admin")).DisableAntiforgery();
 
 
         app.MapPost("/api/ielts/speak-along/upload-file", async (
@@ -629,7 +630,7 @@ public static class IeltsEndpoints
 
             await dbContext.SaveChangesAsync(cancellationToken);
             return Results.Ok(new { Success = true, R2Url = jsonUrl, Id = exam.Id });
-        }).DisableAntiforgery();
+        }).RequireAuthorization(policy => policy.RequireRole("admin")).DisableAntiforgery();
 
 
         app.MapGet("/api/ielts/audio-shadowing", async (
@@ -649,7 +650,7 @@ public static class IeltsEndpoints
         }).DisableAntiforgery();
 
 
-        app.MapPost("/api/ielts/audio-shadowing/save", async (
+        app.MapPost("/api/ielts/audio-shadowing/save", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
             System.Text.Json.JsonElement payload,
             Backend.Application.Abstractions.IR2StorageService r2Service,
             Backend.Infrastructure.Persistence.AppDbContext dbContext,
@@ -696,7 +697,7 @@ public static class IeltsEndpoints
         }).DisableAntiforgery();
 
 
-        app.MapPost("/api/ielts/audio-shadowing/upload-lesson", async (
+        app.MapPost("/api/ielts/audio-shadowing/upload-lesson", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
             string lessonId,
             System.Text.Json.JsonElement payload,
             Backend.Application.Abstractions.IR2StorageService r2Service,
@@ -755,16 +756,48 @@ public static class IeltsEndpoints
                 DurationMs = durationMs,
                 Transcript = transcript
             });
-        }).DisableAntiforgery();
+        }).RequireAuthorization().DisableAntiforgery();
 
         // ─── SPEAKING: Stream private audio ───
 
         app.MapGet("/api/speaking/audio/{*key}", async (
             string key,
+            string? sessionId,
             Backend.Application.Abstractions.IR2StorageService r2Service,
+            Backend.Infrastructure.Persistence.AppDbContext dbContext,
+            HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
             var decodedKey = System.Net.WebUtility.UrlDecode(key);
+
+            // Kiểm soát quyền truy cập: Admin toàn quyền; User sở hữu bài nộp; hoặc khớp sessionId
+            var isAdmin = httpContext.User.IsInRole("admin") || httpContext.User.FindFirst("admin_id") != null;
+            if (!isAdmin)
+            {
+                int? authenticatedUserId = null;
+                if (httpContext.User.Identity?.IsAuthenticated == true)
+                {
+                    var subClaim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                                   ?? httpContext.User.FindFirst("sub")?.Value;
+                    if (int.TryParse(subClaim, out var parsedUid)) authenticatedUserId = parsedUid;
+                }
+
+                var hasAccess = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
+                    dbContext.TestSubmissions.Where(s => s.AudioKey == decodedKey &&
+                        ((authenticatedUserId.HasValue && s.UserId == authenticatedUserId.Value) ||
+                         (!string.IsNullOrWhiteSpace(sessionId) && s.SessionId == sessionId))),
+                    cancellationToken);
+
+                if (!hasAccess)
+                {
+                    if (authenticatedUserId == null && string.IsNullOrWhiteSpace(sessionId))
+                    {
+                        return Results.Unauthorized();
+                    }
+                    return Results.Forbid();
+                }
+            }
+
             var stream = await r2Service.GetPrivateFileStreamAsync(decodedKey, cancellationToken);
             if (stream == null) return Results.NotFound("Audio file not found.");
 
@@ -773,6 +806,41 @@ public static class IeltsEndpoints
 
         app.MapGet("/api/ielts/vocab", async (string? topic, string? search, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
         {
+            var cleanTopic = string.IsNullOrWhiteSpace(topic) ? null : topic.Trim();
+            var cleanSearch = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+
+            // 1. Nếu truy vấn theo từng Topic cụ thể (trường hợp phổ biến nhất), cache riêng theo Topic để key siêu nhẹ (< 50KB)
+            if (!string.IsNullOrEmpty(cleanTopic) && string.IsNullOrEmpty(cleanSearch))
+            {
+                var topicCacheKey = $"ielts:vocab:topic:{cleanTopic.ToLowerInvariant()}";
+                var cachedTopic = await cacheService.GetAsync<List<IeltsVocabularyDto>>(topicCacheKey, cancellationToken);
+                if (cachedTopic != null) return Results.Ok(cachedTopic);
+
+                var topicItems = await dbContext.IeltsVocabularies
+                    .Where(v => v.Topic == cleanTopic)
+                    .OrderBy(v => v.DisplayOrder).ThenBy(v => v.Id)
+                    .Select(v => new IeltsVocabularyDto
+                    {
+                        Id = v.Id,
+                        Word = v.Word,
+                        Phonetic = v.Phonetic,
+                        PartOfSpeech = v.PartOfSpeech,
+                        Meaning = v.Meaning,
+                        Example = v.Example,
+                        ExampleMeaning = v.ExampleMeaning,
+                        Topic = v.Topic,
+                        CefrLevel = v.CefrLevel,
+                        DisplayOrder = v.DisplayOrder,
+                        IsActive = v.IsActive,
+                        CreatedAt = v.CreatedAt
+                    })
+                    .ToListAsync(cancellationToken);
+
+                await cacheService.SetAsync(topicCacheKey, topicItems, TimeSpan.FromHours(2), cancellationToken);
+                return Results.Ok(topicItems);
+            }
+
+            // 2. Trường hợp lấy danh sách chung hoặc tìm kiếm
             const string cacheKey = "ielts:vocab:all";
             var allItems = await cacheService.GetAsync<List<IeltsVocabularyDto>>(cacheKey, cancellationToken);
 
@@ -797,6 +865,7 @@ public static class IeltsEndpoints
                     CreatedAt = v.CreatedAt
                 }).ToList();
 
+                // Được bảo vệ bởi RedisCacheService: nếu chuỗi vượt quá 512KB sẽ tự động lưu RAM MemoryCache, không gửi lên Upstash
                 await cacheService.SetAsync(cacheKey, allItems, TimeSpan.FromHours(2), cancellationToken);
             }
 
@@ -835,7 +904,7 @@ public static class IeltsEndpoints
             await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
             return Results.Ok(new { Id = vocab.Id });
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 
         app.MapPut("/api/ielts/vocab/{id:int}", async (int id, IeltsVocabularyRequest req, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
@@ -862,7 +931,7 @@ public static class IeltsEndpoints
             await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
             return Results.Ok();
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 
         app.MapDelete("/api/ielts/vocab/{id:int}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
@@ -875,7 +944,7 @@ public static class IeltsEndpoints
             await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
             return Results.Ok();
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
         // ─── IELTS: Vocabulary Excel Template ───
 
@@ -1142,7 +1211,7 @@ public static class IeltsEndpoints
             await cacheService.RemoveByPrefixAsync("ielts:vocab:", cancellationToken);
 
             return Results.Ok(new { Success = success, Fail = fail, Duplicate = duplicate, Updated = updated, Errors = errors, JsonUrl = jsonUrl });
-        }).DisableAntiforgery();
+        }).RequireAuthorization(policy => policy.RequireRole("admin")).DisableAntiforgery();
 
         // ─── IELTS: Vocabulary import multiple files ───
 
@@ -1368,7 +1437,7 @@ public static class IeltsEndpoints
             var msg = $"Thêm mới {success}, cập nhật {updated}, thất bại {fail}, bỏ qua {duplicate} trùng.";
             if (errors.Any()) msg += " Chi tiết: " + string.Join(" | ", errors.Take(3));
             return Results.Ok(new { Success = success, Fail = fail, Duplicate = duplicate, Updated = updated, Errors = errors, JsonUrl = jsonUrl });
-        }).DisableAntiforgery();
+        }).RequireAuthorization(policy => policy.RequireRole("admin")).DisableAntiforgery();
 
         // ─── IELTS: Delete all vocabulary ───
 
@@ -1427,7 +1496,7 @@ public static class IeltsEndpoints
                 logger.LogError(ex, "Delete all vocabulary failed");
                 return Results.Problem($"Xóa thất bại: {ex.Message}");
             }
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
         // ─── IELTS Vocabulary Progress (lưu theo tài khoản người dùng) ───
 

@@ -3,6 +3,7 @@ using Backend.Application.Abstractions;
 using Backend.Application.DTOs;
 using Backend.Domain.Entities;
 using Backend.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -64,7 +65,7 @@ public static class HskEndpoints
             await dbContext.SaveChangesAsync(cancellationToken);
     
             return Results.Ok(new { Id = newTest.Id });
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 
         app.MapPut("/api/hsk-mock-tests/{id}", async (int id, Backend.Application.DTOs.CreateMockTestRequest request, Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
@@ -86,7 +87,7 @@ public static class HskEndpoints
 
             await dbContext.SaveChangesAsync(cancellationToken);
             return Results.Ok();
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 
         app.MapDelete("/api/hsk-mock-tests/{id}", async (int id, Backend.Infrastructure.Persistence.AppDbContext dbContext, Backend.Application.Abstractions.IR2StorageService r2Service, CancellationToken cancellationToken) =>
@@ -108,7 +109,7 @@ public static class HskEndpoints
             dbContext.HskMockTests.Remove(test);
             await dbContext.SaveChangesAsync(cancellationToken);
             return Results.Ok();
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 
         app.MapGet("/api/hsk/sections", async (Backend.Infrastructure.Persistence.AppDbContext dbContext, CancellationToken cancellationToken) =>
@@ -215,13 +216,17 @@ public static class HskEndpoints
 
         app.MapGet("/api/hsk/vocab", async (string? level, Backend.Infrastructure.Persistence.AppDbContext dbContext, ICacheService cacheService, CancellationToken cancellationToken) =>
         {
-            var cacheKey = string.IsNullOrEmpty(level) ? "hsk:vocab:all" : $"hsk:vocab:{level.ToLowerInvariant().Trim()}";
+            var normalizedLevel = string.IsNullOrEmpty(level) ? null : level.Replace(" ", "").Trim();
+            var cacheKey = normalizedLevel == null ? "hsk:vocab:all" : $"hsk:vocab:{normalizedLevel.ToLowerInvariant()}";
             var cached = await cacheService.GetAsync<List<HskVocabularyDto>>(cacheKey, cancellationToken);
             if (cached != null) return Results.Ok(cached);
 
             var query = dbContext.HskVocabularies.AsQueryable();
             if (!string.IsNullOrEmpty(level))
-                query = query.Where(v => v.HskLevel == level);
+            {
+                var norm = normalizedLevel!;
+                query = query.Where(v => v.HskLevel == level || v.HskLevel == norm);
+            }
             var items = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
                 query.OrderBy(v => v.HskLevel).ThenBy(v => v.DisplayOrder), cancellationToken);
 
@@ -365,7 +370,7 @@ public static class HskEndpoints
                 logger.LogError(ex, "Delete all HSK vocabulary failed");
                 return Results.Problem($"Xóa thất bại: {ex.Message}");
             }
-        });
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
         // ─── HSK Vocabulary Progress (lưu theo tài khoản người dùng) ───
 
@@ -737,7 +742,7 @@ public static class HskEndpoints
                 JsonUrl = jsonUrl,
                 Logs = parseLogs 
             });
-        }).DisableAntiforgery();
+        }).RequireAuthorization(policy => policy.RequireRole("admin")).DisableAntiforgery();
 
         // ─── HSK: Vocabulary Excel/CSV Import (Multiple Files) ───
 
@@ -973,9 +978,631 @@ public static class HskEndpoints
                 JsonUrl = jsonUrl,
                 Logs = allLogs 
             });
-        }).DisableAntiforgery();
+        }).RequireAuthorization(policy => policy.RequireRole("admin")).DisableAntiforgery();
 
-        // ─── IELTS: Auto-phân loại CEFR cho từ vựng chưa có CefrLevel ───
+        // ─── Culture Stories & Bilingual Reading Endpoints ───
+
+        app.MapGet("/api/hsk/culture-stories", async (
+            string? category,
+            string? level,
+            string? search,
+            Backend.Infrastructure.Persistence.AppDbContext dbContext,
+            ICacheService cacheService,
+            CancellationToken cancellationToken) =>
+        {
+            var cacheKey = $"hsk:culture-stories:list:{category?.ToLowerInvariant()}:{level?.ToLowerInvariant()}:{search?.ToLowerInvariant()}";
+            var cached = await cacheService.GetAsync<List<CultureStoryListItemDto>>(cacheKey, cancellationToken);
+            if (cached != null) return Results.Ok(cached);
+
+            var query = dbContext.CultureStories.Where(s => s.IsPublished).AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(category) && category != "All" && category != "Tất cả")
+            {
+                var catNorm = category.Trim().ToLowerInvariant();
+                query = query.Where(s => s.Category.ToLower() == catNorm);
+            }
+
+            if (!string.IsNullOrWhiteSpace(level) && level != "All" && level != "Tất cả")
+            {
+                var lvlNorm = level.Trim().ToLowerInvariant();
+                query = query.Where(s => s.Level.ToLower() == lvlNorm);
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLowerInvariant();
+                query = query.Where(st =>
+                    st.TitleZh.ToLower().Contains(s) ||
+                    st.TitleVi.ToLower().Contains(s) ||
+                    st.Pinyin.ToLower().Contains(s) ||
+                    (st.SummaryVi != null && st.SummaryVi.ToLower().Contains(s)));
+            }
+
+            var items = await query.OrderByDescending(st => st.CreatedAt).ToListAsync(cancellationToken);
+
+            var dtos = items.Select(st => new CultureStoryListItemDto
+            {
+                Id = st.Id,
+                TitleZh = st.TitleZh,
+                TitleVi = st.TitleVi,
+                Pinyin = st.Pinyin,
+                Slug = st.Slug,
+                Category = st.Category,
+                Level = st.Level,
+                SummaryVi = st.SummaryVi,
+                AudioUrl = st.AudioUrl,
+                ThumbnailUrl = st.ThumbnailUrl,
+                EstimatedMinutes = st.EstimatedMinutes,
+                ViewsCount = st.ViewsCount,
+                IsPublished = st.IsPublished,
+                CreatedAt = st.CreatedAt
+            }).ToList();
+
+            await cacheService.SetAsync(cacheKey, dtos, TimeSpan.FromHours(1), cancellationToken);
+            return Results.Ok(dtos);
+        });
+
+        app.MapGet("/api/hsk/culture-stories/{idOrSlug}", async (
+            string idOrSlug,
+            Backend.Infrastructure.Persistence.AppDbContext dbContext,
+            CancellationToken cancellationToken) =>
+        {
+            CultureStory? story = null;
+            if (int.TryParse(idOrSlug, out int id))
+            {
+                story = await dbContext.CultureStories.FindAsync(new object[] { id }, cancellationToken);
+            }
+            else
+            {
+                var normSlug = idOrSlug.Trim().ToLowerInvariant();
+                story = await dbContext.CultureStories.FirstOrDefaultAsync(s => s.Slug.ToLower() == normSlug, cancellationToken);
+            }
+
+            if (story == null) return Results.NotFound(new { Message = "Không tìm thấy bài đọc văn hóa." });
+
+            story.ViewsCount++;
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            var dto = new CultureStoryDetailDto
+            {
+                Id = story.Id,
+                TitleZh = story.TitleZh,
+                TitleVi = story.TitleVi,
+                Pinyin = story.Pinyin,
+                Slug = story.Slug,
+                Category = story.Category,
+                Level = story.Level,
+                SummaryVi = story.SummaryVi,
+                ContentZh = story.ContentZh,
+                ContentVi = story.ContentVi,
+                ParagraphsJson = story.ParagraphsJson,
+                VocabularyJson = story.VocabularyJson,
+                QuestionsJson = story.QuestionsJson,
+                AudioUrl = story.AudioUrl,
+                ThumbnailUrl = story.ThumbnailUrl,
+                EstimatedMinutes = story.EstimatedMinutes,
+                ViewsCount = story.ViewsCount,
+                IsPublished = story.IsPublished,
+                CreatedAt = story.CreatedAt,
+                UpdatedAt = story.UpdatedAt
+            };
+
+            return Results.Ok(dto);
+        });
+
+        app.MapPost("/api/hsk/culture-stories/{id:int}/quiz", async (
+            int id,
+            CultureStoryQuizSubmissionRequest req,
+            Backend.Infrastructure.Persistence.AppDbContext dbContext,
+            CancellationToken cancellationToken) =>
+        {
+            var story = await dbContext.CultureStories.FindAsync(new object[] { id }, cancellationToken);
+            if (story == null) return Results.NotFound(new { Message = "Không tìm thấy bài đọc văn hóa." });
+
+            var result = new CultureStoryQuizResultDto { StoryId = id };
+
+            try
+            {
+                using var doc = JsonDocument.Parse(story.QuestionsJson);
+                var root = doc.RootElement;
+                if (root.ValueKind == JsonValueKind.Array)
+                {
+                    result.TotalQuestions = root.GetArrayLength();
+                    int correctCount = 0;
+                    for (int i = 0; i < root.GetArrayLength(); i++)
+                    {
+                        var q = root[i];
+                        int correctIndex = q.TryGetProperty("correctIndex", out var cp) ? cp.GetInt32() : 0;
+                        string explanation = q.TryGetProperty("explanation", out var ep) ? ep.GetString() ?? "" : "";
+
+                        result.CorrectIndices.Add(correctIndex);
+                        result.Explanations.Add(explanation);
+
+                        bool isCorrect = (i < req.Answers.Count && req.Answers[i] == correctIndex);
+                        result.AnswerCorrectness.Add(isCorrect);
+                        if (isCorrect) correctCount++;
+                    }
+
+                    result.CorrectCount = correctCount;
+                    result.ScorePercentage = result.TotalQuestions > 0
+                        ? Math.Round((double)correctCount / result.TotalQuestions * 100, 1)
+                        : 100;
+                }
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { Message = "Lỗi chấm điểm bài tập đọc hiểu: " + ex.Message });
+            }
+
+            return Results.Ok(result);
+        });
+
+        app.MapPost("/api/admin/hsk/culture-stories",
+            [Authorize(Roles = "admin")] async (
+                CreateCultureStoryRequest req,
+                Backend.Infrastructure.Persistence.AppDbContext dbContext,
+                ICacheService cacheService,
+                CancellationToken cancellationToken) =>
+            {
+                if (string.IsNullOrWhiteSpace(req.TitleZh) || string.IsNullOrWhiteSpace(req.TitleVi))
+                    return Results.BadRequest(new { Message = "Tiêu đề tiếng Trung và tiếng Việt không được để trống." });
+
+                var pinyin = string.IsNullOrWhiteSpace(req.Pinyin) ? req.TitleZh.Trim() : req.Pinyin.Trim();
+
+                var slug = string.IsNullOrWhiteSpace(req.Slug)
+                    ? Regex.Replace(req.TitleVi.ToLowerInvariant().Trim(), @"[^a-z0-9\s-]", "").Replace(" ", "-")
+                    : req.Slug.Trim();
+
+                if (string.IsNullOrWhiteSpace(slug)) slug = "story-" + Guid.NewGuid().ToString()[..8];
+
+                int suffix = 1;
+                var baseSlug = slug;
+                while (await dbContext.CultureStories.AnyAsync(s => s.Slug == slug, cancellationToken))
+                {
+                    slug = $"{baseSlug}-{suffix++}";
+                }
+
+                var entity = new CultureStory
+                {
+                    TitleZh = req.TitleZh.Trim(),
+                    TitleVi = req.TitleVi.Trim(),
+                    Pinyin = pinyin,
+                    Slug = slug,
+                    Category = string.IsNullOrWhiteSpace(req.Category) ? "chengyu" : req.Category.Trim(),
+                    Level = string.IsNullOrWhiteSpace(req.Level) ? "HSK 3" : req.Level.Trim(),
+                    SummaryVi = req.SummaryVi?.Trim(),
+                    ContentZh = req.ContentZh ?? string.Empty,
+                    ContentVi = req.ContentVi ?? string.Empty,
+                    ParagraphsJson = string.IsNullOrWhiteSpace(req.ParagraphsJson) ? "[]" : req.ParagraphsJson,
+                    VocabularyJson = string.IsNullOrWhiteSpace(req.VocabularyJson) ? "[]" : req.VocabularyJson,
+                    QuestionsJson = string.IsNullOrWhiteSpace(req.QuestionsJson) ? "[]" : req.QuestionsJson,
+                    AudioUrl = req.AudioUrl?.Trim(),
+                    ThumbnailUrl = req.ThumbnailUrl?.Trim(),
+                    EstimatedMinutes = req.EstimatedMinutes ?? 3,
+                    IsPublished = req.IsPublished ?? true,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                dbContext.CultureStories.Add(entity);
+                await dbContext.SaveChangesAsync(cancellationToken);
+
+                await cacheService.RemoveByPrefixAsync("hsk:culture-stories:", cancellationToken);
+
+                return Results.Created($"/api/hsk/culture-stories/{entity.Id}", new { Id = entity.Id, Slug = entity.Slug, Message = "Tạo bài đọc văn hóa thành công!" });
+            })
+            .RequireAuthorization(policy => policy.RequireRole("admin"))
+            .RequireRateLimiting("user-mutation");
+
+        app.MapPut("/api/admin/hsk/culture-stories/{id:int}",
+            [Authorize(Roles = "admin")] async (
+                int id,
+                UpdateCultureStoryRequest req,
+                Backend.Infrastructure.Persistence.AppDbContext dbContext,
+                ICacheService cacheService,
+                CancellationToken cancellationToken) =>
+            {
+                var story = await dbContext.CultureStories.FindAsync(new object[] { id }, cancellationToken);
+                if (story == null) return Results.NotFound(new { Message = "Không tìm thấy bài đọc văn hóa để cập nhật." });
+
+                if (!string.IsNullOrWhiteSpace(req.TitleZh)) story.TitleZh = req.TitleZh.Trim();
+                if (!string.IsNullOrWhiteSpace(req.TitleVi)) story.TitleVi = req.TitleVi.Trim();
+                if (!string.IsNullOrWhiteSpace(req.Pinyin)) story.Pinyin = req.Pinyin.Trim();
+                if (!string.IsNullOrWhiteSpace(req.Category)) story.Category = req.Category.Trim();
+                if (!string.IsNullOrWhiteSpace(req.Level)) story.Level = req.Level.Trim();
+                story.SummaryVi = req.SummaryVi?.Trim();
+                if (req.ContentZh != null) story.ContentZh = req.ContentZh;
+                if (req.ContentVi != null) story.ContentVi = req.ContentVi;
+                if (!string.IsNullOrWhiteSpace(req.ParagraphsJson)) story.ParagraphsJson = req.ParagraphsJson;
+                if (!string.IsNullOrWhiteSpace(req.VocabularyJson)) story.VocabularyJson = req.VocabularyJson;
+                if (!string.IsNullOrWhiteSpace(req.QuestionsJson)) story.QuestionsJson = req.QuestionsJson;
+                story.AudioUrl = req.AudioUrl?.Trim();
+                story.ThumbnailUrl = req.ThumbnailUrl?.Trim();
+                if (req.EstimatedMinutes.HasValue) story.EstimatedMinutes = req.EstimatedMinutes.Value;
+                if (req.IsPublished.HasValue) story.IsPublished = req.IsPublished.Value;
+                story.UpdatedAt = DateTime.UtcNow;
+
+                await dbContext.SaveChangesAsync(cancellationToken);
+                await cacheService.RemoveByPrefixAsync("hsk:culture-stories:", cancellationToken);
+
+                return Results.Ok(new { Id = story.Id, Message = "Cập nhật bài đọc văn hóa thành công!" });
+            })
+            .RequireAuthorization(policy => policy.RequireRole("admin"))
+            .RequireRateLimiting("user-mutation");
+
+        app.MapDelete("/api/admin/hsk/culture-stories/{id:int}",
+            [Authorize(Roles = "admin")] async (
+                int id,
+                Backend.Infrastructure.Persistence.AppDbContext dbContext,
+                ICacheService cacheService,
+                CancellationToken cancellationToken) =>
+            {
+                var story = await dbContext.CultureStories.FindAsync(new object[] { id }, cancellationToken);
+                if (story == null) return Results.NotFound(new { Message = "Không tìm thấy bài đọc văn hóa để xóa." });
+
+                dbContext.CultureStories.Remove(story);
+                await dbContext.SaveChangesAsync(cancellationToken);
+
+                await cacheService.RemoveByPrefixAsync("hsk:culture-stories:", cancellationToken);
+                return Results.Ok(new { Message = "Đã xóa bài đọc văn hóa thành công." });
+            })
+            .RequireAuthorization(policy => policy.RequireRole("admin"))
+            .RequireRateLimiting("user-mutation");
+
+        app.MapPost("/api/admin/hsk/culture-stories/import-json",
+            [Authorize(Roles = "admin")] async (
+                ImportCultureStoryJsonRequest req,
+                Backend.Infrastructure.Persistence.AppDbContext dbContext,
+                ICacheService cacheService,
+                CancellationToken cancellationToken) =>
+            {
+                if (string.IsNullOrWhiteSpace(req.JsonContent))
+                    return Results.BadRequest(new { Message = "Nội dung JSON không được để trống." });
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(req.JsonContent);
+                    if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                        return Results.BadRequest(new { Message = "JSON phải là một mảng danh sách bài đọc văn hóa." });
+
+                    var importedList = new List<CultureStory>();
+                    foreach (var elem in doc.RootElement.EnumerateArray())
+                    {
+                        var titleZh = elem.TryGetProperty("titleZh", out var tzp) ? tzp.GetString() ?? "" : "";
+                        var titleVi = elem.TryGetProperty("titleVi", out var tvp) ? tvp.GetString() ?? "" : "";
+                        var pinyin = elem.TryGetProperty("pinyin", out var pyp) ? pyp.GetString() ?? "" : "";
+                        var slug = elem.TryGetProperty("slug", out var slp) ? slp.GetString() : null;
+                        if (string.IsNullOrWhiteSpace(slug))
+                        {
+                            slug = Regex.Replace(titleVi.ToLowerInvariant().Trim(), @"[^a-z0-9\s-]", "").Replace(" ", "-");
+                            if (string.IsNullOrWhiteSpace(slug)) slug = "story-" + Guid.NewGuid().ToString()[..8];
+                        }
+                        var category = elem.TryGetProperty("category", out var cgp) ? cgp.GetString() ?? "chengyu" : "chengyu";
+                        var level = elem.TryGetProperty("level", out var lvp) ? lvp.GetString() ?? "HSK 3" : "HSK 3";
+                        var summaryVi = elem.TryGetProperty("summaryVi", out var smp) ? smp.GetString() : null;
+                        var contentZh = elem.TryGetProperty("contentZh", out var czp) ? czp.GetString() ?? "" : "";
+                        var contentVi = elem.TryGetProperty("contentVi", out var cvp) ? cvp.GetString() ?? "" : "";
+
+                        string paragraphsJson = "[]";
+                        if (elem.TryGetProperty("paragraphs", out var prp))
+                            paragraphsJson = prp.GetRawText();
+                        else if (elem.TryGetProperty("sentences", out var snp))
+                            paragraphsJson = snp.GetRawText();
+
+                        string vocabJson = "[]";
+                        if (elem.TryGetProperty("vocabulary", out var vcp))
+                            vocabJson = vcp.GetRawText();
+
+                        string questionsJson = "[]";
+                        if (elem.TryGetProperty("questions", out var qsp))
+                            questionsJson = qsp.GetRawText();
+
+                        var audioUrl = elem.TryGetProperty("audioUrl", out var aup) ? aup.GetString() : null;
+                        var thumbUrl = elem.TryGetProperty("thumbnailUrl", out var tmp) ? tmp.GetString() : null;
+                        var estMins = elem.TryGetProperty("estimatedMinutes", out var emp) ? emp.GetInt32() : 3;
+
+                        importedList.Add(new CultureStory
+                        {
+                            TitleZh = titleZh,
+                            TitleVi = titleVi,
+                            Pinyin = pinyin,
+                            Slug = slug,
+                            Category = category,
+                            Level = level,
+                            SummaryVi = summaryVi,
+                            ContentZh = contentZh,
+                            ContentVi = contentVi,
+                            ParagraphsJson = paragraphsJson,
+                            VocabularyJson = vocabJson,
+                            QuestionsJson = questionsJson,
+                            AudioUrl = audioUrl,
+                            ThumbnailUrl = thumbUrl,
+                            EstimatedMinutes = estMins,
+                            IsPublished = true,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+
+                    if (importedList.Count > 0)
+                    {
+                        dbContext.CultureStories.AddRange(importedList);
+                        await dbContext.SaveChangesAsync(cancellationToken);
+                        await cacheService.RemoveByPrefixAsync("hsk:culture-stories:", cancellationToken);
+                    }
+
+                    return Results.Ok(new { Imported = importedList.Count, Message = $"Đã nhập thành công {importedList.Count} bài đọc văn hóa." });
+                }
+                catch (Exception ex)
+                {
+                    return Results.BadRequest(new { Message = "Lỗi xử lý JSON bài đọc văn hóa: " + ex.Message });
+                }
+            })
+            .RequireAuthorization(policy => policy.RequireRole("admin"))
+            .RequireRateLimiting("user-mutation");
+
+        // ─── GenZ Slang & Number Ciphers Endpoints ───
+
+        app.MapGet("/api/hsk/slang", async (
+            string? category,
+            string? search,
+            Backend.Infrastructure.Persistence.AppDbContext dbContext,
+            ICacheService cacheService,
+            CancellationToken cancellationToken) =>
+        {
+            var cacheKey = $"hsk:slang:list:{category?.ToLowerInvariant()}:{search?.ToLowerInvariant()}";
+            var cached = await cacheService.GetAsync<List<SlangVocabDto>>(cacheKey, cancellationToken);
+            if (cached != null) return Results.Ok(cached);
+
+            var query = dbContext.SlangVocabs.Where(s => s.IsActive).AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(category) && category != "All" && category != "Tất cả")
+            {
+                var catNorm = category.Trim().ToLowerInvariant();
+                query = query.Where(s => s.Category.ToLower() == catNorm);
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLowerInvariant();
+                query = query.Where(sv =>
+                    sv.Term.ToLower().Contains(s) ||
+                    sv.Pinyin.ToLower().Contains(s) ||
+                    sv.MeaningVi.ToLower().Contains(s) ||
+                    (sv.Origin != null && sv.Origin.ToLower().Contains(s)));
+            }
+
+            var items = await query
+                .OrderBy(s => s.DisplayOrder)
+                .ThenByDescending(s => s.PopularityScore)
+                .ToListAsync(cancellationToken);
+
+            var dtos = items.Select(s => new SlangVocabDto
+            {
+                Id = s.Id,
+                Term = s.Term,
+                Pinyin = s.Pinyin,
+                MeaningVi = s.MeaningVi,
+                Category = s.Category,
+                Origin = s.Origin,
+                DialogueExampleZh = s.DialogueExampleZh,
+                DialogueExampleVi = s.DialogueExampleVi,
+                AudioUrl = s.AudioUrl,
+                PopularityScore = s.PopularityScore,
+                DisplayOrder = s.DisplayOrder,
+                IsActive = s.IsActive,
+                CreatedAt = s.CreatedAt,
+                UpdatedAt = s.UpdatedAt
+            }).ToList();
+
+            await cacheService.SetAsync(cacheKey, dtos, TimeSpan.FromHours(1), cancellationToken);
+            return Results.Ok(dtos);
+        });
+
+        app.MapGet("/api/hsk/slang/{id:int}", async (
+            int id,
+            Backend.Infrastructure.Persistence.AppDbContext dbContext,
+            CancellationToken cancellationToken) =>
+        {
+            var item = await dbContext.SlangVocabs.FindAsync(new object[] { id }, cancellationToken);
+            if (item == null) return Results.NotFound(new { Message = "Không tìm thấy từ lóng / mật mã." });
+
+            var dto = new SlangVocabDto
+            {
+                Id = item.Id,
+                Term = item.Term,
+                Pinyin = item.Pinyin,
+                MeaningVi = item.MeaningVi,
+                Category = item.Category,
+                Origin = item.Origin,
+                DialogueExampleZh = item.DialogueExampleZh,
+                DialogueExampleVi = item.DialogueExampleVi,
+                AudioUrl = item.AudioUrl,
+                PopularityScore = item.PopularityScore,
+                DisplayOrder = item.DisplayOrder,
+                IsActive = item.IsActive,
+                CreatedAt = item.CreatedAt,
+                UpdatedAt = item.UpdatedAt
+            };
+
+            return Results.Ok(dto);
+        });
+
+        app.MapPost("/api/admin/hsk/slang",
+            [Authorize(Roles = "admin")] async (
+                CreateSlangVocabRequest req,
+                Backend.Infrastructure.Persistence.AppDbContext dbContext,
+                ICacheService cacheService,
+                CancellationToken cancellationToken) =>
+            {
+                if (string.IsNullOrWhiteSpace(req.Term) || string.IsNullOrWhiteSpace(req.MeaningVi))
+                    return Results.BadRequest(new { Message = "Thuật ngữ và ý nghĩa tiếng Việt không được để trống." });
+
+                var term = req.Term.Trim();
+                var exists = await dbContext.SlangVocabs.AnyAsync(s => s.Term.ToLower() == term.ToLower(), cancellationToken);
+                if (exists) return Results.BadRequest(new { Message = "Thuật ngữ / Mật mã này đã tồn tại." });
+
+                var entity = new SlangVocab
+                {
+                    Term = term,
+                    Pinyin = string.IsNullOrWhiteSpace(req.Pinyin) ? term : req.Pinyin.Trim(),
+                    MeaningVi = req.MeaningVi.Trim(),
+                    Category = string.IsNullOrWhiteSpace(req.Category) ? "slang_trend" : req.Category.Trim(),
+                    Origin = req.Origin?.Trim(),
+                    DialogueExampleZh = req.DialogueExampleZh?.Trim(),
+                    DialogueExampleVi = req.DialogueExampleVi?.Trim(),
+                    AudioUrl = req.AudioUrl?.Trim(),
+                    PopularityScore = req.PopularityScore ?? 90,
+                    DisplayOrder = req.DisplayOrder ?? 0,
+                    IsActive = req.IsActive ?? true,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                dbContext.SlangVocabs.Add(entity);
+                await dbContext.SaveChangesAsync(cancellationToken);
+
+                await cacheService.RemoveByPrefixAsync("hsk:slang:", cancellationToken);
+
+                return Results.Created($"/api/hsk/slang/{entity.Id}", new { Id = entity.Id, Message = "Thêm từ lóng / mật mã thành công!" });
+            })
+            .RequireAuthorization(policy => policy.RequireRole("admin"))
+            .RequireRateLimiting("user-mutation");
+
+        app.MapPut("/api/admin/hsk/slang/{id:int}",
+            [Authorize(Roles = "admin")] async (
+                int id,
+                UpdateSlangVocabRequest req,
+                Backend.Infrastructure.Persistence.AppDbContext dbContext,
+                ICacheService cacheService,
+                CancellationToken cancellationToken) =>
+            {
+                var item = await dbContext.SlangVocabs.FindAsync(new object[] { id }, cancellationToken);
+                if (item == null) return Results.NotFound(new { Message = "Không tìm thấy từ lóng / mật mã để cập nhật." });
+
+                if (!string.IsNullOrWhiteSpace(req.Term))
+                {
+                    var term = req.Term.Trim();
+                    if (term.ToLower() != item.Term.ToLower())
+                    {
+                        var exists = await dbContext.SlangVocabs.AnyAsync(s => s.Term.ToLower() == term.ToLower() && s.Id != id, cancellationToken);
+                        if (exists) return Results.BadRequest(new { Message = "Thuật ngữ / Mật mã này đã tồn tại ở bản ghi khác." });
+                    }
+                    item.Term = term;
+                }
+
+                if (!string.IsNullOrWhiteSpace(req.Pinyin)) item.Pinyin = req.Pinyin.Trim();
+                if (!string.IsNullOrWhiteSpace(req.MeaningVi)) item.MeaningVi = req.MeaningVi.Trim();
+                if (!string.IsNullOrWhiteSpace(req.Category)) item.Category = req.Category.Trim();
+                item.Origin = req.Origin?.Trim();
+                item.DialogueExampleZh = req.DialogueExampleZh?.Trim();
+                item.DialogueExampleVi = req.DialogueExampleVi?.Trim();
+                item.AudioUrl = req.AudioUrl?.Trim();
+                if (req.PopularityScore.HasValue) item.PopularityScore = req.PopularityScore.Value;
+                if (req.DisplayOrder.HasValue) item.DisplayOrder = req.DisplayOrder.Value;
+                if (req.IsActive.HasValue) item.IsActive = req.IsActive.Value;
+                item.UpdatedAt = DateTime.UtcNow;
+
+                await dbContext.SaveChangesAsync(cancellationToken);
+                await cacheService.RemoveByPrefixAsync("hsk:slang:", cancellationToken);
+
+                return Results.Ok(new { Id = item.Id, Message = "Cập nhật từ lóng thành công!" });
+            })
+            .RequireAuthorization(policy => policy.RequireRole("admin"))
+            .RequireRateLimiting("user-mutation");
+
+        app.MapDelete("/api/admin/hsk/slang/{id:int}",
+            [Authorize(Roles = "admin")] async (
+                int id,
+                Backend.Infrastructure.Persistence.AppDbContext dbContext,
+                ICacheService cacheService,
+                CancellationToken cancellationToken) =>
+            {
+                var item = await dbContext.SlangVocabs.FindAsync(new object[] { id }, cancellationToken);
+                if (item == null) return Results.NotFound(new { Message = "Không tìm thấy từ lóng để xóa." });
+
+                dbContext.SlangVocabs.Remove(item);
+                await dbContext.SaveChangesAsync(cancellationToken);
+
+                await cacheService.RemoveByPrefixAsync("hsk:slang:", cancellationToken);
+                return Results.Ok(new { Message = "Đã xóa từ lóng thành công." });
+            })
+            .RequireAuthorization(policy => policy.RequireRole("admin"))
+            .RequireRateLimiting("user-mutation");
+
+        app.MapPost("/api/admin/hsk/slang/import-json",
+            [Authorize(Roles = "admin")] async (
+                ImportSlangVocabJsonRequest req,
+                Backend.Infrastructure.Persistence.AppDbContext dbContext,
+                ICacheService cacheService,
+                CancellationToken cancellationToken) =>
+            {
+                if (string.IsNullOrWhiteSpace(req.JsonContent))
+                    return Results.BadRequest(new { Message = "Nội dung JSON không được để trống." });
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(req.JsonContent);
+                    if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                        return Results.BadRequest(new { Message = "JSON phải là một mảng danh sách từ lóng / mật mã." });
+
+                    var importedList = new List<SlangVocab>();
+                    int order = 1;
+                    foreach (var elem in doc.RootElement.EnumerateArray())
+                    {
+                        var term = elem.TryGetProperty("term", out var tmp) ? tmp.GetString() ?? "" : "";
+                        if (string.IsNullOrWhiteSpace(term)) continue;
+
+                        var pinyin = elem.TryGetProperty("pinyin", out var pyp) ? pyp.GetString() ?? "" : "";
+                        var meaningVi = elem.TryGetProperty("meaningVi", out var mvp) ? mvp.GetString() ?? "" : "";
+                        var category = elem.TryGetProperty("category", out var ctp) ? ctp.GetString() ?? "slang_trend" : "slang_trend";
+                        var origin = elem.TryGetProperty("origin", out var ogp) ? ogp.GetString() : null;
+
+                        var dialZh = elem.TryGetProperty("dialogueExampleZh", out var dzp) ? dzp.GetString() : null;
+                        if (string.IsNullOrEmpty(dialZh) && elem.TryGetProperty("dialogueZh", out var dzhp))
+                        {
+                            dialZh = dzhp.GetString();
+                        }
+
+                        var dialVi = elem.TryGetProperty("dialogueExampleVi", out var dvp) ? dvp.GetString() : null;
+                        if (string.IsNullOrEmpty(dialVi) && elem.TryGetProperty("dialogueVi", out var dvip))
+                        {
+                            dialVi = dvip.GetString();
+                        }
+
+                        var audioUrl = elem.TryGetProperty("audioUrl", out var aup) ? aup.GetString() : null;
+                        var popScore = elem.TryGetProperty("popularityScore", out var psp) ? psp.GetInt32() : 90;
+
+                        importedList.Add(new SlangVocab
+                        {
+                            Term = term,
+                            Pinyin = pinyin,
+                            MeaningVi = meaningVi,
+                            Category = category,
+                            Origin = origin,
+                            DialogueExampleZh = dialZh,
+                            DialogueExampleVi = dialVi,
+                            AudioUrl = audioUrl,
+                            PopularityScore = popScore,
+                            DisplayOrder = order++,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+
+                    if (importedList.Count > 0)
+                    {
+                        dbContext.SlangVocabs.AddRange(importedList);
+                        await dbContext.SaveChangesAsync(cancellationToken);
+                        await cacheService.RemoveByPrefixAsync("hsk:slang:", cancellationToken);
+                    }
+
+                    return Results.Ok(new { Imported = importedList.Count, Message = $"Đã nhập thành công {importedList.Count} từ lóng / mật mã." });
+                }
+                catch (Exception ex)
+                {
+                    return Results.BadRequest(new { Message = "Lỗi xử lý JSON từ lóng: " + ex.Message });
+                }
+            })
+            .RequireAuthorization(policy => policy.RequireRole("admin"))
+            .RequireRateLimiting("user-mutation");
 
         return app;
     }

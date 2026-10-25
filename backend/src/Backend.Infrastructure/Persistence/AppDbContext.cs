@@ -33,6 +33,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Notification> Notifications { get; set; }
     public DbSet<UserNotificationRead> UserNotificationReads { get; set; }
 
+    // Exam Hub, Culture & Slang Block
+    public DbSet<ExamSchedule> ExamSchedules { get; set; }
+    public DbSet<CultureStory> CultureStories { get; set; }
+    public DbSet<SlangVocab> SlangVocabs { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -196,6 +201,40 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany()
                 .HasForeignKey(r => r.NotificationId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ExamSchedule
+        modelBuilder.Entity<ExamSchedule>(entity =>
+        {
+            entity.ToTable("exam_schedules");
+            entity.HasIndex(e => new { e.CertificateType, e.ExamDate });
+            entity.HasIndex(e => e.City);
+            entity.HasIndex(e => e.Organizer);
+            entity.HasIndex(e => e.RegistrationDeadline);
+            entity.Property(e => e.FeeVnd).HasPrecision(18, 2);
+        });
+
+        // CultureStory
+        modelBuilder.Entity<CultureStory>(entity =>
+        {
+            entity.ToTable("culture_stories");
+            entity.HasIndex(c => c.Slug).IsUnique();
+            entity.HasIndex(c => c.Category);
+            entity.HasIndex(c => c.Level);
+            entity.HasIndex(c => c.CreatedAt);
+            entity.Property(c => c.ParagraphsJson).HasColumnType("jsonb");
+            entity.Property(c => c.VocabularyJson).HasColumnType("jsonb");
+            entity.Property(c => c.QuestionsJson).HasColumnType("jsonb");
+        });
+
+        // SlangVocab
+        modelBuilder.Entity<SlangVocab>(entity =>
+        {
+            entity.ToTable("slang_vocabs");
+            entity.HasIndex(s => s.Term).IsUnique();
+            entity.HasIndex(s => s.Category);
+            entity.HasIndex(s => s.PopularityScore);
+            entity.HasIndex(s => s.DisplayOrder);
         });
     }
 }

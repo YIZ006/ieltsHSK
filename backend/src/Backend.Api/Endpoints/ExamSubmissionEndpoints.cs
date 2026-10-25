@@ -32,11 +32,11 @@ public static class ExamSubmissionEndpoints
 
             if (userId.HasValue)
             {
-                query = query.Where(c => c.UserId == userId.Value || c.UserIdentifier == userIdentifier);
+                query = query.Where(c => c.UserId == userId.Value);
             }
             else if (!string.IsNullOrWhiteSpace(userIdentifier))
             {
-                query = query.Where(c => c.UserIdentifier == userIdentifier);
+                query = query.Where(c => !c.UserId.HasValue && c.UserIdentifier == userIdentifier);
             }
             else
             {
@@ -72,7 +72,7 @@ public static class ExamSubmissionEndpoints
             var existing = await dbContext.ExamCheckpoints
                 .FirstOrDefaultAsync(c =>
                     (userId.HasValue && c.UserId == userId.Value && c.ExamUrl == request.ExamUrl && c.Skill == request.Skill) ||
-                    (c.UserIdentifier == request.UserIdentifier && c.ExamUrl == request.ExamUrl && c.Skill == request.Skill),
+                    (!userId.HasValue && !c.UserId.HasValue && c.UserIdentifier == request.UserIdentifier && c.ExamUrl == request.ExamUrl && c.Skill == request.Skill),
                     cancellationToken);
 
             if (existing == null)
@@ -120,11 +120,11 @@ public static class ExamSubmissionEndpoints
 
             if (userId.HasValue)
             {
-                query = query.Where(c => c.UserId == userId.Value || c.UserIdentifier == userIdentifier);
+                query = query.Where(c => c.UserId == userId.Value);
             }
             else if (!string.IsNullOrWhiteSpace(userIdentifier))
             {
-                query = query.Where(c => c.UserIdentifier == userIdentifier);
+                query = query.Where(c => !c.UserId.HasValue && c.UserIdentifier == userIdentifier);
             }
             else
             {
@@ -139,7 +139,7 @@ public static class ExamSubmissionEndpoints
             }
 
             return Results.Ok(new { success = true });
-        });
+        }).RequireRateLimiting("user-mutation");
 
         // MOCK TESTS API
 
@@ -309,7 +309,11 @@ public static class ExamSubmissionEndpoints
                 if (!string.IsNullOrWhiteSpace(emailClaim)) userEmail = emailClaim;
             }
 
-            userId ??= request.UserId;
+            // Bảo mật: Thí sinh tự do không được phép mạo danh userId của tài khoản khác
+            if (httpContext.User.Identity?.IsAuthenticated != true)
+            {
+                userId = null;
+            }
 
             // Kiểm tra và liên kết với User trong Database nếu có
             if (userId.HasValue)
@@ -380,6 +384,10 @@ public static class ExamSubmissionEndpoints
                 }
             }
 
+            var isSubjective = string.Equals(request.Skill, "Writing", StringComparison.OrdinalIgnoreCase) 
+                               || string.Equals(request.Skill, "Speaking", StringComparison.OrdinalIgnoreCase);
+            var initialStatus = isSubjective ? "Pending" : (string.IsNullOrWhiteSpace(request.Status) ? "Pending" : request.Status);
+
             var submissionPackage = new
             {
                 StudentName = studentName,
@@ -390,11 +398,11 @@ public static class ExamSubmissionEndpoints
                 ExamTitle = examTitle,
                 ExamUrl = request.ExamUrl,
                 AttemptNumber = attemptNumber,
-                Status = string.IsNullOrWhiteSpace(request.Status) ? "Pending" : request.Status,
-                BandScore = request.BandScore,
+                Status = initialStatus,
+                BandScore = isSubjective ? 0.0 : request.BandScore,
                 CorrectCount = request.CorrectCount,
                 TotalCount = request.TotalCount,
-                TeacherFeedback = request.TeacherFeedback,
+                TeacherFeedback = (string?)null,
                 AudioKey = request.AudioKey,
                 SubmittedAt = DateTimeOffset.UtcNow,
                 Details = parsedDetails
@@ -438,13 +446,13 @@ public static class ExamSubmissionEndpoints
                 ExamUrl = request.ExamUrl,
                 ExamTitle = examTitle,
                 AttemptNumber = attemptNumber,
-                BandScore = request.BandScore,
+                BandScore = isSubjective ? 0.0 : request.BandScore,
                 CorrectCount = request.CorrectCount,
                 TotalCount = request.TotalCount,
                 DetailsJson = request.DetailsJson,
                 R2StorageKey = r2Key,
-                Status = string.IsNullOrWhiteSpace(request.Status) ? "Pending" : request.Status,
-                TeacherFeedback = request.TeacherFeedback,
+                Status = initialStatus,
+                TeacherFeedback = (string?)null,
                 AudioKey = request.AudioKey,
                 SubmittedAt = DateTimeOffset.UtcNow
             };
@@ -463,7 +471,7 @@ public static class ExamSubmissionEndpoints
                 R2StorageKey = submission.R2StorageKey,
                 SubmittedAt = submission.SubmittedAt
             });
-        });
+        }).RequireRateLimiting("submission");
 
         // Endpoint cho User / Client đồng bộ các bài nộp và cập nhật điểm đã được Admin chấm
 
@@ -475,26 +483,46 @@ public static class ExamSubmissionEndpoints
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
-            if (!userId.HasValue && httpContext.User.Identity?.IsAuthenticated == true)
+            var isAdmin = httpContext.User.IsInRole("admin") || httpContext.User.FindFirst("admin_id") != null;
+            int? authenticatedUserId = null;
+            if (httpContext.User.Identity?.IsAuthenticated == true)
             {
                 var subClaim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                                ?? httpContext.User.FindFirst("sub")?.Value;
-                if (int.TryParse(subClaim, out var parsedUid)) userId = parsedUid;
+                if (int.TryParse(subClaim, out var parsedUid)) authenticatedUserId = parsedUid;
             }
 
             var query = dbContext.TestSubmissions.AsNoTracking().AsQueryable();
 
-            if (userId.HasValue && userId.Value > 0)
+            if (isAdmin)
             {
-                query = query.Where(s => s.UserId == userId.Value);
+                if (userId.HasValue && userId.Value > 0)
+                {
+                    query = query.Where(s => s.UserId == userId.Value);
+                }
+                else if (!string.IsNullOrEmpty(sessionId))
+                {
+                    query = query.Where(s => s.SessionId == sessionId);
+                }
+                else if (!string.IsNullOrEmpty(studentName))
+                {
+                    query = query.Where(s => s.StudentName == studentName);
+                }
             }
-            else if (!string.IsNullOrEmpty(sessionId))
+            else if (authenticatedUserId.HasValue)
             {
-                query = query.Where(s => s.SessionId == sessionId);
+                // Người dùng đã đăng nhập CHỈ được xem bài nộp của chính mình
+                query = query.Where(s => s.UserId == authenticatedUserId.Value);
             }
-            else if (!string.IsNullOrEmpty(studentName))
+            else if (!string.IsNullOrWhiteSpace(sessionId))
             {
-                query = query.Where(s => s.StudentName == studentName);
+                // Khách vãng lai CHỈ được xem bài nộp theo sessionId ngẫu nhiên của phiên đó
+                query = query.Where(s => s.SessionId == sessionId.Trim());
+            }
+            else
+            {
+                // Không xác thực và không có sessionId hợp lệ: từ chối để tránh quét dữ liệu người dùng
+                return Results.Ok(new List<object>());
             }
 
             var list = await query
@@ -539,11 +567,13 @@ public static class ExamSubmissionEndpoints
             HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
-            if (!userId.HasValue && httpContext.User.Identity?.IsAuthenticated == true)
+            var isAdmin = httpContext.User.IsInRole("admin") || httpContext.User.FindFirst("admin_id") != null;
+            int? authenticatedUserId = null;
+            if (httpContext.User.Identity?.IsAuthenticated == true)
             {
                 var subClaim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                                ?? httpContext.User.FindFirst("sub")?.Value;
-                if (int.TryParse(subClaim, out var parsedUid)) userId = parsedUid;
+                if (int.TryParse(subClaim, out var parsedUid)) authenticatedUserId = parsedUid;
             }
 
             var query = dbContext.TestSubmissions.AsQueryable();
@@ -553,13 +583,21 @@ public static class ExamSubmissionEndpoints
                 query = query.Where(s => s.Skill.ToLower() == skill.ToLower());
             }
 
-            if (userId.HasValue && userId.Value > 0)
+            if (isAdmin && userId.HasValue && userId.Value > 0)
             {
                 query = query.Where(s => s.UserId == userId.Value);
+            }
+            else if (authenticatedUserId.HasValue)
+            {
+                query = query.Where(s => s.UserId == authenticatedUserId.Value);
             }
             else if (!string.IsNullOrEmpty(sessionId))
             {
                 query = query.Where(s => s.SessionId == sessionId);
+            }
+            else
+            {
+                return Results.NotFound();
             }
 
             if (!string.IsNullOrWhiteSpace(examUrl))
@@ -572,15 +610,6 @@ public static class ExamSubmissionEndpoints
                 .OrderByDescending(s => s.SubmittedAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            if (latest == null && !string.IsNullOrWhiteSpace(examUrl) && !string.IsNullOrWhiteSpace(skill))
-            {
-                var norm = examUrl.Trim().TrimStart('/').Replace('\\', '/').ToLowerInvariant();
-                latest = await dbContext.TestSubmissions
-                    .Where(s => s.Skill.ToLower() == skill.ToLower() && (s.ExamUrl.ToLower().Contains(norm) || norm.Contains(s.ExamUrl.ToLower())))
-                    .OrderByDescending(s => s.SubmittedAt)
-                    .FirstOrDefaultAsync(cancellationToken);
-            }
-
             if (latest == null) return Results.NotFound();
             return Results.Ok(latest);
         });
@@ -589,13 +618,36 @@ public static class ExamSubmissionEndpoints
 
         app.MapGet("/api/test-submissions/{id:int}/r2-json", async (
             int id,
+            string? sessionId,
             Backend.Infrastructure.Persistence.AppDbContext dbContext,
             Backend.Application.Abstractions.IR2StorageService r2Storage,
+            HttpContext httpContext,
             CancellationToken cancellationToken) =>
         {
             var sub = await dbContext.TestSubmissions.FindAsync(new object[] { id }, cancellationToken);
             if (sub == null) return Results.NotFound(new { Message = "Không tìm thấy bài nộp." });
             if (string.IsNullOrEmpty(sub.R2StorageKey)) return Results.NotFound(new { Message = "Bài nộp chưa có file R2 private." });
+
+            // Kiểm tra phân quyền: Admin toàn quyền; User chỉ đọc bài của mình; Khách phải khớp sessionId
+            var isAdmin = httpContext.User.IsInRole("admin") || httpContext.User.FindFirst("admin_id") != null;
+            if (!isAdmin)
+            {
+                int? authenticatedUserId = null;
+                if (httpContext.User.Identity?.IsAuthenticated == true)
+                {
+                    var subClaim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                                   ?? httpContext.User.FindFirst("sub")?.Value;
+                    if (int.TryParse(subClaim, out var parsedUid)) authenticatedUserId = parsedUid;
+                }
+
+                var isOwner = (authenticatedUserId.HasValue && sub.UserId == authenticatedUserId.Value)
+                              || (!string.IsNullOrWhiteSpace(sessionId) && sub.SessionId == sessionId);
+
+                if (!isOwner)
+                {
+                    return Results.Forbid();
+                }
+            }
 
             var stream = await r2Storage.GetPrivateFileStreamAsync(sub.R2StorageKey, cancellationToken);
             if (stream == null) return Results.NotFound(new { Message = "Không thể đọc file từ Cloudflare R2." });
@@ -606,7 +658,7 @@ public static class ExamSubmissionEndpoints
 
         // ─── ADMIN: Quản lý và danh sách bài nộp Test Submissions ───
 
-        app.MapGet("/api/admin/test-submissions", async (
+        app.MapGet("/api/admin/test-submissions", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
             string? skill,
             string? status,
             Backend.Infrastructure.Persistence.AppDbContext dbContext,
@@ -634,7 +686,7 @@ public static class ExamSubmissionEndpoints
 
         // Admin: Lấy chi tiết 1 bài nộp
 
-        app.MapGet("/api/admin/test-submissions/{id:int}", async (
+        app.MapGet("/api/admin/test-submissions/{id:int}", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
             int id,
             Backend.Infrastructure.Persistence.AppDbContext dbContext,
             CancellationToken cancellationToken) =>
@@ -646,7 +698,7 @@ public static class ExamSubmissionEndpoints
 
         // Admin: Cập nhật điểm & nhận xét cho bài nộp
 
-        app.MapPut("/api/admin/test-submissions/{id:int}/grade", async (
+        app.MapPut("/api/admin/test-submissions/{id:int}/grade", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
             int id,
             Backend.Application.DTOs.UpdateSubmissionGradeRequest request,
             Backend.Infrastructure.Persistence.AppDbContext dbContext,

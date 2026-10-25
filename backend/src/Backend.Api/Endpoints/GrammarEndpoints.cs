@@ -127,7 +127,7 @@ public static class GrammarEndpoints
         });
 
 
-        app.MapPost("/api/admin/grammar-structures", async (
+        app.MapPost("/api/admin/grammar-structures", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
             Backend.Application.DTOs.CreateGrammarStructureDto req,
             Backend.Infrastructure.Persistence.AppDbContext dbContext,
             CancellationToken cancellationToken) =>
@@ -165,7 +165,7 @@ public static class GrammarEndpoints
         });
 
 
-        app.MapPut("/api/admin/grammar-structures/{id:int}", async (
+        app.MapPut("/api/admin/grammar-structures/{id:int}", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
             int id,
             Backend.Application.DTOs.UpdateGrammarStructureDto req,
             Backend.Infrastructure.Persistence.AppDbContext dbContext,
@@ -197,7 +197,7 @@ public static class GrammarEndpoints
         });
 
 
-        app.MapDelete("/api/admin/grammar-structures/{id:int}", async (
+        app.MapDelete("/api/admin/grammar-structures/{id:int}", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
             int id,
             Backend.Infrastructure.Persistence.AppDbContext dbContext,
             CancellationToken cancellationToken) =>
@@ -211,7 +211,7 @@ public static class GrammarEndpoints
         });
 
 
-        app.MapPost("/api/admin/grammar-structures/bulk-delete", async (
+        app.MapPost("/api/admin/grammar-structures/bulk-delete", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
             Backend.Application.DTOs.GrammarBulkDeleteDto req,
             Backend.Infrastructure.Persistence.AppDbContext dbContext,
             CancellationToken cancellationToken) =>
@@ -233,7 +233,7 @@ public static class GrammarEndpoints
 
         // ─── Bulk Import Multiple Excel files (.xlsx) ───
 
-        app.MapPost("/api/admin/grammar-structures/import-multiple", async (
+        app.MapPost("/api/admin/grammar-structures/import-multiple", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
             Microsoft.AspNetCore.Http.IFormFileCollection files,
             Backend.Infrastructure.Persistence.AppDbContext dbContext,
             HttpContext httpContext,
@@ -508,7 +508,7 @@ public static class GrammarEndpoints
 
         // ─── Export All Grammar Structures to Excel (.xlsx) ───
 
-        app.MapGet("/api/admin/grammar-structures/export", async (
+        app.MapGet("/api/admin/grammar-structures/export", [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] async (
             Backend.Infrastructure.Persistence.AppDbContext dbContext,
             CancellationToken cancellationToken) =>
         {
