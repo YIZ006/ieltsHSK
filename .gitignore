@@ -2,6 +2,9 @@ dist/
 **/bin/
 **/obj/
 appsettings.Development.json
+appsettings.Production.json
+**/appsettings.Production.json
+**/appsettings.Development.json
 /fix_json.js
 /fix_json.py
 /output.json
@@ -17,3 +20,21 @@ sql/
 # Large audio folders - not committed to git (copy locally from source)
 frontend/src/Frontend.App/wwwroot/sample-data/audio/vol2/
 frontend/src/Frontend.App/wwwroot/sample-data/audio/vol3/
+
+# Build artifacts & publication folders containing untracked secrets
+backend_publish_bin/
+frontend_dist/
+backend_dist/
+tools/
+scripts/
+
+.secrets-config.json
+
+# Cloudflare & IDE / Agent caches
+.wrangler/
+.vs/
+.claude/
+.agents/teamwork/
+
+# Technical documentation & reports (Managed centrally via NotebookLM MCP)
+docs/
