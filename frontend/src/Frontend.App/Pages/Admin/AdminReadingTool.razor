@@ -1,9 +1,9 @@
 @page "/portal-hub/reading-tool"
-@page "/admin/reading-tool"
 @using Frontend.App.Models
 @using System.Text.Json
 @using Microsoft.AspNetCore.Authorization
-@attribute [Authorize]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")]
+@layout Frontend.App.Layout.AdminLayout
 
 <PageTitle>Admin - Reading JSON Generator</PageTitle>
 

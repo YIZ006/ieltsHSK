@@ -328,6 +328,166 @@ public sealed class OfflineStorageService : IAsyncDisposable
         }
     }
 
+    public async Task<bool> IsResourceDownloadedAsync(string key, string? mediaUrl = null)
+    {
+        try
+        {
+            return await _js.InvokeAsync<bool>("OfflineDB.isResourceDownloaded", key, mediaUrl);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task<string> GetStorageEstimateAsync()
+    {
+        try
+        {
+            return await _js.InvokeAsync<string>("OfflineDB.getStorageEstimate");
+        }
+        catch
+        {
+            return "N/A";
+        }
+    }
+
+    public async Task<bool> SaveExamByUrlAsync(string dataUrl, ExamData exam)
+    {
+        if (string.IsNullOrWhiteSpace(dataUrl) || exam == null) return false;
+        try
+        {
+            var json = JsonSerializer.Serialize(exam);
+            var package = new OfflineExamPackage
+            {
+                Title = exam.Title,
+                CollectionName = "Online",
+                ReadingJson = json,
+                ListeningJson = json,
+                ListeningAudioUrl = exam.AudioUrl
+            };
+            return await _js.InvokeAsync<bool>("OfflineDB.saveExamData", dataUrl, package);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task<ExamData?> GetOfflineExamModelByUrlAsync(string dataUrl)
+    {
+        if (string.IsNullOrWhiteSpace(dataUrl)) return null;
+        try
+        {
+            var pkg = await _js.InvokeAsync<OfflineExamPackage?>("OfflineDB.getExamData", dataUrl);
+            if (pkg == null) return null;
+            var raw = pkg.ReadingJson ?? pkg.ListeningJson;
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            return JsonSerializer.Deserialize<ExamData>(raw, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<bool> DownloadGenericExamAsync(string key, string title, string? examUrl, string? answerUrl = null, string? audioUrl = null, Action<string, int>? onProgress = null)
+    {
+        try
+        {
+            var package = new OfflineExamPackage
+            {
+                Title = title,
+                CollectionName = "OfflinePackage",
+                ListeningAudioUrl = audioUrl
+            };
+
+            onProgress?.Invoke("Đang tải dữ liệu bài học...", 15);
+
+            if (!string.IsNullOrWhiteSpace(examUrl))
+            {
+                try
+                {
+                    var json = await _http.GetStringAsync(examUrl);
+                    package.ReadingJson = json;
+                    package.ListeningJson = json;
+
+                    if (string.IsNullOrWhiteSpace(audioUrl) && !string.IsNullOrWhiteSpace(json))
+                    {
+                        using var doc = JsonDocument.Parse(json);
+                        if (doc.RootElement.TryGetProperty("AudioUrl", out var aProp) ||
+                            doc.RootElement.TryGetProperty("audioUrl", out aProp))
+                        {
+                            audioUrl = aProp.GetString();
+                            package.ListeningAudioUrl = audioUrl;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[OfflineStorageService] Download exam error: {ex.Message}");
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(answerUrl))
+            {
+                onProgress?.Invoke("Đang tải đáp án bài thi...", 40);
+                try
+                {
+                    var ansJson = await _http.GetStringAsync(answerUrl);
+                    package.ReadingAnswerJson = ansJson;
+                    package.ListeningAnswerJson = ansJson;
+                }
+                catch { }
+            }
+
+            if (!string.IsNullOrWhiteSpace(audioUrl))
+            {
+                onProgress?.Invoke("Đang tải âm thanh bài nghe từ R2...", 65);
+                try
+                {
+                    await _js.InvokeVoidAsync("OfflineDB.cacheMedia", audioUrl);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[OfflineStorageService] Cache media error: {ex.Message}");
+                }
+            }
+
+            onProgress?.Invoke("Đang lưu trữ dữ liệu vào máy...", 90);
+            await _js.InvokeVoidAsync("OfflineDB.saveExamData", key, package);
+
+            onProgress?.Invoke("Hoàn tất tải offline!", 100);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[OfflineStorageService] DownloadGenericExamAsync error: {ex.Message}");
+            return false;
+        }
+    }
+
+    public async Task<bool> DeleteGenericResourceAsync(string key, string? audioUrl = null)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(audioUrl))
+            {
+                await _js.InvokeVoidAsync("OfflineDB.removeMedia", audioUrl);
+            }
+            await _js.InvokeVoidAsync("OfflineDB.removeExamData", key);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[OfflineStorageService] DeleteGenericResourceAsync error: {ex.Message}");
+            return false;
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         _dotNetRef?.Dispose();

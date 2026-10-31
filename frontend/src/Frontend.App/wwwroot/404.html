@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="secret-hacker-key" content="hsk-master-2026" />
+    <title>Frontend.App</title>
+    <base href="/" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Orbitron:wght@400;600;700;800;900&family=Rajdhani:wght@500;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/app.css?v=20260929_13" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="color-scheme" content="light dark" id="meta-color-scheme" />
+    <meta name="theme-color" content="#ffffff" id="meta-theme-color" />
+    <link rel="stylesheet" href="css/quantum-cipher.css?v=20260905_02" />
+    <link href="Frontend.App.styles.css?v=20260929_13" rel="stylesheet" />
+    <script>
+        (function () {
+            try {
+                var p = (window.location.pathname || '').toLowerCase();
+                var isHome = (p === '/' || p === '' || p === '/index.html');
+                if (!isHome) {
+                    document.documentElement.classList.add('not-home');
+                }
+                var saved = localStorage.getItem('app_theme');
+                if (!saved) {
+                    saved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+                var isDark = (saved === 'dark');
+                var theme = isDark ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-bs-theme', theme);
+                document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+
+                var metaCs = document.getElementById('meta-color-scheme') || document.querySelector('meta[name="color-scheme"]');
+                if (metaCs) metaCs.setAttribute('content', isDark ? 'dark' : 'only light');
+
+                var metaTc = document.getElementById('meta-theme-color') || document.querySelector('meta[name="theme-color"]');
+                if (metaTc) metaTc.setAttribute('content', isDark ? '#090d16' : '#ffffff');
+            } catch (e) { }
+        })();
+    </script>
+    <style>
+        /* Khi ở các trang học tập / con: triệt tiêu hoàn toàn màn hình chờ con sói để mở trang ngay lập tức */
+        html.not-home #app-loader {
+            display: none !important;
+        }
+        html:not(.not-home) .fast-top-bar {
+            display: none !important;
+        }
+        .fast-top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            width: 100%;
+            background: linear-gradient(90deg, #38bdf8, #818cf8, #ec4899);
+            z-index: 999999;
+            pointer-events: none;
+            animation: fastTopBarPulse 0.8s ease-in-out infinite alternate;
+        }
+        @keyframes fastTopBarPulse {
+            from { opacity: 0.5; }
+            to { opacity: 1; }
+        }
+    </style>
+    <script>
+        window.applyDirectTheme = function (theme) {
+            try {
+                var isDark = (theme === 'dark' || theme === true);
+                var targetTheme = isDark ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', targetTheme);
+                document.documentElement.setAttribute('data-bs-theme', targetTheme);
+                document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+                localStorage.setItem('app_theme', targetTheme);
+
+                var metaCs = document.getElementById('meta-color-scheme') || document.querySelector('meta[name="color-scheme"]');
+                if (metaCs) metaCs.setAttribute('content', isDark ? 'dark' : 'only light');
+
+                var metaTc = document.getElementById('meta-theme-color') || document.querySelector('meta[name="theme-color"]');
+                if (metaTc) metaTc.setAttribute('content', isDark ? '#090d16' : '#ffffff');
+            } catch (e) { }
+        };
+
+        window.setAppTheme = function (theme) {
+            window.applyDirectTheme(theme);
+        };
+        window.getAppTheme = function () {
+            try {
+                return document.documentElement.getAttribute('data-theme') || localStorage.getItem('app_theme') || 'light';
+            } catch (e) {
+                return 'light';
+            }
+        };
+
+        // Thông báo console.log có CSS khi truy cập ở chế độ khách (chưa đăng nhập)
+        window.showGuestConsoleWarning = function () {
+            try {
+                var token = localStorage.getItem('authToken');
+                if (!token) {
+                    console.log(
+                        '%c  CHẾ ĐỘ TRẢI NGHIỆM KHÁCH (CHƯA ĐĂNG NHẬP)  %c\n\n' +
+                        '%c⚠ CẢNH BÁO LƯU TRỮ DỮ LIỆU:\n' +
+                        '• Bạn hiện đang truy cập ở chế độ CHƯA ĐĂNG NHẬP.\n' +
+                        '• Toàn bộ kết quả bài thi, lịch sử làm bài và tiến độ học tập CHỈ ĐƯỢC LƯU TẠM TRÊN BỘ NHỚ TRÌNH DUYỆT (LocalStorage/IndexedDB).\n' +
+                        '• Dữ liệu này SẼ KHÔNG ĐƯỢC LƯU HOẶC ĐỒNG BỘ Ở CHẾ ĐỘ ONLINE.\n' +
+                        '• Khi bạn đổi trình duyệt, dọn dẹp lịch sử/cache hoặc đổi máy tính, dữ liệu sẽ bị mất.\n\n' +
+                        '👉 Hãy ĐĂNG NHẬP / ĐĂNG KÝ để kích hoạt lưu trữ đám mây vĩnh viễn và đồng bộ đa thiết bị!\n',
+                        'background: linear-gradient(135deg, #ef4444 0%, #f97316 100%); color: #ffffff; font-size: 13px; font-weight: 800; padding: 7px 16px; border-radius: 6px; text-shadow: 0 1px 2px rgba(0,0,0,0.5); letter-spacing: 0.5px;',
+                        '',
+                        'color: #fbbf24; font-size: 12px; font-weight: 600; line-height: 1.8; font-family: "Segoe UI", system-ui, -apple-system, sans-serif;'
+                    );
+                }
+            } catch (e) { }
+        };
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', window.showGuestConsoleWarning);
+        } else {
+            window.showGuestConsoleWarning();
+        }
+
+        window.toggleAppThemeWithRipple = function (themeOrDark, clientX, clientY) {
+            try {
+                var isDark = typeof themeOrDark === 'boolean' ? themeOrDark : (themeOrDark === 'dark');
+                var targetTheme = isDark ? 'dark' : 'light';
+                var currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+                if (targetTheme === currentTheme) return;
+
+                var x = (typeof clientX === 'number' && clientX > 0) ? clientX : (window.innerWidth - 80);
+                var y = (typeof clientY === 'number' && clientY > 0) ? clientY : 30;
+                var endRadius = Math.hypot(
+                    Math.max(x, window.innerWidth - x),
+                    Math.max(y, window.innerHeight - y)
+                );
+
+                var applyTheme = function () {
+                    window.applyDirectTheme(targetTheme);
+                };
+
+                if (document.startViewTransition) {
+                    var transition = document.startViewTransition(function () {
+                        applyTheme();
+                    });
+                    transition.ready.then(function () {
+                        document.documentElement.animate(
+                            {
+                                clipPath: [
+                                    'circle(0px at ' + x + 'px ' + y + 'px)',
+                                    'circle(' + endRadius + 'px at ' + x + 'px ' + y + 'px)'
+                                ]
+                            },
+                            {
+                                duration: 550,
+                                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                                pseudoElement: '::view-transition-new(root)'
+                            }
+                        );
+                    }).catch(function () {
+                        applyTheme();
+                    });
+                } else {
+                    var ripple = document.createElement('div');
+                    ripple.className = 'theme-transition-radial-ripple';
+                    ripple.style.cssText = 'position:fixed;left:' + x + 'px;top:' + y + 'px;width:0px;height:0px;border-radius:50%;background-color:' + (isDark ? '#090d16' : '#ffffff') + ';z-index:999999;pointer-events:none;transform:translate(-50%,-50%);transition:width 0.55s cubic-bezier(0.22,1,0.36,1),height 0.55s cubic-bezier(0.22,1,0.36,1),opacity 0.2s ease 0.45s;';
+                    document.body.appendChild(ripple);
+                    requestAnimationFrame(function () {
+                        var d = endRadius * 2.2;
+                        ripple.style.width = d + 'px';
+                        ripple.style.height = d + 'px';
+                    });
+                    setTimeout(function () {
+                        applyTheme();
+                        ripple.style.opacity = '0';
+                        setTimeout(function () {
+                            ripple.remove();
+                        }, 250);
+                    }, 350);
+                }
+            } catch (e) {
+                window.applyDirectTheme(themeOrDark ? 'dark' : 'light');
+            }
+        };
+    </script>
+</head>
+
+<body>
+    <div id="app"></div>
+    <div id="fast-top-bar" class="fast-top-bar"></div>
+
+    <!-- PET LOADER OVERLAY (Khởi động ứng dụng cùng Pet Runner trên thanh tiến trình) -->
+    <div id="app-loader" class="pet-loader">
+        <div class="pet-track">
+            <div class="pet-fill" id="pet-fill"></div>
+            <div class="pet-runner-wrapper" id="pet-runner-wrapper">
+                <div class="pet-runner" id="pet-runner"></div>
+                <div class="pet-shadow"></div>
+            </div>
+        </div>
+        <div class="pet-percent" id="pet-percent">0%</div>
+    </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="js/googleAuth.js"></script>
+    <!-- Mascot Manager Early Stub & Auto-Loader: Chống lỗi undefined khi script đang tải hoặc trễ mạng -->
+    <script>
+        (function () {
+            if (!window.MascotManager) {
+                var _q = [];
+                function _loadCore() {
+                    if (document.querySelector('script[data-mascot-core]')) return;
+                    var s = document.createElement('script');
+                    s.src = 'js/mascot-interop.js?v=20260917_05';
+                    s.setAttribute('data-mascot-core', 'true');
+                    document.head.appendChild(s);
+                }
+                window.MascotManager = {
+                    _isStub: true,
+                    init: function (el) { _q.push(['init', el]); _loadCore(); },
+                    boop: function () { _q.push(['boop']); _loadCore(); },
+                    setCharacter: function (c) { _q.push(['setCharacter', c]); _loadCore(); },
+                    setSize: function (s) { _q.push(['setSize', s]); _loadCore(); },
+                    toggleMinimize: function () { _q.push(['toggleMinimize']); _loadCore(); },
+                    toggleBubble: function () { _q.push(['toggleBubble']); _loadCore(); },
+                    toggleSound: function () { _q.push(['toggleSound']); _loadCore(); },
+                    gameSay: function (t, a, b, c) { _q.push(['gameSay', t, a, b, c]); _loadCore(); },
+                    setGameMode: function (m, g) { _q.push(['setGameMode', m, g]); _loadCore(); },
+                    onPageNavigated: function (u) { _q.push(['onPageNavigated', u]); _loadCore(); },
+                    getState: function () {
+                        return { character: 'wolf', size: 104, minimized: false, showBubble: true, soundEnabled: true, isGameMode: false };
+                    },
+                    _flush: function (real) {
+                        _q.forEach(function (call) {
+                            try {
+                                if (typeof real[call[0]] === 'function') {
+                                    real[call[0]].apply(real, call.slice(1));
+                                }
+                            } catch (e) { }
+                        });
+                        _q = [];
+                    }
+                };
+            }
+        })();
+    </script>
+    <script data-mascot-core="true" src="js/mascot-interop.js?v=20260917_02"></script>
+    <script src="_framework/blazor.webassembly.js" autostart="false"></script>
+    <script>
+        // Điều phối khởi động nhanh: Chỉ hiển thị con sói chạy ở trang chủ ("/"),
+        // Trên các trang học tập (IELTS, HSK...): bỏ hoàn toàn màn hình chờ, chỉ hiện thanh top-bar mảnh và mở trang tức thì (0ms delay).
+        (function () {
+            var path = (window.location.pathname || '').toLowerCase();
+            var isHome = (path === '/' || path === '' || path === '/index.html');
+
+            var loader = document.getElementById('app-loader');
+            var topBar = document.getElementById('fast-top-bar');
+
+            if (!isHome && loader) {
+                loader.style.display = 'none';
+            }
+
+            var fill = document.getElementById('pet-fill');
+            var runnerWrapper = document.getElementById('pet-runner-wrapper');
+            var runner = document.getElementById('pet-runner');
+            var percentText = document.getElementById('pet-percent');
+
+            var currentProgress = 0;
+            var targetProgress = isHome ? 30 : 60;
+            var blazorReady = false;
+            var isJumping = false;
+            var isComplete = false;
+
+            function updateUI(p) {
+                if (!isHome) return;
+                var rounded = Math.min(100, Math.round(p));
+                if (fill) fill.style.width = p + '%';
+                if (runnerWrapper) runnerWrapper.style.left = p + '%';
+                if (percentText) percentText.textContent = rounded + '%';
+
+                if (p >= 75 && !isJumping && runner) {
+                    isJumping = true;
+                    runner.classList.add('jumping');
+                } else if (p < 75 && isJumping && runner) {
+                    isJumping = false;
+                    runner.classList.remove('jumping');
+                }
+            }
+
+            function finishLoader() {
+                if (topBar) {
+                    topBar.style.display = 'none';
+                    topBar.remove();
+                }
+                if (loader) {
+                    if (isHome) {
+                        loader.classList.add('fade-out');
+                        setTimeout(function () {
+                            loader.style.display = 'none';
+                            loader.remove();
+                        }, 180);
+                    } else {
+                        loader.style.display = 'none';
+                        loader.remove();
+                    }
+                }
+            }
+
+            function tick() {
+                if (!isComplete && isHome) {
+                    var diff = targetProgress - currentProgress;
+                    if (diff > 0) {
+                        var step = Math.max(1.0, diff * 0.25);
+                        currentProgress = Math.min(targetProgress, currentProgress + step);
+                        updateUI(currentProgress);
+                    }
+                    if (currentProgress < 100) {
+                        requestAnimationFrame(tick);
+                    }
+                }
+            }
+
+            if (isHome) {
+                requestAnimationFrame(tick);
+                setTimeout(function () { if (!blazorReady) targetProgress = 70; }, 200);
+                setTimeout(function () { if (!blazorReady) targetProgress = 90; }, 500);
+            }
+
+            function startBlazor() {
+                if (window.Blazor && !window._blazorStarted) {
+                    window._blazorStarted = true;
+                    Blazor.start().then(function () {
+                        blazorReady = true;
+                        isComplete = true;
+                        if (isHome) {
+                            targetProgress = 100;
+                            updateUI(100);
+                        }
+                        finishLoader();
+                    }).catch(function (err) {
+                        console.error("Blazor boot error:", err);
+                        var errUi = document.getElementById('blazor-error-ui');
+                        if (errUi) {
+                            errUi.style.display = 'block';
+                            errUi.innerHTML = '<strong>Không thể khởi chạy:</strong> ' + (err && err.message ? err.message : err) + ' <a href="." class="reload">Tải lại</a>';
+                        }
+                        blazorReady = true;
+                        isComplete = true;
+                        finishLoader();
+                    });
+                }
+            }
+
+            if (window.Blazor) {
+                startBlazor();
+            } else {
+                window.addEventListener('DOMContentLoaded', startBlazor);
+                window.addEventListener('load', startBlazor);
+            }
+        })();
+    </script>
+    <script>
+        // Scroll to Element Helper
+        window.scrollToElementId = function (elementId) {
+            try {
+                var element = document.getElementById(elementId);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            } catch (err) {
+                console.error("Error scrolling:", err);
+            }
+        };
+
+        // Bind Listening Inputs
+        window.bindListeningInputs = function (dotNetHelper) {
+            document.querySelectorAll('.ielts-input').forEach(input => {
+                if (!input.dataset.bound) {
+                    input.dataset.bound = "true";
+                    const handler = function (e) {
+                        const qId = parseInt(e.target.dataset.q);
+                        const val = e.target.value;
+                        if (qId) {
+                            dotNetHelper.invokeMethodAsync('OnHtmlInputChange', qId, val);
+                        }
+                    };
+                    input.addEventListener('input', handler);
+                    input.addEventListener('change', handler);
+                }
+            });
+        };
+
+        window.restoreListeningInputs = function (answers) {
+            if (!answers) return;
+            for (const [qId, val] of Object.entries(answers)) {
+                const input = document.getElementById('q-' + qId) || document.querySelector(`[data-q="${qId}"]`);
+                if (input && input.value !== val) {
+                    input.value = val;
+                }
+            }
+        };
+    </script>
+    <!-- <script src="js/guard.js"></script> -->
+    <script src="js/youtubePlayer.js"></script>
+    <script src="js/exam-session.js"></script>
+    <script src="js/tab-visibility.js"></script>
+    <script src="js/speaking-interop.js"></script>
+    <script src="js/speak-along-interop.js"></script>
+    <script src="js/home-tilt.js?v=20260928_01"></script>
+    <script src="js/droplet-scrollbar.js?v=20261005_04"></script>
+    <script src="js/home-doc-nav.js?v=20261005_01"></script>
+    <script>
+        window.scrollBuilderToTop = () => {
+            const el = document.getElementById('builder-main');
+            if (el) el.scrollTop = 0;
+            else window.scrollTo(0, 0);
+        };
+
+        // 3D Global Tilt & Mouse Tracking matching user React code
+        window.initHomeGlobalTilt = function (containerId) {
+            const container = document.getElementById(containerId) || document.querySelector('.landing-container');
+            if (!container) return;
+
+            if (window._homeMouseMoveHandler) {
+                window.removeEventListener('mousemove', window._homeMouseMoveHandler);
+            }
+
+            window._homeMouseMoveHandler = function (e) {
+                const { innerWidth, innerHeight } = window;
+                if (!innerWidth || !innerHeight) return;
+                const normX = (e.clientX - innerWidth / 2) / (innerWidth / 2);
+                const normY = (e.clientY - innerHeight / 2) / (innerHeight / 2);
+
+                // Clamped 3D tilt angles between -15deg and 15deg
+                const rotX = Math.max(Math.min(-normY * 15, 15), -15);
+                const rotY = Math.max(Math.min(normX * 15, 15), -15);
+
+                container.style.setProperty('--rot-x', `${rotX.toFixed(2)}deg`);
+                container.style.setProperty('--rot-y', `${rotY.toFixed(2)}deg`);
+                container.style.setProperty('--mouse-x', `${(normX * 36).toFixed(2)}px`);
+            };
+
+            window.addEventListener('mousemove', window._homeMouseMoveHandler, { passive: true });
+        };
+
+        window.disposeHomeGlobalTilt = function () {
+            if (window._homeMouseMoveHandler) {
+                window.removeEventListener('mousemove', window._homeMouseMoveHandler);
+                window._homeMouseMoveHandler = null;
+            }
+        };
+
+        // Web Speech API for Story Reading and Vocabulary pronunciation
+        window.speakText = function (text, lang = 'en-US', rate = 0.95) {
+            if (!('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = lang;
+            utterance.rate = rate;
+            window.speechSynthesis.speak(utterance);
+        };
+        window.speakSentenceWithCallback = function (text, lang, rate, dotNetRef, sentenceIndex) {
+            if (!('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = lang || 'en-US';
+            utterance.rate = rate || 0.95;
+            if (dotNetRef) {
+                utterance.onend = function () {
+                    dotNetRef.invokeMethodAsync('OnSentenceEnded', sentenceIndex);
+                };
+                utterance.onerror = function () {
+                    dotNetRef.invokeMethodAsync('OnSentenceEnded', sentenceIndex);
+                };
+            }
+            window.speechSynthesis.speak(utterance);
+        };
+        window.stopSpeakText = function () {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+        };
+        window.initReadingProgressBar = function (dotNetRef) {
+            const onScroll = function () {
+                const total = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+                if (total <= 0) return;
+                const progress = Math.min(100, Math.max(0, Math.round((window.scrollY / total) * 100)));
+                dotNetRef.invokeMethodAsync('UpdateReadingProgress', progress);
+            };
+            window.addEventListener('scroll', onScroll, { passive: true });
+        };
+        window.locateAndHighlightParagraph = function (paraIndex) {
+            const el = document.getElementById('para-' + paraIndex);
+            if (!el) return;
+            const pane = document.querySelector('.ielts-passage-pane');
+            if (pane) {
+                const paneRect = pane.getBoundingClientRect();
+                const elRect = el.getBoundingClientRect();
+                const scrollTop = pane.scrollTop + (elRect.top - paneRect.top) - (pane.clientHeight / 2) + (el.clientHeight / 2);
+                pane.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' });
+            } else {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            el.classList.remove('passage-pulse-highlight');
+            void el.offsetWidth;
+            el.classList.add('passage-pulse-highlight');
+            setTimeout(function () {
+                el.classList.remove('passage-pulse-highlight');
+            }, 3000);
+        };
+
+        // Auto-focus game input (dùng cho HskVocabShooter popup)
+        // Gọi từ OnAfterRenderAsync sau khi <input> đã được render vào DOM
+        window.focusGameInput = function (inputElement) {
+            if (!inputElement) return;
+            try {
+                // .focus() để nhận keyboard trên desktop
+                inputElement.focus({ preventScroll: true });
+                // Đặt cursor vào cuối chuỗi (nếu có text)
+                const len = inputElement.value ? inputElement.value.length : 0;
+                inputElement.setSelectionRange(len, len);
+            } catch (e) {
+                // Fallback nếu element ref không hợp lệ
+                console.warn('[focusGameInput] focus failed:', e);
+            }
+        };
+
+        // ─── Quantum Briefcase Animation & VFX Helpers ───
+        window.initQuantumBriefcase = function () {
+            const coreImg = document.getElementById('quantumCoreSpark');
+            if (!coreImg || window._quantumCoreInterval) return;
+            let frame = 1;
+            window._quantumCoreInterval = setInterval(function () {
+                const el = document.getElementById('quantumCoreSpark');
+                if (!el) {
+                    clearInterval(window._quantumCoreInterval);
+                    window._quantumCoreInterval = null;
+                    return;
+                }
+                frame = (frame % 6) + 1;
+                el.src = 'images/games/quantum-cipher/set/set' + frame + '_trans.png';
+            }, 85);
+        };
+
+        window.triggerBatteryZap = function (rodIndex) {
+            try { window.WordleSfx && window.WordleSfx.electricZap && window.WordleSfx.electricZap(); } catch(e){}
+            const burst = document.getElementById('quantumSparkBurst');
+            const img = document.getElementById('quantumSparkBurstImg');
+            const tray = document.getElementById('quantumBatteryTray');
+            if (!burst || !img || !tray) return;
+            const rods = tray.querySelectorAll('.power-rod');
+            if (!rods || !rods[rodIndex]) return;
+            const rect = rods[rodIndex].getBoundingClientRect();
+            const stage = document.getElementById('quantumStageBox');
+            if (!stage) return;
+            const stageRect = stage.getBoundingClientRect();
+            const leftPct = ((rect.left + rect.width / 2 - stageRect.left) / stageRect.width) * 100;
+            const topPct = ((rect.top + rect.height / 2 - stageRect.top) / stageRect.height) * 100;
+            burst.style.left = leftPct + '%';
+            burst.style.top = topPct + '%';
+            burst.style.display = 'block';
+            let frame = 1;
+            const iv = setInterval(function () {
+                frame++;
+                if (frame <= 6) {
+                    img.src = 'images/games/quantum-cipher/setgiat/setgiat' + frame + '_trans.png';
+                } else {
+                    clearInterval(iv);
+                    burst.style.display = 'none';
+                }
+            }, 45);
+        };
+
+        // ─── Quantum Briefcase Interactive Spotlight Tutorial & Typewriter System ───
+        window.QuantumTutorial = (function () {
+            let _dotNetRef = null;
+            let currentTutorialStep = 0;
+            let typewriterTimer = null;
+            let isTyping = false;
+            let currentFullText = '';
+            let _keyHandlerBound = false;
+
+            const TUTORIAL_STEPS = [
+                {
+                    targetSelector: '.phone-dock-left',
+                    title: '1. MẬT THƯ TÌNH BÁO // DOSSIER',
+                    text: 'Điện thoại tác chiến cánh trái hiển thị dữ liệu mật: cấp độ từ, nghĩa tiếng Việt và ngữ cảnh câu ví dụ. Dùng các nút bên dưới để [Mở chữ đầu], [Phát âm], hoặc [Đổi từ mới].',
+                    cardPosition: 'right-center',
+                    fallbackBox: { left: '3.5%', top: '12%', width: '25%', height: '80%' }
+                },
+                {
+                    targetSelector: '.plasma-reactor-spark, #hudTimer',
+                    title: '2. ĐẾM NGƯỢC & LÕI PLASMA',
+                    text: 'Lõi phản ứng plasma và đồng hồ đếm ngược 120 giây. Khi còn 30s bom sẽ hú còi báo động to; dưới 20s và 10s nhịp đếm sẽ dồn dập khẩn cấp. Hãy gỡ bom trước khi đồng hồ về 00:00!',
+                    cardPosition: 'bottom-center',
+                    fallbackBox: { left: '29%', top: '18%', width: '42%', height: '36%' }
+                },
+                {
+                    targetSelector: '#rowLockedSlots, #plateRow2',
+                    title: '3. ĐĨA CHỐT & ĐĨA NHẬP MẬT MÃ',
+                    text: 'Hàng 1 [CHỐT]: Cố định màu xanh các chữ cái bạn đã giải mã đúng vị trí. Hàng 2 [NHẬP]: Nơi nhập các ký tự bạn đoán cho lượt hiện tại. Hỗ trợ tự co giãn từ 4 đến 8 chữ!',
+                    cardPosition: 'top-center',
+                    fallbackBox: { left: '28.5%', top: '58%', width: '43%', height: '38%' }
+                },
+                {
+                    targetSelector: '#quantumBatteryTray',
+                    title: '4. 6 THỎI PIN NĂNG LƯỢNG // 6 MẠNG',
+                    text: 'Mỗi viên pin mang biểu tượng tia sét đại diện cho 1 lượt thử. Khi đoán sai 1 từ, 1 viên pin sẽ phát nổ chập điện xè xè và ngắt mạch. Hết 6 pin thì kíp nổ sẽ kích hoạt!',
+                    cardPosition: 'left-bottom',
+                    fallbackBox: { left: '74%', top: '12%', width: '22%', height: '16%' }
+                },
+                {
+                    targetSelector: '#keyboardContainer',
+                    title: '5. BÀN PHÍM CƠ & ĐIỀU KHIỂN',
+                    text: 'Bấm phím ảo trên màn hình hoặc GÕ TRỰC TIẾP TỪ BÀN PHÍM MÁY TÍNH (A-Z, Backspace, Enter). Sau khi nộp, phím đổi màu Xanh (đúng), Vàng (sai vị trí), Đen (không có) chuẩn Wordle.',
+                    cardPosition: 'left-center',
+                    fallbackBox: { left: '73%', top: '48%', width: '24%', height: '48%' }
+                }
+            ];
+
+            function start(dotNetRef) {
+                _dotNetRef = dotNetRef;
+                function tryInit(attempt) {
+                    const overlay = document.getElementById('tutorialOverlay');
+                    const stage = document.getElementById('quantumStageBox');
+                    if (!overlay || !stage) {
+                        if (attempt < 12) {
+                            setTimeout(function () { tryInit(attempt + 1); }, 60);
+                        }
+                        return;
+                    }
+                    overlay.classList.add('show');
+                    currentTutorialStep = 0;
+                    bindControls();
+                    renderStep(currentTutorialStep);
+                }
+                tryInit(0);
+            }
+
+            function end() {
+                try {
+                    clearInterval(typewriterTimer);
+                    const overlay = document.getElementById('tutorialOverlay');
+                    if (overlay) overlay.classList.remove('show');
+                    if (_dotNetRef) {
+                        _dotNetRef.invokeMethodAsync('OnQuantumTutorialFinished');
+                    }
+                } catch (e) { }
+            }
+
+            function renderStep(stepIndex) {
+                try {
+                    clearInterval(typewriterTimer);
+                    const step = TUTORIAL_STEPS[stepIndex];
+                    if (!step) {
+                        end();
+                        return;
+                    }
+
+                    const overlay = document.getElementById('tutorialOverlay');
+                    const box = document.getElementById('tutorialSpotlightBox');
+                    const card = document.getElementById('tutorialCard');
+                    const tutStepText = document.getElementById('tutStepText');
+                    const tutStepDots = document.getElementById('tutStepDots');
+                    const tutTitle = document.getElementById('tutTitle');
+                    const tutBodyText = document.getElementById('tutBodyText');
+                    const tutCursor = document.getElementById('tutCursor');
+                    const tutNextBtnText = document.getElementById('tutNextBtnText');
+
+                    if (!overlay || !box || !card) return;
+
+                    if (tutStepText) tutStepText.textContent = `BƯỚC ${stepIndex + 1}/${TUTORIAL_STEPS.length}`;
+                    if (tutStepDots) {
+                        const dots = tutStepDots.querySelectorAll('.tut-dot');
+                        dots.forEach((d, i) => d.classList.toggle('active', i === stepIndex));
+                    }
+
+                    if (tutTitle) tutTitle.textContent = step.title;
+                    if (tutNextBtnText) tutNextBtnText.textContent = (stepIndex === TUTORIAL_STEPS.length - 1) ? 'VÀO CHƠI' : 'TIẾP THEO';
+
+                    // 1. Calculate Spotlight Box Coordinates
+                    let positioned = false;
+                    const stage = document.getElementById('quantumStageBox');
+                    if (stage) {
+                        const stageRect = stage.getBoundingClientRect();
+                        if (stageRect.width > 0 && stageRect.height > 0) {
+                            let targets = stage.querySelectorAll(step.targetSelector);
+                            if (targets.length > 0) {
+                                let minL = Infinity, minT = Infinity, maxR = -Infinity, maxB = -Infinity;
+                                targets.forEach(t => {
+                                    const r = t.getBoundingClientRect();
+                                    if (r.left < minL) minL = r.left;
+                                    if (r.top < minT) minT = r.top;
+                                    if (r.right > maxR) maxR = r.right;
+                                    if (r.bottom > maxB) maxB = r.bottom;
+                                });
+
+                                if (minL < maxR && minT < maxB) {
+                                    const pad = 6;
+                                    const spotLeft = ((minL - stageRect.left - pad) / stageRect.width) * 100;
+                                    const spotTop = ((minT - stageRect.top - pad) / stageRect.height) * 100;
+                                    const spotWidth = ((maxR - minL + pad * 2) / stageRect.width) * 100;
+                                    const spotHeight = ((maxB - minT + pad * 2) / stageRect.height) * 100;
+
+                                    box.style.left = spotLeft + '%';
+                                    box.style.top = spotTop + '%';
+                                    box.style.width = spotWidth + '%';
+                                    box.style.height = spotHeight + '%';
+                                    positioned = true;
+                                }
+                            }
+                        }
+                    }
+
+                    // Fallback to responsive predefined coordinates if DOM rect calculation failed
+                    if (!positioned && step.fallbackBox) {
+                        box.style.left = step.fallbackBox.left;
+                        box.style.top = step.fallbackBox.top;
+                        box.style.width = step.fallbackBox.width;
+                        box.style.height = step.fallbackBox.height;
+                    }
+
+                    // 2. Position Briefing Card to not obstruct the target
+                    if (step.cardPosition === 'right-center') {
+                        card.style.left = '42%';
+                        card.style.top = '25%';
+                    } else if (step.cardPosition === 'bottom-center') {
+                        card.style.left = '32%';
+                        card.style.top = '54%';
+                    } else if (step.cardPosition === 'top-center') {
+                        card.style.left = '32%';
+                        card.style.top = '12%';
+                    } else if (step.cardPosition === 'left-bottom') {
+                        card.style.left = '38%';
+                        card.style.top = '18%';
+                    } else {
+                        card.style.left = '36%';
+                        card.style.top = '35%';
+                    }
+
+                    // 3. Typewriter text animation
+                    currentFullText = step.text;
+                    if (tutBodyText) tutBodyText.textContent = '';
+                    if (tutCursor) tutCursor.style.display = 'inline-block';
+                    isTyping = true;
+                    let charIdx = 0;
+
+                    typewriterTimer = setInterval(function () {
+                        if (charIdx < currentFullText.length) {
+                            if (tutBodyText) tutBodyText.textContent += currentFullText[charIdx];
+                            try {
+                                if (charIdx % 3 === 0 && window.WordleSfx && window.WordleSfx.keyClick) {
+                                    window.WordleSfx.keyClick();
+                                }
+                            } catch (e) { }
+                            charIdx++;
+                        } else {
+                            clearInterval(typewriterTimer);
+                            isTyping = false;
+                            if (tutCursor) tutCursor.style.display = 'none';
+                        }
+                    }, 20);
+                } catch (e) {
+                    console.error('[QuantumTutorial.renderStep error]', e);
+                }
+            }
+
+            function completeTypewriterImmediately() {
+                if (isTyping) {
+                    clearInterval(typewriterTimer);
+                    const tutBodyText = document.getElementById('tutBodyText');
+                    const tutCursor = document.getElementById('tutCursor');
+                    if (tutBodyText) tutBodyText.textContent = currentFullText;
+                    isTyping = false;
+                    if (tutCursor) tutCursor.style.display = 'none';
+                    return true;
+                }
+                return false;
+            }
+
+            function advanceStep() {
+                var wasTyping = isTyping;
+                if (wasTyping) {
+                    completeTypewriterImmediately();
+                    return;
+                }
+                if (currentTutorialStep < TUTORIAL_STEPS.length - 1) {
+                    currentTutorialStep++;
+                    renderStep(currentTutorialStep);
+                } else {
+                    end();
+                }
+            }
+
+            function bindControls() {
+                const card = document.getElementById('tutorialCard');
+                const btnTutNext = document.getElementById('btnTutNext');
+                const btnTutSkip = document.getElementById('btnTutSkip');
+
+                if (card && !card.dataset.bound) {
+                    card.dataset.bound = 'true';
+                    card.addEventListener('click', function (e) {
+                        if (e.target.closest('#btnTutSkip')) return;
+                        if (e.target.closest('#btnTutNext')) return;
+                        advanceStep();
+                    });
+                }
+
+                if (btnTutNext && !btnTutNext.dataset.bound) {
+                    btnTutNext.dataset.bound = 'true';
+                    btnTutNext.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        advanceStep();
+                    });
+                }
+
+                if (btnTutSkip && !btnTutSkip.dataset.bound) {
+                    btnTutSkip.dataset.bound = 'true';
+                    btnTutSkip.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        end();
+                    });
+                }
+
+                if (!_keyHandlerBound) {
+                    _keyHandlerBound = true;
+                    window.addEventListener('keydown', function (e) {
+                        const overlay = document.getElementById('tutorialOverlay');
+                        if (overlay && overlay.classList.contains('show')) {
+                            if (e.key === 'Escape') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                end();
+                            } else if (e.key === ' ' || e.key === 'Enter') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                advanceStep();
+                            }
+                        }
+                    }, true);
+                }
+            }
+
+            return {
+                start: start,
+                end: end,
+                renderStep: renderStep,
+                completeTypewriterImmediately: completeTypewriterImmediately,
+                advanceStep: advanceStep
+            };
+        })();
+
+        // ─── Global Capture-Phase Keyboard Dispatcher for Quantum Cipher ───
+        // Bắt sự kiện phím ở Capture Phase (useCapture = true) để các Extension (như Google Translate, Vimium)
+        // không thể nuốt phím hoặc làm mất focus khi người dùng đang chơi game.
+        window.QuantumCipherKeyboard = (function () {
+            let _dotNetRef = null;
+            let _isActive = false;
+
+            window.addEventListener('keydown', function (e) {
+                if (!_isActive || !_dotNetRef) return;
+
+                // Không can thiệp vào các tổ hợp phím hệ thống (Ctrl+C, Ctrl+V, F5, F12, v.v.)
+                if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+                // Nếu đang mở bảng hướng dẫn tutorial thì để tutorial xử lý phím
+                const tut = document.getElementById('tutorialOverlay');
+                if (tut && tut.classList.contains('show')) return;
+
+                // Không can thiệp nếu người dùng đang thực sự gõ trong ô input/textarea thông thường
+                const activeTag = document.activeElement ? document.activeElement.tagName.toUpperCase() : '';
+                if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+
+                const key = e.key;
+                const code = e.code || '';
+
+                const isLetter = key.length === 1 && /^[a-zA-Z]$/.test(key);
+                const isAction = key === 'Enter' || key === 'Backspace' || key === '1' || key === '2' || key === 'Escape' || key === ' ' || code === 'Space';
+
+                if (isLetter || isAction) {
+                    // Chặn phím không để browser cuộn trang hay extension bên thứ 3 can thiệp
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+
+                    // Chủ động giữ focus cho overlay game
+                    const overlay = document.querySelector('.quantum-game-overlay');
+                    if (overlay && document.activeElement !== overlay) {
+                        try { overlay.focus(); } catch (err) { }
+                    }
+
+                    try {
+                        _dotNetRef.invokeMethodAsync('HandleGlobalKeyDown', key, code);
+                    } catch (err) {
+                        console.warn('QuantumCipherKeyboard invoke error:', err);
+                    }
+                }
+            }, true); // useCapture = true: Ưu tiên bắt trước mọi extension
+
+            return {
+                init: function (dotNetRef) {
+                    _dotNetRef = dotNetRef;
+                    _isActive = true;
+                    // Lập tức focus overlay khi kích hoạt
+                    setTimeout(function () {
+                        const overlay = document.querySelector('.quantum-game-overlay');
+                        if (overlay) {
+                            try { overlay.focus(); } catch (e) { }
+                        }
+                    }, 50);
+                },
+                destroy: function () {
+                    _isActive = false;
+                    _dotNetRef = null;
+                }
+            };
+        })();
+
+        // ─── Keyboard Sound Effects (Web Audio API — không cần file âm thanh) ───
+        window.WordleSfx = (function () {
+            let _ctx = null;
+            function ctx() {
+                if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
+                // Resume nếu bị suspend (auto-play policy)
+                if (_ctx.state === 'suspended') _ctx.resume();
+                return _ctx;
+            }
+
+            // Tạo một oscillator ngắn
+            function beep(freq, type, gainVal, durationSec, startTimeSec) {
+                try {
+                    const c = ctx();
+                    const osc = c.createOscillator();
+                    const gain = c.createGain();
+                    osc.connect(gain);
+                    gain.connect(c.destination);
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, c.currentTime + startTimeSec);
+                    gain.gain.setValueAtTime(gainVal, c.currentTime + startTimeSec);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + startTimeSec + durationSec);
+                    osc.start(c.currentTime + startTimeSec);
+                    osc.stop(c.currentTime + startTimeSec + durationSec);
+                } catch (e) { }
+            }
+
+            return {
+                // Gõ một ký tự: click ngắn giống bàn phím cơ
+                keyClick: function () {
+                    beep(1100, 'square', 0.06, 0.055, 0);
+                    beep(900, 'square', 0.03, 0.03, 0.01);
+                },
+                // Xóa ký tự: âm thấp hơn
+                keyDelete: function () {
+                    beep(600, 'triangle', 0.07, 0.07, 0);
+                },
+                // Enter hợp lệ (nộp đúng số chữ): hai nốt nhẹ lên
+                keyEnterOk: function () {
+                    beep(880, 'sine', 0.08, 0.08, 0);
+                    beep(1100, 'sine', 0.06, 0.1, 0.06);
+                },
+                // Enter thiếu chữ hoặc lỗi: âm rè ngắn
+                keyEnterError: function () {
+                    beep(200, 'sawtooth', 0.1, 0.12, 0);
+                },
+                // Đoán đúng (win): fanfare nhỏ
+                win: function () {
+                    [523, 659, 784, 1047].forEach(function (f, i) {
+                        beep(f, 'sine', 0.12, 0.18, i * 0.1);
+                    });
+                },
+                // Hết lượt (lose): âm xuống dần
+                lose: function () {
+                    [440, 370, 294, 220].forEach(function (f, i) {
+                        beep(f, 'triangle', 0.1, 0.2, i * 0.12);
+                    });
+                },
+
+                // ─── Quantum Cipher (Bẻ Khóa Bom Lượng Tử) ───
+                // Tiếng điện giật xè xè (Real Electric Arc Sizzle & Crackle)
+                electricZap: function () {
+                    try {
+                        const c = ctx();
+                        const now = c.currentTime;
+                        // 1. Dual oscillator buzzing
+                        const osc1 = c.createOscillator();
+                        const osc2 = c.createOscillator();
+                        const zapGain = c.createGain();
+                        osc1.type = 'sawtooth';
+                        osc1.frequency.setValueAtTime(160, now);
+                        osc1.frequency.exponentialRampToValueAtTime(70, now + 0.38);
+                        osc2.type = 'square';
+                        osc2.frequency.setValueAtTime(840, now);
+                        osc2.frequency.exponentialRampToValueAtTime(90, now + 0.38);
+                        zapGain.gain.setValueAtTime(0.38, now);
+                        zapGain.gain.exponentialRampToValueAtTime(0.01, now + 0.38);
+                        osc1.connect(zapGain);
+                        osc2.connect(zapGain);
+                        zapGain.connect(c.destination);
+                        // 2. High-frequency White Noise Crackle Bursts ("xè xè... tạch tạch")
+                        const duration = 0.42;
+                        const bufferSize = Math.floor(c.sampleRate * duration);
+                        const noiseBuffer = c.createBuffer(1, bufferSize, c.sampleRate);
+                        const output = noiseBuffer.getChannelData(0);
+                        for (let i = 0; i < bufferSize; i++) {
+                            const sputter = Math.random() > 0.25 ? 1 : 0.05;
+                            output[i] = (Math.random() * 2 - 1) * sputter;
+                        }
+                        const whiteNoise = c.createBufferSource();
+                        whiteNoise.buffer = noiseBuffer;
+                        const bandpass = c.createBiquadFilter();
+                        bandpass.type = 'bandpass';
+                        bandpass.frequency.setValueAtTime(3200, now);
+                        bandpass.Q.setValueAtTime(2.8, now);
+                        const noiseGain = c.createGain();
+                        noiseGain.gain.setValueAtTime(0.55, now);
+                        noiseGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+                        whiteNoise.connect(bandpass);
+                        bandpass.connect(noiseGain);
+                        noiseGain.connect(c.destination);
+                        osc1.start(now);
+                        osc2.start(now);
+                        whiteNoise.start(now);
+                        osc1.stop(now + 0.38);
+                        osc2.stop(now + 0.38);
+                        whiteNoise.stop(now + duration);
+                    } catch (e) { }
+                },
+
+                // Chuông cảnh báo 30s cuối cùng (to 1 cái)
+                alarm30s: function () {
+                    try {
+                        const c = ctx();
+                        const now = c.currentTime;
+                        const osc1 = c.createOscillator();
+                        const osc2 = c.createOscillator();
+                        const gain = c.createGain();
+                        osc1.type = 'sawtooth';
+                        osc1.frequency.setValueAtTime(900, now);
+                        osc1.frequency.linearRampToValueAtTime(1450, now + 0.22);
+                        osc1.frequency.linearRampToValueAtTime(800, now + 0.55);
+                        osc2.type = 'square';
+                        osc2.frequency.setValueAtTime(450, now);
+                        osc2.frequency.linearRampToValueAtTime(725, now + 0.22);
+                        osc2.frequency.linearRampToValueAtTime(400, now + 0.55);
+                        gain.gain.setValueAtTime(0.65, now);
+                        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.58);
+                        osc1.connect(gain);
+                        osc2.connect(gain);
+                        gain.connect(c.destination);
+                        osc1.start(now);
+                        osc2.start(now);
+                        osc1.stop(now + 0.58);
+                        osc2.stop(now + 0.58);
+                    } catch (e) { }
+                },
+
+                // Tiếng đếm giây thông minh (bình thường >30s, nhấn mạnh 30s, nhanh dần 20s, dồn dập 10s)
+                quantumTick: function (sec) {
+                    try {
+                        if (sec > 30) {
+                            beep(620, 'sine', 0.08, 0.035, 0);
+                        } else if (sec === 30) {
+                            this.alarm30s();
+                        } else if (sec > 20) {
+                            beep(850, 'sine', 0.14, 0.04, 0);
+                        } else if (sec > 10) {
+                            beep(980, 'sine', 0.20, 0.035, 0);
+                            setTimeout(() => { beep(1050, 'sine', 0.18, 0.035, 0); }, 500);
+                        } else if (sec > 0) {
+                            beep(1300, 'sine', 0.28, 0.035, 0);
+                            [250, 500, 750].forEach((delay, idx) => {
+                                setTimeout(() => { beep(1350 + idx * 50, 'sine', 0.24, 0.03, 0); }, delay);
+                            });
+                        }
+                    } catch (e) { }
+                },
+
+                // ─── HSK Máy Bay Bắn Từ Vựng ───
+                // Tiếng đạn laser bắn từ máy bay
+                laserShoot: function () {
+                    try {
+                        const c = ctx();
+                        const osc = c.createOscillator();
+                        const gain = c.createGain();
+                        osc.connect(gain);
+                        gain.connect(c.destination);
+                        osc.type = 'sawtooth';
+                        const t = c.currentTime;
+                        osc.frequency.setValueAtTime(980, t);
+                        osc.frequency.exponentialRampToValueAtTime(140, t + 0.16);
+                        gain.gain.setValueAtTime(0.12, t);
+                        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+                        osc.start(t);
+                        osc.stop(t + 0.16);
+                    } catch (e) { }
+                },
+
+                // Tiếng nổ / va chạm đạn trúng từ vựng
+                bulletHit: function () {
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+                        // 1. Âm trầm nổ boom (thump)
+                        const osc = c.createOscillator();
+                        const gain = c.createGain();
+                        osc.connect(gain);
+                        gain.connect(c.destination);
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(170, t);
+                        osc.frequency.exponentialRampToValueAtTime(35, t + 0.22);
+                        gain.gain.setValueAtTime(0.25, t);
+                        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+                        osc.start(t);
+                        osc.stop(t + 0.22);
+
+                        // 2. Tiếng nổ va chạm vỡ vụn
+                        const snap = c.createOscillator();
+                        const snapGain = c.createGain();
+                        snap.connect(snapGain);
+                        snapGain.connect(c.destination);
+                        snap.type = 'square';
+                        snap.frequency.setValueAtTime(450, t);
+                        snap.frequency.exponentialRampToValueAtTime(80, t + 0.12);
+                        snapGain.gain.setValueAtTime(0.12, t);
+                        snapGain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+                        snap.start(t);
+                        snap.stop(t + 0.12);
+                    } catch (e) { }
+                },
+
+                // Tiếng khi từ rơi chạm đáy gây trừ máu (Damage Hit)
+                damageHit: function () {
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+                        // Âm cảnh báo rè thấp (alarm buzz / impact)
+                        const osc = c.createOscillator();
+                        const gain = c.createGain();
+                        osc.connect(gain);
+                        gain.connect(c.destination);
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(140, t);
+                        osc.frequency.linearRampToValueAtTime(60, t + 0.28);
+                        gain.gain.setValueAtTime(0.28, t);
+                        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+                        osc.start(t);
+                        osc.stop(t + 0.28);
+
+                        // Tiếng đập thình thịch thứ 2
+                        beep(90, 'triangle', 0.22, 0.25, 0.05);
+                    } catch (e) { }
+                },
+
+                // Tiếng thưởng Combo khi bắn trúng liên tiếp
+                comboSound: function (combo) {
+                    try {
+                        const baseFreq = Math.min(1200, 440 + (combo * 70));
+                        beep(baseFreq, 'sine', 0.12, 0.15, 0);
+                        beep(baseFreq * 1.25, 'triangle', 0.08, 0.18, 0.06);
+                    } catch (e) { }
+                },
+
+                // Tiếng đếm ngược 3, 2, 1
+                countdownTick: function (num) {
+                    const freqs = { 3: 523, 2: 659, 1: 784 };
+                    const f = freqs[num] || 600;
+                    beep(f, 'sine', 0.15, 0.18, 0);
+                    beep(f * 1.5, 'triangle', 0.05, 0.12, 0.02);
+                },
+
+                // Tiếng bắt đầu màn mới (GO!)
+                countdownGo: function () {
+                    [523, 659, 784, 1046].forEach(function (f, i) {
+                        beep(f, 'square', 0.1, 0.22, i * 0.07);
+                    });
+                },
+
+                // ─── Nhạc Nền Game (Web Audio Retro Arcade Synth BGM Loop) ───
+                _bgmTimer: null,
+                _bgmPlaying: false,
+                _bgmStep: 0,
+                startBgm: function () {
+                    if (this._bgmPlaying) return;
+                    this._bgmPlaying = true;
+                    const self = this;
+                    const melody = [
+                        523, 0, 659, 0,  784, 880, 784, 0,
+                        659, 0, 523, 0,  587, 0, 659, 0,
+                        784, 0, 880, 0,  1046, 0, 880, 784,
+                        659, 587, 523, 0, 440, 0, 523, 0
+                    ];
+                    const bass = [
+                        261, 261, 261, 261, 220, 220, 220, 220,
+                        174, 174, 174, 174, 196, 196, 196, 196,
+                        261, 261, 261, 261, 220, 220, 220, 220,
+                        174, 174, 174, 174, 196, 196, 246, 196
+                    ];
+
+                    this._bgmStep = 0;
+                    this._bgmTimer = setInterval(function () {
+                        if (!self._bgmPlaying) return;
+                        const step = self._bgmStep % melody.length;
+                        const note = melody[step];
+                        const bNote = bass[step];
+                        if (note > 0) {
+                            beep(note, 'sine', 0.035, 0.16, 0);
+                        }
+                        if (step % 2 === 0 && bNote > 0) {
+                            beep(bNote, 'triangle', 0.042, 0.2, 0);
+                        }
+                        self._bgmStep++;
+                    }, 175);
+                },
+
+                stopBgm: function () {
+                    this._bgmPlaying = false;
+                    if (this._bgmTimer) {
+                        clearInterval(this._bgmTimer);
+                        this._bgmTimer = null;
+                    }
+                },
+
+                toggleBgm: function () {
+                    if (this._bossBgmPlaying) {
+                        this.stopBossBgm();
+                        return false;
+                    } else if (this._bgmPlaying) {
+                        this.stopBgm();
+                        return false;
+                    } else {
+                        this.startBgm();
+                        return true;
+                    }
+                },
+
+                isBgmPlaying: function () {
+                    return this._bgmPlaying || this._bossBgmPlaying;
+                },
+
+                // ─── Nhạc Nền Boss Ma Vương (soundtrack/boss-fight-big.wav) ───
+                _bossAudio: null,
+                _bossBgmPlaying: false,
+
+                initBossAudio: function () {
+                    if (!this._bossAudio) {
+                        try {
+                            const origin = window.location.origin || '';
+                            const soundUrl = origin + '/soundtrack/boss-fight-big.wav';
+                            this._bossAudio = new Audio(soundUrl);
+                            this._bossAudio.loop = true;
+                            this._bossAudio.volume = 0.70;
+                            this._bossAudio.preload = 'auto';
+                            this._bossAudio.load();
+                        } catch (e) {
+                            console.warn('Init boss audio error:', e);
+                        }
+                    }
+                    return this._bossAudio;
+                },
+
+                startBossBgm: function () {
+                    this.stopBgm(); // Dừng nhạc synth thường
+                    this._bossBgmPlaying = true;
+                    try {
+                        const audio = this.initBossAudio();
+                        if (audio) {
+                            audio.currentTime = 0;
+                            const p = audio.play();
+                            if (p !== undefined) {
+                                p.catch(function (err) {
+                                    console.warn('Boss BGM autoplay waiting for user interaction:', err);
+                                    const resumeAudio = function () {
+                                        if (window.WordleSfx && window.WordleSfx._bossBgmPlaying && audio.paused) {
+                                            audio.play().catch(function () { });
+                                        }
+                                        document.removeEventListener('pointerdown', resumeAudio);
+                                        document.removeEventListener('keydown', resumeAudio);
+                                    };
+                                    document.addEventListener('pointerdown', resumeAudio, { once: true });
+                                    document.addEventListener('keydown', resumeAudio, { once: true });
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('startBossBgm error:', e);
+                    }
+                },
+
+                stopBossBgm: function () {
+                    this._bossBgmPlaying = false;
+                    try {
+                        if (this._bossAudio) {
+                            this._bossAudio.pause();
+                            this._bossAudio.currentTime = 0;
+                        }
+                    } catch (e) { }
+                },
+
+                pauseBossBgm: function () {
+                    try {
+                        if (this._bossAudio) {
+                            this._bossAudio.pause();
+                        }
+                    } catch (e) { }
+                },
+
+                resumeBossBgm: function () {
+                    if (!this._bossBgmPlaying) return;
+                    try {
+                        if (this._bossAudio) {
+                            const p = this._bossAudio.play();
+                            if (p !== undefined) p.catch(function () { });
+                        } else {
+                            this.startBossBgm();
+                        }
+                    } catch (e) { }
+                },
+
+                toggleBossBgm: function () {
+                    if (this._bossBgmPlaying) {
+                        this.stopBossBgm();
+                        return false;
+                    } else {
+                        this.startBossBgm();
+                        return true;
+                    }
+                },
+
+                // ─── HSK Boss "Ma Vương Hán Tự" Dramatic SFX & Chinese Voice ───
+                _cachedZhVoice: null,
+                _currentChargeNodes: null,
+
+                initBossVoices: function () {
+                    if (!('speechSynthesis' in window)) return;
+                    const updateVoice = () => {
+                        try {
+                            const voices = window.speechSynthesis.getVoices();
+                            const zhVoices = voices.filter(v => v.lang && (v.lang.toLowerCase().startsWith('zh') || (v.name || '').toLowerCase().includes('chinese')));
+                            
+                            // Ưu tiên giọng nam trầm uy lực, dứt khoát (Yunxi, Kangkang, Yunyang, Yunjian, Male, Brian, etc.)
+                            const maleKeywords = ['yunxi', 'yunyang', 'kangkang', 'yunjian', 'brian', 'male', 'man', 'nan'];
+                            let selected = zhVoices.find(v => {
+                                const n = (v.name || '').toLowerCase();
+                                return maleKeywords.some(k => n.includes(k));
+                            });
+
+                            if (!selected) {
+                                selected = zhVoices.find(v => (v.name || '').toLowerCase().includes('natural')) ||
+                                           zhVoices.find(v => v.lang === 'zh-CN') ||
+                                           zhVoices[0] ||
+                                           null;
+                            }
+                            this._cachedZhVoice = selected;
+                        } catch (e) { }
+                    };
+                    updateVoice();
+                    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+                        window.speechSynthesis.onvoiceschanged = updateVoice;
+                    }
+                },
+
+                // Cinematic Sub-bass Boss Roar / Rumble
+                bossRoar: function () {
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+                        const osc1 = c.createOscillator();
+                        const osc2 = c.createOscillator();
+                        const filter = c.createBiquadFilter();
+                        const gain = c.createGain();
+
+                        osc1.type = 'sawtooth';
+                        osc1.frequency.setValueAtTime(48, t);
+                        osc1.frequency.exponentialRampToValueAtTime(32, t + 1.2);
+
+                        osc2.type = 'square';
+                        osc2.frequency.setValueAtTime(50, t);
+                        osc2.frequency.exponentialRampToValueAtTime(28, t + 1.2);
+
+                        filter.type = 'lowpass';
+                        filter.frequency.setValueAtTime(140, t);
+                        filter.frequency.exponentialRampToValueAtTime(60, t + 1.2);
+
+                        gain.gain.setValueAtTime(0.38, t);
+                        gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+
+                        osc1.connect(filter);
+                        osc2.connect(filter);
+                        filter.connect(gain);
+                        gain.connect(c.destination);
+
+                        osc1.start(t);
+                        osc2.start(t);
+                        osc1.stop(t + 1.2);
+                        osc2.stop(t + 1.2);
+                    } catch (e) { }
+                },
+
+                // Warning Siren khi Boss giáng lâm
+                bossWarningSiren: function () {
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+                        for (let i = 0; i < 2; i++) {
+                            const st = t + i * 0.7;
+                            const osc = c.createOscillator();
+                            const gain = c.createGain();
+                            osc.type = 'sawtooth';
+                            osc.frequency.setValueAtTime(420, st);
+                            osc.frequency.linearRampToValueAtTime(780, st + 0.35);
+                            osc.frequency.linearRampToValueAtTime(420, st + 0.65);
+                            gain.gain.setValueAtTime(0.2, st);
+                            gain.gain.exponentialRampToValueAtTime(0.01, st + 0.68);
+                            osc.connect(gain);
+                            gain.connect(c.destination);
+                            osc.start(st);
+                            osc.stop(st + 0.68);
+                        }
+                    } catch (e) { }
+                },
+
+                // Sinister chord khi Boss buông lời đe dọa (Taunt)
+                bossTauntStinger: function () {
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+                        [73.4, 110, 138.6, 174.6].forEach((freq, idx) => {
+                            const osc = c.createOscillator();
+                            const gain = c.createGain();
+                            osc.type = idx % 2 === 0 ? 'sawtooth' : 'sine';
+                            osc.frequency.setValueAtTime(freq, t);
+                            gain.gain.setValueAtTime(0.14, t);
+                            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+                            osc.connect(gain);
+                            gain.connect(c.destination);
+                            osc.start(t);
+                            osc.stop(t + 0.9);
+                        });
+                    } catch (e) { }
+                },
+
+                // Âm thanh tụ năng lượng hắc ám (dâng trào căng thẳng)
+                bossSkillCharge: function (durationSec) {
+                    this.stopBossCharge();
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+                        const dur = durationSec || 6.0;
+
+                        const osc1 = c.createOscillator();
+                        const osc2 = c.createOscillator();
+                        const gain = c.createGain();
+
+                        osc1.type = 'sawtooth';
+                        osc1.frequency.setValueAtTime(75, t);
+                        osc1.frequency.exponentialRampToValueAtTime(280, t + dur);
+
+                        osc2.type = 'sine';
+                        osc2.frequency.setValueAtTime(150, t);
+                        osc2.frequency.exponentialRampToValueAtTime(560, t + dur);
+
+                        gain.gain.setValueAtTime(0.06, t);
+                        gain.gain.linearRampToValueAtTime(0.28, t + dur);
+
+                        osc1.connect(gain);
+                        osc2.connect(gain);
+                        gain.connect(c.destination);
+
+                        osc1.start(t);
+                        osc2.start(t);
+                        osc1.stop(t + dur);
+                        osc2.stop(t + dur);
+
+                        this._currentChargeNodes = { osc1, osc2, gain };
+                    } catch (e) { }
+                },
+
+                stopBossCharge: function () {
+                    try {
+                        if (this._currentChargeNodes) {
+                            const c = ctx();
+                            const t = c.currentTime;
+                            this._currentChargeNodes.gain.gain.linearRampToValueAtTime(0.001, t + 0.1);
+                            setTimeout(() => {
+                                try {
+                                    this._currentChargeNodes.osc1.stop();
+                                    this._currentChargeNodes.osc2.stop();
+                                } catch (err) { }
+                                this._currentChargeNodes = null;
+                            }, 120);
+                        }
+                    } catch (e) { }
+                },
+
+                // Tia Laser Khổng Lồ Bắn Nổ (Laser Roar)
+                bossLaserBlast: function () {
+                    this.stopBossCharge();
+                    try {
+                        const c = ctx();
+                        const t = c.currentTime;
+
+                        // 1. Heavy bass boom
+                        const boom = c.createOscillator();
+                        const boomGain = c.createGain();
+                        boom.type = 'triangle';
+                        boom.frequency.setValueAtTime(190, t);
+                        boom.frequency.exponentialRampToValueAtTime(24, t + 0.95);
+                        boomGain.gain.setValueAtTime(0.55, t);
+                        boomGain.gain.exponentialRampToValueAtTime(0.001, t + 0.95);
+                        boom.connect(boomGain);
+                        boomGain.connect(c.destination);
+                        boom.start(t);
+                        boom.stop(t + 0.95);
+
+                        // 2. High laser sizzle / beam blast
+                        const duration = 0.85;
+                        const bufferSize = Math.floor(c.sampleRate * duration);
+                        const noiseBuffer = c.createBuffer(1, bufferSize, c.sampleRate);
+                        const output = noiseBuffer.getChannelData(0);
+                        for (let i = 0; i < bufferSize; i++) {
+                            output[i] = (Math.random() * 2 - 1) * 0.75;
+                        }
+                        const whiteNoise = c.createBufferSource();
+                        whiteNoise.buffer = noiseBuffer;
+                        const filter = c.createBiquadFilter();
+                        filter.type = 'bandpass';
+                        filter.frequency.setValueAtTime(1400, t);
+                        filter.frequency.exponentialRampToValueAtTime(320, t + duration);
+                        filter.Q.setValueAtTime(3.2, t);
+                        const noiseGain = c.createGain();
+                        noiseGain.gain.setValueAtTime(0.45, t);
+                        noiseGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+                        whiteNoise.connect(filter);
+                        filter.connect(noiseGain);
+                        noiseGain.connect(c.destination);
+                        whiteNoise.start(t);
+                        whiteNoise.stop(t + duration);
+                    } catch (e) { }
+                },
+
+                // Phá vỡ tụ năng lượng hắc ám (Shatter / Glass break)
+                bossChargeBroken: function () {
+                    this.stopBossCharge();
+                    try {
+                        [1400, 1850, 2200, 950].forEach((freq, idx) => {
+                            beep(freq, 'triangle', 0.14, 0.25, idx * 0.04);
+                        });
+                        beep(160, 'sawtooth', 0.28, 0.35, 0.05);
+                    } catch (e) { }
+                },
+
+                // Vượt qua 1 đợt (Victory chime)
+                bossWaveCleared: function () {
+                    try {
+                        [392, 523, 659, 784].forEach((freq, idx) => {
+                            beep(freq, 'sine', 0.14, 0.35, idx * 0.1);
+                        });
+                    } catch (e) { }
+                },
+
+                // Boss chết (Multi explosions)
+                bossDefeatedExplosion: function () {
+                    this.stopBossCharge();
+                    try {
+                        [0, 250, 550, 900, 1300].forEach((delay, idx) => {
+                            setTimeout(() => {
+                                this.bulletHit();
+                                if (idx === 4) this.bossRoar();
+                            }, delay);
+                        });
+                    } catch (e) { }
+                },
+
+                // Phát giọng nói tiếng Trung của Boss Ma Vương (Dứt khoát, uy lực, sạch tiếng, âm vang tự nhiên)
+                bossSpeak: function (chineseText, options) {
+                    options = options || {};
+                    try {
+                        if (!('speechSynthesis' in window)) return;
+                        window.speechSynthesis.cancel(); // Dừng câu trước nếu còn đang đọc
+
+                        // Âm bass nổ gọn gàng uy lực mở đầu chiêu thức (sóng sine tròn trịa, không rè, không xì xèo)
+                        if (options.isSkill) {
+                            try {
+                                const c = ctx();
+                                const t = c.currentTime;
+                                const osc = c.createOscillator();
+                                const gain = c.createGain();
+                                osc.type = 'sine'; // Sóng sine thuần khiết, 100% êm mượt không nhiễu
+                                osc.frequency.setValueAtTime(80, t);
+                                osc.frequency.exponentialRampToValueAtTime(32, t + 0.45);
+                                gain.gain.setValueAtTime(0.35, t);
+                                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+                                osc.connect(gain);
+                                gain.connect(c.destination);
+                                osc.start(t);
+                                osc.stop(t + 0.45);
+                            } catch (e) { }
+                        }
+
+                        if (!this._cachedZhVoice) {
+                            this.initBossVoices();
+                        }
+
+                        const u = new SpeechSynthesisUtterance(chineseText);
+                        u.lang = 'zh-CN';
+                        // Giọng đọc cực kỳ có lực: pitch 0.94 - 0.96 tự nhiên chuẩn xác không méo formants, rate 0.95 đanh thép, volume 1.0 to rõ
+                        let p = options.pitch !== undefined ? options.pitch : 0.94;
+                        if (p < 0.85) p = 0.94; // Chống hạ pitch quá sâu gây nghẹt, chối tai
+                        u.pitch = p;
+                        u.rate = options.rate !== undefined ? options.rate : 0.96;
+                        u.volume = 1.0;
+                        if (this._cachedZhVoice) {
+                            u.voice = this._cachedZhVoice;
+                        }
+
+                        window.speechSynthesis.speak(u);
+                    } catch (e) {
+                        console.warn('Boss speech error:', e);
+                    }
+                }
+            };
+        })();
+
+        // Auto-focus helper cho HSK Shooter
+        window.focusHskInput = function () {
+            try {
+                const input = document.querySelector('.hsk-input-dock input');
+                if (input && document.activeElement !== input) {
+                    input.focus();
+                }
+            } catch (e) { }
+        };
+
+        // Tự động focus lại ô nhập khi click chuột ra ngoài chiến trường
+        document.addEventListener('pointerdown', function (e) {
+            const overlay = document.querySelector('.hsk-game-overlay');
+            if (overlay && !e.target.closest('button, .hsk-dialog-card, .hsk-stage-map-card, .hsk-resume-overlay, .hsk-stage-complete-overlay, .stage-map-overlay')) {
+                const input = overlay.querySelector('.hsk-input-dock input');
+                if (input && document.activeElement !== input) {
+                    setTimeout(() => input.focus(), 0);
+                }
+            }
+        });
+
+        // Drag-to-scroll cho Bản Đồ Tầng HSK Shooter (Dí chuột kéo lên kéo xuống)
+        window.initStageMapDrag = function () {
+            const el = document.getElementById('hskStageMapScroll');
+            if (!el || el.dataset.dragInit) return;
+            el.dataset.dragInit = 'true';
+
+            let startY = 0;
+            let scrollTop = 0;
+
+            if (!window._hskMapDragWindowInit) {
+                window._hskMapDragWindowInit = true;
+                window.addEventListener('mouseup', function () {
+                    const scrollEl = document.getElementById('hskStageMapScroll');
+                    if (scrollEl) {
+                        scrollEl._isDraggingMap = false;
+                        scrollEl.classList.remove('is-dragging');
+                    }
+                });
+            }
+
+            el.addEventListener('mousedown', function (e) {
+                if (e.target.closest('button, .btn-stage-play, .btn-close-map, .btn-resume-from-map')) return;
+                el._isDraggingMap = true;
+                el.classList.add('is-dragging');
+                startY = e.pageY - el.offsetTop;
+                scrollTop = el.scrollTop;
+            });
+
+            el.addEventListener('mousemove', function (e) {
+                if (!el._isDraggingMap) return;
+                e.preventDefault();
+                const y = e.pageY - el.offsetTop;
+                const walk = (y - startY) * 1.5;
+                el.scrollTop = scrollTop - walk;
+            });
+
+            // Tự động cuộn căn giữa tầng đang ở
+            setTimeout(function () {
+                const activeRow = document.getElementById('currentActiveStageRow');
+                if (activeRow) {
+                    activeRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        };
+    </script>
+    <script src="js/offlineStorage.js"></script>
+    <script>
+        // Đăng ký Service Worker cho PWA (offline + cài đặt Desktop, luôn check bản mới)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+                    reg.update();
+                }).catch(function (err) {
+                    console.warn('Service Worker registration failed:', err);
+                });
+            });
+        }
+    </script>
+    <!-- Cloudflare Turnstile CAPTCHA (Chống bot spam đăng ký tài khoản) -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+    <script>
+        window.turnstileHelper = {
+            render: function (containerId, siteKey, dotNetHelper) {
+                var el = document.getElementById(containerId);
+                if (!el) return;
+                if (el.getAttribute('data-rendered') === 'true') {
+                    return;
+                }
+                var retryCount = 0;
+                function checkAndRender() {
+                    if (typeof window.turnstile === 'undefined' || typeof window.turnstile.render !== 'function') {
+                        if (retryCount++ < 30) {
+                            setTimeout(checkAndRender, 150);
+                        }
+                        return;
+                    }
+                    var currentEl = document.getElementById(containerId);
+                    if (!currentEl || currentEl.getAttribute('data-rendered') === 'true') return;
+                    currentEl.innerHTML = '';
+                    currentEl.setAttribute('data-rendered', 'true');
+                    try {
+                        var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                        var widgetId = window.turnstile.render('#' + containerId, {
+                            sitekey: siteKey,
+                            theme: isDark ? 'dark' : 'light',
+                            callback: function (token) {
+                                dotNetHelper.invokeMethodAsync('OnTurnstileSuccess', token);
+                            },
+                            'error-callback': function () {
+                                dotNetHelper.invokeMethodAsync('OnTurnstileError');
+                            },
+                            'expired-callback': function () {
+                                dotNetHelper.invokeMethodAsync('OnTurnstileExpired');
+                            }
+                        });
+                        currentEl.setAttribute('data-widget-id', widgetId);
+                    } catch (e) {
+                        console.warn('Turnstile render warning:', e);
+                        if (currentEl) currentEl.removeAttribute('data-rendered');
+                    }
+                }
+                checkAndRender();
+            },
+            reset: function (containerId) {
+                var el = document.getElementById(containerId);
+                if (el) {
+                    var widgetId = el.getAttribute('data-widget-id');
+                    if (window.turnstile && widgetId) {
+                        try {
+                            window.turnstile.reset(widgetId);
+                        } catch (e) { }
+                    }
+                    el.removeAttribute('data-rendered');
+                    el.removeAttribute('data-widget-id');
+                    el.innerHTML = '';
+                }
+            }
+        };
+    </script>
+</body>
+
+</html>

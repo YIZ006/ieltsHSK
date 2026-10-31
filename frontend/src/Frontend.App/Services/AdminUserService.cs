@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 
 namespace Frontend.App.Services;
 
@@ -75,6 +75,22 @@ public class AdminUserService
         {
             Console.WriteLine($"[AdminUserService] Error saving AI settings: {ex.Message}");
             return false;
+        }
+    }
+
+    
+    public async Task<(bool Success, string Message)> DeployFrontendAsync(string? deployHookUrl = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("api/admin/deploy-frontend", new Frontend.App.Models.DeployFrontendRequestDto { DeployHookUrl = deployHookUrl }, cancellationToken);
+            var result = await response.Content.ReadFromJsonAsync<Frontend.App.Models.DeployFrontendResponseDto>(cancellationToken: cancellationToken);
+            return (result?.Success ?? false, result?.Message ?? (response.IsSuccessStatusCode ? "Đã gửi lệnh deploy." : $"Lỗi {response.StatusCode}"));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminUserService] Error triggering frontend deploy: {ex.Message}");
+            return (false, $"Lỗi kết nối: {ex.Message}");
         }
     }
 

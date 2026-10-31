@@ -1,0 +1,64 @@
+# Global Security Headers & Base Configuration
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(self), geolocation=(), interest-cohort=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://accounts.google.com https://challenges.cloudflare.com https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; img-src 'self' data: blob: https: https://pub-91655bd1442d498b9788d1f8f8575587.r2.dev https://*.googleusercontent.com; media-src 'self' data: blob: https: https://pub-91655bd1442d498b9788d1f8f8575587.r2.dev; connect-src 'self' https://ieltshsk-backend.onrender.com https://ieltshsk.runasp.net http://localhost:5101 https://challenges.cloudflare.com https://accounts.google.com https://pub-91655bd1442d498b9788d1f8f8575587.r2.dev; frame-src 'self' https://challenges.cloudflare.com https://accounts.google.com https://www.youtube.com https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self';
+
+# 1. Framework Immutable Cache (Assemblies & Runtimes)
+/_framework/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 2. Entry Points, Manifests, Configurations & Boot JSON (Must Always Revalidate)
+/_framework/blazor.boot.json
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/404.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/manifest.json
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/appsettings*.json
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/appsettings.json
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/appsettings.Development.json
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# 3. Dynamic Static Data (Grammar, Vocab, Exams)
+/sample-data/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/data/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+# 4. Hashed Code & Stylesheets
+/css/*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+/js/*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+
+# 5. Media, Icons & Audio
+/images/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=604800
+
+/icons/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=604800
+
+/mascot/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=604800
+
+/soundtrack/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=604800

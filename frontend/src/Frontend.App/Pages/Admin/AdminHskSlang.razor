@@ -1,0 +1,1065 @@
+@page "/portal-hub/slang-vocabs"
+@page "/admin/slang-vocabs"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")]
+@layout Frontend.App.Layout.AdminLayout
+@using System.Net.Http.Json
+@using System.Text.Json
+@using Frontend.App.Services
+@inject HttpClient Http
+@inject HskSlangService SlangService
+@inject Frontend.App.Services.AuthService AuthService
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Quản lý Tiếng Lóng & Mật Mã Số GenZ - Admin Portal Hub</PageTitle>
+
+<div class="admin-slang-container">
+    <!-- Top Header -->
+    <div class="slang-header">
+        <div class="header-titles">
+            <div class="header-icon-badge">
+                <i class="bi bi-fire text-danger"></i>
+            </div>
+            <div>
+                <h1 class="page-title">Quản lý Tiếng Lóng GenZ &amp; Mật Mã Số Mạng</h1>
+                <p class="page-subtitle">Soạn thảo, cập nhật các hot trend Douyin/Weibo, mật mã số giới trẻ (520, 1314...) và ngữ cảnh giao tiếp thực tế.</p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-action-outline" @onclick="ExportJson">
+                <i class="bi bi-download"></i> Xuất JSON
+            </button>
+            <button class="btn btn-action-primary" @onclick="OpenCreateModal">
+                <i class="bi bi-plus-circle-fill"></i> + Thêm Thuật Ngữ Mới
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Overview Cards -->
+    <div class="stats-overview">
+        <div class="stat-card">
+            <div class="stat-icon icon-total"><i class="bi bi-collection-fill"></i></div>
+            <div class="stat-content">
+                <span class="stat-number">@allSlangs.Count</span>
+                <span class="stat-label">Tổng thuật ngữ</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon icon-cipher"><i class="bi bi-123"></i></div>
+            <div class="stat-content">
+                <span class="stat-number">@allSlangs.Count(s => IsCipher(s.Category))</span>
+                <span class="stat-label">Mật mã số mạng</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon icon-trend"><i class="bi bi-fire"></i></div>
+            <div class="stat-content">
+                <span class="stat-number">@allSlangs.Count(s => IsTrend(s.Category))</span>
+                <span class="stat-label">Hot Trend Douyin/Weibo</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon icon-life"><i class="bi bi-laptop"></i></div>
+            <div class="stat-content">
+                <span class="stat-number">@allSlangs.Count(s => IsLife(s.Category))</span>
+                <span class="stat-label">Công nghệ &amp; Công sở</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Banner -->
+    @if (!string.IsNullOrEmpty(alertMessage))
+    {
+        <div class="custom-alert @(alertSuccess ? "alert-success" : "alert-danger")">
+            <i class="bi @(alertSuccess ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill") me-2"></i>
+            <span>@alertMessage</span>
+            <button class="alert-close" @onclick="() => alertMessage = null">×</button>
+        </div>
+    }
+
+    <!-- Toolbar Filters -->
+    <div class="toolbar-card">
+        <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input type="text" placeholder="Tìm theo thuật ngữ, chữ Hán, Pinyin, nghĩa tiếng Việt..."
+                   @bind="searchKeyword" @bind:event="oninput" @bind:after="ApplyFilters" />
+            @if (!string.IsNullOrEmpty(searchKeyword))
+            {
+                <button class="btn-clear-search" @onclick="ClearSearch">×</button>
+            }
+        </div>
+
+        <div class="filter-controls">
+            <div class="filter-item">
+                <label>Phân loại:</label>
+                <select class="custom-select" @bind="selectedCategoryFilter" @bind:after="ApplyFilters">
+                    <option value="All">Tất cả phân loại</option>
+                    <option value="number_cipher">Mật mã số mạng (520, 1314...)</option>
+                    <option value="slang_trend">Hot Trend Douyin / Weibo</option>
+                    <option value="workplace">Công sở &amp; Đời sống</option>
+                    <option value="tech_life">Công nghệ số &amp; Giới trẻ</option>
+                </select>
+            </div>
+
+            <div class="filter-item">
+                <label>Hiển thị:</label>
+                <select class="custom-select" @bind="pageSize" @bind:after="ApplyFilters">
+                    <option value="15">15 mục / trang</option>
+                    <option value="30">30 mục / trang</option>
+                    <option value="50">50 mục / trang</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table Content Card -->
+    <div class="table-card">
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="spinner-border text-danger" role="status"></div>
+                <p>Đang tải danh sách tiếng lóng &amp; mật mã số...</p>
+            </div>
+        }
+        else if (!filteredSlangs.Any())
+        {
+            <div class="empty-state">
+                <i class="bi bi-chat-square-dots fs-1 text-muted"></i>
+                <p class="mt-2 text-muted">Không tìm thấy thuật ngữ nào phù hợp với bộ lọc.</p>
+                <button class="btn btn-sm btn-outline-danger" @onclick="ResetFilters">Đặt lại bộ lọc</button>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="custom-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 140px;">Thuật ngữ</th>
+                            <th style="width: 130px;">Phiên âm (Pinyin)</th>
+                            <th style="width: 200px;">Nghĩa tiếng Việt</th>
+                            <th style="width: 140px;">Phân loại</th>
+                            <th>Xuất xứ &amp; Ví dụ đối thoại</th>
+                            <th style="width: 80px; text-align: center;">Độ hot</th>
+                            <th style="width: 110px; text-align: right;">Hành động</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in pagedSlangs)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="term-hanzi-wrap">
+                                        <span class="term-main">@item.Term</span>
+                                        @if (!string.IsNullOrEmpty(item.Hanzi) && item.Hanzi != item.Term)
+                                        {
+                                            <span class="term-sub">@item.Hanzi</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="term-pinyin">@item.Pinyin</span>
+                                </td>
+                                <td>
+                                    <span class="term-meaning">@item.MeaningVi</span>
+                                </td>
+                                <td>
+                                    <span class="cat-badge @GetCategoryBadgeClass(item.Category)">
+                                        @GetCategoryLabel(item.Category)
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="origin-preview">
+                                        @if (!string.IsNullOrEmpty(item.Origin))
+                                        {
+                                            <div class="origin-text"><i class="bi bi-info-circle me-1"></i>@item.Origin</div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(item.DialogueZh))
+                                        {
+                                            <div class="dialogue-text">
+                                                <span class="zh">@item.DialogueZh</span>
+                                                @if (!string.IsNullOrEmpty(item.DialogueVi))
+                                                {
+                                                    <span class="vi">(@item.DialogueVi)</span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </td>
+                                <td style="text-align: center;">
+                                    <span class="hot-badge"><i class="bi bi-fire text-danger"></i> @item.PopularityScore</span>
+                                </td>
+                                <td style="text-align: right;">
+                                    <div class="action-btn-group">
+                                        <button class="btn-icon btn-edit" title="Chỉnh sửa" @onclick="() => OpenEditModal(item)">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                        <button class="btn-icon btn-delete" title="Xóa" @onclick="() => ConfirmDelete(item)">
+                                            <i class="bi bi-trash3-fill"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="pagination-bar">
+                <div class="page-info">
+                    Hiển thị <b>@((currentPage - 1) * pageSize + 1)</b> - <b>@(Math.Min(currentPage * pageSize, filteredSlangs.Count))</b> trong tổng <b>@filteredSlangs.Count</b> thuật ngữ
+                </div>
+
+                <div class="page-controls">
+                    <button class="btn-page" disabled="@(currentPage == 1)" @onclick="() => GoToPage(1)">
+                        <i class="bi bi-chevron-double-left"></i>
+                    </button>
+                    <button class="btn-page" disabled="@(currentPage == 1)" @onclick="() => GoToPage(currentPage - 1)">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+
+                    @foreach (var p in VisiblePages)
+                    {
+                        @if (p == -1)
+                        {
+                            <span class="page-ellipsis">...</span>
+                        }
+                        else
+                        {
+                            <button class="btn-page @(p == currentPage ? "active" : "")" @onclick="() => GoToPage(p)">
+                                @p
+                            </button>
+                        }
+                    }
+
+                    <button class="btn-page" disabled="@(currentPage == totalPages)" @onclick="() => GoToPage(currentPage + 1)">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <button class="btn-page" disabled="@(currentPage == totalPages)" @onclick="() => GoToPage(totalPages)">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modal Thêm / Chỉnh sửa -->
+@if (isModalOpen)
+{
+    <div class="modal-backdrop-custom" @onclick="CloseModal">
+        <div class="modal-dialog-custom modal-lg-custom" @onclick:stopPropagation="true">
+            <div class="modal-header-custom">
+                <div class="modal-title-wrap">
+                    <i class="bi @(isEditing ? "bi-pencil-square" : "bi-plus-circle-fill") text-danger fs-4 me-2"></i>
+                    <h3>@(isEditing ? "Chỉnh sửa Thuật ngữ Tiếng Lóng" : "Thêm Thuật ngữ Tiếng Lóng Mới")</h3>
+                </div>
+                <button type="button" class="btn-close-custom" @onclick="CloseModal">×</button>
+            </div>
+
+            <div class="modal-body-custom">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label-custom">Thuật ngữ / Mật mã <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control-custom" placeholder="VD: 520, 躺平, 显眼包..." @bind="modalItem.Term" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label-custom">Chữ Hán tương ứng</label>
+                        <input type="text" class="form-control-custom" placeholder="VD: 我爱你, 躺平..." @bind="modalItem.Hanzi" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label-custom">Phiên âm Pinyin <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control-custom" placeholder="VD: wǔ èr líng, tǎng píng..." @bind="modalItem.Pinyin" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label-custom">Phân loại <span class="text-danger">*</span></label>
+                        <select class="form-control-custom" @bind="modalItem.Category">
+                            <option value="number_cipher">Mật mã số mạng</option>
+                            <option value="slang_trend">Hot Trend Douyin / Weibo</option>
+                            <option value="workplace">Công sở &amp; Giới trẻ</option>
+                            <option value="tech_life">Đời sống &amp; Công nghệ</option>
+                        </select>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label-custom">Nghĩa tiếng Việt <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control-custom" placeholder="VD: Anh yêu em (đồng âm 'ngã ái nhĩ')..." @bind="modalItem.MeaningVi" />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label-custom">Nguồn gốc / Giải thích ngữ cảnh</label>
+                        <textarea class="form-control-custom" rows="2" placeholder="Giải thích vì sao giới trẻ dùng từ này, bắt nguồn từ Douyin hay hiện tượng mạng..." @bind="modalItem.Origin"></textarea>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label-custom">Ví dụ đối thoại (Chữ Hán)</label>
+                        <textarea class="form-control-custom" rows="2" placeholder="A: 今天是520... B: ..." @bind="modalItem.DialogueZh"></textarea>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label-custom">Dịch nghĩa ví dụ (Tiếng Việt)</label>
+                        <textarea class="form-control-custom" rows="2" placeholder="A: Hôm nay là 20/5... B: ..." @bind="modalItem.DialogueVi"></textarea>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label-custom">Độ thịnh hành (0 - 100)</label>
+                        <input type="number" class="form-control-custom" min="50" max="100" @bind="modalItem.PopularityScore" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer-custom">
+                <button type="button" class="btn btn-outline-secondary" @onclick="CloseModal">Hủy bỏ</button>
+                <button type="button" class="btn btn-action-primary" @onclick="SaveModalItem">
+                    <i class="bi bi-check2-circle me-1"></i> Lưu thay đổi
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal Xác nhận Xóa -->
+@if (isDeleteModalOpen && itemToDelete != null)
+{
+    <div class="modal-backdrop-custom" @onclick="() => isDeleteModalOpen = false">
+        <div class="modal-dialog-custom modal-sm-custom" @onclick:stopPropagation="true">
+            <div class="modal-header-custom">
+                <h4 class="text-danger m-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>Xác nhận xóa</h4>
+                <button type="button" class="btn-close-custom" @onclick="() => isDeleteModalOpen = false">×</button>
+            </div>
+            <div class="modal-body-custom py-3">
+                <p>Bạn có chắc chắn muốn xóa thuật ngữ <b>@itemToDelete.Term</b> (@itemToDelete.MeaningVi)?</p>
+                <small class="text-muted">Hành động này sẽ cập nhật ngay lập tức vào bộ nhớ hệ thống.</small>
+            </div>
+            <div class="modal-footer-custom">
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => isDeleteModalOpen = false">Hủy</button>
+                <button type="button" class="btn btn-sm btn-danger" @onclick="ExecuteDelete">
+                    <i class="bi bi-trash3-fill me-1"></i> Xóa vĩnh viễn
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+.admin-slang-container {
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+.slang-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+.header-titles {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.header-icon-badge {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: #fef2f2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+}
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+}
+.page-subtitle {
+    font-size: 0.88rem;
+    color: #64748b;
+    margin: 4px 0 0 0;
+}
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+.btn-action-primary {
+    background: #ef4444;
+    color: #fff;
+    border: none;
+    font-weight: 700;
+    padding: 10px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.btn-action-primary:hover {
+    background: #dc2626;
+    color: #fff;
+    transform: translateY(-1px);
+}
+.btn-action-outline {
+    background: #fff;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.btn-action-outline:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+}
+.stats-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.stat-card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border: 1px solid #f1f5f9;
+}
+.stat-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+}
+.icon-total { background: #eff6ff; color: #2563eb; }
+.icon-cipher { background: #fdf2f8; color: #db2777; }
+.icon-trend { background: #fef2f2; color: #ef4444; }
+.icon-life { background: #f0fdf4; color: #16a34a; }
+.stat-number {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.1;
+}
+.stat-label {
+    font-size: 0.82rem;
+    color: #64748b;
+    font-weight: 600;
+}
+.toolbar-card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    border: 1px solid #f1f5f9;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.search-box {
+    position: relative;
+    flex: 1;
+    min-width: 280px;
+}
+.search-box i.bi-search {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+}
+.search-box input {
+    width: 100%;
+    padding: 10px 38px 10px 40px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.search-box input:focus {
+    border-color: #ef4444;
+}
+.btn-clear-search {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+.filter-controls {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.filter-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.filter-item label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #475569;
+}
+.custom-select {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    font-size: 0.88rem;
+    background: #fff;
+    outline: none;
+    color: #1e293b;
+}
+.table-card {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid #f1f5f9;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    overflow: hidden;
+}
+.custom-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.custom-table th {
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 14px 18px;
+    border-bottom: 1px solid #e2e8f0;
+}
+.custom-table td {
+    padding: 14px 18px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.88rem;
+    vertical-align: middle;
+}
+.custom-table tr:hover {
+    background: #fafafa;
+}
+.term-hanzi-wrap {
+    display: flex;
+    flex-direction: column;
+}
+.term-main {
+    font-weight: 800;
+    color: #0f172a;
+    font-size: 1.05rem;
+}
+.term-sub {
+    font-size: 0.78rem;
+    color: #64748b;
+}
+.term-pinyin {
+    font-family: Consolas, monospace;
+    font-size: 0.84rem;
+    color: #2563eb;
+    font-weight: 600;
+}
+.term-meaning {
+    font-weight: 600;
+    color: #334155;
+    line-height: 1.4;
+}
+.cat-badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: inline-block;
+}
+.cat-cipher { background: #fdf2f8; color: #db2777; }
+.cat-trend { background: #fef2f2; color: #ef4444; }
+.cat-workplace { background: #eff6ff; color: #2563eb; }
+.cat-tech { background: #f0fdf4; color: #16a34a; }
+.origin-preview {
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+.origin-text {
+    color: #64748b;
+    margin-bottom: 4px;
+}
+.dialogue-text .zh {
+    color: #0f172a;
+    font-weight: 600;
+}
+.dialogue-text .vi {
+    color: #64748b;
+    margin-left: 6px;
+}
+.hot-badge {
+    background: #fff7ed;
+    color: #ea580c;
+    font-weight: 700;
+    font-size: 0.8rem;
+    padding: 3px 8px;
+    border-radius: 8px;
+}
+.action-btn-group {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.95rem;
+}
+.btn-edit { background: #eff6ff; color: #2563eb; }
+.btn-edit:hover { background: #dbeafe; }
+.btn-delete { background: #fef2f2; color: #ef4444; }
+.btn-delete:hover { background: #fee2e2; }
+.pagination-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-top: 1px solid #f1f5f9;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.page-info {
+    font-size: 0.84rem;
+    color: #64748b;
+}
+.page-controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.btn-page {
+    min-width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #334155;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+.btn-page:hover:not(:disabled) {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+.btn-page.active {
+    background: #ef4444;
+    color: #fff;
+    border-color: #ef4444;
+}
+.btn-page:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.page-ellipsis {
+    padding: 0 6px;
+    color: #94a3b8;
+}
+.modal-backdrop-custom {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050;
+    padding: 20px;
+}
+.modal-dialog-custom {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+.modal-lg-custom { max-width: 720px; }
+.modal-sm-custom { max-width: 440px; }
+.modal-header-custom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 24px;
+    border-bottom: 1px solid #f1f5f9;
+}
+.modal-title-wrap {
+    display: flex;
+    align-items: center;
+}
+.modal-title-wrap h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+.btn-close-custom {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #94a3b8;
+    cursor: pointer;
+}
+.modal-body-custom {
+    padding: 20px 24px;
+}
+.modal-footer-custom {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 24px;
+    border-top: 1px solid #f1f5f9;
+}
+.form-label-custom {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 6px;
+    display: block;
+}
+.form-control-custom {
+    width: 100%;
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    font-size: 0.88rem;
+    outline: none;
+    color: #0f172a;
+}
+.form-control-custom:focus {
+    border-color: #ef4444;
+}
+.custom-alert {
+    padding: 12px 18px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+.alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.alert-danger { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.alert-close {
+    background: none;
+    border: none;
+    margin-left: auto;
+    font-size: 1.2rem;
+    color: inherit;
+    cursor: pointer;
+}
+</style>
+
+@code {
+    private List<SlangVocabItem> allSlangs = new();
+    private List<SlangVocabItem> filteredSlangs = new();
+    private List<SlangVocabItem> pagedSlangs = new();
+
+    private bool isLoading = true;
+    private string searchKeyword = "";
+    private string selectedCategoryFilter = "All";
+    private int pageSize = 15;
+    private int currentPage = 1;
+    private int totalPages = 1;
+
+    private string? alertMessage;
+    private bool alertSuccess;
+
+    // Modal state
+    private bool isModalOpen = false;
+    private bool isEditing = false;
+    private SlangVocabItem modalItem = new();
+
+    // Delete state
+    private bool isDeleteModalOpen = false;
+    private SlangVocabItem? itemToDelete = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            allSlangs = await SlangService.GetSlangItemsAsync(forceRefresh: true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminHskSlang] Load error: {ex.Message}");
+            allSlangs = new();
+        }
+
+        ApplyFilters();
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private void ApplyFilters()
+    {
+        var query = allSlangs.AsEnumerable();
+
+        if (selectedCategoryFilter != "All")
+        {
+            query = query.Where(s =>
+                string.Equals(s.Category, selectedCategoryFilter, StringComparison.OrdinalIgnoreCase) ||
+                (selectedCategoryFilter == "number_cipher" && IsCipher(s.Category)) ||
+                (selectedCategoryFilter == "slang_trend" && IsTrend(s.Category)) ||
+                (selectedCategoryFilter == "workplace" && IsLife(s.Category)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchKeyword))
+        {
+            var kw = searchKeyword.Trim();
+            query = query.Where(s =>
+                s.Term.Contains(kw, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(s.Hanzi) && s.Hanzi.Contains(kw, StringComparison.OrdinalIgnoreCase)) ||
+                s.Pinyin.Contains(kw, StringComparison.OrdinalIgnoreCase) ||
+                s.MeaningVi.Contains(kw, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(s.Origin) && s.Origin.Contains(kw, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        filteredSlangs = query.ToList();
+        totalPages = Math.Max(1, (int)Math.Ceiling((double)filteredSlangs.Count / pageSize));
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+
+        pagedSlangs = filteredSlangs.Skip((currentPage - 1) * pageSize).Take(pageSize).ToList();
+    }
+
+    private void ClearSearch()
+    {
+        searchKeyword = "";
+        ApplyFilters();
+    }
+
+    private void ResetFilters()
+    {
+        searchKeyword = "";
+        selectedCategoryFilter = "All";
+        currentPage = 1;
+        ApplyFilters();
+    }
+
+    private void GoToPage(int page)
+    {
+        if (page < 1) page = 1;
+        if (page > totalPages) page = totalPages;
+        currentPage = page;
+        pagedSlangs = filteredSlangs.Skip((currentPage - 1) * pageSize).Take(pageSize).ToList();
+        StateHasChanged();
+    }
+
+    private List<int> VisiblePages
+    {
+        get
+        {
+            var pages = new List<int>();
+            if (totalPages <= 7)
+            {
+                for (int i = 1; i <= totalPages; i++) pages.Add(i);
+            }
+            else
+            {
+                pages.Add(1);
+                if (currentPage > 3) pages.Add(-1);
+
+                int start = Math.Max(2, currentPage - 1);
+                int end = Math.Min(totalPages - 1, currentPage + 1);
+
+                for (int i = start; i <= end; i++)
+                {
+                    if (!pages.Contains(i)) pages.Add(i);
+                }
+
+                if (currentPage < totalPages - 2) pages.Add(-1);
+                if (!pages.Contains(totalPages)) pages.Add(totalPages);
+            }
+            return pages;
+        }
+    }
+
+    private void OpenCreateModal()
+    {
+        isEditing = false;
+        modalItem = new SlangVocabItem
+        {
+            Id = Guid.NewGuid().ToString("N").Substring(0, 8),
+            Category = "slang_trend",
+            PopularityScore = 90
+        };
+        isModalOpen = true;
+    }
+
+    private void OpenEditModal(SlangVocabItem item)
+    {
+        isEditing = true;
+        modalItem = new SlangVocabItem
+        {
+            Id = item.Id,
+            Term = item.Term,
+            Hanzi = item.Hanzi,
+            Pinyin = item.Pinyin,
+            MeaningVi = item.MeaningVi,
+            Category = item.Category,
+            Origin = item.Origin,
+            DialogueZh = item.DialogueZh,
+            DialogueVi = item.DialogueVi,
+            PopularityScore = item.PopularityScore
+        };
+        isModalOpen = true;
+    }
+
+    private void CloseModal()
+    {
+        isModalOpen = false;
+    }
+
+    private async Task SaveModalItem()
+    {
+        if (string.IsNullOrWhiteSpace(modalItem.Term) || string.IsNullOrWhiteSpace(modalItem.MeaningVi))
+        {
+            alertMessage = "Vui lòng nhập đầy đủ Thuật ngữ và Nghĩa tiếng Việt.";
+            alertSuccess = false;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(modalItem.Pinyin))
+        {
+            modalItem.Pinyin = modalItem.Term;
+        }
+
+        if (isEditing)
+        {
+            var idx = allSlangs.FindIndex(s => s.Id == modalItem.Id);
+            if (idx >= 0) allSlangs[idx] = modalItem;
+            alertMessage = $"Đã cập nhật thuật ngữ '{modalItem.Term}' thành công.";
+        }
+        else
+        {
+            allSlangs.Insert(0, modalItem);
+            alertMessage = $"Đã thêm mới thuật ngữ '{modalItem.Term}' thành công.";
+        }
+
+        alertSuccess = true;
+        isModalOpen = false;
+        ApplyFilters();
+    }
+
+    private void ConfirmDelete(SlangVocabItem item)
+    {
+        itemToDelete = item;
+        isDeleteModalOpen = true;
+    }
+
+    private void ExecuteDelete()
+    {
+        if (itemToDelete != null)
+        {
+            allSlangs.RemoveAll(s => s.Id == itemToDelete.Id);
+            alertMessage = $"Đã xóa thuật ngữ '{itemToDelete.Term}'.";
+            alertSuccess = true;
+            itemToDelete = null;
+            isDeleteModalOpen = false;
+            ApplyFilters();
+        }
+    }
+
+    private async Task ExportJson()
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(allSlangs, new JsonSerializerOptions { WriteIndented = true });
+            var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(json));
+            await JS.InvokeVoidAsync("eval", $@"
+                (() => {{
+                    const a = document.createElement('a');
+                    a.href = 'data:application/json;charset=utf-8;base64,{base64}';
+                    a.download = 'hsk-genz-slang-export.json';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                }})()
+            ");
+        }
+        catch (Exception ex)
+        {
+            alertMessage = $"Lỗi xuất JSON: {ex.Message}";
+            alertSuccess = false;
+        }
+    }
+
+    private static bool IsCipher(string cat) =>
+        cat.Contains("cipher", StringComparison.OrdinalIgnoreCase) || cat.Contains("số", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsTrend(string cat) =>
+        cat.Contains("trend", StringComparison.OrdinalIgnoreCase) || cat.Contains("slang", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsLife(string cat) =>
+        cat.Contains("work", StringComparison.OrdinalIgnoreCase) || cat.Contains("tech", StringComparison.OrdinalIgnoreCase) || cat.Contains("life", StringComparison.OrdinalIgnoreCase);
+
+    private static string GetCategoryBadgeClass(string cat)
+    {
+        if (IsCipher(cat)) return "cat-cipher";
+        if (IsTrend(cat)) return "cat-trend";
+        if (cat.Contains("work", StringComparison.OrdinalIgnoreCase)) return "cat-workplace";
+        return "cat-tech";
+    }
+
+    private static string GetCategoryLabel(string cat)
+    {
+        if (IsCipher(cat)) return "Mật mã số";
+        if (IsTrend(cat)) return "Hot Trend";
+        if (cat.Contains("work", StringComparison.OrdinalIgnoreCase)) return "Công sở";
+        return "Công nghệ / Đời sống";
+    }
+}

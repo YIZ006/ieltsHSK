@@ -3,6 +3,7 @@
 @layout Frontend.App.Layout.HskLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
+@using Frontend.App.Components.Common
 @using Blazored.LocalStorage
 @using System.Text.Json
 @inject HskService HskService
@@ -39,6 +40,10 @@
                 <span>Học theo Chủ đề (@HskTopicCatalog.Topics.Count chủ đề)</span>
                 <span class="mode-badge-new">Mới</span>
             </button>
+            <OfflineDownloadCornerButton ResourceKey="@(viewCategoryMode == "topic" ? "all" : selectedLevel)" 
+                                        Title="@(viewCategoryMode == "topic" ? "Tất cả từ vựng HSK 1–6 (Chủ đề)" : $"Từ vựng {selectedLevel}")" 
+                                        ContentType="vocab_hsk" 
+                                        CustomClass="ms-2" />
         </div>
     </div>
 
@@ -224,7 +229,7 @@
             <div class="topic-hub-header">
                 <div class="topic-hub-title-box">
                     <h2 class="topic-hub-title"><i class="bi bi-compass-fill"></i> Chủ Đề Từ Vựng Tiếng Trung HSK</h2>
-                    <p class="topic-hub-sub">Khám phá từ vựng theo 14 chủ đề thiết thực đời sống. Luyện phản xạ Flashcard riêng từng nhóm từ.</p>
+                    <p class="topic-hub-sub">Khám phá từ vựng theo @HskTopicCatalog.Topics.Count chủ đề thiết thực đời sống. Luyện phản xạ Flashcard riêng từng nhóm từ.</p>
                 </div>
                 <div class="topic-search-wrap">
                     <i class="bi bi-search"></i>
@@ -373,7 +378,7 @@
                 else
                 {
                     <div class="vocab-grid">
-                        @foreach (var item in topicWords)
+                        @foreach (var item in TopicPagedWords)
                         {
                             var isLearned = IsLearned(item.Id);
                             <div class="vocab-card @(isLearned ? "is-learned" : "")">
@@ -428,6 +433,46 @@
                             </div>
                         }
                     </div>
+
+                    @* Phân trang cho Danh sách Từ vựng Theo Chủ Đề *@
+                    @if (TopicTotalPages > 1)
+                    {
+                        <div class="pagination-container">
+                            <div class="pagination-summary">
+                                Hiển thị <strong>@((topicCurrentPage - 1) * topicPageSize + 1)</strong> - <strong>@(Math.Min(topicCurrentPage * topicPageSize, topicWords.Count))</strong> trong tổng <strong>@topicWords.Count.ToString("N0")</strong> từ chủ đề @currentTopic.TitleVi
+                            </div>
+
+                            <div class="pagination-buttons">
+                                <button class="btn-page" @onclick="() => GoToTopicPage(1)" disabled="@(topicCurrentPage == 1)" title="Trang đầu">
+                                    <i class="bi bi-chevron-double-left"></i>
+                                </button>
+                                <button class="btn-page" @onclick="() => GoToTopicPage(topicCurrentPage - 1)" disabled="@(topicCurrentPage == 1)" title="Trang trước">
+                                    <i class="bi bi-chevron-left"></i>
+                                </button>
+
+                                @foreach (var p in TopicVisiblePageNumbers)
+                                {
+                                    @if (p == -1)
+                                    {
+                                        <span class="page-ellipsis">...</span>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn-page @(p == topicCurrentPage ? "active" : "")" @onclick="() => GoToTopicPage(p)">
+                                            @p
+                                        </button>
+                                    }
+                                }
+
+                                <button class="btn-page" @onclick="() => GoToTopicPage(topicCurrentPage + 1)" disabled="@(topicCurrentPage >= TopicTotalPages)" title="Trang sau">
+                                    <i class="bi bi-chevron-right"></i>
+                                </button>
+                                <button class="btn-page" @onclick="() => GoToTopicPage(TopicTotalPages)" disabled="@(topicCurrentPage >= TopicTotalPages)" title="Trang cuối">
+                                    <i class="bi bi-chevron-double-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    }
                 }
             </div>
         }
@@ -444,7 +489,7 @@
                 {
                     <div class="fc-topbar-info">
                         <span class="fc-counter"><b>@(sessionIndex + 1)</b> / @sessionQueue.Count</span>
-                        @if (viewCategoryMode == "topic" && currentTopic != null)
+                        @if (currentTopic != null)
                         {
                             <span class="fc-topic-chip" style="background:@currentTopic.BgColor; color:@currentTopic.Color;">
                                 <i class="bi @currentTopic.Icon"></i> @currentTopic.TitleVi
@@ -592,16 +637,89 @@
     private string viewCategoryMode = "level"; // "level" | "topic"
     private HskTopicItem? currentTopic = null;
     private string topicFilterTerm = "";
-    private string topicSearchTerm = "";
-    private bool topicHideLearned = false;
+    private string _topicSearchTerm = "";
+    private string topicSearchTerm
+    {
+        get => _topicSearchTerm;
+        set
+        {
+            if (_topicSearchTerm != value)
+            {
+                _topicSearchTerm = value;
+                topicCurrentPage = 1;
+            }
+        }
+    }
+    private bool _topicHideLearned = false;
+    private bool topicHideLearned
+    {
+        get => _topicHideLearned;
+        set
+        {
+            if (_topicHideLearned != value)
+            {
+                _topicHideLearned = value;
+                topicCurrentPage = 1;
+            }
+        }
+    }
     private bool topicIsShuffled = false;
     private List<HskVocabularyItem>? topicShuffledItems;
+
+    // Pagination cho chế độ Chủ đề
+    private int topicPageSize = 24;
+    private int topicCurrentPage = 1;
+
+    private int TopicTotalPages => (int)Math.Ceiling((double)CurrentTopicFilteredWords.Count / Math.Max(1, topicPageSize));
+
+    private List<HskVocabularyItem> TopicPagedWords =>
+        CurrentTopicFilteredWords.Skip((topicCurrentPage - 1) * topicPageSize).Take(topicPageSize).ToList();
+
+    private List<int> TopicVisiblePageNumbers
+    {
+        get
+        {
+            var pages = new List<int>();
+            int total = TopicTotalPages;
+            if (total <= 7)
+            {
+                for (int i = 1; i <= total; i++) pages.Add(i);
+            }
+            else
+            {
+                pages.Add(1);
+                if (topicCurrentPage > 3) pages.Add(-1);
+
+                int start = Math.Max(2, topicCurrentPage - 1);
+                int end = Math.Min(total - 1, topicCurrentPage + 1);
+
+                for (int i = start; i <= end; i++)
+                {
+                    if (!pages.Contains(i)) pages.Add(i);
+                }
+
+                if (topicCurrentPage < total - 2) pages.Add(-1);
+                if (!pages.Contains(total)) pages.Add(total);
+            }
+            return pages;
+        }
+    }
+
+    private void GoToTopicPage(int page)
+    {
+        if (page < 1) page = 1;
+        if (page > TopicTotalPages) page = TopicTotalPages;
+        topicCurrentPage = page;
+    }
+
+    // Kho từ vựng đầy đủ 5.100 từ cho tất cả chủ đề
+    private List<HskVocabularyItem>? allVocabForTopics;
 
     // Topic Caches for instant 0ms switching
     private Dictionary<string, List<HskVocabularyItem>> _topicWordsCache = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<string, (int total, int learned, int percent)> _topicStatsCache = new(StringComparer.OrdinalIgnoreCase);
 
-    private void SetCategoryMode(string mode)
+    private async Task SetCategoryMode(string mode)
     {
         if (viewCategoryMode == mode) return;
         viewCategoryMode = mode;
@@ -609,31 +727,44 @@
         {
             currentTopic = null;
         }
-        else if (_topicWordsCache.Count == 0)
+        else
         {
+            if (allVocabForTopics == null || allVocabForTopics.Count == 0)
+            {
+                isLoading = true;
+                StateHasChanged();
+                allVocabForTopics = await HskService.GetVocabularyAsync("all");
+                isLoading = false;
+            }
             RebuildTopicCache();
+            topicCurrentPage = 1;
         }
     }
 
     private void SelectTopic(HskTopicItem topic)
     {
         currentTopic = topic;
-        topicSearchTerm = "";
-        topicHideLearned = false;
+        _topicSearchTerm = "";
+        _topicHideLearned = false;
         topicIsShuffled = false;
         topicShuffledItems = null;
+        topicCurrentPage = 1;
     }
 
     private void RebuildTopicCache()
     {
+        var sourceList = (allVocabForTopics != null && allVocabForTopics.Count > 0)
+            ? allVocabForTopics
+            : vocabItems;
+
         var newCache = new Dictionary<string, List<HskVocabularyItem>>(StringComparer.OrdinalIgnoreCase);
         var newStats = new Dictionary<string, (int total, int learned, int percent)>(StringComparer.OrdinalIgnoreCase);
 
         // Pre-build index for external vocab items if any
         ILookup<string, HskVocabularyItem>? externalLookup = null;
-        if (vocabItems.Count > 0)
+        if (sourceList.Count > 0)
         {
-            externalLookup = vocabItems.ToLookup(w => w.Topic ?? HskTopicCatalog.InferTopic(w) ?? string.Empty);
+            externalLookup = sourceList.ToLookup(w => HskTopicCatalog.InferTopic(w) ?? string.Empty);
         }
 
         foreach (var topic in HskTopicCatalog.Topics)
@@ -737,9 +868,12 @@
 
     private async Task StartTopicFlashcards(HskTopicItem topic)
     {
-        if (!_topicWordsCache.TryGetValue(topic.Id, out var words))
+        currentTopic = topic;
+        if (!_topicWordsCache.TryGetValue(topic.Id, out var words) || words.Count == 0)
         {
-            words = HskTopicCatalog.GetWordsForTopic(topic.Id, vocabItems);
+            var source = (allVocabForTopics != null && allVocabForTopics.Count > 0) ? allVocabForTopics : vocabItems;
+            words = HskTopicCatalog.GetWordsForTopic(topic.Id, source);
+            _topicWordsCache[topic.Id] = words;
         }
         await StartFlashcardSession(words);
     }
@@ -854,10 +988,13 @@
         try
         {
             var result = await HskService.GetVocabularyAsync(selectedLevel);
-            if (result == null)
+            if (result == null || result.Count == 0)
             {
-                // Lỗi kết nối API -> dùng bộ từ mẫu demo (chỉ có HSK 1-3)
-                vocabItems = GetSampleVocab(selectedLevel);
+                // Khi API trả về rỗng hoặc chưa nạp DB -> nạp từ bộ dữ liệu chuẩn có sẵn
+                var staticWords = HskTopicCatalog.TopicVocabularies
+                    .Where(w => string.Equals(w.HskLevel, selectedLevel, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                vocabItems = staticWords.Count > 0 ? staticWords : GetSampleVocab(selectedLevel);
             }
             else
             {
@@ -868,7 +1005,10 @@
         catch (Exception ex)
         {
             Console.WriteLine($"[HskVocabulary] Load error: {ex.Message}");
-            vocabItems = GetSampleVocab(selectedLevel);
+            var staticWords = HskTopicCatalog.TopicVocabularies
+                .Where(w => string.Equals(w.HskLevel, selectedLevel, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            vocabItems = staticWords.Count > 0 ? staticWords : GetSampleVocab(selectedLevel);
         }
 
         if (isShuffled)
@@ -963,6 +1103,10 @@
 
     private async Task StartFlashcardSession(List<HskVocabularyItem>? customSource = null)
     {
+        if (customSource == null && viewCategoryMode != "topic")
+        {
+            currentTopic = null;
+        }
         var src = customSource ?? vocabItems;
         // Pool: chỉ những từ CHƯA được đánh dấu là đã thuộc, xáo trộn ngẫu nhiên
         var pool = ShuffleList(src.Where(x => !IsLearned(x.Id)).ToList());
@@ -973,12 +1117,13 @@
             pool = ShuffleList(src.ToList());
             if (pool.Count == 0)
             {
-                await JS.InvokeVoidAsync("alert", "Chưa có từ vựng nào trong nhóm này.");
+                await JS.InvokeVoidAsync("OfflineDB.showToast", "Chưa có từ vựng nào trong nhóm này.", "warning");
                 return;
             }
         }
 
-        sessionQueue = pool.Take(flashcardSize).ToList();
+        var size = (customSource != null && src.Count <= flashcardSize) ? src.Count : Math.Min(flashcardSize, pool.Count);
+        sessionQueue = pool.Take(size).ToList();
         sessionIndex = 0;
         cardFlipped = false;
         rememberedThisSession = new();
@@ -1070,7 +1215,7 @@
 
     private async Task SpeakChinese(string text)
     {
-        await JS.InvokeVoidAsync("eval", $"if ('speechSynthesis' in window) {{ const u = new SpeechSynthesisUtterance('{text}'); u.lang = 'zh-CN'; window.speechSynthesis.speak(u); }}");
+        await JS.InvokeVoidAsync("OfflineDB.speakChinese", text);
     }
 
     private static List<HskVocabularyItem> GetSampleVocab(string level)

@@ -1,5 +1,6 @@
-@page "/portal-hub/api-keys"
+﻿@page "/portal-hub/api-keys"
 @page "/portal-hub/ai-settings"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")]
 @layout Frontend.App.Layout.AdminLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
@@ -574,9 +575,64 @@
             </div>
         </div>
     </div>
+
+    <!-- Cloudflare Pages Deploy Card -->
+    <div class="routing-card mt-4" style="border: 1px solid rgba(249, 115, 22, 0.3); background: linear-gradient(135deg, rgba(249, 115, 22, 0.04) 0%, rgba(234, 88, 12, 0.01) 100%); border-radius: 16px; padding: 24px;">
+        <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+            <div>
+                <h3 class="routing-title mb-1" style="font-size: 1.15rem; font-weight: 800; color: #1e293b;">
+                    <i class="bi bi-rocket-takeoff-fill text-warning me-2"></i> Cloudflare Pages Deploy Hook (Triển Khai Web 1-Click)
+                </h3>
+                <p class="routing-sub mb-0" style="color: #64748b; font-size: 0.88rem;">
+                    Cấu hình webhook để kích hoạt Cloudflare Pages tự động build & deploy website ieltshsk.me chỉ với 1 click từ Control Hub.
+                </p>
+            </div>
+            <button class="btn btn-warning btn-sm" @onclick="TriggerDeployFromKeys" disabled="@isDeployingWeb" style="font-weight: 700; border-radius: 8px; padding: 8px 16px;">
+                @if (isDeployingWeb)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                    <span>Đang gửi lệnh...</span>
+                }
+                else
+                {
+                    <i class="bi bi-send-fill me-1"></i>
+                    <span>Kích Hoạt Deploy Ngay</span>
+                }
+            </button>
+        </div>
+
+        <div class="form-group mb-2">
+            <label class="form-label" style="font-size: 0.82rem; font-weight: 700; color: #64748b;">Deploy Hook URL (Lấy từ Cloudflare Dashboard -> Workers &amp; Pages -> ieltsHSK -> Settings -> Builds &amp; deployments -> Deploy hooks)</label>
+            <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-link-45deg"></i></span>
+                <input type="text" class="form-control" @bind="settings.CloudflarePagesDeployHook" placeholder="https://api.cloudflare.com/client/v4/pages/webhooks/deploy_hooks/..." style="font-family: monospace; font-size: 0.85rem;" />
+            </div>
+        </div>
+        <div style="font-size: 0.78rem; color: #94a3b8;">
+            <i class="bi bi-info-circle me-1"></i> Sau khi dán URL, bấm <b>Lưu Cấu Hình</b> ở trên. Bạn cũng có thể kích hoạt Deploy từ nút <b>🚀 Triển khai Web</b> trên thanh Topbar bất cứ lúc nào!
+        </div>
+    </div>
 </div>
 
 @code {
+    private bool isDeployingWeb = false;
+    private async Task TriggerDeployFromKeys()
+    {
+        if (string.IsNullOrWhiteSpace(settings.CloudflarePagesDeployHook))
+        {
+            notificationMessage = "Vui lòng nhập Deploy Hook URL của Cloudflare Pages trước khi kích hoạt.";
+            isNotificationSuccess = false;
+            return;
+        }
+
+        isDeployingWeb = true;
+        await AdminUserService.SaveAiSettingsAsync(settings);
+        var (ok, msg) = await AdminUserService.DeployFrontendAsync(settings.CloudflarePagesDeployHook);
+        isDeployingWeb = false;
+        notificationMessage = msg;
+        isNotificationSuccess = ok;
+    }
+
     private SystemAiSettingsDto settings = new();
     private Dictionary<string, bool> showKey = new()
     {

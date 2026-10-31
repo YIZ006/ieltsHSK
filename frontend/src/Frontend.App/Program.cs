@@ -18,15 +18,23 @@ var backendApiBaseUrl = builder.Configuration["BackendApi:BaseUrl"] ?? "http://l
 // - Nếu truy cập bằng localhost -> Backend API tự trỏ về http://localhost:5101/
 if (Uri.TryCreate(builder.HostEnvironment.BaseAddress, UriKind.Absolute, out var hostUri))
 {
-    if (hostUri.Host != "localhost" && hostUri.Host != "127.0.0.1")
-    {
-        backendApiBaseUrl = $"{hostUri.Scheme}://{hostUri.Host}:5101/";
-    }
-    else
+    if (hostUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) || hostUri.Host == "127.0.0.1")
     {
         backendApiBaseUrl = "http://localhost:5101/";
+        builder.Configuration["BackendApi:BaseUrl"] = backendApiBaseUrl;
     }
-    builder.Configuration["BackendApi:BaseUrl"] = backendApiBaseUrl;
+    else if (System.Net.IPAddress.TryParse(hostUri.Host, out _))
+    {
+        // Nếu truy cập bằng IP mạng LAN (ví dụ http://192.168.1.x:5102) -> trỏ về IP LAN cổng 5101
+        backendApiBaseUrl = $"{hostUri.Scheme}://{hostUri.Host}:5101/";
+        builder.Configuration["BackendApi:BaseUrl"] = backendApiBaseUrl;
+    }
+    // Nếu là tên miền online chạy HTTPS (như ieltshsk.me, ieltshsk.pages.dev) -> đảm bảo BackendApi dùng HTTPS để tránh lỗi Mixed Content (Failed to fetch)
+    else if (hostUri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) && backendApiBaseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+    {
+        backendApiBaseUrl = "https://" + backendApiBaseUrl.Substring("http://".Length);
+        builder.Configuration["BackendApi:BaseUrl"] = backendApiBaseUrl;
+    }
 }
 
 if (!backendApiBaseUrl.EndsWith('/'))
@@ -114,18 +122,12 @@ builder.Services.AddScoped(sp =>
         BaseAddress = new Uri(backendApiBaseUrl)
     };
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
-    return new UserGameProgressService(httpClient, localStorage);
-});
-builder.Services.AddScoped(sp =>
-{
-    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
-    {
-        BaseAddress = new Uri(backendApiBaseUrl)
-    };
-    var localStorage = sp.GetRequiredService<ILocalStorageService>();
     return new ExamSubmissionService(localStorage, httpClient);
 });
 builder.Services.AddScoped<GrammarStructureService>();
+builder.Services.AddScoped<ExamScheduleService>();
+builder.Services.AddScoped<CultureStoryService>();
+builder.Services.AddScoped<HskSlangService>();
 
 builder.Services.AddAuthorizationCore();
 
@@ -157,7 +159,7 @@ builder.Services.AddScoped(sp =>
     {
         BaseAddress = new Uri(backendApiBaseUrl)
     };
-    return new IeltsService(httpClient);
+    return new IeltsService(httpClient, sp.GetRequiredService<IJSRuntime>());
 });
 
 // OfflineStorageService: Quản lý tải và lưu trữ đề thi Offline với IndexedDB và CacheStorage
@@ -210,14 +212,16 @@ builder.Services.AddScoped(sp =>
     return new StoryService(httpClient);
 });
 
-// HskService: tải dữ liệu HSK (gắn JWT tự động qua AuthHeaderHandler)
+// HskService: tải dữ liệu HSK (gắn JWT tự động qua AuthHeaderHandler + frontendClient để nạp offline sample-data)
 builder.Services.AddScoped(sp =>
 {
     var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
     {
         BaseAddress = new Uri(backendApiBaseUrl)
     };
-    return new HskService(httpClient, sp.GetRequiredService<ILocalStorageService>());
+    var frontendClient = new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) };
+    var js = sp.GetRequiredService<IJSRuntime>();
+    return new HskService(httpClient, sp.GetRequiredService<ILocalStorageService>(), frontendClient, js);
 });
 
 // SpeakAlongService: IELTS Nói Theo (Shadowing)

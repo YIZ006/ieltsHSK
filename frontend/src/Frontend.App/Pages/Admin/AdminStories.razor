@@ -1,9 +1,10 @@
-@page "/portal-hub/stories"
-@page "/admin/stories"
+﻿@page "/portal-hub/stories"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")]
 @layout Frontend.App.Layout.AdminLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
 @inject StoryService StoryService
+@inject Frontend.App.Services.AdminUserService AdminUserService
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 
@@ -29,7 +30,19 @@
                 else
                 {
                     <i class="bi bi-cloud-arrow-up-fill text-primary"></i>
-                    <span>Đồng bộ lên R2</span>
+                    <span>Đồng bộ R2 (Nội dung)</span>
+                }
+            </button>
+            <button class="btn btn-secondary-outline" @onclick="TriggerDeployFromStories" disabled="@isDeployingStoriesWeb" title="Kích hoạt Cloudflare Pages build & deploy website ieltshsk.me" style="background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); color: #c2410c; border: 1px solid #fed7aa; font-weight: 700;">
+                @if (isDeployingStoriesWeb)
+                {
+                    <span class="mini-spinner"></span>
+                    <span>Đang kích hoạt...</span>
+                }
+                else
+                {
+                    <i class="bi bi-rocket-takeoff-fill text-warning"></i>
+                    <span>Triển khai Web</span>
                 }
             </button>
             <button class="btn btn-primary-outline" @onclick="OpenImportModal">
@@ -664,6 +677,15 @@
 }
 
 @code {
+    private bool isDeployingStoriesWeb = false;
+    private async Task TriggerDeployFromStories()
+    {
+        isDeployingStoriesWeb = true;
+        var (ok, msg) = await AdminUserService.DeployFrontendAsync();
+        isDeployingStoriesWeb = false;
+        await JSRuntime.InvokeVoidAsync("alert", msg);
+    }
+
     private static List<StoryModel>? _cachedStories;
 
     private List<StoryModel> stories = new();

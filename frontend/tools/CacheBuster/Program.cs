@@ -18,6 +18,7 @@ class Program
         }
 
         bool verifyOnly = args.Any(a => a.Equals("--verify-only", StringComparison.OrdinalIgnoreCase));
+        bool noCompress = args.Any(a => a.Equals("--no-compress", StringComparison.OrdinalIgnoreCase) || a.Equals("--cloudflare-pages", StringComparison.OrdinalIgnoreCase));
         string targetDir = args.First(a => !a.StartsWith("--", StringComparison.Ordinal));
 
         // If path points to publish root containing wwwroot, adjust to wwwroot
@@ -35,15 +36,28 @@ class Program
 
         Console.WriteLine($"Target directory: {targetDir}");
 
+        if (noCompress)
+        {
+            Console.WriteLine("[INFO] Cloudflare Pages / No-compress mode: cleaning all .gz and .br files...");
+            foreach (var f in Directory.GetFiles(targetDir, "*.gz", SearchOption.AllDirectories))
+            {
+                try { File.Delete(f); } catch { }
+            }
+            foreach (var f in Directory.GetFiles(targetDir, "*.br", SearchOption.AllDirectories))
+            {
+                try { File.Delete(f); } catch { }
+            }
+        }
+
         if (verifyOnly)
         {
             return VerifyDeployment(targetDir, indexPath);
         }
 
-        return ProcessAndCacheBust(targetDir, indexPath);
+        return ProcessAndCacheBust(targetDir, indexPath, noCompress);
     }
 
-    static int ProcessAndCacheBust(string targetDir, string indexPath)
+    static int ProcessAndCacheBust(string targetDir, string indexPath, bool noCompress)
     {
         try
         {
@@ -100,8 +114,11 @@ class Program
                 // Write hashed asset copy
                 File.WriteAllBytes(newFullPath, fileBytes);
 
-                // Generate pre-compressed files (.gz and .br)
-                GenerateCompressedVariants(newFullPath, fileBytes);
+                // Generate pre-compressed files (.gz and .br) if compression enabled
+                if (!noCompress)
+                {
+                    GenerateCompressedVariants(newFullPath, fileBytes);
+                }
 
                 // Replace in HTML
                 string originalMatch = match.Value;
@@ -117,9 +134,12 @@ class Program
             // Write modified index.html
             File.WriteAllText(indexPath, updatedHtml, Encoding.UTF8);
 
-            // Re-generate compression for index.html
-            byte[] indexBytes = Encoding.UTF8.GetBytes(updatedHtml);
-            GenerateCompressedVariants(indexPath, indexBytes);
+            // Re-generate compression for index.html if compression enabled
+            if (!noCompress)
+            {
+                byte[] indexBytes = Encoding.UTF8.GetBytes(updatedHtml);
+                GenerateCompressedVariants(indexPath, indexBytes);
+            }
 
             Console.WriteLine("[SUCCESS] index.html successfully updated with hashed assets.");
 

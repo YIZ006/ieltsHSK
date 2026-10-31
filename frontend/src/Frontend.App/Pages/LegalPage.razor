@@ -4,47 +4,110 @@
 @page "/contact"
 @inject HttpClient Http
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>@GetPageTitle()</PageTitle>
 
 <div class="legal">
-    @if (loading) { <p class="lede">Đang tải…</p> }
-    else if (error != null) { <p class="lede">@error</p> }
-    else { @((MarkupString)html) }
+    @if (loading)
+    {
+        <div style="text-align: center; padding: 60px 0;">
+            <div class="spinner-border text-primary" role="status" style="width: 2rem; height: 2rem; margin-bottom: 12px;"></div>
+            <p class="lede">Đang tải nội dung...</p>
+        </div>
+    }
+    else if (error != null)
+    {
+        <div style="text-align: center; padding: 60px 0;">
+            <p class="lede text-danger">@error</p>
+            <button class="btn btn-outline-primary btn-sm" @onclick="LoadAsync" style="margin-top: 12px;">Thử lại</button>
+        </div>
+    }
+    else
+    {
+        @((MarkupString)html)
+    }
 </div>
 
 @code {
     private string html = "";
     private bool loading = true;
     private string? error;
+    private string? lastSlug;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        await LoadAsync();
+    }
 
     protected override async Task OnParametersSetAsync()
     {
-        // route cùng component -> chỉ reload khi slug đổi
-        var slug = Slug();
-        if (slug != lastSlug) await LoadAsync();
+        var currentSlug = Slug();
+        if (currentSlug != lastSlug)
+        {
+            await LoadAsync();
+            try { await JS.InvokeVoidAsync("window.scrollTo", 0, 0); } catch { }
+        }
     }
 
-    private string? lastSlug;
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        var currentSlug = Slug();
+        if (currentSlug != lastSlug)
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadAsync();
+                try { await JS.InvokeVoidAsync("window.scrollTo", 0, 0); } catch { }
+            });
+        }
+    }
 
-    private string Slug() => Nav.ToBaseRelativePath(Nav.Uri).Split('/')[0];
+    private string Slug()
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var path = relative.Split('?', '#')[0].Trim('/').ToLowerInvariant();
+        return string.IsNullOrEmpty(path) ? "terms" : path;
+    }
+
+    private string GetPageTitle()
+    {
+        return Slug() switch
+        {
+            "privacy" => "Chính Sách Bảo Mật - ieltsHSK",
+            "curriculum" => "Khung Chương Trình Đào Tạo - ieltsHSK",
+            "contact" => "Trung Tâm Trợ Giúp & Liên Hệ - ieltsHSK",
+            _ => "Điều Khoản Dịch Vụ - ieltsHSK"
+        };
+    }
 
     private async Task LoadAsync()
     {
-        loading = true; error = null; StateHasChanged();
-        lastSlug = Slug();
+        var targetSlug = Slug();
+        lastSlug = targetSlug;
+        loading = true;
+        error = null;
+        StateHasChanged();
+
         try
         {
-            html = await Http.GetStringAsync($"legal/{lastSlug}.html");
+            html = await Http.GetStringAsync($"legal/{targetSlug}.html");
         }
-        catch
+        catch (Exception ex)
         {
-            error = "Không tải được nội dung trang.";
+            error = "Không tải được nội dung trang: " + ex.Message;
         }
         finally
         {
             loading = false;
             StateHasChanged();
         }
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
     }
 }

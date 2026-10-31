@@ -9,6 +9,8 @@ html, body {
 }
 
 :root, [data-theme="light"] {
+    color-scheme: light;
+    color-scheme: only light;
     --ig-bg: #f8fafc;
     --ig-surface: #ffffff;
     --ig-text: #0f172a;
@@ -53,6 +55,7 @@ html, body {
 }
 
 [data-theme="dark"] {
+    color-scheme: dark;
     --ig-bg: #0b0d13;
     --ig-surface: #12151e;
     --ig-text: #f8fafc;
@@ -97,53 +100,6 @@ html, body {
         0 0 16px rgba(56, 189, 248, 0.85);
 }
 
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-        --ig-bg: #0b0d13;
-        --ig-surface: #12151e;
-        --ig-text: #f8fafc;
-        --ig-text-secondary: #94a3b8;
-        --ig-border: #232838;
-        --ig-primary: #38bdf8;
-        --ig-primary-hover: #0ea5e9;
-        --ig-card-bg: #141721;
-        --ig-danger: #f87171;
-
-        --landing-bg: radial-gradient(circle at 50% 8%, #141721 0%, #0b0d13 55%, #06070a 100%);
-        --landing-text: #f8fafc;
-        --landing-title: #f8fafc;
-        --landing-subtitle: #94a3b8;
-        --landing-card-bg: #0f172a;
-
-        /* Liquid Water Droplet Scrollbar (Dark Mode) */
-        --water-scroll-width: 9px;
-        --water-track-bg: rgba(56, 189, 248, 0.03);
-        --water-drop-thumb: linear-gradient(
-            180deg,
-            rgba(255, 255, 255, 0.95) 0%,
-            rgba(186, 230, 253, 0.85) 10%,
-            rgba(56, 189, 248, 0.8) 32%,
-            rgba(14, 165, 233, 0.85) 65%,
-            rgba(2, 132, 199, 0.9) 100%
-        );
-        --water-drop-shadow: 
-            inset 0 2px 4px rgba(255, 255, 255, 0.9),
-            inset 0 -2px 4px rgba(7, 12, 24, 0.6),
-            0 2px 12px rgba(56, 189, 248, 0.55);
-        --water-drop-hover: linear-gradient(
-            180deg,
-            #ffffff 0%,
-            #bae6fd 12%,
-            #38bdf8 38%,
-            #0ea5e9 75%,
-            #0284c7 100%
-        );
-        --water-drop-hover-shadow: 
-            inset 0 2px 5px #ffffff,
-            0 0 16px rgba(56, 189, 248, 0.85);
-    }
-}
-
 /* ── VIEW TRANSITIONS EXPANDING CIRCLE FROM BUTTON ── */
 ::view-transition-old(root),
 ::view-transition-new(root) {
@@ -174,15 +130,6 @@ html, body {
 
 [data-theme="dark"] .brand-logo-dark {
     display: block !important;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .brand-logo-light {
-        display: none !important;
-    }
-    :root:not([data-theme="light"]) .brand-logo-dark {
-        display: block !important;
-    }
 }
 
 /* ══════════════════════════════════════════════════════════════════════ */
@@ -449,7 +396,56 @@ html.has-droplet-scrollbar body::-webkit-scrollbar {
     color: #f8fafc !important;
 }
 
-/* Inputs & Selects */
+/* Inputs & Selects - Explicit Light Mode Hard-Locking */
+html[data-theme="light"] input[type="text"],
+html[data-theme="light"] input[type="search"],
+html[data-theme="light"] input[type="date"],
+html[data-theme="light"] select,
+html[data-theme="light"] textarea,
+html[data-theme="light"] .form-input,
+html[data-theme="light"] .search-input-wrapper input,
+html[data-theme="light"] .search-input-group input,
+html[data-theme="light"] .category-select-wrapper select,
+[data-theme="light"] input[type="text"],
+[data-theme="light"] input[type="search"],
+[data-theme="light"] input[type="date"],
+[data-theme="light"] select,
+[data-theme="light"] textarea,
+[data-theme="light"] .form-input,
+[data-theme="light"] .search-input-wrapper input,
+[data-theme="light"] .search-input-group input,
+[data-theme="light"] .category-select-wrapper select,
+:root:not([data-theme="dark"]) input[type="text"],
+:root:not([data-theme="dark"]) input[type="search"],
+:root:not([data-theme="dark"]) input[type="date"],
+:root:not([data-theme="dark"]) select,
+:root:not([data-theme="dark"]) textarea,
+:root:not([data-theme="dark"]) .form-input,
+:root:not([data-theme="dark"]) .search-input-wrapper input,
+:root:not([data-theme="dark"]) .search-input-group input,
+:root:not([data-theme="dark"]) .category-select-wrapper select {
+    background-color: #ffffff !important;
+    border-color: var(--ig-border) !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] select option,
+[data-theme="light"] select option,
+:root:not([data-theme="dark"]) select option {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder,
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder,
+:root:not([data-theme="dark"]) input::placeholder,
+:root:not([data-theme="dark"]) textarea::placeholder {
+    color: #94a3b8 !important;
+}
+
+/* Inputs & Selects - Dark Mode */
 [data-theme="dark"] input[type="text"],
 [data-theme="dark"] input[type="search"],
 [data-theme="dark"] input[type="date"],
@@ -461,6 +457,11 @@ html.has-droplet-scrollbar body::-webkit-scrollbar {
 [data-theme="dark"] .category-select-wrapper select {
     background-color: #111d33 !important;
     border-color: var(--ig-border) !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] select option {
+    background-color: #111d33 !important;
     color: #f8fafc !important;
 }
 
@@ -600,6 +601,125 @@ html.has-droplet-scrollbar body::-webkit-scrollbar {
     background-color: #141721 !important;
     border-color: #232838 !important;
     color: #f8fafc !important;
+}
+
+/* ========================================================================= */
+/* ADMIN PORTAL HUB THEME ENFORCEMENT                                        */
+/* Admin Hub uses a dedicated high-contrast light enterprise theme.          */
+/* Prevent global [data-theme="dark"] from turning text white on white cards.*/
+/* ========================================================================= */
+.admin-layout,
+.admin-layout .admin-content,
+.admin-layout .admin-main,
+.admin-layout .content-card,
+.admin-layout .table-card,
+.admin-layout table,
+.admin-layout td,
+.admin-layout th {
+    color: #1e293b !important;
+}
+
+.admin-layout .text-dark,
+.admin-layout .text-body,
+.admin-layout .text-black,
+.admin-layout .fw-bold,
+.admin-layout h1, .admin-layout h2, .admin-layout h3, .admin-layout h4, .admin-layout h5, .admin-layout h6,
+.admin-layout .page-title,
+.admin-layout .topic-title,
+.admin-layout .question-text,
+.admin-layout .story-title,
+.admin-layout .grammar-title,
+.admin-layout strong,
+.admin-layout b {
+    color: #0f172a !important;
+}
+
+.admin-layout .text-muted,
+.admin-layout .page-subtitle,
+.admin-layout .tips-tag,
+.admin-layout .sub-info,
+.admin-layout .text-secondary {
+    color: #64748b !important;
+}
+
+.admin-layout .text-primary {
+    color: #0284c7 !important;
+}
+
+.admin-layout table,
+.admin-layout .custom-table,
+.admin-layout .grammar-table,
+.admin-layout .stories-table,
+.admin-layout .nav-table,
+.admin-layout .users-table,
+.admin-layout .dictation-table {
+    color: #1e293b !important;
+    background-color: #ffffff !important;
+}
+
+.admin-layout table tbody tr td,
+.admin-layout .custom-table tbody tr td,
+.admin-layout .grammar-table tbody tr td,
+.admin-layout .stories-table tbody tr td,
+.admin-layout .nav-table tbody tr td,
+.admin-layout .table > :not(caption) > * > * {
+    color: #1e293b !important;
+    background-color: #ffffff !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.admin-layout table tbody tr:hover td,
+.admin-layout .custom-table tbody tr:hover td,
+.admin-layout .grammar-table tbody tr:hover td,
+.admin-layout .stories-table tbody tr:hover td,
+.admin-layout .nav-table tbody tr:hover td {
+    background-color: #f8fafc !important;
+}
+
+.admin-layout table thead th,
+.admin-layout .custom-table thead th,
+.admin-layout .grammar-table thead th,
+.admin-layout .stories-table thead th,
+.admin-layout .nav-table thead th {
+    background-color: #f8fafc !important;
+    color: #475569 !important;
+    border-bottom: 1.5px solid #e2e8f0 !important;
+}
+
+.admin-layout .formula-box {
+    background-color: #f1f5f9 !important;
+    border: 1px solid #e2e8f0 !important;
+}
+
+.admin-layout .formula-box code,
+.admin-layout code {
+    color: #312e81 !important;
+    background-color: #e0e7ff !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+}
+
+.admin-layout .usage-text,
+.admin-layout .adv-text,
+.admin-layout .answer-text,
+.admin-layout p {
+    color: #334155 !important;
+}
+
+.admin-layout input:not([type="checkbox"]):not([type="radio"]),
+.admin-layout select,
+.admin-layout textarea {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+}
+
+.admin-layout .card,
+.admin-layout .content-card,
+.admin-layout .table-card {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    color: #1e293b !important;
 }
 
 

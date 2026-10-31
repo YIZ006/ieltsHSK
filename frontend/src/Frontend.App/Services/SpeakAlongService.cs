@@ -38,7 +38,31 @@ public class SpeakAlongService
             return memCached;
         }
 
-        // 1. Try to fetch from Backend & Cloudflare R2
+        var key = GetStorageKey(part);
+
+        // 1. CACHE-FIRST: Return local storage cache immediately (0ms load)
+        if (!forceRefresh)
+        {
+            try
+            {
+                var localJson = await _js.InvokeAsync<string?>("localStorage.getItem", key);
+                if (!string.IsNullOrWhiteSpace(localJson))
+                {
+                    var localData = JsonSerializer.Deserialize<SpeakAlongExamData>(localJson);
+                    if (localData != null && localData.Items != null && localData.Items.Count > 0)
+                    {
+                        _examMemoryCache[cleanPart] = localData;
+                        return localData;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SpeakAlongService] Error reading local storage: {ex.Message}");
+            }
+        }
+
+        // 2. Fetch from Backend & Cloudflare R2
         try
         {
             var apiEndpoint = $"{_backendApiBaseUrl}/api/ielts/speak-along/{cleanPart}";
@@ -58,7 +82,6 @@ public class SpeakAlongService
                         {
                             // Cache to memory & localStorage for offline
                             _examMemoryCache[cleanPart] = r2Data;
-                            var key = GetStorageKey(part);
                             var json = JsonSerializer.Serialize(r2Data);
                             await _js.InvokeVoidAsync("localStorage.setItem", key, json);
                             return r2Data;
@@ -70,26 +93,6 @@ public class SpeakAlongService
         catch (Exception ex)
         {
             Console.WriteLine($"[SpeakAlongService] Remote R2 load failed, falling back: {ex.Message}");
-        }
-
-        // 2. Try localStorage cache
-        try
-        {
-            var key = GetStorageKey(part);
-            var localJson = await _js.InvokeAsync<string?>("localStorage.getItem", key);
-            if (!string.IsNullOrWhiteSpace(localJson))
-            {
-                var localData = JsonSerializer.Deserialize<SpeakAlongExamData>(localJson);
-                if (localData != null && localData.Items != null && localData.Items.Count > 0)
-                {
-                    _examMemoryCache[cleanPart] = localData;
-                    return localData;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[SpeakAlongService] Error reading local storage: {ex.Message}");
         }
 
         // 3. Fallback to sample data files
@@ -274,16 +277,40 @@ public class SpeakAlongService
     // AUDIO SHADOWING (CAMBRIDGE IELTS & ENGNOVATE MP3)
     // ══════════════════════════════════════════════════════
 
-    private const string AudioLessonsStorageKey = "ielts_audio_shadowing_lessons_catalog";
+    private const string AudioLessonsStorageKey = "ielts_audio_shadowing_lessons_catalog_v2";
 
     public async Task<List<AudioLessonDto>> LoadAudioLessonsAsync(bool forceRefresh = false)
     {
         if (!forceRefresh && _audioLessonsMemoryCache != null && _audioLessonsMemoryCache.Count > 0)
         {
+            SanitizeAudioUrls(_audioLessonsMemoryCache);
             return _audioLessonsMemoryCache;
         }
 
-        // 1. Try to fetch master catalog from Backend & Cloudflare R2
+        // 1. CACHE-FIRST: Try local storage cache first (instant 0ms load)
+        if (!forceRefresh)
+        {
+            try
+            {
+                var localJson = await _js.InvokeAsync<string?>("localStorage.getItem", AudioLessonsStorageKey);
+                if (!string.IsNullOrWhiteSpace(localJson))
+                {
+                    var cached = JsonSerializer.Deserialize<List<AudioLessonDto>>(localJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (cached != null && cached.Count > 0)
+                    {
+                        SanitizeAudioUrls(cached);
+                        _audioLessonsMemoryCache = cached;
+                        return cached;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SpeakAlongService] Local storage audio lessons read failed: {ex.Message}");
+            }
+        }
+
+        // 2. Try to fetch master catalog from Backend & Cloudflare R2
         try
         {
             var apiEndpoint = $"{_backendApiBaseUrl}/api/ielts/audio-shadowing";
@@ -301,7 +328,7 @@ public class SpeakAlongService
                         var r2Lessons = await backendClient.GetFromJsonAsync<List<AudioLessonDto>>(r2Url);
                         if (r2Lessons != null && r2Lessons.Count > 0)
                         {
-                            // Cache to memory & localStorage
+                            SanitizeAudioUrls(r2Lessons);
                             _audioLessonsMemoryCache = r2Lessons;
                             var json = JsonSerializer.Serialize(r2Lessons);
                             await _js.InvokeVoidAsync("localStorage.setItem", AudioLessonsStorageKey, json);
@@ -316,31 +343,13 @@ public class SpeakAlongService
             Console.WriteLine($"[SpeakAlongService] R2 audio catalog fetch warning: {ex.Message}");
         }
 
-        // 2. Try local storage cache
-        try
-        {
-            var localJson = await _js.InvokeAsync<string?>("localStorage.getItem", AudioLessonsStorageKey);
-            if (!string.IsNullOrWhiteSpace(localJson))
-            {
-                var cached = JsonSerializer.Deserialize<List<AudioLessonDto>>(localJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (cached != null && cached.Count > 0)
-                {
-                    _audioLessonsMemoryCache = cached;
-                    return cached;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[SpeakAlongService] Local storage audio lessons read failed: {ex.Message}");
-        }
-
         // 3. Fallback to bundled master catalog json
         try
         {
             var masterCatalog = await _http.GetFromJsonAsync<List<AudioLessonDto>>("sample-data/ielts_audio_shadowing_master_catalog.json");
             if (masterCatalog != null && masterCatalog.Count > 0)
             {
+                SanitizeAudioUrls(masterCatalog);
                 _audioLessonsMemoryCache = masterCatalog;
                 var json = JsonSerializer.Serialize(masterCatalog);
                 await _js.InvokeVoidAsync("localStorage.setItem", AudioLessonsStorageKey, json);
@@ -353,6 +362,17 @@ public class SpeakAlongService
         }
 
         return new List<AudioLessonDto>();
+    }
+
+    private static void SanitizeAudioUrls(List<AudioLessonDto> list)
+    {
+        foreach (var item in list)
+        {
+            if (string.IsNullOrWhiteSpace(item.AudioUrl) || item.AudioUrl.Contains("engnovate.com"))
+            {
+                item.AudioUrl = $"sample-data/audio/shadowing/{item.Id}.mp3";
+            }
+        }
     }
 
     public async Task SaveAudioLessonsAsync(List<AudioLessonDto> lessons)

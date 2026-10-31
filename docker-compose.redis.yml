@@ -2,25 +2,35 @@ version: '3.8'
 
 services:
   redis:
-    image: redis:7-alpine
+    image: redis:7.2-alpine
     container_name: ieltshsk-redis
     restart: always
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-ChangeThisDevRedisPass123!}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   redis-commander:
-    image: rediscommander/redis-commander:latest
+    image: rediscommander/redis-commander:v0.8.0
     container_name: ieltshsk-redis-commander
     restart: always
     environment:
-      - REDIS_HOSTS=local:redis:6379
+      - REDIS_HOSTS=local:redis:6379:0:${REDIS_PASSWORD:-ChangeThisDevRedisPass123!}
+      - HTTP_USER=admin
+      - HTTP_PASSWORD=${REDIS_COMMANDER_PASSWORD:-ChangeThisDevCommanderPass123!}
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
     depends_on:
       - redis
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
 volumes:
   redis-data:

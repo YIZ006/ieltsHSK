@@ -193,6 +193,84 @@ public static class HskTopicCatalog
             Description = "Phương hướng đông tây nam bắc, trước sau, ngân hàng, công viên.",
             LevelRange = "HSK 1–3",
             OrderIndex = 14
+        },
+        new HskTopicItem
+        {
+            Id = "tech",
+            TitleVi = "Công nghệ & Kỹ thuật số",
+            TitleZh = "科技与数码",
+            Pinyin = "Kējì yǔ Shùmǎ",
+            Icon = "bi-laptop-fill",
+            Color = "#6366f1",
+            BgColor = "#eef2ff",
+            Description = "Máy tính, mạng internet, phần mềm, thiết bị thông minh và công nghệ số.",
+            LevelRange = "HSK 2–5",
+            OrderIndex = 15
+        },
+        new HskTopicItem
+        {
+            Id = "business",
+            TitleVi = "Thương mại & Kinh tế",
+            TitleZh = "商务与经济",
+            Pinyin = "Shāngwù yǔ Jīngjì",
+            Icon = "bi-graph-up-arrow",
+            Color = "#059669",
+            BgColor = "#ecfdf5",
+            Description = "Đàm phán kinh doanh, thị trường, đầu tư, hợp đồng và xuất nhập khẩu.",
+            LevelRange = "HSK 3–6",
+            OrderIndex = 16
+        },
+        new HskTopicItem
+        {
+            Id = "environment",
+            TitleVi = "Môi trường & Sinh thái",
+            TitleZh = "环境与生态",
+            Pinyin = "Huánjìng yǔ Shēngtài",
+            Icon = "bi-tree-fill",
+            Color = "#15803d",
+            BgColor = "#f0fdf4",
+            Description = "Bảo vệ môi trường, cây xanh, sinh thái, tài nguyên và thiên nhiên.",
+            LevelRange = "HSK 3–6",
+            OrderIndex = 17
+        },
+        new HskTopicItem
+        {
+            Id = "culture_art",
+            TitleVi = "Văn hóa & Nghệ thuật",
+            TitleZh = "文化与艺术",
+            Pinyin = "Wénhuà yǔ Yìshù",
+            Icon = "bi-palette-fill",
+            Color = "#b91c1c",
+            BgColor = "#fef2f2",
+            Description = "Lịch sử, truyền thống, lễ hội, thư pháp, hội họa và phong tục Trung Hoa.",
+            LevelRange = "HSK 2–6",
+            OrderIndex = 18
+        },
+        new HskTopicItem
+        {
+            Id = "hospitality",
+            TitleVi = "Du lịch & Khách sạn",
+            TitleZh = "酒店与旅游",
+            Pinyin = "Jiǔdiàn yǔ Lǚyóu",
+            Icon = "bi-building-fill-check",
+            Color = "#0891b2",
+            BgColor = "#ecfeff",
+            Description = "Khách sạn, đặt phòng, quầy lễ tân, dịch vụ lữ hành và thắng cảnh.",
+            LevelRange = "HSK 2–5",
+            OrderIndex = 19
+        },
+        new HskTopicItem
+        {
+            Id = "society",
+            TitleVi = "Xã hội & Đời sống",
+            TitleZh = "社会与生活",
+            Pinyin = "Shèhuì yǔ Shēnghuó",
+            Icon = "bi-globe2",
+            Color = "#7c3aed",
+            BgColor = "#f5f3ff",
+            Description = "Pháp luật, đời sống xã hội, cộng đồng, trật tự và tiện ích hiện đại.",
+            LevelRange = "HSK 1–6",
+            OrderIndex = 20
         }
     };
 
@@ -375,7 +453,15 @@ public static class HskTopicCatalog
     /// </summary>
     public static string? InferTopic(HskVocabularyItem item)
     {
-        if (!string.IsNullOrEmpty(item.Topic)) return item.Topic;
+        if (!string.IsNullOrEmpty(item.Topic))
+        {
+            var match = Topics.FirstOrDefault(t =>
+                string.Equals(t.Id, item.Topic, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(t.TitleVi, item.Topic, StringComparison.OrdinalIgnoreCase));
+            if (match != null) return match.Id;
+            return item.Topic;
+        }
+
         if (string.IsNullOrWhiteSpace(item.Hanzi)) return null;
 
         var hanzi = item.Hanzi.Trim();

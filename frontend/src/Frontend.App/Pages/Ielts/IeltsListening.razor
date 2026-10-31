@@ -1,9 +1,11 @@
 @page "/ielts/listening/preview"
 @page "/ielts/listening/{ExamUrl}"
 @page "/ielts/listening"
+@page "/hsk/listening/preview"
 @layout Frontend.App.Layout.ExamLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
+@using Frontend.App.Components.Common
 @using Microsoft.JSInterop
 @inject ExamService ExamService
 @inject AnswerKeyService answerKeyService
@@ -97,6 +99,7 @@ else
                 </div>
             </div>
             <div class="topbar-right">
+                <OfflineDownloadCornerButton ResourceKey="@($"mock_{(QueryMockTestId ?? 0)}")" Title="@exam.Title" ExamUrl="@_examUrlLoaded" AnswerUrl="@_answerUrlLoaded" AudioUrl="@exam.AudioUrl" CustomClass="me-2" />
                 <button class="btn-exit-exam" @onclick="ExitExam">Exit test</button>
                 <button class="btn-submit-exam" disabled="@isSubmitting" @onclick="SubmitExam">
                     @(isSubmitting ? "Đang chấm..." : "Nộp bài ➤")
@@ -437,14 +440,10 @@ else
         exam = await ExamService.LoadExamAsync(url, QueryMockTestId, "Listening");
         if (exam != null && !string.IsNullOrWhiteSpace(exam.AudioUrl))
         {
-            var isOnline = await OfflineStorageService.IsOnlineAsync();
-            if (!isOnline)
+            var cachedBlob = await OfflineStorageService.GetOfflineAudioBlobUrlAsync(exam.AudioUrl);
+            if (!string.IsNullOrWhiteSpace(cachedBlob))
             {
-                var cachedBlob = await OfflineStorageService.GetOfflineAudioBlobUrlAsync(exam.AudioUrl);
-                if (!string.IsNullOrWhiteSpace(cachedBlob))
-                {
-                    exam.AudioUrl = cachedBlob;
-                }
+                exam.AudioUrl = cachedBlob;
             }
         }
         if (exam?.Parts?.Count > 0)

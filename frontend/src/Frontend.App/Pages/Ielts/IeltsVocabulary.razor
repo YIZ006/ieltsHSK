@@ -2,6 +2,7 @@
 @layout Frontend.App.Layout.IeltsLayout
 @using Frontend.App.Services
 @using Frontend.App.Models
+@using Frontend.App.Components.Common
 @using Microsoft.AspNetCore.Authorization
 @inject IeltsService IeltsService
 @inject IJSRuntime JS
@@ -21,6 +22,7 @@
             </div>
         </div>
         <div class="header-right">
+            <OfflineDownloadCornerButton ResourceKey="ielts_vocab_all" Title="Kho Từ Vựng IELTS (16,000+ từ)" ContentType="vocab_ielts" CustomClass="me-2" />
             <div class="view-mode-toggle">
                 <button class="toggle-btn @(viewMode == "table" ? "active" : "")" @onclick='() => viewMode = "table"' title="Xem dạng Bảng (Mate&Me)">
                     <i class="bi bi-table"></i>

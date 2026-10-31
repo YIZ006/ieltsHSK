@@ -1,0 +1,1285 @@
+@page "/exam-hub"
+@page "/lich-thi"
+@using Frontend.App.Services
+@inject ExamScheduleService ExamService
+@inject NavigationManager NavManager
+
+<PageTitle>Cổng Tra Cứu Lịch Thi IELTS &amp; HSK 2026 Toàn Quốc | ieltsHSK</PageTitle>
+
+<div class="exam-hub-container">
+    @* ── HERO SECTION ── *@
+    <div class="exam-hub-hero">
+        <div class="hero-badge">
+            <span class="badge-dot-live"></span>
+            <span>Cập nhật Lịch Thi Khảo Thí Chính Thức 2026</span>
+        </div>
+        <h1 class="hero-title">
+            Cổng Tra Cứu Lịch Thi IELTS &amp; HSK Toàn Quốc
+        </h1>
+        <p class="hero-desc">
+            Tra cứu đầy đủ các đợt thi IELTS (IDP / British Council) và HSK &amp; HSKK (Hanban CTI).
+            Theo dõi thời hạn đăng ký, lệ phí thi niêm yết, địa điểm thi ủy quyền và quy chế phòng thi chuẩn quốc tế.
+        </p>
+
+        @* Quick Highlights Row *@
+        <div class="hero-highlights">
+            <div class="highlight-chip">
+                <i class="bi bi-calendar2-week-fill text-danger"></i>
+                <span><strong>24+</strong> Đợt thi đã lên lịch 2026</span>
+            </div>
+            <div class="highlight-chip">
+                <i class="bi bi-geo-alt-fill text-primary"></i>
+                <span><strong>5+</strong> Cụm thi lớn toàn quốc</span>
+            </div>
+            <div class="highlight-chip">
+                <i class="bi bi-laptop-fill text-success"></i>
+                <span><strong>Thi Máy &amp; Thi Giấy</strong> Đầy đủ chỉ tiêu</span>
+            </div>
+        </div>
+    </div>
+
+    @* ── CERTIFICATE SELECTION TABS ── *@
+    <div class="exam-type-nav">
+        <button type="button"
+                class="type-tab-btn @(selectedTab == "ALL" ? "active" : "")"
+                @onclick='() => ChangeTab("ALL")'>
+            <i class="bi bi-grid-fill"></i>
+            <span>Tất cả Kỳ thi (@(allSchedules?.Count ?? 0))</span>
+        </button>
+
+        <button type="button"
+                class="type-tab-btn tab-hsk @(selectedTab == "HSK" ? "active" : "")"
+                @onclick='() => ChangeTab("HSK")'>
+            <i class="bi bi-translate text-danger"></i>
+            <span>Lịch thi HSK &amp; HSKK (@hskCount)</span>
+        </button>
+
+        <button type="button"
+                class="type-tab-btn tab-ielts @(selectedTab == "IELTS" ? "active" : "")"
+                @onclick='() => ChangeTab("IELTS")'>
+            <i class="bi bi-award-fill text-primary"></i>
+            <span>Lịch thi IELTS (IDP / BC) (@ieltsCount)</span>
+        </button>
+    </div>
+
+    @* ── SMART MULTI-FILTER TOOLBAR ── *@
+    <div class="filter-panel">
+        <div class="filter-grid">
+            @* Search input *@
+            <div class="filter-col filter-search">
+                <label class="filter-label"><i class="bi bi-search me-1"></i>Tìm kiếm</label>
+                <div class="search-input-wrap">
+                    <input type="text"
+                           class="form-control"
+                           placeholder="Địa điểm, điểm thi, đơn vị tổ chức..."
+                           @bind="searchQuery"
+                           @bind:event="oninput"
+                           @bind:after="ApplyFilters" />
+                    @if (!string.IsNullOrEmpty(searchQuery))
+                    {
+                        <button type="button" class="btn-clear" @onclick="ClearSearch">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @* City / Region *@
+            <div class="filter-col">
+                <label class="filter-label"><i class="bi bi-geo-alt me-1"></i>Khu vực / Tỉnh thành</label>
+                <select class="form-select" @bind="selectedCity" @bind:after="ApplyFilters">
+                    <option value="All">Toàn quốc (Tất cả)</option>
+                    <option value="Hà Nội">Hà Nội</option>
+                    <option value="TP. Hồ Chí Minh">TP. Hồ Chí Minh</option>
+                    <option value="Đà Nẵng">Đà Nẵng</option>
+                    <option value="Huế">Huế</option>
+                    <option value="Thái Nguyên">Thái Nguyên</option>
+                </select>
+            </div>
+
+            @* Format *@
+            <div class="filter-col">
+                <label class="filter-label"><i class="bi bi-display me-1"></i>Hình thức thi</label>
+                <select class="form-select" @bind="selectedFormat" @bind:after="ApplyFilters">
+                    <option value="All">Tất cả hình thức</option>
+                    <option value="Computer">Thi trên máy tính (Computer)</option>
+                    <option value="Paper">Thi trên giấy (Paper-based)</option>
+                </select>
+            </div>
+
+            @* Status filter *@
+            <div class="filter-col">
+                <label class="filter-label"><i class="bi bi-funnel me-1"></i>Trạng thái đăng ký</label>
+                <select class="form-select" @bind="selectedStatus" @bind:after="ApplyFilters">
+                    <option value="All">Tất cả các đợt</option>
+                    <option value="Open">Đang mở đăng ký</option>
+                    <option value="ClosingSoon">Sắp hết hạn</option>
+                    <option value="Closed">Đã đóng đăng ký</option>
+                </select>
+            </div>
+        </div>
+
+        @* Active Filter Summary *@
+        <div class="filter-footer-row">
+            <span class="results-count">
+                Hiển thị <strong>@(filteredSchedules?.Count ?? 0)</strong> đợt thi phù hợp
+            </span>
+            @if (HasActiveFilters)
+            {
+                <button type="button" class="btn-reset-filters" @onclick="ResetFilters">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Xóa bộ lọc
+                </button>
+            }
+        </div>
+    </div>
+
+    @* ── SCHEDULE CARDS GRID ── *@
+    @if (isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner-border text-danger" role="status"></div>
+            <p>Đang tải dữ liệu lịch thi 2026...</p>
+        </div>
+    }
+    else if (filteredSchedules == null || filteredSchedules.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-icon">📅</div>
+            <h3>Không tìm thấy đợt thi phù hợp</h3>
+            <p>Vui lòng thử mở rộng bộ lọc khu vực, hình thức thi hoặc đổi từ khóa tìm kiếm.</p>
+            <button type="button" class="btn btn-outline-danger btn-sm mt-3" @onclick="ResetFilters">
+                <i class="bi bi-arrow-counterclockwise"></i> Xem tất cả lịch thi
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="schedules-grid">
+            @foreach (var sched in filteredSchedules)
+            {
+                var isIelts = sched.CertificateType.StartsWith("IELTS", StringComparison.OrdinalIgnoreCase);
+                var isClosed = sched.IsClosed;
+                var isClosingSoon = sched.IsClosingSoon;
+
+                <div class="sched-card @(isIelts ? "card-ielts" : "card-hsk") @(isClosed ? "sched-closed" : "")">
+                    @* Card Top Ribbon *@
+                    <div class="sched-top-bar">
+                        <div class="cert-badge @(isIelts ? "badge-ielts" : "badge-hsk")">
+                            <i class="bi @(isIelts ? "bi-award-fill" : "bi-translate") me-1"></i>
+                            @sched.CertificateType
+                        </div>
+
+                        <div class="format-badge @(sched.Format == "Computer" ? "badge-computer" : "badge-paper")">
+                            <i class="bi @(sched.Format == "Computer" ? "bi-laptop" : "bi-pencil-square") me-1"></i>
+                            @(sched.Format == "Computer" ? "Máy tính" : "Trên giấy")
+                        </div>
+
+                        <div class="status-badge @(isClosed ? "status-closed" : (isClosingSoon ? "status-closing" : "status-open"))">
+                            <i class="bi @(isClosed ? "bi-x-circle-fill" : (isClosingSoon ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill")) me-1"></i>
+                            @(isClosed ? "Đã đóng" : (isClosingSoon ? "Sắp hết hạn" : "Đang mở"))
+                        </div>
+                    </div>
+
+                    @* Date Focus *@
+                    <div class="sched-date-box">
+                        <div class="date-calendar">
+                            <span class="cal-month">Tháng @sched.ExamDate.Month</span>
+                            <span class="cal-day">@sched.ExamDate.Day.ToString("00")</span>
+                            <span class="cal-year">@sched.ExamDate.Year</span>
+                        </div>
+
+                        <div class="date-info">
+                            <div class="date-weekday">@GetDayOfWeekVietnamese(sched.ExamDate)</div>
+                            <div class="sched-level">@(sched.Level ?? "Tiêu chuẩn quốc tế")</div>
+                            <div class="deadline-note @(isClosed ? "deadline-closed" : (isClosingSoon ? "deadline-closing" : ""))">
+                                <i class="bi @(isClosed ? "bi-calendar-x" : (isClosingSoon ? "bi-clock-history text-warning" : "bi-alarm")) me-1"></i>
+                                Hạn nộp: <strong>@sched.RegistrationDeadline.ToString("dd/MM/yyyy")</strong>
+                                @if (isClosed)
+                                {
+                                    <span class="badge-closed-tag ms-1">Đã kết thúc</span>
+                                }
+                                else if (isClosingSoon)
+                                {
+                                    var daysLeft = (int)Math.Max(0, (sched.RegistrationDeadline.Date - DateTime.Today).TotalDays);
+                                    <span class="badge-closing-tag ms-1">Còn @(daysLeft == 0 ? "hôm nay" : $"{daysLeft} ngày")</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Center Details *@
+                    <div class="sched-center-details">
+                        <div class="center-name">
+                            <i class="bi bi-geo-alt-fill text-danger me-1"></i>
+                            <strong>@sched.TestCenter</strong>
+                        </div>
+                        @if (!string.IsNullOrEmpty(sched.LocationAddress) && sched.LocationAddress != sched.TestCenter)
+                        {
+                            <div class="center-addr">@sched.LocationAddress</div>
+                        }
+                        <div class="center-city-org">
+                            <span class="city-tag"><i class="bi bi-building me-1"></i>@sched.City</span>
+                            <span class="org-tag"><i class="bi bi-shield-check me-1"></i>@sched.Organizer</span>
+                        </div>
+                    </div>
+
+                    @* Fee Box *@
+                    <div class="sched-fee-row">
+                        <div class="fee-label">Lệ phí niêm yết:</div>
+                        <div class="fee-amount">
+                            @(string.IsNullOrEmpty(sched.FeeFormatted) ? $"{sched.FeeVnd:N0} VNĐ" : sched.FeeFormatted)
+                        </div>
+                    </div>
+
+                    @* Notes / Description *@
+                    @if (!string.IsNullOrEmpty(sched.Notes) || !string.IsNullOrEmpty(sched.Description))
+                    {
+                        <div class="sched-notes">
+                            <i class="bi bi-info-circle me-1"></i>
+                            <span>@(sched.Notes ?? sched.Description)</span>
+                        </div>
+                    }
+
+                    @* Action Footer *@
+                    <div class="sched-actions">
+                        @if (isClosed)
+                        {
+                            <button type="button" class="btn-register-now btn-disabled-closed" disabled>
+                                <i class="bi bi-lock-fill me-1"></i>
+                                <span>Đã Hết Hạn Đăng Ký</span>
+                            </button>
+                        }
+                        else if (!string.IsNullOrEmpty(sched.RegistrationUrl))
+                        {
+                            <a href="@sched.RegistrationUrl"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               class="btn-register-now">
+                                <span>Đăng Ký Dự Thi Chính Thức</span>
+                                <i class="bi bi-box-arrow-up-right ms-1"></i>
+                            </a>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn-register-now btn-disabled-closed" disabled>
+                                <span>Liên hệ điểm thi</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @* ── OFFICIAL 2026 FEE MATRIX TABLE ── *@
+    <div class="fee-matrix-section">
+        <div class="section-header">
+            <div class="sec-badge"><i class="bi bi-cash-stack me-1"></i>Bảng Giá Khảo Thí Niêm Yết</div>
+            <h2 class="sec-title">Biểu Phí Khảo Thí Chính Thức Năm 2026</h2>
+            <p class="sec-desc">
+                Bảng lệ phí thi chuẩn do Ủy ban Khảo thí Tiếng Trung Quốc tế (CTI Hanban),
+                IDP Education và British Council ban hành cho khu vực Việt Nam.
+            </p>
+        </div>
+
+        <div class="tables-dual-grid">
+            @* HSK Fees Table *@
+            <div class="fee-card">
+                <div class="fee-card-header hsk-header">
+                    <i class="bi bi-translate text-danger fs-5"></i>
+                    <div>
+                        <h4 class="mb-0">Lệ Phí Thi HSK &amp; HSKK 3.0</h4>
+                        <small>Kỳ thi kết hợp Nghe - Đọc - Viết &amp; Khẩu ngữ</small>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table fee-table">
+                        <thead>
+                            <tr>
+                                <th>Cấp độ thi</th>
+                                <th class="text-end">Lệ phí (VNĐ)</th>
+                                <th>Ghi chú điều kiện</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (feeMatrix?.HskFees != null && feeMatrix.HskFees.Count > 0)
+                            {
+                                @foreach (var f in feeMatrix.HskFees)
+                                {
+                                    <tr>
+                                        <td><strong>@f.LevelOrType</strong></td>
+                                        <td class="text-end text-danger fw-bold">@f.FormattedVnd</td>
+                                        <td class="fee-note-cell">@f.Note</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr><td>HSK 1 - HSK 2</td><td class="text-end text-danger fw-bold">550.000 VNĐ</td><td>Dành cho người mới học</td></tr>
+                                <tr><td>HSK 3 + HSKK Sơ cấp</td><td class="text-end text-danger fw-bold">1.280.000 VNĐ</td><td>Bắt buộc thi kết hợp</td></tr>
+                                <tr><td>HSK 4 + HSKK Trung cấp</td><td class="text-end text-danger fw-bold">1.600.000 VNĐ</td><td>Chuẩn đầu ra đại học</td></tr>
+                                <tr><td>HSK 5 + HSKK Cao cấp</td><td class="text-end text-danger fw-bold">1.850.000 VNĐ</td><td>Phục vụ du học &amp; học bổng</td></tr>
+                                <tr><td>HSK 6 + HSKK Cao cấp</td><td class="text-end text-danger fw-bold">2.150.000 VNĐ</td><td>Trình độ chuyên gia</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            @* IELTS Fees Table *@
+            <div class="fee-card">
+                <div class="fee-card-header ielts-header">
+                    <i class="bi bi-award-fill text-primary fs-5"></i>
+                    <div>
+                        <h4 class="mb-0">Lệ Phí Thi IELTS (IDP / British Council)</h4>
+                        <small>Học thuật, Tổng quát và Visa UK</small>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table fee-table">
+                        <thead>
+                            <tr>
+                                <th>Loại hình thi</th>
+                                <th class="text-end">Lệ phí (VNĐ)</th>
+                                <th>Ghi chú điều kiện</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (feeMatrix?.IeltsFees != null && feeMatrix.IeltsFees.Count > 0)
+                            {
+                                @foreach (var f in feeMatrix.IeltsFees)
+                                {
+                                    <tr>
+                                        <td><strong>@f.LevelOrType</strong></td>
+                                        <td class="text-end text-primary fw-bold">@f.FormattedVnd</td>
+                                        <td class="fee-note-cell">@f.Note</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr><td>IELTS Academic / General</td><td class="text-end text-primary fw-bold">4.664.000 VNĐ</td><td>Đã bao gồm thuế VAT ưu đãi 8%</td></tr>
+                                <tr><td>IELTS for UKVI</td><td class="text-end text-primary fw-bold">5.250.000 VNĐ</td><td>Phục vụ hồ sơ visa Anh quốc</td></tr>
+                                <tr><td>IELTS Life Skills (A1/B1)</td><td class="text-end text-primary fw-bold">4.414.000 VNĐ</td><td>Định cư &amp; bảo lãnh gia đình</td></tr>
+                                <tr><td>IELTS One Skill Retake</td><td class="text-end text-primary fw-bold">2.900.000 VNĐ</td><td>Thi lại 1 kỹ năng trong 60 ngày</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ── TEST DAY REGULATIONS & GUIDELINES ── *@
+    <div class="regulations-section">
+        <div class="section-header">
+            <div class="sec-badge"><i class="bi bi-shield-lock-fill me-1"></i>Cẩm Nang Khảo Thí</div>
+            <h2 class="sec-title">Quy Chế Phòng Thi &amp; Vật Dụng Được Mang Vào</h2>
+            <p class="sec-desc">
+                Thí sinh bắt buộc tuân thủ nghiêm ngặt để tránh bị đình chỉ thi và hủy kết quả.
+            </p>
+        </div>
+
+        <div class="regulations-grid">
+            <div class="reg-box box-required">
+                <div class="reg-box-title">
+                    <i class="bi bi-person-badge-fill text-primary"></i>
+                    <span>Giấy tờ tùy thân bắt buộc</span>
+                </div>
+                <ul class="reg-list">
+                    <li>Bản gốc CCCD gắn chip hoặc Hộ chiếu còn hạn sử dụng (trùng khớp 100% hồ sơ đăng ký).</li>
+                    <li>Email xác nhận số báo danh và thời gian ca thi chính thức.</li>
+                    <li>Ảnh thẻ chuẩn 3x4 hoặc 4x6 chụp trong vòng 6 tháng (nếu điểm thi trên giấy yêu cầu).</li>
+                    <li><strong>Lưu ý:</strong> Không chấp nhận bản sao công chứng, hình chụp điện thoại hay bằng lái xe.</li>
+                </ul>
+            </div>
+
+            <div class="reg-box box-permitted">
+                <div class="reg-box-title">
+                    <i class="bi bi-check-circle-fill text-success"></i>
+                    <span>Vật dụng được phép mang vào</span>
+                </div>
+                <ul class="reg-list">
+                    <li>Giấy tờ tùy thân hợp lệ theo quy định.</li>
+                    <li>Chai nước suối nhựa trong suốt đã bóc sạch 100% nhãn mác bao bì.</li>
+                    <li>Áo khoác đơn giản không mũ (phải cởi ra để giám thị kiểm tra trước khi vào phòng).</li>
+                    <li>Thuốc đặc trị cá nhân có giấy chỉ định của bác sĩ (cần báo trước giám thị).</li>
+                </ul>
+            </div>
+
+            <div class="reg-box box-prohibited">
+                <div class="reg-box-title">
+                    <i class="bi bi-slash-circle-fill text-danger"></i>
+                    <span>Vật dụng bị cấm tuyệt đối</span>
+                </div>
+                <ul class="reg-list">
+                    <li>Mọi loại đồng hồ: đồng hồ thông minh, đồng hồ điện tử và cả đồng hồ cơ truyền thống.</li>
+                    <li>Thiết bị điện tử: điện thoại di động, tai nghe Bluetooth, máy ghi âm, bút camera.</li>
+                    <li>Bút viết riêng, gôm tẩy riêng, giấy nháp (Hội đồng thi phát đồng bộ tại phòng).</li>
+                    <li>Ví tiền, tư trang kim loại kích thước lớn, chìa khóa có điều khiển từ xa.</li>
+                </ul>
+            </div>
+
+            <div class="reg-box box-timeline">
+                <div class="reg-box-title">
+                    <i class="bi bi-stopwatch-fill text-warning"></i>
+                    <span>Quy trình &amp; Mốc thời gian</span>
+                </div>
+                <ul class="reg-list">
+                    <li>Có mặt tại điểm thi trước giờ làm bài tối thiểu <strong>45 - 60 phút</strong> để gửi đồ và chụp ảnh nhận diện.</li>
+                    <li>Cửa phòng thi đóng chính xác <strong>15 phút</strong> trước giờ làm bài. Đến muộn sẽ bị hủy thi và mất lệ phí.</li>
+                    <li>Phần thi Khẩu ngữ (Speaking / HSKK): có mặt trước giờ hẹn tối thiểu <strong>30 phút</strong> tại phòng chờ.</li>
+                    <li>Kết quả thi máy trả sau 10 - 14 ngày; thi trên giấy trả sau khoảng 30 ngày.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ── EXAM HUB STYLES (Compatible with --ig-* tokens) ── */
+.exam-hub-container {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+    color: var(--ig-text, #0f172a);
+}
+
+/* ── HERO ── */
+.exam-hub-hero {
+    text-align: center;
+    padding: 36px 20px 28px;
+    margin-bottom: 28px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(220, 38, 38, 0.08) 100%);
+    border: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #0284c7;
+    margin-bottom: 12px;
+}
+
+.badge-dot-live {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+    animation: pulseDot 2s infinite;
+}
+
+@@keyframes pulseDot {
+    0% { transform: scale(0.95); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.8; }
+    100% { transform: scale(0.95); opacity: 1; }
+}
+
+.hero-title {
+    font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, var(--ig-text, #0f172a) 40%, #0284c7 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.hero-desc {
+    max-width: 780px;
+    margin: 0 auto 20px;
+    color: var(--ig-text-secondary, #475569);
+    font-size: 0.96rem;
+    line-height: 1.6;
+}
+
+.hero-highlights {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.highlight-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--ig-surface, #ffffff);
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    font-size: 0.85rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+/* ── TAB NAVIGATION ── */
+.exam-type-nav {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.type-tab-btn {
+    padding: 10px 20px;
+    border-radius: 12px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-surface, #ffffff);
+    color: var(--ig-text-secondary, #475569);
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s ease;
+}
+
+.type-tab-btn:hover {
+    border-color: #0284c7;
+    color: #0284c7;
+}
+
+.type-tab-btn.active {
+    background: #0284c7;
+    color: #ffffff;
+    border-color: #0284c7;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+}
+
+.type-tab-btn.tab-hsk.active {
+    background: #dc2626;
+    border-color: #dc2626;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+}
+
+/* ── FILTER PANEL ── */
+.filter-panel {
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 28px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+@@media (max-width: 900px) {
+    .filter-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@@media (max-width: 600px) {
+    .filter-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.filter-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--ig-text-secondary, #64748b);
+    margin-bottom: 6px;
+    letter-spacing: 0.4px;
+}
+
+.search-input-wrap {
+    position: relative;
+}
+
+.search-input-wrap .btn-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--ig-text-secondary, #94a3b8);
+    font-size: 1.1rem;
+    cursor: pointer;
+}
+
+.filter-panel .form-control, .filter-panel .form-select {
+    border-radius: 10px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-bg, #f8fafc);
+    color: var(--ig-text, #0f172a);
+    font-size: 0.88rem;
+    padding: 8px 12px;
+}
+
+.filter-panel .form-control:focus, .filter-panel .form-select:focus {
+    border-color: #0284c7;
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+    background: var(--ig-surface, #ffffff);
+}
+
+.filter-footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 12px;
+    border-top: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.results-count {
+    font-size: 0.86rem;
+    color: var(--ig-text-secondary, #64748b);
+}
+
+.btn-reset-filters {
+    background: none;
+    border: none;
+    color: #dc2626;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* ── SCHEDULES GRID ── */
+.schedules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 20px;
+    margin-bottom: 48px;
+}
+
+.sched-card {
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.sched-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.07);
+}
+
+.sched-card.card-hsk:hover {
+    border-color: rgba(220, 38, 38, 0.4);
+}
+
+.sched-card.card-ielts:hover {
+    border-color: rgba(2, 132, 199, 0.4);
+}
+
+.sched-closed {
+    opacity: 0.75;
+}
+
+/* Card Top Ribbon */
+.sched-top-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.cert-badge {
+    font-size: 0.74rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.badge-hsk {
+    background: rgba(220, 38, 38, 0.12);
+    color: #dc2626;
+}
+
+.badge-ielts {
+    background: rgba(2, 132, 199, 0.12);
+    color: #0284c7;
+}
+
+.format-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--ig-bg, #f1f5f9);
+    color: var(--ig-text-secondary, #475569);
+}
+
+.status-badge {
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.status-open {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+}
+
+.status-closing {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+}
+
+.status-closed {
+    background: rgba(100, 116, 139, 0.12);
+    color: #64748b;
+}
+
+/* Date Box */
+.sched-date-box {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    background: var(--ig-bg, #f8fafc);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+}
+
+.date-calendar {
+    width: 60px;
+    height: 60px;
+    border-radius: 10px;
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.cal-month {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #dc2626;
+}
+
+.cal-day {
+    font-size: 1.4rem;
+    font-weight: 900;
+    color: var(--ig-text, #0f172a);
+    line-height: 1;
+}
+
+.cal-year {
+    font-size: 0.65rem;
+    color: var(--ig-text-secondary, #94a3b8);
+}
+
+.date-info {
+    flex-grow: 1;
+}
+
+.date-weekday {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--ig-text-secondary, #64748b);
+}
+
+.sched-level {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: var(--ig-text, #0f172a);
+    margin: 1px 0 3px;
+}
+
+.deadline-note {
+    font-size: 0.78rem;
+    color: #dc2626;
+}
+
+/* Center Details */
+.sched-center-details {
+    margin-bottom: 12px;
+}
+
+.center-name {
+    font-size: 0.94rem;
+    color: var(--ig-text, #0f172a);
+    margin-bottom: 3px;
+    line-height: 1.4;
+}
+
+.center-addr {
+    font-size: 0.8rem;
+    color: var(--ig-text-secondary, #64748b);
+    margin-bottom: 6px;
+    line-height: 1.4;
+}
+
+.center-city-org {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 0.76rem;
+    color: var(--ig-text-secondary, #64748b);
+}
+
+.city-tag, .org-tag {
+    background: var(--ig-bg, #f1f5f9);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+/* Fee Row */
+.sched-fee-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--ig-bg, #f8fafc);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    margin-bottom: 12px;
+}
+
+.fee-label {
+    font-size: 0.8rem;
+    color: var(--ig-text-secondary, #64748b);
+}
+
+.fee-amount {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #10b981;
+}
+
+.card-ielts .fee-amount {
+    color: #0284c7;
+}
+
+.card-hsk .fee-amount {
+    color: #dc2626;
+}
+
+.sched-notes {
+    font-size: 0.78rem;
+    color: var(--ig-text-secondary, #64748b);
+    line-height: 1.4;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: baseline;
+}
+
+/* Actions */
+.sched-actions {
+    padding-top: 10px;
+    border-top: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.btn-register-now {
+    width: 100%;
+    padding: 9px;
+    border-radius: 8px;
+    border: none;
+    background: #0284c7;
+    color: #ffffff;
+    font-size: 0.86rem;
+    font-weight: 700;
+    text-decoration: none !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.card-hsk .btn-register-now {
+    background: #dc2626;
+}
+
+.btn-register-now:hover:not(.disabled) {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.btn-register-now.disabled, .btn-disabled-closed {
+    background: #64748b !important;
+    color: #f1f5f9 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+    box-shadow: none !important;
+    opacity: 0.75;
+}
+
+.sched-card.sched-closed {
+    background: var(--ig-bg-muted, #f8fafc);
+    opacity: 0.82;
+}
+
+.sched-card.sched-closed:hover {
+    transform: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+}
+
+.badge-closed-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border-radius: 4px;
+    background: rgba(220, 38, 38, 0.12);
+    color: #dc2626;
+}
+
+.badge-closing-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border-radius: 4px;
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+}
+
+.deadline-note.deadline-closed {
+    color: #dc2626;
+}
+
+/* ── FEE MATRIX SECTION ── */
+.fee-matrix-section, .regulations-section {
+    margin-bottom: 48px;
+}
+
+.section-header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.sec-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #0284c7;
+    margin-bottom: 8px;
+}
+
+.sec-title {
+    font-size: clamp(1.4rem, 2.5vw, 1.8rem);
+    font-weight: 800;
+    color: var(--ig-text, #0f172a);
+    margin-bottom: 8px;
+}
+
+.sec-desc {
+    max-width: 680px;
+    margin: 0 auto;
+    font-size: 0.9rem;
+    color: var(--ig-text-secondary, #64748b);
+}
+
+.tables-dual-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@@media (max-width: 860px) {
+    .tables-dual-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.fee-card {
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.fee-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.hsk-header {
+    background: rgba(220, 38, 38, 0.05);
+}
+
+.ielts-header {
+    background: rgba(2, 132, 199, 0.05);
+}
+
+.fee-card-header h4 {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--ig-text, #0f172a);
+}
+
+.fee-card-header small {
+    font-size: 0.78rem;
+    color: var(--ig-text-secondary, #64748b);
+}
+
+.fee-table {
+    margin: 0;
+    font-size: 0.84rem;
+}
+
+.fee-table th {
+    background: var(--ig-bg, #f8fafc);
+    color: var(--ig-text-secondary, #475569);
+    font-weight: 700;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.fee-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--ig-border, #f1f5f9);
+    color: var(--ig-text, #0f172a);
+}
+
+.fee-note-cell {
+    font-size: 0.78rem;
+    color: var(--ig-text-secondary, #64748b);
+}
+
+/* ── REGULATIONS ── */
+.regulations-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.reg-box {
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+}
+
+.box-required { border-top: 4px solid #0284c7; }
+.box-permitted { border-top: 4px solid #10b981; }
+.box-prohibited { border-top: 4px solid #ef4444; }
+.box-timeline { border-top: 4px solid #f59e0b; }
+
+.reg-box-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: var(--ig-text, #0f172a);
+    margin-bottom: 12px;
+}
+
+.reg-list {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 0.84rem;
+    color: var(--ig-text-secondary, #475569);
+    line-height: 1.6;
+}
+
+.reg-list li {
+    margin-bottom: 6px;
+}
+
+/* ── STATES ── */
+.loading-state, .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--ig-text-secondary, #64748b);
+}
+
+.empty-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+</style>
+
+@code {
+    private List<ExamScheduleItem>? allSchedules;
+    private List<ExamScheduleItem>? filteredSchedules;
+    private ExamFeeMatrix? feeMatrix;
+    private ExamRegulations? regulations;
+
+    private string selectedTab = "ALL"; // "ALL", "HSK", "IELTS"
+    private string selectedCity = "All";
+    private string selectedFormat = "All";
+    private string selectedStatus = "All";
+    private string searchQuery = "";
+    private bool isLoading = true;
+
+    private int hskCount => allSchedules?.Count(s => s.CertificateType.StartsWith("HSK", StringComparison.OrdinalIgnoreCase)) ?? 0;
+    private int ieltsCount => allSchedules?.Count(s => s.CertificateType.StartsWith("IELTS", StringComparison.OrdinalIgnoreCase)) ?? 0;
+
+    private bool HasActiveFilters =>
+        selectedCity != "All" ||
+        selectedFormat != "All" ||
+        selectedStatus != "All" ||
+        !string.IsNullOrEmpty(searchQuery);
+
+    [SupplyParameterFromQuery(Name = "type")]
+    public string? TypeQuery { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var relative = NavManager.ToBaseRelativePath(NavManager.Uri).ToLowerInvariant();
+        if (relative.StartsWith("hsk"))
+        {
+            selectedTab = "HSK";
+        }
+        else if (relative.StartsWith("ielts"))
+        {
+            selectedTab = "IELTS";
+        }
+        else if (!string.IsNullOrWhiteSpace(TypeQuery))
+        {
+            var t = TypeQuery.Trim().ToUpperInvariant();
+            if (t == "HSK") selectedTab = "HSK";
+            else if (t == "IELTS") selectedTab = "IELTS";
+        }
+
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            allSchedules = await ExamService.GetSchedulesAsync();
+            feeMatrix = await ExamService.GetFeeMatrixAsync();
+            regulations = await ExamService.GetRegulationsAsync();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ExamHub] Error loading schedules: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ChangeTab(string tab)
+    {
+        selectedTab = tab;
+        ApplyFilters();
+    }
+
+    private void ClearSearch()
+    {
+        searchQuery = "";
+        ApplyFilters();
+    }
+
+    private void ResetFilters()
+    {
+        selectedCity = "All";
+        selectedFormat = "All";
+        selectedStatus = "All";
+        searchQuery = "";
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        if (allSchedules == null)
+        {
+            filteredSchedules = new List<ExamScheduleItem>();
+            return;
+        }
+
+        var query = allSchedules.AsEnumerable();
+
+        // 1. Tab filter
+        if (selectedTab == "HSK")
+        {
+            query = query.Where(s => s.CertificateType.StartsWith("HSK", StringComparison.OrdinalIgnoreCase));
+        }
+        else if (selectedTab == "IELTS")
+        {
+            query = query.Where(s => s.CertificateType.StartsWith("IELTS", StringComparison.OrdinalIgnoreCase));
+        }
+
+        // 2. City filter
+        if (selectedCity != "All")
+        {
+            var cNorm = selectedCity.Trim().ToLowerInvariant();
+            query = query.Where(s => s.City.ToLowerInvariant().Contains(cNorm));
+        }
+
+        // 3. Format filter
+        if (selectedFormat != "All")
+        {
+            var fNorm = selectedFormat.Trim().ToLowerInvariant();
+            query = query.Where(s => s.Format.ToLowerInvariant().Contains(fNorm));
+        }
+
+        // 4. Status filter (Evaluates dynamic real-time status)
+        if (selectedStatus != "All")
+        {
+            query = query.Where(s => string.Equals(s.EffectiveStatus, selectedStatus, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // 5. Search text filter
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var q = searchQuery.Trim().ToLowerInvariant();
+            query = query.Where(s =>
+                s.TestCenter.ToLowerInvariant().Contains(q) ||
+                s.City.ToLowerInvariant().Contains(q) ||
+                s.Organizer.ToLowerInvariant().Contains(q) ||
+                (s.Level != null && s.Level.ToLowerInvariant().Contains(q)) ||
+                (s.LocationAddress != null && s.LocationAddress.ToLowerInvariant().Contains(q)));
+        }
+
+        filteredSchedules = query.OrderBy(s => s.ExamDate).ToList();
+    }
+
+    private static string GetDayOfWeekVietnamese(DateTime dt)
+    {
+        return dt.DayOfWeek switch
+        {
+            DayOfWeek.Monday => "Thứ Hai",
+            DayOfWeek.Tuesday => "Thứ Ba",
+            DayOfWeek.Wednesday => "Thứ Tư",
+            DayOfWeek.Thursday => "Thứ Năm",
+            DayOfWeek.Friday => "Thứ Sáu",
+            DayOfWeek.Saturday => "Thứ Bảy",
+            DayOfWeek.Sunday => "Chủ Nhật",
+            _ => ""
+        };
+    }
+}

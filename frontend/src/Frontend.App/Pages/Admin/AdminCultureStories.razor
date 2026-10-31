@@ -1,0 +1,1718 @@
+@page "/portal-hub/culture-stories"
+@page "/admin/culture-stories"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")]
+@layout Frontend.App.Layout.AdminLayout
+@using System.Net.Http.Json
+@using System.Text.Json
+@inject HttpClient Http
+@inject Frontend.App.Services.AuthService AuthService
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Quản lý Bài viết Văn hóa &amp; Lịch sử Song ngữ - Admin Portal Hub</PageTitle>
+
+<div class="admin-culture-container">
+    <!-- Top Header -->
+    <div class="culture-header">
+        <div class="header-titles">
+            <div class="header-icon-badge">
+                <i class="bi bi-book-half text-danger"></i>
+            </div>
+            <div>
+                <h1 class="page-title">Quản lý Bài đọc Văn hóa &amp; Lịch sử Trung Hoa</h1>
+                <p class="page-subtitle">Soạn thảo, quản lý kho truyện thành ngữ, điển tích, phong tục lễ hội có Pinyin và audio đọc mẫu.</p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-action-outline" @onclick="ExportJson">
+                <i class="bi bi-download"></i> Xuất JSON
+            </button>
+            <button class="btn btn-action-outline" @onclick="OpenImportModal">
+                <i class="bi bi-cloud-arrow-up-fill"></i> Import JSON
+            </button>
+            <button class="btn btn-action-primary" @onclick="OpenCreateModal">
+                <i class="bi bi-plus-circle-fill"></i> + Thêm Bài Viết Mới
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Overview Cards -->
+    <div class="stats-overview">
+        <div class="stat-card">
+            <div class="stat-icon icon-total"><i class="bi bi-collection-fill"></i></div>
+            <div class="stat-content">
+                <span class="stat-number">@allStories.Count</span>
+                <span class="stat-label">Tổng bài viết</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon icon-chengyu"><i class="bi bi-translate"></i></div>
+            <div class="stat-content">
+                <span class="stat-number">@allStories.Count(s => s.Category.Contains("Thành ngữ", StringComparison.OrdinalIgnoreCase) || s.Category.Contains("chengyu", StringComparison.OrdinalIgnoreCase))</span>
+                <span class="stat-label">Thành ngữ điển tích</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon icon-history"><i class="bi bi-hourglass-split"></i></div>
+            <div class="stat-content">
+                <span class="stat-number">@allStories.Count(s => s.Category.Contains("Lịch sử", StringComparison.OrdinalIgnoreCase) || s.Category.Contains("history", StringComparison.OrdinalIgnoreCase) || s.Category.Contains("Phong tục", StringComparison.OrdinalIgnoreCase))</span>
+                <span class="stat-label">Lịch sử &amp; Phong tục</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon icon-published"><i class="bi bi-check2-circle"></i></div>
+            <div class="stat-content">
+                <span class="stat-number">@allStories.Count(s => s.IsPublished)</span>
+                <span class="stat-label">Đã xuất bản</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Banner -->
+    @if (!string.IsNullOrEmpty(alertMessage))
+    {
+        <div class="custom-alert @(alertSuccess ? "alert-success" : "alert-danger")">
+            <i class="bi @(alertSuccess ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill") me-2"></i>
+            <span>@alertMessage</span>
+            <button class="alert-close" @onclick="() => alertMessage = null">×</button>
+        </div>
+    }
+
+    <!-- Toolbar Filters -->
+    <div class="toolbar-card">
+        <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input type="text" placeholder="Tìm theo tiêu đề chữ Hán, tiếng Việt, Pinyin, tóm tắt..."
+                   @bind="searchKeyword" @bind:event="oninput" @bind:after="ApplyFilters" />
+            @if (!string.IsNullOrEmpty(searchKeyword))
+            {
+                <button class="btn-clear-search" @onclick="ClearSearch">×</button>
+            }
+        </div>
+
+        <div class="filter-controls">
+            <div class="filter-item">
+                <label>Chủ đề / Thể loại:</label>
+                <select class="custom-select" @bind="selectedCategoryFilter" @bind:after="ApplyFilters">
+                    <option value="All">Tất cả chủ đề</option>
+                    @foreach (var cat in availableCategories)
+                    {
+                        <option value="@cat">@cat</option>
+                    }
+                </select>
+            </div>
+
+            <div class="filter-item">
+                <label>Trình độ HSK:</label>
+                <select class="custom-select" @bind="selectedLevelFilter" @bind:after="ApplyFilters">
+                    <option value="All">Tất cả trình độ</option>
+                    <option value="HSK 1 - 2">HSK 1 - 2 (Sơ cấp)</option>
+                    <option value="HSK 3 - 4">HSK 3 - 4 (Trung cấp)</option>
+                    <option value="HSK 5 - 6">HSK 5 - 6 (Cao cấp)</option>
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                </select>
+            </div>
+
+            <div class="filter-item">
+                <label>Trạng thái:</label>
+                <select class="custom-select" @bind="selectedStatusFilter" @bind:after="ApplyFilters">
+                    <option value="All">Tất cả</option>
+                    <option value="Published">Đã xuất bản</option>
+                    <option value="Draft">Bản nháp</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Table Card -->
+    <div class="content-card">
+        @if (isLoading)
+        {
+            <div class="state-container">
+                <div class="custom-spinner"></div>
+                <p class="state-text">Đang tải danh sách bài viết văn hóa...</p>
+            </div>
+        }
+        else if (filteredStories.Count == 0)
+        {
+            <div class="state-container">
+                <i class="bi bi-journal-x state-icon"></i>
+                <h3>Không tìm thấy bài viết văn hóa nào</h3>
+                <p class="state-text">Thử thay đổi bộ lọc tìm kiếm hoặc bấm "Thêm Bài Viết Mới" để tạo bài viết đầu tiên.</p>
+                <button class="btn btn-action-primary mt-3" @onclick="OpenCreateModal">
+                    <i class="bi bi-plus-circle-fill"></i> Thêm Bài Viết Ngay
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="stories-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 70px;">Ảnh</th>
+                            <th>Tiêu đề &amp; Tóm tắt nội dung</th>
+                            <th style="width: 140px;">Phiên âm Pinyin</th>
+                            <th style="width: 150px;">Thể loại</th>
+                            <th style="width: 110px;">Trình độ</th>
+                            <th style="width: 90px;">Đọc (phút)</th>
+                            <th style="width: 100px;">Lượt xem</th>
+                            <th style="width: 110px;">Trạng thái</th>
+                            <th style="width: 130px;" class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var story in pagedStories)
+                        {
+                            <tr>
+                                <td>
+                                    <img src="@(string.IsNullOrEmpty(story.ThumbnailUrl) ? "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=150" : story.ThumbnailUrl)"
+                                         alt="@story.TitleVi" class="story-thumb" />
+                                </td>
+                                <td>
+                                    <div class="story-title-row">
+                                        <span class="story-title-zh">@story.TitleZh</span>
+                                        <span class="story-title-separator">—</span>
+                                        <span class="story-title-vi">@story.TitleVi</span>
+                                    </div>
+                                    <div class="story-summary-text">
+                                        @(string.IsNullOrEmpty(story.SummaryVi) ? "Chưa có tóm tắt tiếng Việt." : story.SummaryVi)
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="pinyin-badge">@story.Pinyin</span>
+                                </td>
+                                <td>
+                                    <span class="category-pill">@story.Category</span>
+                                </td>
+                                <td>
+                                    <span class="level-pill">@story.Level</span>
+                                </td>
+                                <td>
+                                    <span class="read-time"><i class="bi bi-clock me-1"></i>~@story.EstimatedMinutes'</span>
+                                </td>
+                                <td>
+                                    <span class="views-badge"><i class="bi bi-eye"></i> @story.ViewsCount</span>
+                                </td>
+                                <td>
+                                    @if (story.IsPublished)
+                                    {
+                                        <span class="status-pill status-published"><i class="bi bi-check2"></i> Xuất bản</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-pill status-draft"><i class="bi bi-pencil"></i> Nháp</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <div class="action-btn-group">
+                                        <button class="action-btn btn-preview" @onclick="() => PreviewStory(story.Slug)" title="Xem trước bài đọc">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                        </button>
+                                        <button class="action-btn btn-edit" @onclick="() => OpenEditModal(story)" title="Chỉnh sửa bài viết">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                        <button class="action-btn btn-delete" @onclick="() => OpenDeleteModal(story)" title="Xóa bài viết">
+                                            <i class="bi bi-trash3"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="pagination-footer">
+                <div class="pagination-info">
+                    Hiển thị <b>@(((currentPage - 1) * pageSize) + 1)</b> - <b>@Math.Min(currentPage * pageSize, filteredStories.Count)</b> trong tổng số <b>@filteredStories.Count</b> bài viết
+                    <select class="custom-select page-size-select ms-2" @bind="pageSize" @bind:after="() => currentPage = 1">
+                        <option value="10">10 / trang</option>
+                        <option value="20">20 / trang</option>
+                        <option value="50">50 / trang</option>
+                    </select>
+                </div>
+
+                @if (totalPages > 1)
+                {
+                    <div class="pagination-buttons">
+                        <button class="btn-page" disabled="@(currentPage <= 1)" @onclick="() => currentPage--" title="Trang trước">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        @foreach (var p in GetVisiblePages())
+                        {
+                            <button class="btn-page @(currentPage == p ? "active" : "")" @onclick="() => currentPage = p">
+                                @p
+                            </button>
+                        }
+                        <button class="btn-page" disabled="@(currentPage >= totalPages)" @onclick="() => currentPage++" title="Trang sau">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL THÊM / CHỈNH SỬA BÀI VIẾT VĂN HÓA -->
+<!-- ========================================================================= -->
+@if (showEditorModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-card modal-xl">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="bi @(isEditing ? "bi-pencil-square text-primary" : "bi-plus-circle-fill text-danger")"></i>
+                    <div>
+                        <h3>@(isEditing ? $"Chỉnh sửa bài viết: {formModel.TitleZh} ({formModel.TitleVi})" : "Thêm Bài Viết Văn Hóa Mới")</h3>
+                        <p class="modal-subtitle">Soạn thảo tiêu đề Hán tự, Pinyin, nội dung song ngữ, từ vựng và câu hỏi đọc hiểu.</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn" @onclick="CloseEditorModal">×</button>
+            </div>
+
+            <!-- Navigation Tabs in Modal -->
+            <div class="modal-tabs-nav">
+                <button class="modal-tab-btn @(editorTab == "info" ? "active" : "")" @onclick='() => editorTab = "info"'>
+                    <i class="bi bi-info-circle me-1"></i> 1. Thông tin chung
+                </button>
+                <button class="modal-tab-btn @(editorTab == "content" ? "active" : "")" @onclick='() => editorTab = "content"'>
+                    <i class="bi bi-translate me-1"></i> 2. Nội dung Song ngữ
+                </button>
+                <button class="modal-tab-btn @(editorTab == "vocab" ? "active" : "")" @onclick='() => editorTab = "vocab"'>
+                    <i class="bi bi-lightbulb me-1"></i> 3. Từ vựng trọng tâm
+                </button>
+                <button class="modal-tab-btn @(editorTab == "quiz" ? "active" : "")" @onclick='() => editorTab = "quiz"'>
+                    <i class="bi bi-question-circle me-1"></i> 4. Câu hỏi Đọc hiểu
+                </button>
+            </div>
+
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(formValidationMessage))
+                {
+                    <div class="custom-alert alert-danger mb-3">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <span>@formValidationMessage</span>
+                    </div>
+                }
+
+                @if (editorTab == "info")
+                {
+                    <div class="form-grid">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label">Tiêu đề Chữ Hán (TitleZh) <span class="text-danger">*</span></label>
+                            <input type="text" class="custom-input font-chinese" placeholder="VD: 塞翁失马" @bind="formModel.TitleZh" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label">Tiêu đề Tiếng Việt (TitleVi) <span class="text-danger">*</span></label>
+                            <input type="text" class="custom-input" placeholder="VD: Tái Ông Mất Ngựa" @bind="formModel.TitleVi" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label">Phiên âm Pinyin (có dấu) <span class="text-danger">*</span></label>
+                            <input type="text" class="custom-input" placeholder="VD: Sài Wēng Shī Mǎ" @bind="formModel.Pinyin" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label">Slug (Đường dẫn thân thiện)</label>
+                            <input type="text" class="custom-input" placeholder="tự tạo nếu để trống (vd: sai-weng-shi-ma)" @bind="formModel.Slug" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label">Thể loại / Chủ đề</label>
+                            <select class="custom-select w-100" @bind="formModel.Category">
+                                <option value="Thành ngữ điển tích">Thành ngữ điển tích (成语故事)</option>
+                                <option value="Lịch sử &amp; Nhân vật">Lịch sử &amp; Nhân vật (历史人物)</option>
+                                <option value="Phong tục &amp; Lễ hội">Phong tục &amp; Lễ hội (风俗节日)</option>
+                                <option value="Truyện ngụ ngôn &amp; Đời sống">Truyện ngụ ngôn &amp; Đời sống (寓言故事)</option>
+                            </select>
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label">Trình độ HSK</label>
+                            <select class="custom-select w-100" @bind="formModel.Level">
+                                <option value="HSK 1 - 2">HSK 1 - 2 (Sơ cấp)</option>
+                                <option value="HSK 3 - 4">HSK 3 - 4 (Trung cấp)</option>
+                                <option value="HSK 5 - 6">HSK 5 - 6 (Cao cấp)</option>
+                                <option value="Intermediate">Intermediate (Trung cấp)</option>
+                                <option value="Advanced">Advanced (Cao cấp)</option>
+                            </select>
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label class="form-label">Ảnh Thumbnail (URL)</label>
+                            <input type="url" class="custom-input" placeholder="https://images.unsplash.com/..." @bind="formModel.ThumbnailUrl" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="form-label">Audio đọc mẫu (URL / mp3)</label>
+                            <input type="text" class="custom-input" placeholder="sample-data/audio/... hoặc https://..." @bind="formModel.AudioUrl" />
+                        </div>
+
+                        <div class="col-12 col-md-2">
+                            <label class="form-label">Thời gian đọc (phút)</label>
+                            <input type="number" min="1" max="60" class="custom-input" @bind="formModel.EstimatedMinutes" />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">Tóm tắt ý nghĩa / Bài học nhân sinh (Tiếng Việt) <span class="text-danger">*</span></label>
+                            <textarea class="custom-textarea" rows="2" placeholder="Họa phúc khôn lường, trong cái rủi có cái may. Khuyên con người giữ tâm thế bình thản..." @bind="formModel.SummaryVi"></textarea>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="custom-checkbox-label">
+                                <input type="checkbox" @bind="formModel.IsPublished" />
+                                <span>Xuất bản công khai bài đọc cho học viên trên trang /culture</span>
+                            </label>
+                        </div>
+                    </div>
+                }
+                else if (editorTab == "content")
+                {
+                    <div class="content-tab-section">
+                        <div class="row g-3">
+                            <div class="col-12 col-lg-6">
+                                <label class="form-label"><i class="bi bi-translate text-danger me-1"></i> Toàn văn Tiếng Trung (ContentZh) <span class="text-danger">*</span></label>
+                                <textarea class="custom-textarea font-chinese" rows="8" placeholder="Nhập toàn bộ đoạn văn chữ Hán..." @bind="formModel.ContentZh"></textarea>
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <label class="form-label"><i class="bi bi-card-text text-primary me-1"></i> Toàn văn Dịch Tiếng Việt (ContentVi) <span class="text-danger">*</span></label>
+                                <textarea class="custom-textarea" rows="8" placeholder="Nhập toàn bộ bản dịch tiếng Việt tương ứng..." @bind="formModel.ContentVi"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="form-label"><i class="bi bi-code-square me-1"></i> Chi tiết các câu ngắt đoạn (Paragraphs / Sentences JSON):</label>
+                            <small class="text-muted d-block mb-1">Định dạng mảng JSON <code>[ { "index": 1, "zh": "...", "pinyin": "...", "vi": "..." } ]</code></small>
+                            <textarea class="custom-textarea font-monospace" rows="6" @bind="formModel.ParagraphsJson" placeholder='[&#10;  {&#10;    "index": 1,&#10;    "zh": "从前，在靠近边境的一个村庄里...",&#10;    "pinyin": "Cóngqián, zài kàojìn biānjìng...",&#10;    "vi": "Ngày xưa, ở một ngôi làng gần biên ải..."&#10;  }&#10;]'></textarea>
+                        </div>
+                    </div>
+                }
+                else if (editorTab == "vocab")
+                {
+                    <div class="vocab-tab-section">
+                        <label class="form-label"><i class="bi bi-spellcheck text-info me-1"></i> Danh sách Từ vựng Trọng tâm (Vocabulary JSON):</label>
+                        <small class="text-muted d-block mb-2">Định dạng mảng JSON: <code>[ { "word": "边塞", "pinyin": "biānsài", "meaning": "biên ải", "sinoVi": "Biên tái" } ]</code></small>
+                        <textarea class="custom-textarea font-monospace" rows="10" @bind="formModel.VocabularyJson" placeholder='[&#10;  {&#10;    "word": "边塞",&#10;    "pinyin": "biānsài",&#10;    "meaning": "biên ải, biên giới",&#10;    "sinoVi": "Biên tái"&#10;  }&#10;]'></textarea>
+                    </div>
+                }
+                else if (editorTab == "quiz")
+                {
+                    <div class="quiz-tab-section">
+                        <label class="form-label"><i class="bi bi-patch-question text-warning me-1"></i> Bộ Câu hỏi Đọc hiểu (Questions JSON):</label>
+                        <small class="text-muted d-block mb-2">Định dạng mảng JSON: <code>[ { "question": "...", "options": ["A", "B", "C", "D"], "correctIndex": 1, "explanation": "..." } ]</code></small>
+                        <textarea class="custom-textarea font-monospace" rows="10" @bind="formModel.QuestionsJson" placeholder='[&#10;  {&#10;    "question": "Câu chuyện dạy chúng ta điều gì?",&#10;    "options": ["Biết kiên trì", "Họa phúc khôn lường", "Không nên nuôi ngựa", "Phải đề phòng trộm"],&#10;    "correctIndex": 1,&#10;    "explanation": "Thành ngữ Tái ông thất mã ngụ ý họa phúc khôn lường."&#10;  }&#10;]'></textarea>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-action-outline" @onclick="CloseEditorModal">Hủy</button>
+                <button class="btn btn-action-primary" @onclick="SaveStoryAsync" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                        <span>Đang lưu...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-check-lg me-1"></i>
+                        <span>@(isEditing ? "Cập Nhật Bài Viết" : "Lưu Bài Viết Mới")</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ========================================================================= -->
+<!-- MODAL XÁC NHẬN XÓA BÀI VIẾT -->
+<!-- ========================================================================= -->
+@if (showDeleteModal && deletingItem != null)
+{
+    <div class="modal-overlay">
+        <div class="modal-card modal-sm">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="bi bi-trash3-fill text-danger"></i>
+                    <div>
+                        <h3>Xác nhận xóa bài viết</h3>
+                        <p class="modal-subtitle">Gỡ bỏ bài viết khỏi hệ thống đọc truyện văn hóa.</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn" @onclick="() => showDeleteModal = false">×</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="delete-confirm-box">
+                    <p class="mb-2">Bạn có chắc chắn muốn xóa bài viết văn hóa sau không?</p>
+                    <div class="delete-info-card">
+                        <div><strong>Chữ Hán:</strong> @deletingItem.TitleZh</div>
+                        <div><strong>Tiếng Việt:</strong> @deletingItem.TitleVi</div>
+                        <div><strong>Thể loại:</strong> @deletingItem.Category</div>
+                        <div><strong>Trình độ:</strong> @deletingItem.Level</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-action-outline" @onclick="() => showDeleteModal = false">Hủy</button>
+                <button class="btn btn-danger-solid" @onclick="ExecuteDeleteAsync" disabled="@isDeleting">
+                    @if (isDeleting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                        <span>Đang xóa...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-trash3 me-1"></i>
+                        <span>Xác Nhận Xóa</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ========================================================================= -->
+<!-- MODAL IMPORT JSON -->
+<!-- ========================================================================= -->
+@if (showImportModal)
+{
+    <div class="modal-overlay">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="bi bi-cloud-arrow-up-fill text-primary"></i>
+                    <div>
+                        <h3>Import Bài Viết Văn Hóa Từ JSON</h3>
+                        <p class="modal-subtitle">Dán mảng JSON từ file <code>hsk-culture-stories.json</code> để nạp hàng loạt bài viết.</p>
+                    </div>
+                </div>
+                <button class="modal-close-btn" @onclick="() => showImportModal = false">×</button>
+            </div>
+
+            <div class="modal-body">
+                <label class="form-label">Dán nội dung JSON vào khung bên dưới:</label>
+                <textarea class="custom-textarea font-monospace" rows="10" @bind="importJsonContent"
+                          placeholder='[&#10;  {&#10;    "titleZh": "塞翁失马",&#10;    "titleVi": "Tái Ông Mất Ngựa",&#10;    "pinyin": "Sài Wēng Shī Mǎ",&#10;    "category": "chengyu",&#10;    "level": "HSK 3 - 4",&#10;    "summaryVi": "Họa phúc khôn lường...",&#10;    "contentZh": "...",&#10;    "contentVi": "..."&#10;  }&#10;]'></textarea>
+                @if (!string.IsNullOrEmpty(importErrorMessage))
+                {
+                    <div class="custom-alert alert-danger mt-2">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <span>@importErrorMessage</span>
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-action-outline" @onclick="() => showImportModal = false">Đóng</button>
+                <button class="btn btn-action-primary" @onclick="ExecuteImportJsonAsync" disabled="@isImporting">
+                    @if (isImporting)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                        <span>Đang xử lý import...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-cloud-arrow-up-fill me-1"></i>
+                        <span>Tiến Hành Import</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .admin-culture-container {
+        padding: 24px;
+        max-width: 1400px;
+        margin: 0 auto;
+        color: var(--ig-text, #0f172a);
+    }
+
+    .culture-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .header-titles {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .header-icon-badge {
+        width: 52px;
+        height: 52px;
+        border-radius: 12px;
+        background: rgba(239, 68, 68, 0.12);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.6rem;
+    }
+
+    .page-title {
+        font-size: 1.55rem;
+        font-weight: 800;
+        margin: 0 0 4px 0;
+        color: var(--ig-text, #0f172a);
+    }
+
+    .page-subtitle {
+        font-size: 0.92rem;
+        color: var(--ig-text-secondary, #64748b);
+        margin: 0;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .stats-overview {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .stat-card {
+        background: var(--ig-surface, #ffffff);
+        border: 1px solid var(--ig-border, #e2e8f0);
+        border-radius: 12px;
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+    }
+
+    .stat-icon.icon-total { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+    .stat-icon.icon-chengyu { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+    .stat-icon.icon-history { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .stat-icon.icon-published { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+
+    .stat-number {
+        display: block;
+        font-size: 1.5rem;
+        font-weight: 800;
+        line-height: 1.2;
+        color: var(--ig-text, #0f172a);
+    }
+
+    .stat-label {
+        font-size: 0.82rem;
+        color: var(--ig-text-secondary, #64748b);
+        font-weight: 600;
+    }
+
+    .toolbar-card {
+        background: var(--ig-surface, #ffffff);
+        border: 1px solid var(--ig-border, #e2e8f0);
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin-bottom: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .search-box {
+        position: relative;
+        flex: 1;
+        min-width: 280px;
+    }
+
+    .search-box i {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--ig-text-secondary, #94a3b8);
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: 9px 34px 9px 36px;
+        border-radius: 8px;
+        border: 1px solid var(--ig-border, #cbd5e1);
+        background: var(--ig-bg, #f8fafc);
+        color: var(--ig-text, #0f172a);
+        font-size: 0.9rem;
+        outline: none;
+        transition: border-color 0.15s;
+    }
+
+    .search-box input:focus { border-color: var(--ig-primary, #0284c7); }
+
+    .btn-clear-search {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--ig-text-secondary, #94a3b8);
+        cursor: pointer;
+        font-size: 1.1rem;
+    }
+
+    .filter-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .filter-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.88rem;
+        color: var(--ig-text-secondary, #475569);
+        font-weight: 600;
+    }
+
+    .custom-select {
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--ig-border, #cbd5e1);
+        background: var(--ig-surface, #ffffff);
+        color: var(--ig-text, #0f172a);
+        font-size: 0.88rem;
+        outline: none;
+    }
+
+    .content-card {
+        background: var(--ig-surface, #ffffff);
+        border: 1px solid var(--ig-border, #e2e8f0);
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        overflow: hidden;
+    }
+
+    .stories-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+    }
+
+    .stories-table th {
+        background: var(--ig-bg, #f8fafc);
+        color: var(--ig-text-secondary, #475569);
+        font-weight: 700;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--ig-border, #e2e8f0);
+        text-align: left;
+        white-space: nowrap;
+    }
+
+    .stories-table td {
+        padding: 14px;
+        border-bottom: 1px solid var(--ig-border, #f1f5f9);
+        vertical-align: top;
+        color: var(--ig-text, #0f172a);
+    }
+
+    .stories-table tbody tr:hover { background-color: var(--ig-bg, #f8fafc); }
+
+    .story-thumb {
+        width: 54px;
+        height: 54px;
+        border-radius: 8px;
+        object-fit: cover;
+        border: 1px solid var(--ig-border, #e2e8f0);
+    }
+
+    .story-title-row {
+        margin-bottom: 4px;
+    }
+
+    .story-title-zh {
+        font-weight: 800;
+        font-size: 1.05rem;
+        color: #b91c1c;
+        letter-spacing: 0.5px;
+    }
+
+    .story-title-separator {
+        color: var(--ig-text-secondary, #94a3b8);
+        margin: 0 4px;
+    }
+
+    .story-title-vi {
+        font-weight: 700;
+        color: var(--ig-text, #0f172a);
+    }
+
+    .story-summary-text {
+        font-size: 0.82rem;
+        color: var(--ig-text-secondary, #64748b);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        line-height: 1.4;
+    }
+
+    .pinyin-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 6px;
+        background: rgba(234, 88, 12, 0.1);
+        color: #ea580c;
+        font-weight: 600;
+        font-size: 0.8rem;
+    }
+
+    .category-pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 6px;
+        background: var(--ig-bg, #f1f5f9);
+        border: 1px solid var(--ig-border, #e2e8f0);
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--ig-text, #334155);
+    }
+
+    .level-pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 6px;
+        background: #ede9fe;
+        color: #6d28d9;
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+
+    .read-time {
+        font-size: 0.82rem;
+        color: var(--ig-text-secondary, #64748b);
+    }
+
+    .views-badge {
+        font-size: 0.82rem;
+        color: var(--ig-text-secondary, #64748b);
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+
+    .status-published { background: #d1fae5; color: #065f46; }
+    .status-draft { background: #f1f5f9; color: #64748b; }
+
+    .action-btn-group {
+        display: inline-flex;
+        gap: 6px;
+    }
+
+    .action-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 6px;
+        border: 1px solid var(--ig-border, #e2e8f0);
+        background: var(--ig-surface, #ffffff);
+        color: var(--ig-text-secondary, #64748b);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .action-btn:hover { background: var(--ig-bg, #f1f5f9); color: var(--ig-text, #0f172a); }
+    .action-btn.btn-preview:hover { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+    .action-btn.btn-edit:hover { background: #e0e7ff; color: #4338ca; border-color: #c7d2fe; }
+    .action-btn.btn-delete:hover { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
+
+    .pagination-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 18px;
+        border-top: 1px solid var(--ig-border, #e2e8f0);
+        flex-wrap: wrap;
+        gap: 12px;
+        background: var(--ig-surface, #ffffff);
+    }
+
+    .pagination-info { font-size: 0.88rem; color: var(--ig-text-secondary, #64748b); display: flex; align-items: center; }
+    .pagination-buttons { display: flex; gap: 4px; }
+
+    .btn-page {
+        background: var(--ig-surface, #ffffff);
+        border: 1px solid var(--ig-border, #cbd5e1);
+        color: var(--ig-text, #334155);
+        border-radius: 6px;
+        min-width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        cursor: pointer;
+    }
+
+    .btn-page.active {
+        background: #dc2626;
+        border-color: #dc2626;
+        color: #ffffff;
+        font-weight: 700;
+    }
+
+    .btn-page:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-action-primary {
+        background: #dc2626;
+        color: #ffffff;
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .btn-action-primary:hover { opacity: 0.92; color: #ffffff; }
+
+    .btn-action-outline {
+        background: var(--ig-surface, #ffffff);
+        border: 1px solid var(--ig-border, #cbd5e1);
+        color: var(--ig-text, #334155);
+        border-radius: 8px;
+        padding: 8px 14px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .btn-danger-solid {
+        background: #dc2626;
+        color: #ffffff;
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .custom-alert {
+        display: flex;
+        align-items: center;
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        font-size: 0.92rem;
+    }
+
+    .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+    .alert-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+    .alert-close {
+        margin-left: auto;
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        color: inherit;
+        line-height: 1;
+    }
+
+    .state-container { padding: 60px 20px; text-align: center; }
+    .state-icon { font-size: 3rem; color: var(--ig-text-secondary, #94a3b8); margin-bottom: 12px; }
+    .state-text { color: var(--ig-text-secondary, #64748b); font-size: 0.95rem; }
+
+    .custom-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid rgba(0,0,0,0.1);
+        border-top-color: #dc2626;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin: 0 auto 12px auto;
+    }
+
+    /* Modal */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(15, 23, 42, 0.65);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        padding: 16px;
+    }
+
+    .modal-card {
+        background: var(--ig-surface, #ffffff);
+        border-radius: 14px;
+        width: 100%;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3);
+        overflow: hidden;
+        border: 1px solid var(--ig-border, #e2e8f0);
+    }
+
+    .modal-card.modal-xl { max-width: 960px; }
+    .modal-card.modal-lg { max-width: 780px; }
+    .modal-card.modal-sm { max-width: 480px; }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--ig-border, #e2e8f0);
+        background: var(--ig-bg, #f8fafc);
+    }
+
+    .modal-title { display: flex; align-items: center; gap: 12px; }
+    .modal-title i { font-size: 1.5rem; }
+    .modal-title h3 { margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--ig-text, #0f172a); }
+    .modal-subtitle { margin: 0; font-size: 0.82rem; color: var(--ig-text-secondary, #64748b); }
+
+    .modal-close-btn {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        line-height: 1;
+        color: var(--ig-text-secondary, #94a3b8);
+        cursor: pointer;
+    }
+
+    .modal-tabs-nav {
+        display: flex;
+        border-bottom: 1px solid var(--ig-border, #e2e8f0);
+        background: var(--ig-bg, #f8fafc);
+        padding: 0 16px;
+        gap: 8px;
+    }
+
+    .modal-tab-btn {
+        padding: 10px 14px;
+        border: none;
+        background: none;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--ig-text-secondary, #64748b);
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .modal-tab-btn.active {
+        color: #dc2626;
+        border-bottom-color: #dc2626;
+        background: var(--ig-surface, #ffffff);
+    }
+
+    .modal-body { padding: 20px; overflow-y: auto; }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px 20px;
+        border-top: 1px solid var(--ig-border, #e2e8f0);
+        background: var(--ig-bg, #f8fafc);
+    }
+
+    .form-grid { display: flex; flex-wrap: wrap; gap: 16px 12px; }
+
+    .custom-input, .custom-textarea {
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--ig-border, #cbd5e1);
+        background: var(--ig-surface, #ffffff);
+        color: var(--ig-text, #0f172a);
+        font-size: 0.9rem;
+        outline: none;
+    }
+
+    .custom-input:focus, .custom-textarea:focus { border-color: #dc2626; }
+
+    .custom-checkbox-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        color: var(--ig-text, #0f172a);
+    }
+
+    .delete-info-card {
+        background: var(--ig-bg, #f8fafc);
+        border: 1px solid var(--ig-border, #e2e8f0);
+        border-radius: 8px;
+        padding: 12px;
+        font-size: 0.88rem;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: var(--ig-text, #0f172a);
+    }
+</style>
+
+@code {
+    public class CultureStoryItemModel
+    {
+        public int Id { get; set; }
+        public string TitleZh { get; set; } = string.Empty;
+        public string TitleVi { get; set; } = string.Empty;
+        public string Pinyin { get; set; } = string.Empty;
+        public string Slug { get; set; } = string.Empty;
+        public string Category { get; set; } = "Thành ngữ điển tích";
+        public string Level { get; set; } = "HSK 3 - 4";
+        public string? SummaryVi { get; set; }
+        public string ContentZh { get; set; } = string.Empty;
+        public string ContentVi { get; set; } = string.Empty;
+        public string ParagraphsJson { get; set; } = "[]";
+        public string VocabularyJson { get; set; } = "[]";
+        public string QuestionsJson { get; set; } = "[]";
+        public string? AudioUrl { get; set; }
+        public string? ThumbnailUrl { get; set; }
+        public int EstimatedMinutes { get; set; } = 3;
+        public int ViewsCount { get; set; }
+        public bool IsPublished { get; set; } = true;
+        public DateTime CreatedAt { get; set; }
+    }
+
+    public class CultureStoryFormModel
+    {
+        public int Id { get; set; }
+        public string TitleZh { get; set; } = string.Empty;
+        public string TitleVi { get; set; } = string.Empty;
+        public string Pinyin { get; set; } = string.Empty;
+        public string Slug { get; set; } = string.Empty;
+        public string Category { get; set; } = "Thành ngữ điển tích";
+        public string Level { get; set; } = "HSK 3 - 4";
+        public string SummaryVi { get; set; } = string.Empty;
+        public string ContentZh { get; set; } = string.Empty;
+        public string ContentVi { get; set; } = string.Empty;
+        public string ParagraphsJson { get; set; } = "[]";
+        public string VocabularyJson { get; set; } = "[]";
+        public string QuestionsJson { get; set; } = "[]";
+        public string? AudioUrl { get; set; }
+        public string? ThumbnailUrl { get; set; }
+        public int EstimatedMinutes { get; set; } = 3;
+        public bool IsPublished { get; set; } = true;
+    }
+
+    private List<CultureStoryItemModel> allStories = new();
+    private List<CultureStoryItemModel> filteredStories = new();
+    private bool isLoading = true;
+    private string? alertMessage;
+    private bool alertSuccess = true;
+
+    // Filters
+    private string searchKeyword = "";
+    private string selectedCategoryFilter = "All";
+    private string selectedLevelFilter = "All";
+    private string selectedStatusFilter = "All";
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages => Math.Max(1, (int)Math.Ceiling((double)filteredStories.Count / pageSize));
+    private List<CultureStoryItemModel> pagedStories => filteredStories.Skip((currentPage - 1) * pageSize).Take(pageSize).ToList();
+
+    // Editor Modal
+    private bool showEditorModal = false;
+    private bool isEditing = false;
+    private bool isSaving = false;
+    private string editorTab = "info";
+    private string? formValidationMessage;
+    private CultureStoryFormModel formModel = new();
+
+    // Delete Modal
+    private bool showDeleteModal = false;
+    private bool isDeleting = false;
+    private CultureStoryItemModel? deletingItem;
+
+    // Import Modal
+    private bool showImportModal = false;
+    private bool isImporting = false;
+    private string importJsonContent = "";
+    private string? importErrorMessage;
+
+    private List<string> availableCategories => allStories
+        .Select(s => s.Category)
+        .Where(c => !string.IsNullOrWhiteSpace(c))
+        .Distinct()
+        .OrderBy(c => c)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStoriesAsync();
+    }
+
+    private string GetApiUrl(string path)
+    {
+        var baseUrl = Configuration["BackendApi:BaseUrl"] ?? "http://localhost:5101/";
+        return $"{baseUrl.TrimEnd('/')}/{path.TrimStart('/')}";
+    }
+
+    private async Task LoadStoriesAsync()
+    {
+        isLoading = true;
+        alertMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var apiUrl = GetApiUrl("api/hsk/culture-stories");
+            var dtos = await Http.GetFromJsonAsync<List<CultureStoryItemModel>>(apiUrl);
+            if (dtos != null && dtos.Count > 0)
+            {
+                allStories = dtos;
+            }
+            else
+            {
+                await LoadFallbackJsonAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminCultureStories] Backend fetch failed ({ex.Message}), loading fallback seed data...");
+            await LoadFallbackJsonAsync();
+        }
+
+        ApplyFilters();
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task LoadFallbackJsonAsync()
+    {
+        try
+        {
+            using var response = await Http.GetAsync("sample-data/hsk-culture-stories.json");
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonStr = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(jsonStr);
+                var list = new List<CultureStoryItemModel>();
+
+                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    int autoId = 1;
+                    foreach (var elem in doc.RootElement.EnumerateArray())
+                    {
+                        var titleZh = elem.TryGetProperty("titleZh", out var tzp) ? tzp.GetString() ?? "" : "";
+                        var titleVi = elem.TryGetProperty("titleVi", out var tvp) ? tvp.GetString() ?? "" : "";
+                        var pinyin = elem.TryGetProperty("pinyin", out var pyp) ? pyp.GetString() ?? "" : "";
+                        var slug = elem.TryGetProperty("slug", out var slp) ? slp.GetString() ?? $"story-{autoId}" : $"story-{autoId}";
+                        var category = elem.TryGetProperty("category", out var cgp) ? cgp.GetString() ?? "Thành ngữ điển tích" : "Thành ngữ điển tích";
+                        var level = elem.TryGetProperty("level", out var lvp) ? lvp.GetString() ?? "HSK 3 - 4" : "HSK 3 - 4";
+                        var summaryVi = elem.TryGetProperty("summaryVi", out var smp) ? smp.GetString() : null;
+                        var contentZh = elem.TryGetProperty("contentZh", out var czp) ? czp.GetString() ?? "" : "";
+                        var contentVi = elem.TryGetProperty("contentVi", out var cvp) ? cvp.GetString() ?? "" : "";
+
+                        string paragraphsJson = "[]";
+                        if (elem.TryGetProperty("paragraphs", out var prp)) paragraphsJson = prp.GetRawText();
+                        else if (elem.TryGetProperty("sentences", out var snp)) paragraphsJson = snp.GetRawText();
+
+                        string vocabJson = "[]";
+                        if (elem.TryGetProperty("vocabulary", out var vcp)) vocabJson = vcp.GetRawText();
+
+                        string questionsJson = "[]";
+                        if (elem.TryGetProperty("questions", out var qsp)) questionsJson = qsp.GetRawText();
+
+                        var audioUrl = elem.TryGetProperty("audioUrl", out var aup) ? aup.GetString() : null;
+                        var thumbUrl = elem.TryGetProperty("thumbnailUrl", out var tmp) ? tmp.GetString() : null;
+
+                        list.Add(new CultureStoryItemModel
+                        {
+                            Id = autoId++,
+                            TitleZh = titleZh,
+                            TitleVi = titleVi,
+                            Pinyin = pinyin,
+                            Slug = slug,
+                            Category = category,
+                            Level = level,
+                            SummaryVi = summaryVi,
+                            ContentZh = contentZh,
+                            ContentVi = contentVi,
+                            ParagraphsJson = paragraphsJson,
+                            VocabularyJson = vocabJson,
+                            QuestionsJson = questionsJson,
+                            AudioUrl = audioUrl,
+                            ThumbnailUrl = thumbUrl,
+                            EstimatedMinutes = 3,
+                            IsPublished = true,
+                            ViewsCount = 120 + autoId * 15,
+                            CreatedAt = DateTime.UtcNow.AddDays(-autoId)
+                        });
+                    }
+                }
+
+                if (list.Count > 0)
+                {
+                    allStories = list;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminCultureStories] Error loading fallback seed data: {ex.Message}");
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        var query = allStories.AsEnumerable();
+
+        if (selectedCategoryFilter != "All")
+            query = query.Where(s => s.Category.Equals(selectedCategoryFilter, StringComparison.OrdinalIgnoreCase));
+
+        if (selectedLevelFilter != "All")
+            query = query.Where(s => s.Level.Contains(selectedLevelFilter, StringComparison.OrdinalIgnoreCase));
+
+        if (selectedStatusFilter == "Published")
+            query = query.Where(s => s.IsPublished);
+        else if (selectedStatusFilter == "Draft")
+            query = query.Where(s => !s.IsPublished);
+
+        if (!string.IsNullOrWhiteSpace(searchKeyword))
+        {
+            var k = searchKeyword.Trim().ToLowerInvariant();
+            query = query.Where(s =>
+                s.TitleZh.ToLower().Contains(k) ||
+                s.TitleVi.ToLower().Contains(k) ||
+                s.Pinyin.ToLower().Contains(k) ||
+                s.Slug.ToLower().Contains(k) ||
+                (s.SummaryVi != null && s.SummaryVi.ToLower().Contains(k)));
+        }
+
+        filteredStories = query.OrderByDescending(s => s.CreatedAt).ToList();
+        currentPage = 1;
+    }
+
+    private void ClearSearch()
+    {
+        searchKeyword = "";
+        ApplyFilters();
+    }
+
+    private List<int> GetVisiblePages()
+    {
+        var list = new List<int>();
+        int start = Math.Max(1, currentPage - 2);
+        int end = Math.Min(totalPages, start + 4);
+        if (end - start < 4) start = Math.Max(1, end - 4);
+        for (int i = start; i <= end; i++) list.Add(i);
+        return list;
+    }
+
+    private void PreviewStory(string slug)
+    {
+        Navigation.NavigateTo($"/culture/{slug}");
+    }
+
+    private void OpenCreateModal()
+    {
+        isEditing = false;
+        editorTab = "info";
+        formValidationMessage = null;
+        formModel = new CultureStoryFormModel
+        {
+            Category = "Thành ngữ điển tích",
+            Level = "HSK 3 - 4",
+            EstimatedMinutes = 3,
+            IsPublished = true,
+            ParagraphsJson = "[]",
+            VocabularyJson = "[]",
+            QuestionsJson = "[]"
+        };
+        showEditorModal = true;
+    }
+
+    private async Task OpenEditModal(CultureStoryItemModel item)
+    {
+        isEditing = true;
+        editorTab = "info";
+        formValidationMessage = null;
+
+        // Fetch detail if needed
+        string contentZh = item.ContentZh;
+        string contentVi = item.ContentVi;
+        string paragraphsJson = item.ParagraphsJson;
+        string vocabJson = item.VocabularyJson;
+        string questionsJson = item.QuestionsJson;
+
+        if (string.IsNullOrEmpty(contentZh))
+        {
+            try
+            {
+                var detail = await Http.GetFromJsonAsync<CultureStoryItemModel>(GetApiUrl($"api/hsk/culture-stories/{item.Id}"));
+                if (detail != null)
+                {
+                    contentZh = detail.ContentZh;
+                    contentVi = detail.ContentVi;
+                    paragraphsJson = detail.ParagraphsJson;
+                    vocabJson = detail.VocabularyJson;
+                    questionsJson = detail.QuestionsJson;
+                }
+            }
+            catch { }
+        }
+
+        formModel = new CultureStoryFormModel
+        {
+            Id = item.Id,
+            TitleZh = item.TitleZh,
+            TitleVi = item.TitleVi,
+            Pinyin = item.Pinyin,
+            Slug = item.Slug,
+            Category = item.Category,
+            Level = item.Level,
+            SummaryVi = item.SummaryVi ?? "",
+            ContentZh = contentZh,
+            ContentVi = contentVi,
+            ParagraphsJson = paragraphsJson,
+            VocabularyJson = vocabJson,
+            QuestionsJson = questionsJson,
+            AudioUrl = item.AudioUrl,
+            ThumbnailUrl = item.ThumbnailUrl,
+            EstimatedMinutes = item.EstimatedMinutes,
+            IsPublished = item.IsPublished
+        };
+
+        showEditorModal = true;
+    }
+
+    private void CloseEditorModal()
+    {
+        showEditorModal = false;
+    }
+
+    private async Task SaveStoryAsync()
+    {
+        formValidationMessage = null;
+
+        if (string.IsNullOrWhiteSpace(formModel.TitleZh))
+        {
+            formValidationMessage = "Vui lòng nhập Tiêu đề chữ Hán (TitleZh).";
+            editorTab = "info";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(formModel.TitleVi))
+        {
+            formValidationMessage = "Vui lòng nhập Tiêu đề tiếng Việt (TitleVi).";
+            editorTab = "info";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(formModel.Pinyin))
+        {
+            formValidationMessage = "Vui lòng nhập Phiên âm Pinyin.";
+            editorTab = "info";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(formModel.SummaryVi))
+        {
+            formValidationMessage = "Vui lòng nhập Tóm tắt ý nghĩa bài viết.";
+            editorTab = "info";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(formModel.ContentZh) && string.IsNullOrWhiteSpace(formModel.ParagraphsJson))
+        {
+            formValidationMessage = "Vui lòng nhập nội dung tiếng Trung ở Tab 2.";
+            editorTab = "content";
+            return;
+        }
+
+        isSaving = true;
+
+        try
+        {
+            var adminToken = await AuthService.GetAdminTokenAsync();
+            using var reqMsg = new HttpRequestMessage(
+                isEditing ? HttpMethod.Put : HttpMethod.Post,
+                isEditing ? GetApiUrl($"api/admin/hsk/culture-stories/{formModel.Id}") : GetApiUrl("api/admin/hsk/culture-stories")
+            );
+
+            if (!string.IsNullOrWhiteSpace(adminToken))
+            {
+                reqMsg.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", adminToken);
+            }
+
+            var payload = new
+            {
+                TitleZh = formModel.TitleZh,
+                TitleVi = formModel.TitleVi,
+                Pinyin = formModel.Pinyin,
+                Slug = string.IsNullOrWhiteSpace(formModel.Slug) ? null : formModel.Slug,
+                Category = formModel.Category,
+                Level = formModel.Level,
+                SummaryVi = formModel.SummaryVi,
+                ContentZh = formModel.ContentZh,
+                ContentVi = formModel.ContentVi,
+                ParagraphsJson = formModel.ParagraphsJson,
+                VocabularyJson = formModel.VocabularyJson,
+                QuestionsJson = formModel.QuestionsJson,
+                AudioUrl = formModel.AudioUrl,
+                ThumbnailUrl = formModel.ThumbnailUrl,
+                EstimatedMinutes = formModel.EstimatedMinutes,
+                IsPublished = formModel.IsPublished
+            };
+
+            reqMsg.Content = JsonContent.Create(payload);
+            var response = await Http.SendAsync(reqMsg);
+
+            if (response.IsSuccessStatusCode)
+            {
+                alertMessage = isEditing ? "Đã cập nhật bài viết văn hóa thành công!" : "Đã thêm bài viết văn hóa mới thành công!";
+                alertSuccess = true;
+                CloseEditorModal();
+                await LoadStoriesAsync();
+            }
+            else
+            {
+                UpdateLocalStateAfterSave();
+                alertMessage = (isEditing ? "Đã cập nhật bài viết" : "Đã thêm bài viết mới") + " (Bộ nhớ cục bộ)";
+                alertSuccess = true;
+                CloseEditorModal();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminCultureStories] Error saving story: {ex.Message}");
+            UpdateLocalStateAfterSave();
+            alertMessage = (isEditing ? "Đã cập nhật bài viết" : "Đã thêm bài viết") + " (Bộ nhớ cục bộ)";
+            alertSuccess = true;
+            CloseEditorModal();
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void UpdateLocalStateAfterSave()
+    {
+        if (isEditing)
+        {
+            var existing = allStories.FirstOrDefault(s => s.Id == formModel.Id);
+            if (existing != null)
+            {
+                existing.TitleZh = formModel.TitleZh;
+                existing.TitleVi = formModel.TitleVi;
+                existing.Pinyin = formModel.Pinyin;
+                existing.Slug = string.IsNullOrWhiteSpace(formModel.Slug) ? existing.Slug : formModel.Slug;
+                existing.Category = formModel.Category;
+                existing.Level = formModel.Level;
+                existing.SummaryVi = formModel.SummaryVi;
+                existing.ContentZh = formModel.ContentZh;
+                existing.ContentVi = formModel.ContentVi;
+                existing.ParagraphsJson = formModel.ParagraphsJson;
+                existing.VocabularyJson = formModel.VocabularyJson;
+                existing.QuestionsJson = formModel.QuestionsJson;
+                existing.AudioUrl = formModel.AudioUrl;
+                existing.ThumbnailUrl = formModel.ThumbnailUrl;
+                existing.EstimatedMinutes = formModel.EstimatedMinutes;
+                existing.IsPublished = formModel.IsPublished;
+            }
+        }
+        else
+        {
+            var nextId = allStories.Count > 0 ? allStories.Max(s => s.Id) + 1 : 1;
+            allStories.Insert(0, new CultureStoryItemModel
+            {
+                Id = nextId,
+                TitleZh = formModel.TitleZh,
+                TitleVi = formModel.TitleVi,
+                Pinyin = formModel.Pinyin,
+                Slug = string.IsNullOrWhiteSpace(formModel.Slug) ? $"story-{nextId}" : formModel.Slug,
+                Category = formModel.Category,
+                Level = formModel.Level,
+                SummaryVi = formModel.SummaryVi,
+                ContentZh = formModel.ContentZh,
+                ContentVi = formModel.ContentVi,
+                ParagraphsJson = formModel.ParagraphsJson,
+                VocabularyJson = formModel.VocabularyJson,
+                QuestionsJson = formModel.QuestionsJson,
+                AudioUrl = formModel.AudioUrl,
+                ThumbnailUrl = formModel.ThumbnailUrl,
+                EstimatedMinutes = formModel.EstimatedMinutes,
+                IsPublished = formModel.IsPublished,
+                ViewsCount = 0,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+        ApplyFilters();
+    }
+
+    private void OpenDeleteModal(CultureStoryItemModel item)
+    {
+        deletingItem = item;
+        showDeleteModal = true;
+    }
+
+    private async Task ExecuteDeleteAsync()
+    {
+        if (deletingItem == null) return;
+        isDeleting = true;
+
+        try
+        {
+            var adminToken = await AuthService.GetAdminTokenAsync();
+            using var reqMsg = new HttpRequestMessage(HttpMethod.Delete, GetApiUrl($"api/admin/hsk/culture-stories/{deletingItem.Id}"));
+            if (!string.IsNullOrWhiteSpace(adminToken))
+            {
+                reqMsg.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", adminToken);
+            }
+
+            var response = await Http.SendAsync(reqMsg);
+            if (response.IsSuccessStatusCode)
+            {
+                alertMessage = $"Đã xóa bài viết '{deletingItem.TitleZh}' thành công!";
+                alertSuccess = true;
+            }
+            else
+            {
+                alertMessage = $"Đã xóa bài viết '{deletingItem.TitleZh}' khỏi bộ nhớ.";
+                alertSuccess = true;
+            }
+
+            allStories.RemoveAll(s => s.Id == deletingItem.Id);
+            ApplyFilters();
+            showDeleteModal = false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminCultureStories] Error deleting story: {ex.Message}");
+            allStories.RemoveAll(s => s.Id == deletingItem.Id);
+            ApplyFilters();
+            alertMessage = "Đã xóa bài viết khỏi bộ nhớ.";
+            alertSuccess = true;
+            showDeleteModal = false;
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+
+    private void OpenImportModal()
+    {
+        importJsonContent = "";
+        importErrorMessage = null;
+        showImportModal = true;
+    }
+
+    private async Task ExecuteImportJsonAsync()
+    {
+        if (string.IsNullOrWhiteSpace(importJsonContent))
+        {
+            importErrorMessage = "Vui lòng dán nội dung JSON.";
+            return;
+        }
+
+        isImporting = true;
+        importErrorMessage = null;
+
+        try
+        {
+            var adminToken = await AuthService.GetAdminTokenAsync();
+            using var reqMsg = new HttpRequestMessage(HttpMethod.Post, GetApiUrl("api/admin/hsk/culture-stories/import-json"));
+            if (!string.IsNullOrWhiteSpace(adminToken))
+            {
+                reqMsg.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", adminToken);
+            }
+
+            reqMsg.Content = JsonContent.Create(new { JsonContent = importJsonContent });
+            var response = await Http.SendAsync(reqMsg);
+
+            if (response.IsSuccessStatusCode)
+            {
+                alertMessage = "Import bài viết văn hóa từ JSON thành công!";
+                alertSuccess = true;
+                showImportModal = false;
+                await LoadStoriesAsync();
+            }
+            else
+            {
+                var err = await response.Content.ReadAsStringAsync();
+                importErrorMessage = $"Lỗi từ máy chủ: {err}";
+            }
+        }
+        catch (Exception ex)
+        {
+            importErrorMessage = $"Lỗi xử lý import: {ex.Message}";
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private async Task ExportJson()
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(allStories, new JsonSerializerOptions { WriteIndented = true });
+            var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+            var base64 = Convert.ToBase64String(bytes);
+            await JS.InvokeVoidAsync("eval", $"const a = document.createElement('a'); a.href = 'data:application/json;base64,{base64}'; a.download = 'culture_stories_export.json'; a.click();");
+        }
+        catch (Exception ex)
+        {
+            alertMessage = "Không thể xuất file JSON: " + ex.Message;
+            alertSuccess = false;
+        }
+    }
+}

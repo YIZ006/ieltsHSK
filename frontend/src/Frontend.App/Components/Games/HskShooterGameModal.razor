@@ -89,6 +89,34 @@
 
         <!-- Shooter Battlefield -->
         <main class="hsk-battlefield @(IsHskGamePaused ? "is-paused" : "")" @onclick="FocusHskInput">
+            @if (_isLoadingVocab)
+            {
+                <div class="hsk-game-status-card">
+                    <div class="spinner-border text-warning mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                    <h3 class="text-white fw-bold">Đang tải từ vựng @hskShooterSelectedLevel...</h3>
+                    <p class="text-white-50">Hệ thống đang chuẩn bị chiến trường. Vui lòng đợi trong giây lát.</p>
+                    <button type="button" class="btn btn-outline-light btn-sm mt-2" @onclick="CloseHskShooterGame">
+                        <i class="bi bi-x-lg me-1"></i> Hủy & Thoát (Esc)
+                    </button>
+                </div>
+            }
+            else if (!string.IsNullOrEmpty(_loadError))
+            {
+                <div class="hsk-game-status-card">
+                    <div class="mb-3"><i class="bi bi-exclamation-triangle-fill text-warning fs-1"></i></div>
+                    <h3 class="text-white fw-bold">Không thể bắt đầu trò chơi</h3>
+                    <p class="text-white-50">@_loadError</p>
+                    <div class="d-flex gap-2 justify-content-center mt-3">
+                        <button type="button" class="btn btn-warning fw-bold" @onclick="StartHskShooterGame">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Thử lại
+                        </button>
+                        <button type="button" class="btn btn-secondary" @onclick="CloseHskShooterGame">
+                            <i class="bi bi-x-lg me-1"></i> Thoát về Sảnh
+                        </button>
+                    </div>
+                </div>
+            }
+
             <!-- Corner Floating Map Button in Battlefield -->
             @if (hskShooterState == HskGameState.Playing || hskShooterState == HskGameState.Paused)
             {
@@ -950,23 +978,120 @@
         catch { }
     }
 
+    private bool _isLoadingVocab = true;
+    private string? _loadError;
+
+    private static List<HskVocabularyItem> GetSampleVocab(string level)
+    {
+        var norm = level.Replace(" ", "").ToUpperInvariant();
+        if (norm == "HSK2")
+        {
+            return new List<HskVocabularyItem>
+            {
+                new() { Id = 201, HskLevel = "HSK2", Hanzi = "机场", Pinyin = "jī chǎng", Meaning = "Sân bay", IsActive = true },
+                new() { Id = 202, HskLevel = "HSK2", Hanzi = "准备", Pinyin = "zhǔn bèi", Meaning = "Chuẩn bị", IsActive = true },
+                new() { Id = 203, HskLevel = "HSK2", Hanzi = "帮助", Pinyin = "bāng zhù", Meaning = "Giúp đỡ", IsActive = true },
+                new() { Id = 204, HskLevel = "HSK2", Hanzi = "运动", Pinyin = "yùn dòng", Meaning = "Vận động, thể thao", IsActive = true },
+                new() { Id = 205, HskLevel = "HSK2", Hanzi = "旅游", Pinyin = "lǚ yóu", Meaning = "Du lịch", IsActive = true }
+            };
+        }
+        if (norm == "HSK3")
+        {
+            return new List<HskVocabularyItem>
+            {
+                new() { Id = 301, HskLevel = "HSK3", Hanzi = "图书馆", Pinyin = "tú shū guǎn", Meaning = "Thư viện", IsActive = true },
+                new() { Id = 302, HskLevel = "HSK3", Hanzi = "满意", Pinyin = "mǎn yì", Meaning = "Hài lòng, vừa ý", IsActive = true },
+                new() { Id = 303, HskLevel = "HSK3", Hanzi = "突然", Pinyin = "tū rán", Meaning = "Đột nhiên", IsActive = true },
+                new() { Id = 304, HskLevel = "HSK3", Hanzi = "环境", Pinyin = "huán jìng", Meaning = "Môi trường", IsActive = true },
+                new() { Id = 305, HskLevel = "HSK3", Hanzi = "简单", Pinyin = "jiǎn dān", Meaning = "Đơn giản", IsActive = true }
+            };
+        }
+        return new List<HskVocabularyItem>
+        {
+            new() { Id = 101, HskLevel = "HSK1", Hanzi = "你好", Pinyin = "nǐ hǎo", Meaning = "Xin chào", IsActive = true },
+            new() { Id = 102, HskLevel = "HSK1", Hanzi = "谢谢", Pinyin = "xiè xiè", Meaning = "Cảm ơn", IsActive = true },
+            new() { Id = 103, HskLevel = "HSK1", Hanzi = "再见", Pinyin = "zài jiàn", Meaning = "Tạm biệt", IsActive = true },
+            new() { Id = 104, HskLevel = "HSK1", Hanzi = "学习", Pinyin = "xué xí", Meaning = "Học tập", IsActive = true },
+            new() { Id = 105, HskLevel = "HSK1", Hanzi = "朋友", Pinyin = "péng yǒu", Meaning = "Bạn bè", IsActive = true },
+            new() { Id = 106, HskLevel = "HSK1", Hanzi = "喜欢", Pinyin = "xǐ huān", Meaning = "Thích", IsActive = true },
+            new() { Id = 107, HskLevel = "HSK1", Hanzi = "老师", Pinyin = "lǎo shī", Meaning = "Thầy cô giáo", IsActive = true },
+            new() { Id = 108, HskLevel = "HSK1", Hanzi = "学生", Pinyin = "xué sheng", Meaning = "Học sinh", IsActive = true },
+            new() { Id = 109, HskLevel = "HSK1", Hanzi = "高兴", Pinyin = "gāo xìng", Meaning = "Vui vẻ", IsActive = true },
+            new() { Id = 110, HskLevel = "HSK1", Hanzi = "中国", Pinyin = "zhōng guó", Meaning = "Trung Quốc", IsActive = true },
+            new() { Id = 111, HskLevel = "HSK1", Hanzi = "水", Pinyin = "shuǐ", Meaning = "Nước", IsActive = true },
+            new() { Id = 112, HskLevel = "HSK1", Hanzi = "茶", Pinyin = "chá", Meaning = "Trà", IsActive = true },
+            new() { Id = 113, HskLevel = "HSK1", Hanzi = "米饭", Pinyin = "mǐ fàn", Meaning = "Cơm", IsActive = true },
+            new() { Id = 114, HskLevel = "HSK1", Hanzi = "苹果", Pinyin = "píng guǒ", Meaning = "Quả táo", IsActive = true },
+            new() { Id = 115, HskLevel = "HSK1", Hanzi = "看书", Pinyin = "kàn shū", Meaning = "Đọc sách", IsActive = true },
+            new() { Id = 116, HskLevel = "HSK1", Hanzi = "写字", Pinyin = "xiě zì", Meaning = "Viết chữ", IsActive = true },
+            new() { Id = 117, HskLevel = "HSK1", Hanzi = "学校", Pinyin = "xué xiào", Meaning = "Trường học", IsActive = true },
+            new() { Id = 118, HskLevel = "HSK1", Hanzi = "医院", Pinyin = "yī yuàn", Meaning = "Bệnh viện", IsActive = true },
+            new() { Id = 119, HskLevel = "HSK1", Hanzi = "商店", Pinyin = "shāng diàn", Meaning = "Cửa hàng", IsActive = true },
+            new() { Id = 120, HskLevel = "HSK1", Hanzi = "今天", Pinyin = "jīn tiān", Meaning = "Hôm nay", IsActive = true }
+        };
+    }
+
     private async Task StartHskShooterGame()
     {
         _isBgmOn = true;
-        var all = await HskSvc.GetVocabularyAsync(hskShooterSelectedLevel);
-        hskVocabPool = all?.Where(v => v.IsActive && !string.IsNullOrWhiteSpace(v.Pinyin))
-                          .DistinctBy(v => v.Hanzi.Trim())
-                          .ToList() ?? new();
-        if (hskVocabPool.Count == 0)
-        {
-            ShowToast($"Chưa có từ vựng cho cấp độ {hskShooterSelectedLevel}!");
-            return;
-        }
-
-        CloseGameInfo();
-        isPlayingHskShooter = true;
-        hskShooterState = HskGameState.Playing;
+        _isLoadingVocab = true;
+        _loadError = null;
         StateHasChanged();
+
+        try
+        {
+            var all = await HskSvc.GetVocabularyAsync(hskShooterSelectedLevel);
+            hskVocabPool = all?.Where(v => v.IsActive && !string.IsNullOrWhiteSpace(v.Pinyin))
+                              .DistinctBy(v => v.Hanzi.Trim())
+                              .ToList() ?? new();
+
+            if (hskVocabPool.Count == 0)
+            {
+                var sample = GetSampleVocab(hskShooterSelectedLevel);
+                if (sample.Count > 0)
+                {
+                    hskVocabPool = sample.Where(v => v.IsActive && !string.IsNullOrWhiteSpace(v.Pinyin))
+                                         .DistinctBy(v => v.Hanzi.Trim())
+                                         .ToList();
+                }
+            }
+
+            if (hskVocabPool.Count == 0)
+            {
+                _loadError = $"Chưa có từ vựng cho cấp độ {hskShooterSelectedLevel}!";
+                _isLoadingVocab = false;
+                StateHasChanged();
+                return;
+            }
+
+            CloseGameInfo();
+            isPlayingHskShooter = true;
+            hskShooterState = HskGameState.Playing;
+            _isLoadingVocab = false;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            var sample = GetSampleVocab(hskShooterSelectedLevel);
+            if (sample.Count > 0)
+            {
+                hskVocabPool = sample.Where(v => v.IsActive && !string.IsNullOrWhiteSpace(v.Pinyin))
+                                     .DistinctBy(v => v.Hanzi.Trim())
+                                     .ToList();
+                CloseGameInfo();
+                isPlayingHskShooter = true;
+                hskShooterState = HskGameState.Playing;
+                _isLoadingVocab = false;
+                StateHasChanged();
+            }
+            else
+            {
+                _loadError = $"Lỗi kết nối tải từ vựng: {ex.Message}";
+                _isLoadingVocab = false;
+                StateHasChanged();
+                return;
+            }
+        }
 
         // Shuffle the entire pool once per level load
         for (int i = hskVocabPool.Count - 1; i > 0; i--)
@@ -1711,7 +1836,7 @@
                 }
                 else
                 {
-                    CloseHskShooterGame();
+                    await CloseHskShooterGame();
                 }
             }
         });
@@ -1727,7 +1852,7 @@
         }
         else
         {
-            CloseHskShooterGame();
+            await CloseHskShooterGame();
         }
     }
 
@@ -2131,16 +2256,28 @@
         // Phím Escape: Thoát trò chơi
         if (key == "ESCAPE" || e.Code == "Escape")
         {
-            CloseHskShooterGame();
+            await CloseHskShooterGame();
             return;
         }
     }
 
     private async Task HandleHskKeyDown(KeyboardEventArgs e)
     {
-        if (!isPlayingHskShooter) return;
-
         var key = e.Key.ToUpperInvariant();
+
+        // Luôn cho phép phím ESC thoát khỏi trò chơi dù đang tải, menu hay đang chơi!
+        if (key == "ESCAPE" || e.Code == "Escape")
+        {
+            if (_showStageMap)
+            {
+                CloseStageMap();
+                return;
+            }
+            await CloseHskShooterGame();
+            return;
+        }
+
+        if (!isPlayingHskShooter) return;
 
         // 0. Hoạt cảnh hội thoại Boss đang hiển thị -> Space / Enter để chạy nhanh hoặc tiếp tục
         if (_showBossDialogue)
@@ -2152,7 +2289,7 @@
             }
             if (key == "ESCAPE" || e.Code == "Escape")
             {
-                CloseHskShooterGame();
+                await CloseHskShooterGame();
                 return;
             }
             return;
@@ -2163,7 +2300,7 @@
         {
             if (key == "ESCAPE" || e.Code == "Escape")
             {
-                CloseHskShooterGame();
+                await CloseHskShooterGame();
                 return;
             }
             return;
@@ -2194,7 +2331,7 @@
             }
             else if (key == "ESCAPE" || e.Code == "Escape")
             {
-                CloseHskShooterGame();
+                await CloseHskShooterGame();
             }
             return;
         }
@@ -2222,7 +2359,7 @@
             }
             else if (key == "ESCAPE" || e.Code == "Escape")
             {
-                CloseHskShooterGame();
+                await CloseHskShooterGame();
             }
             return;
         }
@@ -2236,7 +2373,7 @@
             }
             else if (key == "ESCAPE" || e.Code == "Escape")
             {
-                CloseHskShooterGame();
+                await CloseHskShooterGame();
             }
             return;
         }
@@ -2268,7 +2405,7 @@
             // Phím Escape: Thoát trò chơi
             if (key == "ESCAPE" || e.Code == "Escape")
             {
-                CloseHskShooterGame();
+                await CloseHskShooterGame();
                 return;
             }
 
@@ -2350,14 +2487,18 @@
         StateHasChanged();
     }
 
-    private void CloseHskShooterGame()
+    private async Task CloseHskShooterGame()
     {
         hskTimer?.Dispose();
         _countdownTimer?.Dispose();
         _hskPauseStartTime = null;
         _wasPausedByMap = false;
-        _ = JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm(); window.WordleSfx?.stopBossBgm?.(); window.WordleSfx?.stopBossCharge?.(); if ('speechSynthesis' in window) window.speechSynthesis.cancel();");
-        _ = JS.InvokeVoidAsync("MascotManager.setGameMode", false);
+        try
+        {
+            await JS.InvokeVoidAsync("eval", "window.WordleSfx?.stopBgm(); window.WordleSfx?.stopBossBgm?.(); window.WordleSfx?.stopBossCharge?.(); if ('speechSynthesis' in window) window.speechSynthesis.cancel();");
+            await JS.InvokeVoidAsync("MascotManager.setGameMode", false);
+        }
+        catch { }
         hskShooterState = HskGameState.Menu;
         isPlayingHskShooter = false;
         _showStageMap = false;
@@ -2367,6 +2508,7 @@
         _showBossTaunt = false;
         hskBullets.Clear();
         hskImpacts.Clear();
+        await OnClose.InvokeAsync();
     }
 
     private bool IsHskTargeted(FallingWord word)

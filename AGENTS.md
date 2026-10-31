@@ -14,5 +14,5 @@
    - `Program.cs` is strictly reserved for service registration, middleware pipeline, and calling modular `app.MapXEndpoints()` extension methods.
    - All new endpoints must be placed inside the appropriate domain file under `backend/src/Backend.Api/Endpoints/<Domain>Endpoints.cs` (or create a new `Endpoints/<Feature>Endpoints.cs` if introducing a new bounded context).
    - Place all new DTOs in `Backend.Application/DTOs/`, never at the bottom of `Program.cs`.
-   - See `docs/agent_backend_guidelines.md` for complete architecture patterns and templates.
+   - See `docs/RP20_agent_backend_guidelines.md` for complete architecture patterns and templates.
 7. **SECURITY RULE**: Every sensitive endpoint (Admin functions, AI grading invocation, and user data mutations) MUST be protected by `[Authorize]` (or `[Authorize(Roles = "admin")]`) and appropriate Rate Limiting.

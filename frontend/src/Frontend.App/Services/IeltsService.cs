@@ -1,4 +1,6 @@
 using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.JSInterop;
 using Frontend.App.Models;
 
 namespace Frontend.App.Services;
@@ -6,15 +8,21 @@ namespace Frontend.App.Services;
 public class IeltsService
 {
     private readonly HttpClient _httpClient;
+    private readonly IJSRuntime? _js;
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     // Client-side in-memory caches
     private List<IeltsVocabularyItem>? _vocabCache;
     private List<LearningSectionDto>? _sectionsCache;
     private List<ListenVideoDto>? _videosCache;
 
-    public IeltsService(HttpClient httpClient)
+    public IeltsService(HttpClient httpClient, IJSRuntime? js = null)
     {
         _httpClient = httpClient;
+        _js = js;
     }
 
     public void InvalidateVocabCache() => _vocabCache = null;
@@ -29,10 +37,29 @@ public class IeltsService
     // === Vocabulary (IELTS) ===
     public async Task<List<IeltsVocabularyItem>?> GetVocabularyAsync(string? topic = null, string? search = null, bool forceRefresh = false)
     {
-        // Phục vụ tức thì 0ms từ RAM nếu đang lấy toàn bộ danh sách
+        // 1. Phục vụ tức thì 0ms từ RAM nếu đang lấy toàn bộ danh sách
         if (!forceRefresh && string.IsNullOrEmpty(topic) && string.IsNullOrEmpty(search) && _vocabCache != null)
         {
             return _vocabCache;
+        }
+
+        // 2. Phục vụ siêu tốc <100ms từ IndexedDB local browser cache
+        if (!forceRefresh && string.IsNullOrEmpty(topic) && string.IsNullOrEmpty(search) && _js != null)
+        {
+            try
+            {
+                var cachedJson = await _js.InvokeAsync<string?>("OfflineDB.getVocabCache", "ielts_vocab_all");
+                if (!string.IsNullOrEmpty(cachedJson))
+                {
+                    var items = JsonSerializer.Deserialize<List<IeltsVocabularyItem>>(cachedJson, _jsonOptions);
+                    if (items != null && items.Count > 0)
+                    {
+                        _vocabCache = items;
+                        return items;
+                    }
+                }
+            }
+            catch { }
         }
 
         try
@@ -42,14 +69,27 @@ public class IeltsService
             if (!string.IsNullOrEmpty(topic)) qs.Add($"topic={Uri.EscapeDataString(topic)}");
             if (!string.IsNullOrEmpty(search)) qs.Add($"search={Uri.EscapeDataString(search)}");
             if (qs.Count > 0) url += "?" + string.Join("&", qs);
-            var items = await _httpClient.GetFromJsonAsync<List<IeltsVocabularyItem>>(url);
 
-            if (string.IsNullOrEmpty(topic) && string.IsNullOrEmpty(search) && items != null)
+            if (string.IsNullOrEmpty(topic) && string.IsNullOrEmpty(search) && _js != null)
             {
-                _vocabCache = items;
+                var json = await _httpClient.GetStringAsync(url);
+                var items = JsonSerializer.Deserialize<List<IeltsVocabularyItem>>(json, _jsonOptions);
+                if (items != null)
+                {
+                    _vocabCache = items;
+                    _ = _js.InvokeVoidAsync("OfflineDB.saveVocabCache", "ielts_vocab_all", json);
+                }
+                return items ?? new List<IeltsVocabularyItem>();
             }
-
-            return items ?? new List<IeltsVocabularyItem>();
+            else
+            {
+                var items = await _httpClient.GetFromJsonAsync<List<IeltsVocabularyItem>>(url);
+                if (string.IsNullOrEmpty(topic) && string.IsNullOrEmpty(search) && items != null)
+                {
+                    _vocabCache = items;
+                }
+                return items ?? new List<IeltsVocabularyItem>();
+            }
         }
         catch (HttpRequestException)
         {

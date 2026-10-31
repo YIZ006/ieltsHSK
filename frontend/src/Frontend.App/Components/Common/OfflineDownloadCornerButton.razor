@@ -1,0 +1,230 @@
+@using Frontend.App.Services
+@inject OfflineStorageService OfflineStorage
+@inject IeltsService IeltsSvc
+@inject HskService HskSvc
+@inject IJSRuntime JS
+
+<div class="offline-corner-wrapper @CustomClass">
+    @if (_isDownloading)
+    {
+        <div class="btn-offline-corner is-downloading" title="Đang tải dữ liệu offline về thiết bị...">
+            <div class="spinner-border spinner-border-sm text-warning me-2" role="status"></div>
+            <span class="btn-text">@_downloadStatus (@(_downloadPercent)%)</span>
+            <div class="offline-progress-track">
+                <div class="offline-progress-bar" style="width: @(_downloadPercent)%"></div>
+            </div>
+        </div>
+    }
+    else if (_isDownloaded)
+    {
+        <div class="offline-downloaded-group">
+            <button type="button" class="btn-offline-corner is-downloaded" @onclick="ToggleDropdown" title="Bài học đã được lưu vào máy. Bấm để xem tùy chọn">
+                <i class="bi bi-cloud-check-fill text-success me-1"></i>
+                <span class="btn-text">Đã tải offline</span>
+                <i class="bi bi-chevron-down ms-1 dropdown-arrow"></i>
+            </button>
+
+            @if (_showDropdown)
+            {
+                <div class="offline-dropdown-menu" @onclick:stopPropagation="true">
+                    <div class="dropdown-header">
+                        <i class="bi bi-hdd-fill text-info me-1"></i>
+                        <span>Bộ nhớ máy: <b>@_storageSize</b></span>
+                    </div>
+                    <div class="dropdown-status-text">
+                        <i class="bi bi-shield-check text-success me-1"></i> Sẵn sàng học mượt mà không cần kết nối mạng.
+                    </div>
+                    <hr class="dropdown-divider" />
+                    <button type="button" class="dropdown-item redownload" @onclick="HandleDownload">
+                        <i class="bi bi-arrow-repeat me-2"></i> Tải lại / Cập nhật mới
+                    </button>
+                    <button type="button" class="dropdown-item delete" @onclick="HandleDelete">
+                        <i class="bi bi-trash3 me-2"></i> Xóa bản tải offline
+                    </button>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <button type="button" class="btn-offline-corner btn-download" @onclick="HandleDownload" title="Tải toàn bộ bài học, đề thi & file âm thanh R2 về máy để học không cần mạng">
+            <i class="bi bi-cloud-arrow-down-fill text-warning me-1"></i>
+            <span class="btn-text">Tải học offline</span>
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public string ResourceKey { get; set; } = string.Empty;
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? ExamUrl { get; set; }
+    [Parameter] public string? AnswerUrl { get; set; }
+    [Parameter] public string? AudioUrl { get; set; }
+    [Parameter] public string ContentType { get; set; } = "exam"; // "exam", "vocab_ielts", "vocab_hsk", "audio_lesson"
+    [Parameter] public string CustomClass { get; set; } = "";
+    [Parameter] public EventCallback<bool> OnStatusChanged { get; set; }
+
+    private bool _isDownloaded = false;
+    private bool _isDownloading = false;
+    private int _downloadPercent = 0;
+    private string _downloadStatus = "Đang chuẩn bị...";
+    private bool _showDropdown = false;
+    private string _storageSize = "0 MB";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await CheckDownloadStatusAsync();
+    }
+
+    private void ToggleDropdown()
+    {
+        _showDropdown = !_showDropdown;
+    }
+
+    private async Task CheckDownloadStatusAsync()
+    {
+        if (string.IsNullOrWhiteSpace(ResourceKey) && string.IsNullOrWhiteSpace(ExamUrl)) return;
+        var key = !string.IsNullOrWhiteSpace(ResourceKey) ? ResourceKey : ExamUrl!;
+
+        try
+        {
+            if (ContentType == "vocab_ielts")
+            {
+                var cached = await JS.InvokeAsync<string?>("OfflineDB.getVocabCache", "ielts_vocab_all");
+                _isDownloaded = !string.IsNullOrWhiteSpace(cached);
+            }
+            else if (ContentType == "vocab_hsk")
+            {
+                var normKey = string.IsNullOrEmpty(ResourceKey) ? "all" : ResourceKey.Replace(" ", "").Trim().ToLowerInvariant();
+                var cached = await JS.InvokeAsync<string?>("OfflineDB.getVocabCache", $"hsk_vocab_{normKey}");
+                if (!string.IsNullOrWhiteSpace(cached))
+                {
+                    _isDownloaded = true;
+                }
+                else
+                {
+                    var allCached = await JS.InvokeAsync<string?>("OfflineDB.getVocabCache", "hsk_vocab_all");
+                    _isDownloaded = !string.IsNullOrWhiteSpace(allCached);
+                }
+            }
+            else
+            {
+                _isDownloaded = await OfflineStorage.IsResourceDownloadedAsync(key, AudioUrl);
+            }
+            _storageSize = await OfflineStorage.GetStorageEstimateAsync();
+        }
+        catch
+        {
+            _isDownloaded = false;
+        }
+    }
+
+    private async Task HandleDownload()
+    {
+        if (_isDownloading) return;
+        _showDropdown = false;
+        _isDownloading = true;
+        _downloadPercent = 5;
+        _downloadStatus = "Đang kết nối...";
+        StateHasChanged();
+
+        try
+        {
+            var key = !string.IsNullOrWhiteSpace(ResourceKey) ? ResourceKey : ExamUrl!;
+            var title = !string.IsNullOrWhiteSpace(Title) ? Title : "Bài học offline";
+
+            if (ContentType == "vocab_ielts")
+            {
+                _downloadStatus = "Đang tải 16,000+ từ vựng...";
+                _downloadPercent = 40;
+                StateHasChanged();
+                await IeltsSvc.GetVocabularyAsync(forceRefresh: true);
+                _downloadPercent = 100;
+                _isDownloaded = true;
+            }
+            else if (ContentType == "vocab_hsk")
+            {
+                var normKey = string.IsNullOrEmpty(ResourceKey) ? "all" : ResourceKey.Replace(" ", "").Trim().ToLowerInvariant();
+                _downloadStatus = $"Đang tải kho từ vựng {ResourceKey}...";
+                _downloadPercent = 35;
+                StateHasChanged();
+                var items = await HskSvc.GetVocabularyAsync(normKey, forceRefresh: true);
+                _downloadPercent = 90;
+                StateHasChanged();
+                _isDownloaded = items != null && items.Count > 0;
+                _downloadPercent = 100;
+            }
+            else
+            {
+                var success = await OfflineStorage.DownloadGenericExamAsync(
+                    key, title, ExamUrl, AnswerUrl, AudioUrl,
+                    (status, percent) =>
+                    {
+                        _downloadStatus = status;
+                        _downloadPercent = percent;
+                        InvokeAsync(StateHasChanged);
+                    });
+
+                _isDownloaded = success;
+            }
+
+            _storageSize = await OfflineStorage.GetStorageEstimateAsync();
+            await OnStatusChanged.InvokeAsync(_isDownloaded);
+            await JS.InvokeVoidAsync("OfflineDB.showToast", "Đã tải hoàn tất dữ liệu offline! Bạn có thể học không cần mạng.", "success");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[OfflineDownloadCornerButton] Download failed: {ex.Message}");
+            await JS.InvokeVoidAsync("OfflineDB.showToast", $"Lỗi khi tải offline: {ex.Message}", "warning");
+        }
+        finally
+        {
+            _isDownloading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleDelete()
+    {
+        _showDropdown = false;
+        var key = !string.IsNullOrWhiteSpace(ResourceKey) ? ResourceKey : ExamUrl!;
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn xóa bản tải offline của bài học này để giải phóng dung lượng?");
+        if (!confirmed) return;
+
+        try
+        {
+            if (ContentType == "vocab_ielts")
+            {
+                await JS.InvokeAsync<bool>("OfflineDB.saveVocabCache", "ielts_vocab_all", "");
+                IeltsSvc.InvalidateVocabCache();
+            }
+            else if (ContentType == "vocab_hsk")
+            {
+                var normKey = string.IsNullOrEmpty(ResourceKey) ? "all" : ResourceKey.Replace(" ", "").Trim().ToLowerInvariant();
+                await JS.InvokeAsync<bool>("OfflineDB.saveVocabCache", $"hsk_vocab_{normKey}", "");
+                if (normKey == "all")
+                {
+                    foreach (var lvl in new[] { "hsk1", "hsk2", "hsk3", "hsk4", "hsk5", "hsk6" })
+                    {
+                        await JS.InvokeAsync<bool>("OfflineDB.saveVocabCache", $"hsk_vocab_{lvl}", "");
+                    }
+                }
+                HskSvc.InvalidateVocabCache(normKey);
+            }
+            else
+            {
+                await OfflineStorage.DeleteGenericResourceAsync(key, AudioUrl);
+            }
+
+            _isDownloaded = false;
+            await OnStatusChanged.InvokeAsync(false);
+            _storageSize = await OfflineStorage.GetStorageEstimateAsync();
+            StateHasChanged();
+            await JS.InvokeVoidAsync("OfflineDB.showToast", "Đã xóa dữ liệu offline thành công.", "info");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[OfflineDownloadCornerButton] Delete failed: {ex.Message}");
+        }
+    }
+}

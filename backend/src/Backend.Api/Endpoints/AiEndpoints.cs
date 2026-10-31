@@ -205,7 +205,7 @@ public static class AiEndpoints
         return app;
     }
 
-    private static SystemAiSettingsDto LoadAiSettings()
+    public static SystemAiSettingsDto LoadAiSettings()
     {
         var paths = new[]
         {
@@ -230,7 +230,7 @@ public static class AiEndpoints
         return new SystemAiSettingsDto();
     }
 
-    private static void SaveAiSettings(SystemAiSettingsDto settings)
+    public static void SaveAiSettings(SystemAiSettingsDto settings)
     {
         try
         {

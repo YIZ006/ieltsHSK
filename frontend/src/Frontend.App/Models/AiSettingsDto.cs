@@ -25,6 +25,19 @@ public class SystemAiSettingsDto
     public string PrimarySpeakingProvider { get; set; } = "gemini";
     public string PrimaryDictionaryProvider { get; set; } = "gemini";
     public string PrimarySttProvider { get; set; } = "browser"; // "browser", "whisper", "groq", "gemini"
+
+    public string? CloudflarePagesDeployHook { get; set; }
+}
+
+public class DeployFrontendRequestDto
+{
+    public string? DeployHookUrl { get; set; }
+}
+
+public class DeployFrontendResponseDto
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
 }
 
 public class TestAiConnectionRequestDto

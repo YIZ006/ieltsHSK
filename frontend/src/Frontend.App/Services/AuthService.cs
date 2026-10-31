@@ -225,6 +225,7 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[AuthService.AdminLogin] BaseAddress: {httpClient.BaseAddress}, ex: {ex.Message}");
             return (false, false, "Lỗi kết nối máy chủ: " + ex.Message);
         }
     }

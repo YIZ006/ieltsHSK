@@ -23,43 +23,47 @@ public class ExamService
     /// </summary>
     public async Task<ExamData?> LoadExamAsync(string dataUrl, int? mockTestId = null, string skill = "Reading")
     {
-        // Nếu có mockTestId và offline hoặc đã tải về, ưu tiên lấy từ IndexedDB khi offline
+        // 1. Phục vụ 0ms từ RAM Cache nếu đã tải trong phiên hiện tại
+        if (!string.IsNullOrWhiteSpace(dataUrl) && _cache.TryGetValue(dataUrl, out var ramCached))
+        {
+            return ramCached;
+        }
+
+        // 2. Hiển thị trước cái nào đã tải rồi từ IndexedDB (Tức thì <10ms, không phụ thuộc mạng)
         if (mockTestId.HasValue)
         {
-            var isOnline = await _offlineStorage.IsOnlineAsync();
-            if (!isOnline)
+            var offlineExam = await _offlineStorage.GetOfflineExamModelAsync(mockTestId.Value, skill);
+            if (offlineExam != null)
             {
-                var offlineExam = await _offlineStorage.GetOfflineExamModelAsync(mockTestId.Value, skill);
-                if (offlineExam != null)
-                {
-                    NormalizeExam(offlineExam);
-                    return offlineExam;
-                }
+                NormalizeExam(offlineExam);
+                if (!string.IsNullOrWhiteSpace(dataUrl)) _cache[dataUrl] = offlineExam;
+                return offlineExam;
             }
         }
-
-        if (string.IsNullOrWhiteSpace(dataUrl))
+        else if (!string.IsNullOrWhiteSpace(dataUrl))
         {
-            if (mockTestId.HasValue)
+            var offlineExam = await _offlineStorage.GetOfflineExamModelByUrlAsync(dataUrl);
+            if (offlineExam != null)
             {
-                var offlineExam = await _offlineStorage.GetOfflineExamModelAsync(mockTestId.Value, skill);
-                if (offlineExam != null)
-                {
-                    NormalizeExam(offlineExam);
-                    return offlineExam;
-                }
+                NormalizeExam(offlineExam);
+                _cache[dataUrl] = offlineExam;
+                return offlineExam;
             }
-            return null;
         }
 
-        // Trả từ cache nếu đã load rồi
-        if (_cache.TryGetValue(dataUrl, out var cached)) return cached;
+        if (string.IsNullOrWhiteSpace(dataUrl)) return null;
 
+        // 3. Nếu chưa có bản tải offline, nạp từ Cloudflare R2 / Server mạng
         try
         {
             var exam = await _http.GetFromJsonAsync<ExamData>(dataUrl);
-            NormalizeExam(exam);
-            if (exam != null) _cache[dataUrl] = exam;
+            if (exam != null)
+            {
+                NormalizeExam(exam);
+                _cache[dataUrl] = exam;
+                // Lưu đệm ngầm vào IndexedDB để các lần truy cập sau hiển thị ngay
+                _ = _offlineStorage.SaveExamByUrlAsync(dataUrl, exam);
+            }
             return exam;
         }
         catch (Exception ex)

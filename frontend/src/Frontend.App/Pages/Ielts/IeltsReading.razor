@@ -1,9 +1,11 @@
 @page "/ielts/reading/{ExamUrl}"
 @page "/ielts/reading"
 @page "/ielts/reading/preview"
+@page "/hsk/reading/preview"
 @layout Frontend.App.Layout.ExamLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
+@using Frontend.App.Components.Common
 @using Microsoft.AspNetCore.Components.Forms
 @inject ExamService ExamService
 @inject AnswerKeyService answerKeyService
@@ -97,6 +99,7 @@ else
                 </div>
             </div>
             <div class="topbar-right">
+                <OfflineDownloadCornerButton ResourceKey="@($"mock_{(QueryMockTestId ?? 0)}")" Title="@exam.Title" ExamUrl="@_examUrlLoaded" AnswerUrl="@_answerUrlLoaded" CustomClass="me-2" />
                 <button class="btn-exit-exam" @onclick="ExitExam">Exit test</button>
                 <button class="btn-submit-exam" disabled="@isSubmitting" @onclick="SubmitExam">
                     @(isSubmitting ? "Đang chấm..." : "Nộp bài ➤")

@@ -1,11 +1,13 @@
 @page "/portal-hub/login"
-@page "/admin/login"
 @layout Frontend.App.Layout.PlainLayout
 @using Frontend.App.Services
 @using Microsoft.AspNetCore.Components.Authorization
 @inject AuthService AuthService
 @inject NavigationManager NavigationManager
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@implements IDisposable
 
 <PageTitle>Đăng nhập Quản trị viên - Admin Hub</PageTitle>
 
@@ -66,6 +68,10 @@
                 <ValidationMessage For="@(() => loginModel.Password)" class="validation-msg" />
             </div>
 
+            <div class="turnstile-wrapper" style="margin: 14px 0 14px; display: flex; justify-content: center; min-height: 65px;">
+                <div id="turnstile-admin-login-widget"></div>
+            </div>
+
             <button type="submit" class="btn-admin-submit" disabled="@isLoading">
                 @if (isLoading)
                 {
@@ -79,16 +85,6 @@
                 }
             </button>
         </EditForm>
-
-        <!-- Quick Test Account Helper -->
-        <div class="quick-accounts-section">
-            <span class="quick-title"><i class="bi bi-lightning-charge-fill"></i> Tài khoản Quản trị mẫu:</span>
-            <div class="account-chips">
-                <button type="button" class="chip-btn" @onclick='() => FillCredentials("admin@ieltshsk.com", "Aa@cuongnane")'>
-                    <b>admin</b> (admin@ieltshsk.com)
-                </button>
-            </div>
-        </div>
 
         <!-- Back to Student Portal Link -->
         <div class="card-footer-links">
@@ -107,9 +103,12 @@
     private bool isLoading = false;
     private bool showPassword = false;
     private string? errorMessage = null;
+    private DotNetObjectReference<AdminLogin>? objRef;
 
     protected override async Task OnInitializedAsync()
     {
+        objRef = DotNetObjectReference.Create(this);
+
         // Nếu đã có token Quản trị viên hợp lệ thì redirect ngay vào Admin Hub
         var adminToken = await AuthService.GetAdminTokenAsync();
         if (!string.IsNullOrWhiteSpace(adminToken))
@@ -125,15 +124,50 @@
         }
     }
 
-    private void FillCredentials(string email, string password)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        loginModel.Email = email;
-        loginModel.Password = password;
-        errorMessage = null;
+        if (firstRender && objRef != null)
+        {
+            var siteKey = Configuration["Turnstile:SiteKey"] ?? "1x00000000000000000000AA";
+            await JS.InvokeVoidAsync("turnstileHelper.render", "turnstile-admin-login-widget", siteKey, objRef);
+        }
+    }
+
+    [JSInvokable]
+    public void OnTurnstileSuccess(string token)
+    {
+        loginModel.CaptchaToken = token;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnTurnstileError()
+    {
+        loginModel.CaptchaToken = null;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OnTurnstileExpired()
+    {
+        loginModel.CaptchaToken = null;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        objRef?.Dispose();
     }
 
     private async Task HandleAdminLogin()
     {
+        var turnstileEnabled = Configuration.GetValue<bool?>("Turnstile:Enabled") ?? true;
+        if (turnstileEnabled && string.IsNullOrWhiteSpace(loginModel.CaptchaToken))
+        {
+            errorMessage = "Vui lòng xác nhận bạn không phải người máy (CAPTCHA) trước khi bấm Đăng nhập.";
+            return;
+        }
+
         isLoading = true;
         errorMessage = null;
 
@@ -144,6 +178,7 @@
             if (!success)
             {
                 errorMessage = errMsg;
+                await JS.InvokeVoidAsync("turnstileHelper.reset", "turnstile-admin-login-widget");
                 isLoading = false;
                 return;
             }
@@ -155,6 +190,7 @@
         catch (Exception ex)
         {
             errorMessage = "Đã xảy ra lỗi kết nối: " + ex.Message;
+            await JS.InvokeVoidAsync("turnstileHelper.reset", "turnstile-admin-login-widget");
             isLoading = false;
         }
     }

@@ -3,6 +3,7 @@
 @layout Frontend.App.Layout.HskLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
+@using Frontend.App.Components.Common
 @inject MockTestService MockTestService
 @inject NavigationManager Navigation
 
@@ -48,7 +49,10 @@
                 @foreach (var test in mockTests)
                 {
                     <div class="test-block">
-                        <h2>@test.Title</h2>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h2>@test.Title</h2>
+                            <OfflineDownloadCornerButton ResourceKey="@($"mock_{test.Id}")" Title="@test.Title" ExamUrl="@(test.ReadingUrl ?? test.ListeningUrl)" AudioUrl="@test.ListeningAudioUrl" CustomClass="ms-2" />
+                        </div>
                         <div class="skills-grid">
                             <!-- Listening -->
                             <div class="skill-card listening">

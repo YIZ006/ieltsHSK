@@ -1,0 +1,1615 @@
+@page "/hsk/culture"
+@page "/hsk/van-hoa"
+@page "/hsk/culture-stories"
+@page "/hsk/culture/{slug}"
+@page "/hsk/culture-stories/{slug}"
+@page "/culture"
+@page "/culture/{slug}"
+@layout Frontend.App.Layout.HskLayout
+@using Frontend.App.Services
+@inject CultureStoryService CultureService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavManager
+
+<PageTitle>@(selectedStory != null ? selectedStory.TitleVi + " | " + selectedStory.TitleZh : "Góc Đọc Truyện & Khám Phá Văn Hóa Trung Hoa") | ieltsHSK</PageTitle>
+
+<div class="culture-container">
+    @if (selectedStory == null)
+    {
+        @* ── STORY LISTING CATALOG ── *@
+        <div class="culture-hero">
+            <div class="hero-tag">
+                <i class="bi bi-compass-fill text-danger me-1"></i> Văn Hóa, Lịch Sử &amp; Điển Tích Song Ngữ
+            </div>
+            <h1 class="culture-title">Khám Phá Văn Hóa &amp; Truyện Đọc Trung Hoa</h1>
+            <p class="culture-desc">
+                Đắm mình vào những câu chuyện thành ngữ kinh điển, huyền thoại lịch sử và phong tục ngàn năm.
+                Hỗ trợ phiên âm Pinyin, bản dịch song ngữ, âm thanh giọng đọc bản xứ và tra từ vựng tức thì.
+            </p>
+
+            @* Quick Stats *@
+            <div class="culture-stats-row">
+                <div class="c-stat-item">
+                    <i class="bi bi-book-half text-danger"></i>
+                    <span><strong>@(stories?.Count ?? 0)</strong> Câu chuyện tuyển chọn</span>
+                </div>
+                <div class="c-stat-item">
+                    <i class="bi bi-translate text-primary"></i>
+                    <span><strong>Song ngữ</strong> Kèm Pinyin &amp; Âm Hán Việt</span>
+                </div>
+                <div class="c-stat-item">
+                    <i class="bi bi-question-diamond-fill text-warning"></i>
+                    <span><strong>100%</strong> Có Trắc nghiệm đọc hiểu</span>
+                </div>
+            </div>
+        </div>
+
+        @* ── TOOLBAR & CATEGORIES ── *@
+        <div class="culture-toolbar">
+            <div class="search-box">
+                <i class="bi bi-search"></i>
+                <input type="text"
+                       placeholder="Tìm kiếm theo tiêu đề tiếng Trung, tiếng Việt, Pinyin..."
+                       @bind="searchQuery"
+                       @bind:event="oninput"
+                       @bind:after="ApplyFilter" />
+                @if (!string.IsNullOrEmpty(searchQuery))
+                {
+                    <button type="button" class="btn-clear" @onclick="ClearSearch">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                }
+            </div>
+
+            <div class="category-tabs" role="tablist">
+                <button type="button"
+                        class="tab-btn @(selectedCategory == "all" ? "active" : "")"
+                        @onclick='() => FilterCategory("all")'>
+                    <i class="bi bi-collection"></i> Tất cả (@(allStories?.Count ?? 0))
+                </button>
+                <button type="button"
+                        class="tab-btn @(selectedCategory == "chengyu" ? "active" : "")"
+                        @onclick='() => FilterCategory("chengyu")'>
+                    <i class="bi bi-chat-quote-fill"></i> Thành ngữ điển tích (@chengyuCount)
+                </button>
+                <button type="button"
+                        class="tab-btn @(selectedCategory == "history" ? "active" : "")"
+                        @onclick='() => FilterCategory("history")'>
+                    <i class="bi bi-shield-fill"></i> Lịch sử &amp; Nhân vật (@historyCount)
+                </button>
+                <button type="button"
+                        class="tab-btn @(selectedCategory == "customs" ? "active" : "")"
+                        @onclick='() => FilterCategory("customs")'>
+                    <i class="bi bi-stars"></i> Phong tục &amp; Lễ hội (@customsCount)
+                </button>
+            </div>
+        </div>
+
+        @* ── STORIES GRID ── *@
+        @if (isLoading)
+        {
+            <div class="loading-wrap">
+                <div class="spinner-border text-danger" role="status"></div>
+                <p>Đang tải tuyển tập truyện văn hóa...</p>
+            </div>
+        }
+        else if (stories == null || stories.Count == 0)
+        {
+            <div class="empty-wrap">
+                <div class="empty-icon">🏮</div>
+                <h3>Không tìm thấy câu chuyện nào</h3>
+                <p>Vui lòng thử lại với từ khóa tìm kiếm hoặc thể loại khác.</p>
+                <button class="btn btn-outline-danger btn-sm mt-3" @onclick="ResetFilters">
+                    <i class="bi bi-arrow-counterclockwise"></i> Xem tất cả truyện
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="stories-grid">
+                @foreach (var s in stories)
+                {
+                    <div class="story-card" @onclick="() => OpenStory(s)">
+                        <div class="story-card-cover">
+                            @if (!string.IsNullOrEmpty(s.ThumbnailUrl))
+                            {
+                                <img src="@s.ThumbnailUrl" alt="@s.TitleVi" loading="lazy" />
+                            }
+                            else
+                            {
+                                <div class="cover-placeholder">
+                                    <span class="cover-hanzi">@s.TitleZh</span>
+                                </div>
+                            }
+                            <span class="badge-level">@(s.HskLevel ?? s.Level)</span>
+                            <span class="badge-category">@s.Category</span>
+                        </div>
+
+                        <div class="story-card-body">
+                            <div class="story-titles">
+                                <h3 class="title-zh">@s.TitleZh</h3>
+                                <div class="title-pinyin">@s.Pinyin</div>
+                                <h4 class="title-vi">@s.TitleVi</h4>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(s.SummaryVi))
+                            {
+                                <p class="story-summary">@s.SummaryVi</p>
+                            }
+
+                            <div class="story-card-footer">
+                                <span class="read-time"><i class="bi bi-clock me-1"></i>@(s.EstimatedMinutes) phút đọc</span>
+                                <span class="btn-read-story">
+                                    Đọc ngay <i class="bi bi-arrow-right"></i>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+    else
+    {
+        @* ── READER VIEW (INTERACTIVE BILINGUAL READER) ── *@
+        <div class="reader-container">
+            @* Reader Sticky Navigation Bar *@
+            <div class="reader-topbar">
+                <button type="button" class="btn-back-catalog" @onclick="CloseStory">
+                    <i class="bi bi-chevron-left"></i> Quay lại tuyển tập
+                </button>
+
+                <div class="reader-controls">
+                    @* Pinyin Toggle *@
+                    <button type="button"
+                            class="ctrl-btn @(showPinyin ? "active" : "")"
+                            @onclick="() => showPinyin = !showPinyin"
+                            title="Bật/Tắt phiên âm Pinyin">
+                        <i class="bi bi-alphabet"></i>
+                        <span>Pinyin: @(showPinyin ? "BẬT" : "TẮT")</span>
+                    </button>
+
+                    @* Vietnamese Toggle *@
+                    <button type="button"
+                            class="ctrl-btn @(showTranslation ? "active" : "")"
+                            @onclick="() => showTranslation = !showTranslation"
+                            title="Bật/Tắt bản dịch tiếng Việt">
+                        <i class="bi bi-translate"></i>
+                        <span>Dịch: @(showTranslation ? "BẬT" : "TẮT")</span>
+                    </button>
+
+                    @* Font Size Adjuster *@
+                    <div class="font-size-group">
+                        <button type="button" class="font-btn" @onclick="DecreaseFontSize" title="Thu nhỏ chữ">A-</button>
+                        <span class="font-val">@(fontSize)px</span>
+                        <button type="button" class="font-btn" @onclick="IncreaseFontSize" title="Phóng to chữ">A+</button>
+                    </div>
+
+                    @* Full Story Narration *@
+                    <button type="button"
+                            class="narrate-btn @(isNarrating ? "narrating" : "")"
+                            @onclick="ToggleStoryNarration"
+                            title="Nghe đọc toàn bài">
+                        <i class="bi @(isNarrating ? "bi-stop-fill" : "bi-volume-up-fill")"></i>
+                        <span>@(isNarrating ? "Dừng đọc" : "Nghe toàn bài")</span>
+                    </button>
+                </div>
+            </div>
+
+            @* Reader Header Hero *@
+            <div class="reader-header-hero">
+                <div class="reader-header-badges">
+                    <span class="badge-cat-pill">@selectedStory.Category</span>
+                    <span class="badge-level-pill">@(selectedStory.HskLevel ?? selectedStory.Level)</span>
+                    <span class="badge-time-pill"><i class="bi bi-clock me-1"></i>@selectedStory.EstimatedMinutes phút đọc</span>
+                </div>
+
+                <h1 class="reader-title-zh">@selectedStory.TitleZh</h1>
+                <div class="reader-title-pinyin">@selectedStory.Pinyin</div>
+                <h2 class="reader-title-vi">@selectedStory.TitleVi</h2>
+
+                @if (!string.IsNullOrEmpty(selectedStory.SummaryVi))
+                {
+                    <div class="reader-summary-callout">
+                        <i class="bi bi-quote quote-icon"></i>
+                        <span>@selectedStory.SummaryVi</span>
+                    </div>
+                }
+            </div>
+
+            @* Vocabulary Highlights Bar *@
+            @if (selectedStory.Vocabulary != null && selectedStory.Vocabulary.Count > 0)
+            {
+                <div class="vocab-chips-bar">
+                    <span class="vocab-bar-title"><i class="bi bi-lightbulb-fill text-warning me-1"></i>Từ vựng then chốt (nhấp để tra nghĩa):</span>
+                    <div class="chips-list">
+                        @foreach (var v in selectedStory.Vocabulary)
+                        {
+                            <button type="button" class="vocab-chip" @onclick="() => OpenWordModal(v)">
+                                <span class="chip-hanzi">@(string.IsNullOrEmpty(v.Hanzi) ? v.Word : v.Hanzi)</span>
+                                <span class="chip-pinyin">@v.Pinyin</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+
+            @* Reader Story Paragraphs & Sentences *@
+            <article class="reader-article" style="font-size: @(fontSize)px;">
+                @{
+                    var displaySentences = (selectedStory.Sentences != null && selectedStory.Sentences.Count > 0)
+                        ? selectedStory.Sentences
+                        : selectedStory.Paragraphs;
+                }
+
+                @if (displaySentences != null && displaySentences.Count > 0)
+                {
+                    @foreach (var line in displaySentences)
+                    {
+                        <div class="sentence-block @(playingSentenceIndex == line.Index ? "playing-sentence" : "")">
+                            <div class="sentence-left-gutter">
+                                <span class="sentence-index">#@line.Index</span>
+                                <button type="button"
+                                        class="sentence-audio-btn"
+                                        @onclick="() => PlaySentence(line.Index, line.Zh)"
+                                        title="Nghe câu này">
+                                    <i class="bi @(playingSentenceIndex == line.Index ? "bi-volume-up-fill text-danger" : "bi-volume-up")"></i>
+                                </button>
+                            </div>
+
+                            <div class="sentence-text-area">
+                                @if (showPinyin && !string.IsNullOrEmpty(line.Pinyin))
+                                {
+                                    <div class="sentence-pinyin">@line.Pinyin</div>
+                                }
+                                <div class="sentence-zh">
+                                    @line.Zh
+                                </div>
+                                @if (showTranslation && !string.IsNullOrEmpty(line.Vi))
+                                {
+                                    <div class="sentence-vi">@line.Vi</div>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="fallback-content-box">
+                        <div class="sentence-zh">@selectedStory.ContentZh</div>
+                        @if (showTranslation && !string.IsNullOrEmpty(selectedStory.ContentVi))
+                        {
+                            <div class="sentence-vi mt-3">@selectedStory.ContentVi</div>
+                        }
+                    </div>
+                }
+            </article>
+
+            @* ── COMPREHENSION QUIZ SECTION ── *@
+            @if (selectedStory.Questions != null && selectedStory.Questions.Count > 0)
+            {
+                <div class="quiz-section">
+                    <div class="quiz-header">
+                        <div class="quiz-header-title">
+                            <i class="bi bi-patch-question-fill text-danger me-2"></i>
+                            <h3>Thử Thách Đọc Hiểu (@selectedStory.Questions.Count câu hỏi)</h3>
+                        </div>
+                        <span class="quiz-subtitle">Kiểm tra mức độ thẩm thấu nội dung câu chuyện</span>
+                    </div>
+
+                    <div class="quiz-questions-list">
+                        @for (int i = 0; i < selectedStory.Questions.Count; i++)
+                        {
+                            int qIdx = i;
+                            var q = selectedStory.Questions[qIdx];
+                            var userSelected = userQuizAnswers.ContainsKey(qIdx) ? userQuizAnswers[qIdx] : -1;
+                            var isEvaluated = quizResult != null;
+                            var isCorrect = isEvaluated && qIdx < quizResult!.AnswerCorrectness.Count && quizResult.AnswerCorrectness[qIdx];
+
+                            <div class="question-card @(isEvaluated ? (isCorrect ? "q-correct" : "q-incorrect") : "")">
+                                <div class="q-title-row">
+                                    <span class="q-num">Câu @(qIdx + 1)</span>
+                                    <span class="q-text">@q.Question</span>
+                                </div>
+
+                                <div class="q-options-grid">
+                                    @for (int optIdx = 0; optIdx < q.Options.Count; optIdx++)
+                                    {
+                                        int optVal = optIdx;
+                                        var optText = q.Options[optVal];
+                                        var isSelected = (userSelected == optVal);
+                                        var isRightAnswer = (isEvaluated && q.CorrectIndex == optVal);
+
+                                        <button type="button"
+                                                class="option-btn @(isSelected ? "selected" : "") @(isRightAnswer ? "is-right" : "")"
+                                                disabled="@isEvaluated"
+                                                @onclick="() => SelectAnswer(qIdx, optVal)">
+                                            <span class="opt-letter">@((char)('A' + optVal))</span>
+                                            <span class="opt-label">@optText</span>
+                                            @if (isEvaluated && isRightAnswer)
+                                            {
+                                                <i class="bi bi-check-circle-fill text-success ms-auto"></i>
+                                            }
+                                            else if (isEvaluated && isSelected && !isCorrect)
+                                            {
+                                                <i class="bi bi-x-circle-fill text-danger ms-auto"></i>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+
+                                @if (isEvaluated)
+                                {
+                                    <div class="q-explanation-box">
+                                        <i class="bi bi-info-circle-fill me-1"></i>
+                                        <strong>Giải thích:</strong> @q.Explanation
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    @* Quiz Action Button & Result Display *@
+                    <div class="quiz-footer-actions">
+                        @if (quizResult == null)
+                        {
+                            <button type="button"
+                                    class="btn-submit-quiz"
+                                    disabled="@(userQuizAnswers.Count < selectedStory.Questions.Count)"
+                                    @onclick="SubmitQuiz">
+                                <i class="bi bi-check2-all me-1"></i> Nộp Bài Đọc Hiểu
+                            </button>
+                            @if (userQuizAnswers.Count < selectedStory.Questions.Count)
+                            {
+                                <span class="quiz-warning-text">Vui lòng hoàn thành tất cả @selectedStory.Questions.Count câu hỏi trước khi nộp bài.</span>
+                            }
+                        }
+                        else
+                        {
+                            <div class="quiz-score-banner">
+                                <div class="score-pill">
+                                    <span class="score-label">Kết quả của bạn:</span>
+                                    <span class="score-numbers">@quizResult.CorrectCount / @quizResult.TotalQuestions Đúng</span>
+                                    <span class="score-badge">@quizResult.ScorePercentage%</span>
+                                </div>
+                                <button type="button" class="btn-retry-quiz" @onclick="ResetQuiz">
+                                    <i class="bi bi-arrow-repeat"></i> Làm lại bài trắc nghiệm
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@* ── MODAL: INSTANT WORD LOOKUP POPUP ── *@
+@if (activeLookupWord != null)
+{
+    <div class="modal-backdrop-custom" @onclick="CloseWordModal"></div>
+    <div class="word-modal-dialog" role="dialog" aria-modal="true">
+        <div class="word-modal-header">
+            <span class="word-modal-tag"><i class="bi bi-search me-1"></i>Tra Cứu Từ Vựng</span>
+            <button type="button" class="btn-close-modal" @onclick="CloseWordModal" title="Đóng">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="word-modal-body">
+            <div class="word-main-hanzi">
+                @(string.IsNullOrEmpty(activeLookupWord.Hanzi) ? activeLookupWord.Word : activeLookupWord.Hanzi)
+            </div>
+            <div class="word-pinyin">@activeLookupWord.Pinyin</div>
+
+            @if (!string.IsNullOrEmpty(activeLookupWord.SinoVi))
+            {
+                <div class="word-sino-vi">
+                    <span class="label">Âm Hán Việt:</span>
+                    <strong class="val">@activeLookupWord.SinoVi</strong>
+                </div>
+            }
+
+            <div class="word-meaning-vi">
+                <span class="label">Ý nghĩa:</span>
+                <span class="val">@activeLookupWord.Meaning</span>
+            </div>
+
+            @if (!string.IsNullOrEmpty(activeLookupWord.Pos))
+            {
+                <div class="word-pos">
+                    <span class="label">Từ loại:</span>
+                    <span class="val">@activeLookupWord.Pos</span>
+                </div>
+            }
+        </div>
+        <div class="word-modal-footer">
+            <button type="button" class="btn-speak-word" @onclick="() => SpeakText(activeLookupWord.Word)">
+                <i class="bi bi-volume-up-fill me-1"></i> Phát âm từ vựng
+            </button>
+        </div>
+    </div>
+}
+
+<style>
+/* ── CULTURE MODULE STYLES (Light & Dark Compatible via --ig-* Tokens) ── */
+.culture-container {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+    color: var(--ig-text, #0f172a);
+}
+
+/* ── HERO BANNER ── */
+.culture-hero {
+    text-align: center;
+    padding: 36px 20px 28px;
+    margin-bottom: 28px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, rgba(220, 38, 38, 0.08) 0%, rgba(234, 88, 12, 0.08) 50%, rgba(217, 119, 6, 0.08) 100%);
+    border: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.hero-tag {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #dc2626;
+    margin-bottom: 10px;
+}
+
+.culture-title {
+    font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, var(--ig-text, #0f172a) 40%, #dc2626 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.culture-desc {
+    max-width: 760px;
+    margin: 0 auto 20px;
+    color: var(--ig-text-secondary, #475569);
+    font-size: 0.96rem;
+    line-height: 1.6;
+}
+
+.culture-stats-row {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.c-stat-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--ig-surface, #ffffff);
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    font-size: 0.85rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+/* ── TOOLBAR ── */
+.culture-toolbar {
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 28px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.search-box {
+    position: relative;
+    margin-bottom: 14px;
+}
+
+.search-box i.bi-search {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--ig-text-secondary, #94a3b8);
+}
+
+.search-box input {
+    width: 100%;
+    padding: 12px 42px 12px 40px;
+    border-radius: 12px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-bg, #f8fafc);
+    color: var(--ig-text, #0f172a);
+    font-size: 0.92rem;
+    transition: all 0.2s ease;
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: #dc2626;
+    background: var(--ig-surface, #ffffff);
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+}
+
+.btn-clear {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--ig-text-secondary, #94a3b8);
+    cursor: pointer;
+}
+
+.category-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tab-btn {
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-bg, #f8fafc);
+    color: var(--ig-text-secondary, #475569);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tab-btn:hover {
+    border-color: #dc2626;
+    color: #dc2626;
+}
+
+.tab-btn.active {
+    background: #dc2626;
+    color: #ffffff;
+    border-color: #dc2626;
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
+}
+
+/* ── STORIES GRID ── */
+.stories-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 22px;
+}
+
+.story-card {
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 16px;
+    overflow: hidden;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.story-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+    border-color: rgba(220, 38, 38, 0.4);
+}
+
+.story-card-cover {
+    height: 160px;
+    width: 100%;
+    position: relative;
+    background: #1e293b;
+    overflow: hidden;
+}
+
+.story-card-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.story-card:hover .story-card-cover img {
+    transform: scale(1.04);
+}
+
+.cover-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+}
+
+.cover-hanzi {
+    font-size: 2.2rem;
+    font-weight: 900;
+    color: #ffffff;
+    letter-spacing: 2px;
+}
+
+.badge-level {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(4px);
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.badge-category {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(220, 38, 38, 0.85);
+    backdrop-filter: blur(4px);
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.story-card-body {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    justify-content: space-between;
+}
+
+.story-titles {
+    margin-bottom: 10px;
+}
+
+.title-zh {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--ig-text, #0f172a);
+    margin: 0 0 2px;
+}
+
+.title-pinyin {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #ea580c;
+    margin-bottom: 4px;
+}
+
+.title-vi {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--ig-text, #0f172a);
+    margin: 0;
+}
+
+.story-summary {
+    color: var(--ig-text-secondary, #475569);
+    font-size: 0.86rem;
+    line-height: 1.5;
+    margin-bottom: 16px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.story-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 12px;
+    border-top: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.read-time {
+    font-size: 0.78rem;
+    color: var(--ig-text-secondary, #64748b);
+}
+
+.btn-read-story {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #dc2626;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ── READER VIEW ── */
+.reader-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.reader-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 14px;
+    padding: 10px 16px;
+    margin-bottom: 24px;
+    position: sticky;
+    top: 70px;
+    z-index: 20;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.btn-back-catalog {
+    background: none;
+    border: none;
+    color: var(--ig-text-secondary, #475569);
+    font-size: 0.86rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-back-catalog:hover {
+    color: #dc2626;
+}
+
+.reader-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.ctrl-btn {
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-bg, #f8fafc);
+    color: var(--ig-text-secondary, #475569);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ctrl-btn.active {
+    background: #dc2626;
+    color: #ffffff;
+    border-color: #dc2626;
+}
+
+.font-size-group {
+    display: inline-flex;
+    align-items: center;
+    background: var(--ig-bg, #f8fafc);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 8px;
+}
+
+.font-btn {
+    padding: 4px 8px;
+    background: none;
+    border: none;
+    color: var(--ig-text, #0f172a);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.font-val {
+    font-size: 0.75rem;
+    color: var(--ig-text-secondary, #64748b);
+    padding: 0 4px;
+}
+
+.narrate-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: none;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.narrate-btn.narrating {
+    background: #10b981;
+}
+
+/* Reader Header Hero */
+.reader-header-hero {
+    text-align: center;
+    padding: 24px 16px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.reader-header-badges {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.badge-cat-pill {
+    background: rgba(220, 38, 38, 0.12);
+    color: #dc2626;
+    font-size: 0.74rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+
+.badge-level-pill, .badge-time-pill {
+    background: var(--ig-bg, #f1f5f9);
+    color: var(--ig-text-secondary, #475569);
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+
+.reader-title-zh {
+    font-size: 2.2rem;
+    font-weight: 900;
+    color: var(--ig-text, #0f172a);
+    margin: 0 0 4px;
+}
+
+.reader-title-pinyin {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #ea580c;
+    margin-bottom: 8px;
+}
+
+.reader-title-vi {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: var(--ig-text, #0f172a);
+    margin: 0 0 16px;
+}
+
+.reader-summary-callout {
+    max-width: 680px;
+    margin: 0 auto;
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-left: 4px solid #dc2626;
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 0.92rem;
+    color: var(--ig-text-secondary, #475569);
+    font-style: italic;
+    line-height: 1.55;
+    position: relative;
+    text-align: left;
+}
+
+/* Vocabulary Bar */
+.vocab-chips-bar {
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 24px;
+}
+
+.vocab-bar-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--ig-text-secondary, #64748b);
+    display: block;
+    margin-bottom: 8px;
+}
+
+.chips-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.vocab-chip {
+    padding: 5px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-bg, #f8fafc);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.vocab-chip:hover {
+    border-color: #dc2626;
+    background: rgba(220, 38, 38, 0.05);
+}
+
+.chip-hanzi {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--ig-text, #0f172a);
+}
+
+.chip-pinyin {
+    font-size: 0.78rem;
+    color: #ea580c;
+}
+
+/* Reader Article */
+.reader-article {
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 32px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.sentence-block {
+    display: flex;
+    gap: 16px;
+    padding: 14px 12px;
+    border-radius: 12px;
+    transition: background 0.15s ease;
+    border-bottom: 1px dashed var(--ig-border, #f1f5f9);
+}
+
+.sentence-block:last-child {
+    border-bottom: none;
+}
+
+.sentence-block:hover {
+    background: var(--ig-bg, #f8fafc);
+}
+
+.sentence-block.playing-sentence {
+    background: rgba(220, 38, 38, 0.08);
+    border-left: 3px solid #dc2626;
+}
+
+.sentence-left-gutter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding-top: 2px;
+}
+
+.sentence-index {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--ig-text-secondary, #94a3b8);
+}
+
+.sentence-audio-btn {
+    background: none;
+    border: none;
+    color: var(--ig-text-secondary, #64748b);
+    cursor: pointer;
+    font-size: 0.95rem;
+}
+
+.sentence-audio-btn:hover {
+    color: #dc2626;
+}
+
+.sentence-text-area {
+    flex-grow: 1;
+}
+
+.sentence-pinyin {
+    font-size: 0.88em;
+    font-weight: 600;
+    color: #ea580c;
+    margin-bottom: 4px;
+    letter-spacing: 0.3px;
+}
+
+.sentence-zh {
+    font-size: 1.15em;
+    font-weight: 600;
+    line-height: 1.7;
+    color: var(--ig-text, #0f172a);
+    margin-bottom: 6px;
+}
+
+.sentence-vi {
+    font-size: 0.9em;
+    color: var(--ig-text-secondary, #475569);
+    line-height: 1.5;
+}
+
+/* ── COMPREHENSION QUIZ ── */
+.quiz-section {
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 32px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.quiz-header {
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.quiz-header-title {
+    display: flex;
+    align-items: center;
+}
+
+.quiz-header-title h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--ig-text, #0f172a);
+}
+
+.quiz-subtitle {
+    font-size: 0.84rem;
+    color: var(--ig-text-secondary, #64748b);
+    display: block;
+    margin-top: 4px;
+}
+
+.quiz-questions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.question-card {
+    background: var(--ig-bg, #f8fafc);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.question-card.q-correct {
+    border-left: 4px solid #10b981;
+}
+
+.question-card.q-incorrect {
+    border-left: 4px solid #ef4444;
+}
+
+.q-title-row {
+    margin-bottom: 12px;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+}
+
+.q-num {
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+.q-text {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--ig-text, #0f172a);
+}
+
+.q-options-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.option-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-surface, #ffffff);
+    color: var(--ig-text, #0f172a);
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.88rem;
+    transition: all 0.15s ease;
+}
+
+.option-btn:hover:not(:disabled) {
+    border-color: #dc2626;
+    background: rgba(220, 38, 38, 0.04);
+}
+
+.option-btn.selected {
+    border-color: #dc2626;
+    background: rgba(220, 38, 38, 0.08);
+}
+
+.option-btn.is-right {
+    border-color: #10b981 !important;
+    background: rgba(16, 185, 129, 0.1) !important;
+}
+
+.opt-letter {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--ig-bg, #f1f5f9);
+    color: var(--ig-text, #0f172a);
+    font-size: 0.78rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.option-btn.selected .opt-letter {
+    background: #dc2626;
+    color: #ffffff;
+}
+
+.q-explanation-box {
+    margin-top: 10px;
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    color: var(--ig-text-secondary, #475569);
+    line-height: 1.45;
+}
+
+.quiz-footer-actions {
+    margin-top: 24px;
+    text-align: center;
+}
+
+.btn-submit-quiz {
+    padding: 10px 24px;
+    border-radius: 10px;
+    border: none;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+}
+
+.btn-submit-quiz:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.quiz-warning-text {
+    display: block;
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: var(--ig-text-secondary, #64748b);
+}
+
+.quiz-score-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    background: var(--ig-bg, #f8fafc);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 12px;
+    padding: 14px 20px;
+}
+
+.score-pill {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.score-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--ig-text-secondary, #475569);
+}
+
+.score-numbers {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--ig-text, #0f172a);
+}
+
+.score-badge {
+    background: #10b981;
+    color: #ffffff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.btn-retry-quiz {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-surface, #ffffff);
+    color: var(--ig-text, #0f172a);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* ── WORD MODAL ── */
+.modal-backdrop-custom {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+}
+
+.word-modal-dialog {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 440px;
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 16px;
+    padding: 20px;
+    z-index: 1001;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+}
+
+.word-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.word-modal-tag {
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #dc2626;
+}
+
+.btn-close-modal {
+    background: none;
+    border: none;
+    font-size: 1rem;
+    color: var(--ig-text-secondary, #94a3b8);
+    cursor: pointer;
+}
+
+.word-main-hanzi {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--ig-text, #0f172a);
+    text-align: center;
+}
+
+.word-pinyin {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #ea580c;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.word-sino-vi, .word-meaning-vi, .word-pos {
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 8px;
+}
+
+.word-sino-vi .label, .word-meaning-vi .label, .word-pos .label {
+    color: var(--ig-text-secondary, #64748b);
+    min-width: 90px;
+}
+
+.word-sino-vi .val {
+    color: #dc2626;
+}
+
+.word-modal-footer {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.btn-speak-word {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-bg, #f8fafc);
+    color: var(--ig-text, #0f172a);
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-speak-word:hover {
+    background: #dc2626;
+    color: #ffffff;
+    border-color: #dc2626;
+}
+
+/* ── STATES ── */
+.loading-wrap, .empty-wrap {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--ig-text-secondary, #64748b);
+}
+
+.empty-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+</style>
+
+@code {
+    [Parameter]
+    public string? Slug { get; set; }
+
+    private List<CultureStoryItem>? allStories;
+    private List<CultureStoryItem>? stories;
+    private CultureStoryItem? selectedStory;
+
+    private string selectedCategory = "all";
+    private string searchQuery = "";
+    private bool isLoading = true;
+
+    // Reader Settings
+    private bool showPinyin = true;
+    private bool showTranslation = true;
+    private int fontSize = 18;
+    private bool isNarrating = false;
+    private int playingSentenceIndex = -1;
+
+    // Word Lookup Popup
+    private StoryVocabItem? activeLookupWord;
+
+    // Quiz State
+    private Dictionary<int, int> userQuizAnswers = new();
+    private CultureQuizResult? quizResult;
+
+    private int chengyuCount => allStories?.Count(s => s.Category.Contains("Thành ngữ") || s.Category.Contains("chengyu")) ?? 0;
+    private int historyCount => allStories?.Count(s => s.Category.Contains("Lịch sử") || s.Category.Contains("history")) ?? 0;
+    private int customsCount => allStories?.Count(s => s.Category.Contains("Phong tục") || s.Category.Contains("Lễ hội") || s.Category.Contains("custom")) ?? 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadStoriesDataAsync();
+        if (!string.IsNullOrWhiteSpace(Slug))
+        {
+            await LoadStoryBySlugAsync(Slug);
+        }
+    }
+
+    private async Task LoadStoriesDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            allStories = await CultureService.GetStoriesAsync();
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CultureReader] Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadStoryBySlugAsync(string slugOrId)
+    {
+        selectedStory = await CultureService.GetStoryDetailAsync(slugOrId);
+        ResetQuiz();
+    }
+
+    private void ApplyFilter()
+    {
+        if (allStories == null)
+        {
+            stories = new List<CultureStoryItem>();
+            return;
+        }
+
+        var filtered = allStories.AsEnumerable();
+
+        if (selectedCategory == "chengyu")
+        {
+            filtered = filtered.Where(s => s.Category.Contains("Thành ngữ") || s.Category.Contains("chengyu"));
+        }
+        else if (selectedCategory == "history")
+        {
+            filtered = filtered.Where(s => s.Category.Contains("Lịch sử") || s.Category.Contains("history"));
+        }
+        else if (selectedCategory == "customs")
+        {
+            filtered = filtered.Where(s => s.Category.Contains("Phong tục") || s.Category.Contains("Lễ hội") || s.Category.Contains("custom"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var q = searchQuery.Trim().ToLowerInvariant();
+            filtered = filtered.Where(s =>
+                s.TitleZh.ToLowerInvariant().Contains(q) ||
+                s.TitleVi.ToLowerInvariant().Contains(q) ||
+                s.Pinyin.ToLowerInvariant().Contains(q) ||
+                (s.SummaryVi != null && s.SummaryVi.ToLowerInvariant().Contains(q)));
+        }
+
+        stories = filtered.ToList();
+    }
+
+    private void FilterCategory(string cat)
+    {
+        selectedCategory = cat;
+        ApplyFilter();
+    }
+
+    private void ClearSearch()
+    {
+        searchQuery = "";
+        ApplyFilter();
+    }
+
+    private void ResetFilters()
+    {
+        selectedCategory = "all";
+        searchQuery = "";
+        ApplyFilter();
+    }
+
+    private async Task OpenStory(CultureStoryItem s)
+    {
+        selectedStory = await CultureService.GetStoryDetailAsync(s.Slug ?? s.Id);
+        ResetQuiz();
+    }
+
+    private void CloseStory()
+    {
+        selectedStory = null;
+        isNarrating = false;
+        playingSentenceIndex = -1;
+        ResetQuiz();
+    }
+
+    private void IncreaseFontSize()
+    {
+        if (fontSize < 28) fontSize += 2;
+    }
+
+    private void DecreaseFontSize()
+    {
+        if (fontSize > 14) fontSize -= 2;
+    }
+
+    private async Task PlaySentence(int index, string text)
+    {
+        playingSentenceIndex = index;
+        await SpeakText(text);
+    }
+
+    private async Task ToggleStoryNarration()
+    {
+        if (isNarrating)
+        {
+            isNarrating = false;
+            playingSentenceIndex = -1;
+            return;
+        }
+
+        if (selectedStory == null) return;
+        isNarrating = true;
+
+        var sentences = (selectedStory.Sentences != null && selectedStory.Sentences.Count > 0)
+            ? selectedStory.Sentences
+            : selectedStory.Paragraphs;
+
+        if (sentences != null && sentences.Count > 0)
+        {
+            foreach (var line in sentences)
+            {
+                if (!isNarrating) break;
+                playingSentenceIndex = line.Index;
+                StateHasChanged();
+                await SpeakText(line.Zh);
+                await Task.Delay(1500); // Pause between sentences
+            }
+        }
+        else if (!string.IsNullOrEmpty(selectedStory.ContentZh))
+        {
+            await SpeakText(selectedStory.ContentZh);
+        }
+
+        isNarrating = false;
+        playingSentenceIndex = -1;
+        StateHasChanged();
+    }
+
+    private async Task SpeakText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("speakText", text, "zh-CN");
+        }
+        catch { }
+    }
+
+    private void OpenWordModal(StoryVocabItem vocab) => activeLookupWord = vocab;
+    private void CloseWordModal() => activeLookupWord = null;
+
+    private void SelectAnswer(int qIndex, int optIndex)
+    {
+        if (quizResult != null) return;
+        userQuizAnswers[qIndex] = optIndex;
+    }
+
+    private async Task SubmitQuiz()
+    {
+        if (selectedStory == null || selectedStory.Questions == null) return;
+
+        var answersList = new List<int>();
+        for (int i = 0; i < selectedStory.Questions.Count; i++)
+        {
+            answersList.Add(userQuizAnswers.ContainsKey(i) ? userQuizAnswers[i] : -1);
+        }
+
+        quizResult = await CultureService.SubmitQuizAsync(selectedStory.StoryId, selectedStory.Slug, answersList);
+    }
+
+    private void ResetQuiz()
+    {
+        userQuizAnswers.Clear();
+        quizResult = null;
+    }
+}

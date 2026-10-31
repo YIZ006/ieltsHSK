@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using Blazored.LocalStorage;
+using Microsoft.JSInterop;
 using Frontend.App.Models;
 
 namespace Frontend.App.Services;
@@ -7,21 +9,45 @@ namespace Frontend.App.Services;
 public class HskService
 {
     private readonly HttpClient _http;
+    private readonly HttpClient? _frontendHttp;
     private readonly ILocalStorageService _localStorage;
+    private readonly IJSRuntime? _js;
     private readonly Dictionary<string, HskExamData> _examCache = new();
-    private readonly Dictionary<string, List<HskVocabularyItem>> _vocabCache = new();
+    private readonly Dictionary<string, List<HskVocabularyItem>> _vocabCache = new(StringComparer.OrdinalIgnoreCase);
     private List<HskLearningSection>? _sectionsCache;
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     public HttpClient Client => _http;
 
-    public HskService(HttpClient http, ILocalStorageService localStorage)
+    public HskService(HttpClient http, ILocalStorageService localStorage, HttpClient? frontendHttp = null, IJSRuntime? js = null)
     {
         _http = http;
         _localStorage = localStorage;
+        _frontendHttp = frontendHttp;
+        _js = js;
     }
 
-    public void InvalidateVocabCache() => _vocabCache.Clear();
-    public bool HasVocabInCache(string? level = null) => _vocabCache.ContainsKey(string.IsNullOrEmpty(level) ? "all" : level);
+    public void InvalidateVocabCache(string? level = null)
+    {
+        if (string.IsNullOrEmpty(level))
+        {
+            _vocabCache.Clear();
+        }
+        else
+        {
+            var key = level.Replace(" ", "").Trim().ToLowerInvariant();
+            _vocabCache.Remove(key);
+        }
+    }
+
+    public bool HasVocabInCache(string? level = null)
+    {
+        var key = string.IsNullOrEmpty(level) ? "all" : level.Replace(" ", "").Trim().ToLowerInvariant();
+        return _vocabCache.ContainsKey(key);
+    }
 
     // === Exam loading ===
     public async Task<HskExamData?> LoadExamAsync(string dataUrl)
@@ -86,45 +112,152 @@ public class HskService
     // === Vocabulary ===
     public async Task<List<HskVocabularyItem>?> GetVocabularyAsync(string? level = null, bool forceRefresh = false)
     {
-        var cacheKey = string.IsNullOrEmpty(level) ? "all" : level;
-        if (!forceRefresh && _vocabCache.TryGetValue(cacheKey, out var cachedVocab))
+        var normalizedLevel = string.IsNullOrEmpty(level) ? "all" : level.Replace(" ", "").Trim().ToLowerInvariant();
+        var cacheKey = normalizedLevel;
+
+        // 1. Phục vụ tức thì 0ms từ RAM
+        if (!forceRefresh && _vocabCache.TryGetValue(cacheKey, out var cachedVocab) && cachedVocab.Count > 0)
         {
             return cachedVocab;
         }
 
+        // 2. Phục vụ siêu tốc <100ms từ IndexedDB (Offline Storage)
+        if (!forceRefresh && _js != null)
+        {
+            try
+            {
+                var cachedJson = await _js.InvokeAsync<string?>("OfflineDB.getVocabCache", $"hsk_vocab_{cacheKey}");
+                if (!string.IsNullOrEmpty(cachedJson))
+                {
+                    var dbItems = JsonSerializer.Deserialize<List<HskVocabularyItem>>(cachedJson, _jsonOptions);
+                    if (dbItems != null && dbItems.Count > 0)
+                    {
+                        _vocabCache[cacheKey] = dbItems;
+                        return dbItems;
+                    }
+                }
+
+                // Nếu hỏi từng cấp (HSK1..6) mà chưa có cache riêng nhưng đã lưu "all"
+                if (cacheKey != "all")
+                {
+                    var allCachedJson = await _js.InvokeAsync<string?>("OfflineDB.getVocabCache", "hsk_vocab_all");
+                    if (!string.IsNullOrEmpty(allCachedJson))
+                    {
+                        var allItems = JsonSerializer.Deserialize<List<HskVocabularyItem>>(allCachedJson, _jsonOptions);
+                        if (allItems != null && allItems.Count > 0)
+                        {
+                            var filtered = allItems
+                                .Where(w => string.Equals(w.HskLevel, cacheKey, StringComparison.OrdinalIgnoreCase))
+                                .ToList();
+                            if (filtered.Count > 0)
+                            {
+                                _vocabCache[cacheKey] = filtered;
+                                return filtered;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[HskService] IndexedDB read error: {ex.Message}");
+            }
+        }
+
+        List<HskVocabularyItem>? items = null;
         var url = "/api/hsk/vocab";
-        if (!string.IsNullOrEmpty(level)) url += $"?level={Uri.EscapeDataString(level)}";
+        if (!string.IsNullOrEmpty(level) && !normalizedLevel.Equals("all", StringComparison.OrdinalIgnoreCase))
+        {
+            url += $"?level={Uri.EscapeDataString(normalizedLevel)}";
+        }
 
         try
         {
-            var items = await _http.GetFromJsonAsync<List<HskVocabularyItem>>(url);
-            if (items != null)
-            {
-                _vocabCache[cacheKey] = items;
-            }
-            return items ?? new List<HskVocabularyItem>();
+            items = await _http.GetFromJsonAsync<List<HskVocabularyItem>>(url);
         }
         catch (HttpRequestException)
         {
             try
             {
                 await Task.Delay(500);
-                var items = await _http.GetFromJsonAsync<List<HskVocabularyItem>>(url);
-                if (items != null)
-                {
-                    _vocabCache[cacheKey] = items;
-                }
-                return items ?? new List<HskVocabularyItem>();
+                items = await _http.GetFromJsonAsync<List<HskVocabularyItem>>(url);
             }
-            catch
-            {
-                return _vocabCache.TryGetValue(cacheKey, out var fallback) ? fallback : null;
-            }
+            catch { }
         }
-        catch
+        catch { }
+
+        // Fallback tự động: nếu API backend rỗng hoặc DB chưa nạp -> nạp từ sample-data/hsk
+        if (items == null || items.Count == 0)
         {
-            return _vocabCache.TryGetValue(cacheKey, out var fallback) ? fallback : null;
+            items = await LoadOfflineVocabularyAsync(normalizedLevel);
         }
+
+        // Lưu vào RAM và IndexedDB (đảm bảo không bị giới hạn 5MB của localStorage)
+        if (items != null && items.Count > 0)
+        {
+            _vocabCache[cacheKey] = items;
+            if (_js != null)
+            {
+                try
+                {
+                    var jsonStr = JsonSerializer.Serialize(items);
+                    await _js.InvokeAsync<bool>("OfflineDB.saveVocabCache", $"hsk_vocab_{cacheKey}", jsonStr);
+
+                    // Nếu nạp "all", đồng thời tách lưu cache riêng cho HSK1..6
+                    if (cacheKey == "all")
+                    {
+                        var groups = items.GroupBy(x => x.HskLevel?.ToLowerInvariant() ?? "");
+                        foreach (var g in groups)
+                        {
+                            if (!string.IsNullOrEmpty(g.Key))
+                            {
+                                var subList = g.ToList();
+                                _vocabCache[g.Key] = subList;
+                                var subJson = JsonSerializer.Serialize(subList);
+                                await _js.InvokeAsync<bool>("OfflineDB.saveVocabCache", $"hsk_vocab_{g.Key}", subJson);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[HskService] IndexedDB save error: {ex.Message}");
+                }
+            }
+        }
+
+        return items ?? (_vocabCache.TryGetValue(cacheKey, out var fallback) ? fallback : new List<HskVocabularyItem>());
+    }
+
+    private async Task<List<HskVocabularyItem>> LoadOfflineVocabularyAsync(string level)
+    {
+        var client = _frontendHttp ?? _http;
+        var result = new List<HskVocabularyItem>();
+        var norm = level.ToLowerInvariant();
+
+        if (norm == "all" || string.IsNullOrEmpty(level))
+        {
+            foreach (var lvl in new[] { "hsk1", "hsk2", "hsk3", "hsk4", "hsk5", "hsk6" })
+            {
+                try
+                {
+                    var list = await client.GetFromJsonAsync<List<HskVocabularyItem>>($"sample-data/hsk/{lvl}.json");
+                    if (list != null && list.Count > 0) result.AddRange(list);
+                }
+                catch { }
+            }
+        }
+        else
+        {
+            try
+            {
+                var list = await client.GetFromJsonAsync<List<HskVocabularyItem>>($"sample-data/hsk/{norm}.json");
+                if (list != null && list.Count > 0) result.AddRange(list);
+            }
+            catch { }
+        }
+
+        return result;
     }
 
     // === Admin: Save exam ===

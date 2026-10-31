@@ -298,13 +298,26 @@ window.setYouTubeShadowRate = function (rate) {
 let nativeAudio = null;
 let audioSegmentInterval = null;
 
-window.initAudioShadowPlayer = function (audioElementId, audioUrl) {
+window.initAudioShadowPlayer = function (audioElementId, audioUrl, dotNetHelper) {
     if (audioSegmentInterval) clearInterval(audioSegmentInterval);
     nativeAudio = document.getElementById(audioElementId);
     if (!nativeAudio) {
         nativeAudio = new Audio(audioUrl);
-    } else if (audioUrl && nativeAudio.src !== audioUrl) {
-        nativeAudio.src = audioUrl;
+    } else {
+        if (audioUrl && nativeAudio.src !== audioUrl) {
+            nativeAudio.src = audioUrl;
+        }
+        nativeAudio.preload = "auto";
+        try { nativeAudio.load(); } catch (e) { }
+    }
+
+    if (nativeAudio) {
+        nativeAudio.onerror = function () {
+            console.warn('[AudioShadow] Native MP3 load error:', audioUrl);
+            if (dotNetHelper) {
+                try { dotNetHelper.invokeMethodAsync('OnNativeAudioError', 'File audio gốc không tải được'); } catch (e) { }
+            }
+        };
     }
 };
 
@@ -312,7 +325,10 @@ window.playAudioSegment = function (startTime, endTime, rate, isLoop, dotNetHelp
     if (!nativeAudio) {
         nativeAudio = document.getElementById('engnovate-main-audio');
     }
-    if (!nativeAudio) return;
+    if (!nativeAudio) {
+        console.warn('[AudioShadow] Native audio element not found');
+        return;
+    }
     if (audioSegmentInterval) clearInterval(audioSegmentInterval);
 
     if (rate) {
@@ -320,24 +336,47 @@ window.playAudioSegment = function (startTime, endTime, rate, isLoop, dotNetHelp
     }
 
     const safeStart = Math.max(0, startTime);
-    nativeAudio.currentTime = safeStart;
-    nativeAudio.play().catch(e => console.log('Audio play error:', e));
 
-    audioSegmentInterval = setInterval(() => {
+    function startNativePlayback() {
         if (!nativeAudio) return;
-        if (nativeAudio.currentTime >= endTime) {
-            if (isLoop) {
-                nativeAudio.currentTime = safeStart;
-                nativeAudio.play().catch(e => console.log('Audio play error:', e));
-            } else {
-                clearInterval(audioSegmentInterval);
-                nativeAudio.pause();
-                if (dotNetHelper) {
-                    try { dotNetHelper.invokeMethodAsync('OnSegmentPlaybackEnded'); } catch (e) { }
+        try {
+            nativeAudio.currentTime = safeStart;
+            const playPromise = nativeAudio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(e => {
+                    console.warn('[AudioShadow] Native play interrupted or paused:', e);
+                });
+            }
+        } catch (e) {
+            console.warn('[AudioShadow] Play error:', e);
+        }
+
+        audioSegmentInterval = setInterval(() => {
+            if (!nativeAudio) return;
+            if (nativeAudio.currentTime >= endTime) {
+                if (isLoop) {
+                    nativeAudio.currentTime = safeStart;
+                    nativeAudio.play().catch(e => console.log('Audio loop error:', e));
+                } else {
+                    clearInterval(audioSegmentInterval);
+                    nativeAudio.pause();
+                    if (dotNetHelper) {
+                        try { dotNetHelper.invokeMethodAsync('OnSegmentPlaybackEnded'); } catch (e) { }
+                    }
                 }
             }
-        }
-    }, 25);
+        }, 25);
+    }
+
+    if (nativeAudio.readyState >= 1) {
+        startNativePlayback();
+    } else {
+        nativeAudio.addEventListener('loadedmetadata', function onMeta() {
+            nativeAudio.removeEventListener('loadedmetadata', onMeta);
+            startNativePlayback();
+        }, { once: true });
+        try { nativeAudio.load(); } catch (e) { }
+    }
 };
 
 window.pauseAudioSegment = function () {

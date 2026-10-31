@@ -76,7 +76,11 @@
 
     private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
-        await SafeInvokeVoidAsync("MascotManager.onPageNavigated", e.Location);
+        try
+        {
+            await SafeInvokeVoidAsync("MascotManager.onPageNavigated", e.Location);
+        }
+        catch { }
     }
 
     private async Task EnsureMascotScriptAsync()

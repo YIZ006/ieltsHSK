@@ -1,0 +1,1227 @@
+@page "/hsk/slang"
+@page "/hsk/vocab-topics"
+@page "/hsk/tu-long"
+@page "/hsk/genz"
+@page "/slang"
+@layout Frontend.App.Layout.HskLayout
+@using Frontend.App.Services
+@inject HskSlangService SlangService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavManager
+
+<PageTitle>Tiếng Lóng GenZ &amp; Mật Mã Số Mạng Trung Quốc | ieltsHSK</PageTitle>
+
+<div class="slang-container">
+    @* ── HERO BANNER ── *@
+    <div class="slang-hero">
+        <div class="slang-hero-badge">
+            <span class="badge-fire">🔥 Hot Trend 2026</span>
+            <span class="badge-sub">Mạng Xã Hội Douyin &amp; Weibo</span>
+        </div>
+        <h1 class="slang-hero-title">
+            Tiếng Lóng GenZ &amp; Mật Mã Số Mạng
+        </h1>
+        <p class="slang-hero-desc">
+            Khám phá kho tàng ngôn ngữ mạng thế hệ mới của giới trẻ Trung Quốc. Hiểu rõ ngữ âm đồng âm,
+            nguồn gốc văn hóa số và giao tiếp tự nhiên như người bản xứ qua hội thoại WeChat thực tế.
+        </p>
+
+        @* Quick Stats Bar *@
+        <div class="slang-stats-bar">
+            <div class="stat-pill">
+                <i class="bi bi-collection-fill text-primary"></i>
+                <span><strong>@(items?.Count ?? 0)</strong> Từ vựng &amp; Mật mã</span>
+            </div>
+            <div class="stat-pill">
+                <i class="bi bi-check-circle-fill text-success"></i>
+                <span><strong>@learnedCount</strong> / @(items?.Count ?? 0) Đã thuộc (@learnedPercent%)</span>
+            </div>
+            <div class="stat-pill">
+                <i class="bi bi-chat-dots-fill text-warning"></i>
+                <span><strong>100%</strong> Có Hội thoại WeChat</span>
+            </div>
+        </div>
+    </div>
+
+    @* ── TOOLBAR: SEARCH & CATEGORY FILTERS ── *@
+    <div class="slang-toolbar">
+        <div class="search-wrap">
+            <i class="bi bi-search search-icon"></i>
+            <input type="text"
+                   class="slang-search-input"
+                   placeholder="Tìm theo mật mã số (520, 1314...), chữ Hán (躺平), Pinyin hoặc nghĩa tiếng Việt..."
+                   @bind="searchQuery"
+                   @bind:event="oninput"
+                   @bind:after="ApplyFilter" />
+            @if (!string.IsNullOrEmpty(searchQuery))
+            {
+                <button type="button" class="btn-clear-search" @onclick="ClearSearch" title="Xóa tìm kiếm">
+                    <i class="bi bi-x-circle-fill"></i>
+                </button>
+            }
+        </div>
+
+        <div class="filter-actions-row">
+            @* Category Pills *@
+            <div class="category-pills" role="tablist">
+                <button type="button"
+                        class="cat-pill @(selectedCategory == "all" ? "active" : "")"
+                        @onclick='() => ChangeCategory("all")'>
+                    <i class="bi bi-grid-fill"></i> Tất cả (@(allItems?.Count ?? 0))
+                </button>
+                <button type="button"
+                        class="cat-pill cat-cipher @(selectedCategory == "cipher" ? "active" : "")"
+                        @onclick='() => ChangeCategory("cipher")'>
+                    <i class="bi bi-123"></i> 🔢 Mật mã số mạng (@cipherCount)
+                </button>
+                <button type="button"
+                        class="cat-pill cat-trend @(selectedCategory == "slang" ? "active" : "")"
+                        @onclick='() => ChangeCategory("slang")'>
+                    <i class="bi bi-fire"></i> 🔥 Hot Trend Douyin/Weibo (@trendCount)
+                </button>
+                <button type="button"
+                        class="cat-pill cat-work @(selectedCategory == "work_tech" ? "active" : "")"
+                        @onclick='() => ChangeCategory("work_tech")'>
+                    <i class="bi bi-briefcase-fill"></i> 💼 Đời sống &amp; Công nghệ (@workCount)
+                </button>
+            </div>
+
+            @* Secondary Toggles *@
+            <div class="toolbar-toggles">
+                <label class="toggle-learned-label">
+                    <input type="checkbox" @bind="hideLearned" @bind:after="ApplyFilter" />
+                    <span>Ẩn từ đã thuộc</span>
+                </label>
+
+                <div class="view-mode-pill">
+                    <button type="button"
+                            class="view-mode-btn @(!isFlashcardMode ? "active" : "")"
+                            @onclick="() => isFlashcardMode = false"
+                            title="Chế độ lưới thẻ">
+                        <i class="bi bi-grid-3x3-gap-fill"></i> Lưới
+                    </button>
+                    <button type="button"
+                            class="view-mode-btn @(isFlashcardMode ? "active" : "")"
+                            @onclick="() => isFlashcardMode = true"
+                            title="Chế độ Flashcard">
+                        <i class="bi bi-card-text"></i> Flashcard
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ── CONTENT DISPLAY ── *@
+    @if (isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner-border text-danger" role="status"></div>
+            <p>Đang tải ngân hàng từ vựng &amp; mật mã GenZ...</p>
+        </div>
+    }
+    else if (items == null || items.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-icon">🔍</div>
+            <h3>Không tìm thấy từ vựng phù hợp</h3>
+            <p>Thử đổi từ khóa tìm kiếm hoặc chọn danh mục khác nhé!</p>
+            <button class="btn btn-primary btn-sm mt-3" @onclick="ResetFilters">
+                <i class="bi bi-arrow-counterclockwise"></i> Xem tất cả
+            </button>
+        </div>
+    }
+    else if (isFlashcardMode)
+    {
+        @* ── FLASHCARD REVIEW MODE ── *@
+        <div class="flashcard-mode-container">
+            <div class="flashcard-header">
+                <span>Thẻ @(currentCardIndex + 1) / @items.Count</span>
+                <span class="flashcard-hint">Nhấp vào thẻ để lật xem giải thích</span>
+            </div>
+
+            @if (currentCardIndex >= 0 && currentCardIndex < items.Count)
+            {
+                var card = items[currentCardIndex];
+                <div class="flashcard-wrapper @(isCardFlipped ? "flipped" : "")" @onclick="FlipCard">
+                    @* Mặt trước *@
+                    <div class="flashcard-face flashcard-front">
+                        <span class="flashcard-category-badge">@GetCategoryNameVi(card.Category)</span>
+                        <div class="flashcard-term">@card.Term</div>
+                        <div class="flashcard-pinyin">@card.Pinyin</div>
+                        <div class="flashcard-front-hint">
+                            <i class="bi bi-arrow-repeat"></i> Chạm để xem nghĩa &amp; đối thoại
+                        </div>
+                        <button type="button"
+                                class="flashcard-audio-btn"
+                                @onclick="() => SpeakTerm(card.Term)"
+                                @onclick:stopPropagation
+                                title="Phát âm">
+                            <i class="bi bi-volume-up-fill"></i> Nghe phát âm
+                        </button>
+                    </div>
+
+                    @* Mặt sau *@
+                    <div class="flashcard-face flashcard-back">
+                        <div class="flashcard-meaning">@card.MeaningVi</div>
+                        @if (!string.IsNullOrEmpty(card.Origin))
+                        {
+                            <div class="flashcard-origin">
+                                <strong>Nguồn gốc:</strong> @card.Origin
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(card.DialogueZh))
+                        {
+                            <div class="flashcard-dialogue">
+                                <div class="dialogue-line-zh">@card.DialogueZh</div>
+                                <div class="dialogue-line-vi">@card.DialogueVi</div>
+                            </div>
+                        }
+                        <div class="flashcard-actions" @onclick:stopPropagation>
+                            <button type="button"
+                                    class="btn-mark-learned @(card.IsLearned ? "learned" : "")"
+                                    @onclick="() => ToggleLearned(card)">
+                                <i class="bi @(card.IsLearned ? "bi-check-circle-fill" : "bi-circle")"></i>
+                                @(card.IsLearned ? "Đã thuộc từ này" : "Đánh dấu đã thuộc")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                @* Navigation Controls *@
+                <div class="flashcard-nav">
+                    <button type="button"
+                            class="btn-nav-prev"
+                            disabled="@(currentCardIndex == 0)"
+                            @onclick="PrevCard">
+                        <i class="bi bi-chevron-left"></i> Thẻ trước
+                    </button>
+                    <button type="button"
+                            class="btn-nav-flip"
+                            @onclick="FlipCard">
+                        <i class="bi bi-arrow-repeat"></i> Lật thẻ
+                    </button>
+                    <button type="button"
+                            class="btn-nav-next"
+                            disabled="@(currentCardIndex == items.Count - 1)"
+                            @onclick="NextCard">
+                        Thẻ tiếp <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        @* ── GRID CARD MODE ── *@
+        <div class="slang-cards-grid">
+            @foreach (var item in items)
+            {
+                <div class="slang-card @(item.IsLearned ? "card-learned" : "")">
+                    @* Card Header *@
+                    <div class="card-top-row">
+                        <span class="cat-badge @GetCategoryBadgeClass(item.Category)">
+                            @GetCategoryNameVi(item.Category)
+                        </span>
+
+                        <div class="card-header-actions">
+                            <span class="popularity-badge" title="Độ phổ biến: @item.PopularityScore/100">
+                                <i class="bi bi-fire text-danger"></i> @item.PopularityScore
+                            </span>
+                            <button type="button"
+                                    class="audio-round-btn"
+                                    @onclick="() => SpeakTerm(item.Term)"
+                                    title="Nghe phát âm '@item.Term'">
+                                <i class="bi bi-volume-up-fill"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    @* Hero Term Area *@
+                    <div class="card-term-area">
+                        <div class="term-hanzi">
+                            @item.Term
+                        </div>
+                        <div class="term-pinyin">
+                            @item.Pinyin
+                        </div>
+                    </div>
+
+                    @* Meaning & Origin *@
+                    <div class="card-meaning-box">
+                        <div class="meaning-vi">
+                            <i class="bi bi-chat-quote-fill me-1 text-danger"></i>
+                            <strong>@item.MeaningVi</strong>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(item.Origin))
+                        {
+                            <div class="origin-note">
+                                <i class="bi bi-info-circle-fill me-1 text-secondary"></i>
+                                <span>@item.Origin</span>
+                            </div>
+                        }
+                    </div>
+
+                    @* WeChat Dialogue Simulator *@
+                    @if (!string.IsNullOrWhiteSpace(item.DialogueZh))
+                    {
+                        <div class="wechat-preview-box">
+                            <div class="wechat-header">
+                                <span class="wechat-dot red"></span>
+                                <span class="wechat-dot yellow"></span>
+                                <span class="wechat-dot green"></span>
+                                <span class="wechat-title"><i class="bi bi-wechat text-success me-1"></i>Đối thoại WeChat thực tế</span>
+                            </div>
+                            <div class="wechat-body">
+                                @{
+                                    var dialogLinesZh = (item.DialogueZh ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                                    var dialogLinesVi = (item.DialogueVi ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                                }
+                                @for (int i = 0; i < dialogLinesZh.Length; i++)
+                                {
+                                    var lineZh = dialogLinesZh[i];
+                                    var lineVi = i < dialogLinesVi.Length ? dialogLinesVi[i] : "";
+                                    var isSenderB = lineZh.TrimStart().StartsWith("B:") || lineZh.TrimStart().StartsWith("B：");
+
+                                    <div class="wechat-message-row @(isSenderB ? "bubble-right" : "bubble-left")">
+                                        <div class="bubble-avatar">
+                                            @(isSenderB ? "🐱" : "🐼")
+                                        </div>
+                                        <div class="bubble-content">
+                                            <div class="bubble-zh">
+                                                <span>@lineZh</span>
+                                                <button type="button"
+                                                        class="bubble-audio-btn"
+                                                        @onclick="() => SpeakLine(lineZh)"
+                                                        title="Đọc câu">
+                                                    <i class="bi bi-volume-up"></i>
+                                                </button>
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(lineVi))
+                                            {
+                                                <div class="bubble-vi">@lineVi</div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @* Card Footer: Learn State Toggle *@
+                    <div class="card-footer-row">
+                        <button type="button"
+                                class="btn-learned-toggle @(item.IsLearned ? "is-learned" : "")"
+                                @onclick="() => ToggleLearned(item)">
+                            <i class="bi @(item.IsLearned ? "bi-check2-circle" : "bi-circle")"></i>
+                            <span>@(item.IsLearned ? "Đã thuộc từ này" : "Đánh dấu đã thuộc")</span>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+/* ── SLANG MODULE STYLES (Light & Dark Compatible via --ig-* Tokens) ── */
+.slang-container {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+    color: var(--ig-text, #0f172a);
+}
+
+/* ── HERO BANNER ── */
+.slang-hero {
+    text-align: center;
+    padding: 36px 20px 28px;
+    margin-bottom: 28px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(168, 85, 247, 0.08) 50%, rgba(2, 132, 199, 0.08) 100%);
+    border: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.slang-hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.badge-fire {
+    background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+    color: #fff;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
+}
+
+.badge-sub {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--ig-text-secondary, #64748b);
+}
+
+.slang-hero-title {
+    font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, var(--ig-text, #0f172a) 30%, #ef4444 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.slang-hero-desc {
+    max-width: 780px;
+    margin: 0 auto 20px;
+    color: var(--ig-text-secondary, #475569);
+    font-size: 0.96rem;
+    line-height: 1.6;
+}
+
+.slang-stats-bar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--ig-surface, #ffffff);
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    font-size: 0.85rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+/* ── TOOLBAR ── */
+.slang-toolbar {
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 28px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.search-wrap {
+    position: relative;
+    margin-bottom: 14px;
+}
+
+.search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--ig-text-secondary, #94a3b8);
+    font-size: 1rem;
+}
+
+.slang-search-input {
+    width: 100%;
+    padding: 12px 42px 12px 40px;
+    border-radius: 12px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-bg, #f8fafc);
+    color: var(--ig-text, #0f172a);
+    font-size: 0.92rem;
+    transition: all 0.2s ease;
+}
+
+.slang-search-input:focus {
+    outline: none;
+    border-color: #ef4444;
+    background: var(--ig-surface, #ffffff);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+.btn-clear-search {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--ig-text-secondary, #94a3b8);
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.filter-actions-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.category-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.cat-pill {
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-bg, #f8fafc);
+    color: var(--ig-text-secondary, #475569);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cat-pill:hover {
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+.cat-pill.active {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.25);
+}
+
+.toolbar-toggles {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.toggle-learned-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--ig-text-secondary, #475569);
+}
+
+.view-mode-pill {
+    display: inline-flex;
+    background: var(--ig-bg, #f8fafc);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 8px;
+    padding: 2px;
+}
+
+.view-mode-btn {
+    padding: 5px 10px;
+    border: none;
+    background: none;
+    color: var(--ig-text-secondary, #64748b);
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.view-mode-btn.active {
+    background: var(--ig-surface, #ffffff);
+    color: var(--ig-text, #0f172a);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* ── GRID OF CARDS ── */
+.slang-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+}
+
+.slang-card {
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.slang-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.07);
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+.slang-card.card-learned {
+    border-left: 4px solid #10b981;
+}
+
+.card-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.cat-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.badge-cipher {
+    background: rgba(168, 85, 247, 0.12);
+    color: #9333ea;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.badge-trend {
+    background: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge-work {
+    background: rgba(2, 132, 199, 0.12);
+    color: #0284c7;
+    border: 1px solid rgba(2, 132, 199, 0.3);
+}
+
+.card-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.popularity-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--ig-text-secondary, #64748b);
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.audio-round-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-bg, #f8fafc);
+    color: var(--ig-primary, #ef4444);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.audio-round-btn:hover {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+    transform: scale(1.08);
+}
+
+/* Term Area */
+.card-term-area {
+    margin-bottom: 12px;
+}
+
+.term-hanzi {
+    font-size: 1.85rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--ig-text, #0f172a);
+    line-height: 1.2;
+}
+
+.term-pinyin {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #ea580c;
+    margin-top: 2px;
+}
+
+/* Meaning Box */
+.card-meaning-box {
+    background: var(--ig-bg, #f8fafc);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    font-size: 0.88rem;
+    border: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.meaning-vi {
+    color: var(--ig-text, #0f172a);
+    margin-bottom: 4px;
+}
+
+.origin-note {
+    font-size: 0.8rem;
+    color: var(--ig-text-secondary, #64748b);
+    line-height: 1.45;
+}
+
+/* WeChat Simulator */
+.wechat-preview-box {
+    background: var(--ig-bg, #f1f5f9);
+    border-radius: 12px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    padding: 10px 12px;
+    margin-bottom: 14px;
+}
+
+.wechat-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--ig-border, #cbd5e1);
+}
+
+.wechat-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+.wechat-dot.red { background: #ef4444; }
+.wechat-dot.yellow { background: #eab308; }
+.wechat-dot.green { background: #22c55e; }
+
+.wechat-title {
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--ig-text-secondary, #64748b);
+    letter-spacing: 0.4px;
+}
+
+.wechat-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.wechat-message-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.wechat-message-row.bubble-right {
+    flex-direction: row-reverse;
+}
+
+.bubble-avatar {
+    font-size: 1.1rem;
+    line-height: 1;
+    margin-top: 2px;
+}
+
+.bubble-content {
+    max-width: 85%;
+    padding: 6px 10px;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    position: relative;
+}
+
+.bubble-left .bubble-content {
+    background: var(--ig-surface, #ffffff);
+    color: var(--ig-text, #0f172a);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-top-left-radius: 2px;
+}
+
+.bubble-right .bubble-content {
+    background: #95ec69;
+    color: #0f172a;
+    border-top-right-radius: 2px;
+}
+
+.bubble-zh {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.bubble-audio-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #475569;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.bubble-vi {
+    font-size: 0.76rem;
+    color: #475569;
+    margin-top: 2px;
+}
+
+/* Card Footer */
+.card-footer-row {
+    padding-top: 10px;
+    border-top: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.btn-learned-toggle {
+    width: 100%;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px dashed var(--ig-border, #cbd5e1);
+    background: transparent;
+    color: var(--ig-text-secondary, #64748b);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+
+.btn-learned-toggle:hover {
+    border-color: #10b981;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.05);
+}
+
+.btn-learned-toggle.is-learned {
+    border-style: solid;
+    border-color: #10b981;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.08);
+}
+
+/* ── FLASHCARD MODE ── */
+.flashcard-mode-container {
+    max-width: 620px;
+    margin: 0 auto;
+}
+
+.flashcard-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--ig-text-secondary, #64748b);
+    margin-bottom: 14px;
+}
+
+.flashcard-wrapper {
+    perspective: 1000px;
+    min-height: 380px;
+    cursor: pointer;
+    position: relative;
+    border-radius: 20px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+}
+
+.flashcard-face {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 20px;
+    background: var(--ig-surface, #ffffff);
+    border: 2px solid var(--ig-border, #e2e8f0);
+    padding: 32px 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    box-sizing: border-box;
+    backface-visibility: hidden;
+    transition: transform 0.4s ease;
+}
+
+.flashcard-front {
+    transform: rotateY(0deg);
+}
+
+.flashcard-back {
+    transform: rotateY(180deg);
+}
+
+.flashcard-wrapper.flipped .flashcard-front {
+    transform: rotateY(-180deg);
+}
+
+.flashcard-wrapper.flipped .flashcard-back {
+    transform: rotateY(0deg);
+}
+
+.flashcard-category-badge {
+    position: absolute;
+    top: 18px;
+    left: 20px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #ef4444;
+}
+
+.flashcard-term {
+    font-size: 3rem;
+    font-weight: 900;
+    color: var(--ig-text, #0f172a);
+    margin-bottom: 6px;
+}
+
+.flashcard-pinyin {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #ea580c;
+    margin-bottom: 24px;
+}
+
+.flashcard-front-hint {
+    font-size: 0.82rem;
+    color: var(--ig-text-secondary, #94a3b8);
+}
+
+.flashcard-audio-btn {
+    position: absolute;
+    bottom: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-bg, #f8fafc);
+    color: var(--ig-text, #0f172a);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.flashcard-meaning {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #ef4444;
+    margin-bottom: 12px;
+}
+
+.flashcard-origin {
+    font-size: 0.86rem;
+    color: var(--ig-text-secondary, #475569);
+    margin-bottom: 14px;
+    line-height: 1.5;
+    max-width: 90%;
+}
+
+.flashcard-dialogue {
+    background: var(--ig-bg, #f8fafc);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    max-width: 90%;
+    font-size: 0.82rem;
+    text-align: left;
+}
+
+.dialogue-line-zh {
+    font-weight: 600;
+    color: var(--ig-text, #0f172a);
+}
+
+.dialogue-line-vi {
+    color: var(--ig-text-secondary, #64748b);
+    font-size: 0.78rem;
+    margin-top: 3px;
+}
+
+.btn-mark-learned {
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-mark-learned.learned {
+    background: #10b981;
+    color: #ffffff;
+}
+
+.flashcard-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.btn-nav-prev, .btn-nav-next, .btn-nav-flip {
+    padding: 10px 18px;
+    border-radius: 12px;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-surface, #ffffff);
+    color: var(--ig-text, #0f172a);
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-nav-prev:disabled, .btn-nav-next:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn-nav-flip {
+    background: #ef4444;
+    border-color: #ef4444;
+    color: #ffffff;
+}
+
+/* ── STATES ── */
+.loading-state, .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--ig-text-secondary, #64748b);
+}
+
+.empty-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+
+/* ── DARK THEME OVERRIDES ── */
+[data-theme="dark"] .bubble-right .bubble-content {
+    background: #2b772b;
+    color: #ffffff;
+}
+
+[data-theme="dark"] .bubble-right .bubble-vi {
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .wechat-preview-box {
+    background: #0f131c;
+    border-color: #1e2638;
+}
+
+[data-theme="dark"] .bubble-left .bubble-content {
+    background: #161c2a;
+    border-color: #232c40;
+}
+</style>
+
+@code {
+    private List<SlangVocabItem>? allItems;
+    private List<SlangVocabItem>? items;
+    private string selectedCategory = "all";
+    private string searchQuery = "";
+    private bool hideLearned = false;
+    private bool isFlashcardMode = false;
+    private bool isLoading = true;
+
+    private int currentCardIndex = 0;
+    private bool isCardFlipped = false;
+
+    private int learnedCount = 0;
+    private int learnedPercent => (allItems != null && allItems.Count > 0)
+        ? (int)Math.Round((double)learnedCount / allItems.Count * 100)
+        : 0;
+
+    private int cipherCount => allItems?.Count(x => x.Category.Contains("cipher") || x.Category.Contains("number")) ?? 0;
+    private int trendCount => allItems?.Count(x => x.Category.Contains("trend") || x.Category.Contains("slang")) ?? 0;
+    private int workCount => allItems?.Count(x => x.Category.Contains("work") || x.Category.Contains("tech")) ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            allItems = await SlangService.GetSlangItemsAsync();
+            UpdateLearnedStats();
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HskSlangVocab] Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void UpdateLearnedStats()
+    {
+        learnedCount = allItems?.Count(x => x.IsLearned) ?? 0;
+    }
+
+    private void ChangeCategory(string cat)
+    {
+        selectedCategory = cat;
+        currentCardIndex = 0;
+        isCardFlipped = false;
+        ApplyFilter();
+    }
+
+    private void ClearSearch()
+    {
+        searchQuery = "";
+        ApplyFilter();
+    }
+
+    private void ResetFilters()
+    {
+        selectedCategory = "all";
+        searchQuery = "";
+        hideLearned = false;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        if (allItems == null)
+        {
+            items = new List<SlangVocabItem>();
+            return;
+        }
+
+        var filtered = allItems.AsEnumerable();
+
+        if (selectedCategory == "cipher")
+        {
+            filtered = filtered.Where(x => x.Category.Contains("cipher") || x.Category.Contains("number"));
+        }
+        else if (selectedCategory == "slang")
+        {
+            filtered = filtered.Where(x => x.Category.Contains("trend") || x.Category.Contains("slang"));
+        }
+        else if (selectedCategory == "work_tech")
+        {
+            filtered = filtered.Where(x => x.Category.Contains("work") || x.Category.Contains("tech"));
+        }
+
+        if (hideLearned)
+        {
+            filtered = filtered.Where(x => !x.IsLearned);
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var q = searchQuery.Trim().ToLowerInvariant();
+            filtered = filtered.Where(x =>
+                x.Term.ToLowerInvariant().Contains(q) ||
+                x.Pinyin.ToLowerInvariant().Contains(q) ||
+                x.MeaningVi.ToLowerInvariant().Contains(q) ||
+                (x.Origin != null && x.Origin.ToLowerInvariant().Contains(q)) ||
+                (x.DialogueZh != null && x.DialogueZh.ToLowerInvariant().Contains(q)) ||
+                (x.DialogueVi != null && x.DialogueVi.ToLowerInvariant().Contains(q)));
+        }
+
+        items = filtered.ToList();
+        if (currentCardIndex >= items.Count)
+        {
+            currentCardIndex = 0;
+        }
+    }
+
+    private async Task ToggleLearned(SlangVocabItem item)
+    {
+        var newState = await SlangService.ToggleLearnedAsync(item.Term);
+        item.IsLearned = newState;
+
+        var matching = allItems?.FirstOrDefault(x => x.Term == item.Term);
+        if (matching != null) matching.IsLearned = newState;
+
+        UpdateLearnedStats();
+        if (hideLearned) ApplyFilter();
+    }
+
+    private async Task SpeakTerm(string term)
+    {
+        if (string.IsNullOrWhiteSpace(term)) return;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("speakText", term, "zh-CN");
+        }
+        catch { }
+    }
+
+    private async Task SpeakLine(string rawLine)
+    {
+        if (string.IsNullOrWhiteSpace(rawLine)) return;
+        var clean = rawLine.Replace("A:", "").Replace("B:", "").Replace("A：", "").Replace("B：", "").Trim();
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("speakText", clean, "zh-CN");
+        }
+        catch { }
+    }
+
+    private void FlipCard() => isCardFlipped = !isCardFlipped;
+    private void NextCard()
+    {
+        if (items != null && currentCardIndex < items.Count - 1)
+        {
+            currentCardIndex++;
+            isCardFlipped = false;
+        }
+    }
+    private void PrevCard()
+    {
+        if (currentCardIndex > 0)
+        {
+            currentCardIndex--;
+            isCardFlipped = false;
+        }
+    }
+
+    private static string GetCategoryNameVi(string cat)
+    {
+        var c = cat.ToLowerInvariant();
+        if (c.Contains("cipher") || c.Contains("number") || c.Contains("số")) return "Mật mã số mạng";
+        if (c.Contains("trend") || c.Contains("slang") || c.Contains("lóng")) return "Hot Trend Douyin/Weibo";
+        if (c.Contains("work") || c.Contains("tech") || c.Contains("công sở")) return "Đời sống & Công nghệ";
+        return "Tiếng lóng GenZ";
+    }
+
+    private static string GetCategoryBadgeClass(string cat)
+    {
+        var c = cat.ToLowerInvariant();
+        if (c.Contains("cipher") || c.Contains("number")) return "badge-cipher";
+        if (c.Contains("trend") || c.Contains("slang")) return "badge-trend";
+        if (c.Contains("work") || c.Contains("tech")) return "badge-work";
+        return "badge-trend";
+    }
+}

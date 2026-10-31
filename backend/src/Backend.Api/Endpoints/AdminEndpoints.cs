@@ -810,6 +810,67 @@ public static class AdminEndpoints
         }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 
+        // 8. Admin: Deploy Frontend via Cloudflare Pages Deploy Hook
+        app.MapPost("/api/admin/deploy-frontend", async (
+            DeployFrontendRequestDto? req,
+            IHttpClientFactory httpFactory,
+            CancellationToken cancellationToken) =>
+        {
+            var settings = AiEndpoints.LoadAiSettings();
+            var hookUrl = req?.DeployHookUrl;
+            if (string.IsNullOrWhiteSpace(hookUrl))
+            {
+                hookUrl = settings.CloudflarePagesDeployHook ?? Environment.GetEnvironmentVariable("CLOUDFLARE_PAGES_DEPLOY_HOOK");
+            }
+
+            if (string.IsNullOrWhiteSpace(hookUrl))
+            {
+                return Results.Ok(new DeployFrontendResponseDto
+                {
+                    Success = false,
+                    Message = "Chưa cấu hình Cloudflare Pages Deploy Hook URL. Vui lòng thiết lập URL Deploy Hook trong Hub để kích hoạt."
+                });
+            }
+
+            try
+            {
+                var client = httpFactory.CreateClient();
+                client.Timeout = TimeSpan.FromSeconds(20);
+                var res = await client.PostAsync(hookUrl, null, cancellationToken);
+                if (res.IsSuccessStatusCode)
+                {
+                    if (!string.IsNullOrWhiteSpace(req?.DeployHookUrl) && req.DeployHookUrl != settings.CloudflarePagesDeployHook)
+                    {
+                        settings.CloudflarePagesDeployHook = req.DeployHookUrl;
+                        AiEndpoints.SaveAiSettings(settings);
+                    }
+
+                    return Results.Ok(new DeployFrontendResponseDto
+                    {
+                        Success = true,
+                        Message = "🎉 Đã gửi lệnh kích hoạt Deploy thành công tới Cloudflare Pages! Web ieltshsk.me sẽ tự động build và cập nhật trong 1-2 phút."
+                    });
+                }
+                else
+                {
+                    var err = await res.Content.ReadAsStringAsync(cancellationToken);
+                    return Results.Ok(new DeployFrontendResponseDto
+                    {
+                        Success = false,
+                        Message = $"Cloudflare phản hồi mã lỗi {(int)res.StatusCode}: {res.ReasonPhrase}. {err}"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(new DeployFrontendResponseDto
+                {
+                    Success = false,
+                    Message = $"Lỗi khi kích hoạt Deploy Hook: {ex.Message}"
+                });
+            }
+        }).RequireAuthorization(policy => policy.RequireRole("admin"));
+
         return app;
     }
 }

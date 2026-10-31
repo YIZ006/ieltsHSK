@@ -1,0 +1,281 @@
+@inject NavigationManager NavManager
+
+<div class="mini-quiz-wrapper">
+    <div class="mini-quiz-header">
+        <div class="quiz-badge">
+            <span class="pulse-dot"></span>
+            <span>Trắc Nghiệm Tương Tác 60 Giây</span>
+        </div>
+        <h3 class="quiz-title">Thử Sức 3 Câu Hỏi Chuẩn Quốc Tế</h3>
+        <p class="quiz-desc">
+            Trải nghiệm phương pháp học phản xạ ngay trên trình duyệt mà không cần đăng ký tài khoản.
+        </p>
+
+        <!-- Step Progress Indicator -->
+        <div class="quiz-steps-nav">
+            @for (int i = 0; i < Questions.Count; i++)
+            {
+                var stepIndex = i;
+                var q = Questions[i];
+                var isCompleted = userAnswers.ContainsKey(stepIndex);
+                var isCurrent = currentStep == stepIndex;
+                <button type="button" 
+                        class="step-pill @(isCurrent ? "active" : "") @(isCompleted ? "done" : "")"
+                        @onclick="() => SelectStep(stepIndex)">
+                    <span class="step-num">@(stepIndex + 1)</span>
+                    <span class="step-label">@q.Category</span>
+                    @if (isCompleted)
+                    {
+                        <i class="bi bi-check-circle-fill text-success ms-1"></i>
+                    }
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (!isAllDone)
+    {
+        var currentQ = Questions[currentStep];
+        var hasAnswered = userAnswers.TryGetValue(currentStep, out var selectedOption);
+        var isCorrect = hasAnswered && selectedOption == currentQ.CorrectOptionIndex;
+
+        <div class="quiz-card-body">
+            <!-- Question Category & Band tag -->
+            <div class="card-meta">
+                <span class="meta-tag @currentQ.CategoryBadgeClass">
+                    <i class="@currentQ.IconClass me-1"></i> @currentQ.Category
+                </span>
+                <span class="meta-level">@currentQ.TargetLevel</span>
+            </div>
+
+            <!-- Question Prompt -->
+            <div class="question-prompt">
+                <div class="prompt-text">@((MarkupString)currentQ.Prompt)</div>
+                @if (!string.IsNullOrEmpty(currentQ.SubPrompt))
+                {
+                    <div class="prompt-subtext">@currentQ.SubPrompt</div>
+                }
+            </div>
+
+            <!-- Options Grid -->
+            <div class="options-grid">
+                @for (int j = 0; j < currentQ.Options.Length; j++)
+                {
+                    var optIndex = j;
+                    var optText = currentQ.Options[j];
+                    var isThisSelected = hasAnswered && selectedOption == optIndex;
+                    var isThisCorrect = optIndex == currentQ.CorrectOptionIndex;
+
+                    string optionStateClass = "";
+                    if (hasAnswered)
+                    {
+                        if (isThisCorrect) optionStateClass = "option-correct";
+                        else if (isThisSelected) optionStateClass = "option-incorrect";
+                        else optionStateClass = "option-disabled";
+                    }
+
+                    <button type="button" 
+                            class="option-btn @optionStateClass @(isThisSelected ? "selected" : "")"
+                            disabled="@hasAnswered"
+                            @onclick="() => ChooseOption(currentStep, optIndex)">
+                        <span class="opt-prefix">@GetPrefixLetter(optIndex)</span>
+                        <span class="opt-text">@optText</span>
+                        @if (hasAnswered)
+                        {
+                            @if (isThisCorrect)
+                            {
+                                <i class="bi bi-check-circle-fill text-success ms-auto"></i>
+                            }
+                            else if (isThisSelected)
+                            {
+                                <i class="bi bi-x-circle-fill text-danger ms-auto"></i>
+                            }
+                        }
+                    </button>
+                }
+            </div>
+
+            <!-- Explanation Box (Appears after answer) -->
+            @if (hasAnswered)
+            {
+                <div class="explanation-box @(isCorrect ? "box-correct" : "box-incorrect")">
+                    <div class="explanation-header">
+                        @if (isCorrect)
+                        {
+                            <span class="exp-status text-success">
+                                <i class="bi bi-check2-circle me-1"></i> Chính xác! Tuyệt vời.
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="exp-status text-danger">
+                                <i class="bi bi-exclamation-circle me-1"></i> Chưa chính xác rồi!
+                            </span>
+                        }
+                        <span class="exp-badge">Phân tích học thuật</span>
+                    </div>
+                    <p class="explanation-content">@currentQ.Explanation</p>
+                </div>
+
+                <div class="card-footer-actions">
+                    @if (currentStep < Questions.Count - 1)
+                    {
+                        <button type="button" class="btn-next-question" @onclick="NextStep">
+                            <span>Câu tiếp theo (@(currentStep + 2)/@(Questions.Count))</span>
+                            <i class="bi bi-arrow-right ms-2"></i>
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn-finish-quiz" @onclick="FinishQuiz">
+                            <span>Xem Kết Quả &amp; Nhận Lộ Trình</span>
+                            <i class="bi bi-stars ms-2"></i>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <!-- Quiz Completed Result Screen -->
+        <div class="quiz-result-card">
+            <div class="result-trophy">
+                <i class="bi bi-trophy-fill"></i>
+            </div>
+            <h4 class="result-title">Hoàn Thành Thử Thách!</h4>
+            <p class="result-score">
+                Bạn đã trả lời đúng <strong>@correctCount / @Questions.Count</strong> câu hỏi phản xạ.
+            </p>
+            <p class="result-desc">
+                Trình độ nhận diện ngữ âm &amp; từ vựng của bạn rất tiềm năng! Hãy bắt đầu lộ trình được cá nhân hóa bằng thuật toán Spaced Repetition ngay hôm nay.
+            </p>
+
+            <div class="result-cta-group">
+                <button type="button" class="btn-main-convert" @onclick='() => NavManager.NavigateTo("/ielts/dashboard")'>
+                    <i class="bi bi-rocket-takeoff-fill me-2"></i> Bắt đầu Luyện Thi Miễn Phí
+                </button>
+                <div class="cta-trust-badge">
+                    <i class="bi bi-shield-check text-success me-1"></i>
+                    <span>Không cần thẻ tín dụng • Kiểm tra trình độ 5 phút • Miễn phí 100%</span>
+                </div>
+            </div>
+
+            <button type="button" class="btn-retry" @onclick="ResetQuiz">
+                <i class="bi bi-arrow-clockwise me-1"></i> Làm lại thử thách
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private int currentStep = 0;
+    private bool isAllDone = false;
+    private readonly Dictionary<int, int> userAnswers = new();
+
+    private int correctCount => userAnswers.Count(kv => kv.Key < Questions.Count && kv.Value == Questions[kv.Key].CorrectOptionIndex);
+
+    private record QuizItem(
+        string Category,
+        string CategoryBadgeClass,
+        string IconClass,
+        string TargetLevel,
+        string Prompt,
+        string? SubPrompt,
+        string[] Options,
+        int CorrectOptionIndex,
+        string Explanation
+    );
+
+    private readonly List<QuizItem> Questions = new()
+    {
+        new(
+            Category: "IELTS Reading",
+            CategoryBadgeClass: "badge-ielts",
+            IconClass: "bi-book-half",
+            TargetLevel: "Band 7.0+ Academic",
+            Prompt: "The recent breakthrough in renewable energy technology has played a <strong>________</strong> role in reducing global carbon emissions.",
+            SubPrompt: "Chọn collocation chuẩn học thuật Cambridge để hoàn thành câu:",
+            Options: new[] {
+                "pivotal",
+                "superficial",
+                "trivial",
+                "reluctant"
+            },
+            CorrectOptionIndex: 0,
+            Explanation: "Collocation 'play a pivotal role' (đóng vai trò then chốt) là từ vựng thuộc nhóm C1/C2 thường xuyên xuất hiện trong đề thi IELTS Reading & Writing. Các từ còn lại mang nghĩa trái ngược: superficial (nông cạn), trivial (tầm thường), reluctant (miễn cưỡng)."
+        ),
+        new(
+            Category: "HSK 3.0",
+            CategoryBadgeClass: "badge-hsk",
+            IconClass: "bi-translate",
+            TargetLevel: "HSK Cấp 3 - 4 Chuẩn Mới",
+            Prompt: "为了提高中文水平，他每天都坚持 <strong>_______</strong> 听力。",
+            SubPrompt: "Wèile tígāo zhōngwén shuǐpíng, tā měitiān dōu jiānchí _______ tīnglì.",
+            Options: new[] {
+                "练习 (liànxí)",
+                "学习 (xuéxí)",
+                "准备 (zhǔnbèi)",
+                "参加 (cānjiā)"
+            },
+            CorrectOptionIndex: 0,
+            Explanation: "Động từ '练习' (rèn luyện, thực hành) kết hợp tự nhiên với danh từ '听力' (kỹ năng nghe) để chỉ hành động rèn luyện kỹ năng. '学习' (học tập nói chung) ít khi đứng trước '听力' trong văn viết khảo thí HSK."
+        ),
+        new(
+            Category: "Spaced Repetition",
+            CategoryBadgeClass: "badge-srs",
+            IconClass: "bi-lightning-charge-fill",
+            TargetLevel: "Khoa Học Trí Nhớ",
+            Prompt: "Theo đường cong lãng quên Ebbinghaus (Forgetting Curve), não bộ con người có xu hướng lãng quên bao nhiêu % kiến thức mới sau <strong>24 giờ</strong> nếu không ôn tập?",
+            SubPrompt: "Ứng dụng khoa học lặp lại ngắt quãng trong việc ghi nhớ từ vựng:",
+            Options: new[] {
+                "Khoảng 70% lượng kiến thức",
+                "Khoảng 20% lượng kiến thức",
+                "Khoảng 40% lượng kiến thức",
+                "Không quên nếu học tập trung"
+            },
+            CorrectOptionIndex: 0,
+            Explanation: "Nghiên cứu của Hermann Ebbinghaus chứng minh sau 24h não người quên xấp xỉ 70% thông tin mới. ieltsHSK ứng dụng thuật toán SRS tự động gợi ý từ vựng vào ngày 1, ngày 3, ngày 7 để đưa từ vào trí nhớ vĩnh viễn với chỉ 15 phút/ngày!"
+        )
+    };
+
+    private void ChooseOption(int step, int optionIndex)
+    {
+        if (userAnswers.ContainsKey(step)) return;
+        userAnswers[step] = optionIndex;
+    }
+
+    private void SelectStep(int step)
+    {
+        currentStep = step;
+    }
+
+    private void NextStep()
+    {
+        if (currentStep < Questions.Count - 1)
+        {
+            currentStep++;
+        }
+    }
+
+    private void FinishQuiz()
+    {
+        isAllDone = true;
+    }
+
+    private void ResetQuiz()
+    {
+        userAnswers.Clear();
+        currentStep = 0;
+        isAllDone = false;
+    }
+
+    private string GetPrefixLetter(int index) => index switch
+    {
+        0 => "A",
+        1 => "B",
+        2 => "C",
+        3 => "D",
+        _ => "?"
+    };
+}

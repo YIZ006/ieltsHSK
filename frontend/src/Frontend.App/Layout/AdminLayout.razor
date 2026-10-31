@@ -1,9 +1,10 @@
-@inherits LayoutComponentBase
+﻿@inherits LayoutComponentBase
 @implements IDisposable
 @inject NavigationManager NavigationManager
 @inject Frontend.App.Services.AuthService AuthService
 @inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
 @inject Frontend.App.Services.OfflineStorageService OfflineStorageService
+@inject Frontend.App.Services.AdminUserService AdminUserService
 
 @if (!isOnline)
 {
@@ -165,6 +166,16 @@ else
                                 <i class="bi bi-people-fill"></i> Học viên IELTS
                             </a>
                         </li>
+                        <li class="menu-item @(IsActive("/portal-hub/exam-schedules") ? "active" : "")">
+                            <a href="/portal-hub/exam-schedules">
+                                <i class="bi bi-calendar2-check-fill text-warning"></i> Lịch thi Chứng chỉ
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/users") && (NavigationManager.Uri.Contains("ielts") || !NavigationManager.Uri.Contains("domain")) ? "active" : "")">
+                            <a href="/portal-hub/users?domain=ielts">
+                                <i class="bi bi-people-fill"></i> Học viên IELTS
+                            </a>
+                        </li>
                     }
                     else if (activeDomain == "HSK")
                     {
@@ -176,6 +187,21 @@ else
                         <li class="menu-item @(IsActive("/portal-hub/hsk-vocab") ? "active" : "")">
                             <a href="/portal-hub/hsk-vocab">
                                 <i class="bi bi-translate"></i> Ngân hàng Từ vựng HSK
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/slang-vocabs") ? "active" : "")">
+                            <a href="/portal-hub/slang-vocabs">
+                                <i class="bi bi-fire text-danger"></i> Tiếng lóng & Trend GenZ
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/culture-stories") ? "active" : "")">
+                            <a href="/portal-hub/culture-stories">
+                                <i class="bi bi-book-half text-danger"></i> Bài viết Văn hóa
+                            </a>
+                        </li>
+                        <li class="menu-item @(IsActive("/portal-hub/exam-schedules") ? "active" : "")">
+                            <a href="/portal-hub/exam-schedules">
+                                <i class="bi bi-calendar2-check-fill text-warning"></i> Lịch thi Chứng chỉ
                             </a>
                         </li>
                         <li class="menu-item @(IsActive("/portal-hub/navigation") ? "active" : "")">
@@ -237,7 +263,102 @@ else
 
 <MascotWidget />
 
+
+@if (showDeployModal)
+{
+    <div class="modal-backdrop fade show" style="background-color: rgba(15, 23, 42, 0.7); z-index: 99999;"></div>
+    <div class="modal fade show d-block" tabindex="-1" style="z-index: 100000;" @onclick="CloseDeployModal">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;" @onclick:stopPropagation="true">
+            <div class="modal-content" style="border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4); overflow: hidden;">
+                <div class="modal-header" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding: 18px 24px;">
+                    <h5 class="modal-title d-flex align-items-center gap-2 text-white m-0" style="font-weight: 700; font-size: 1.1rem;">
+                        <span style="font-size: 1.3rem;">🚀</span> Triển khai Frontend (Cloudflare Pages)
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseDeployModal"></button>
+                </div>
+                <div class="modal-body" style="padding: 24px;">
+                    @if (!string.IsNullOrEmpty(deployResultMsg))
+                    {
+                        <div class="alert @(deployResultSuccess ? "alert-success" : "alert-danger") d-flex align-items-center gap-2" role="alert" style="border-radius: 10px; font-size: 0.9rem;">
+                            <i class="bi @(deployResultSuccess ? "bi-check-circle-fill text-success" : "bi-exclamation-triangle-fill text-danger")" style="font-size: 1.2rem;"></i>
+                            <div>@deployResultMsg</div>
+                        </div>
+                    }
+
+                    <p style="font-size: 0.88rem; color: #64748b; line-height: 1.5; margin-bottom: 16px;">
+                        Kích hoạt Cloudflare Pages tự động lấy code mới nhất từ nhánh <code>main</code> và build lại website <code>https://ieltshsk.me</code>.
+                    </p>
+
+                    <div class="form-group mb-3">
+                        <label style="font-size: 0.82rem; font-weight: 700; color: #475569; margin-bottom: 6px; display: block;">
+                            Cloudflare Pages Deploy Hook URL
+                        </label>
+                        <input type="text" class="form-control" @bind="deployHookUrl" placeholder="https://api.cloudflare.com/client/v4/pages/webhooks/deploy_hooks/..." style="font-family: monospace; font-size: 0.82rem; border-radius: 8px; padding: 10px 12px;" />
+                    </div>
+
+                    <div class="p-3" style="background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0; font-size: 0.8rem; color: #64748b;">
+                        <strong style="color: #334155; display: block; margin-bottom: 4px;">📌 Hướng dẫn lấy Deploy Hook (chỉ làm 1 lần):</strong>
+                        1. Đăng nhập Cloudflare Dashboard ➔ <b>Workers &amp; Pages</b> ➔ chọn project của bạn.<br />
+                        2. Vào <b>Settings</b> ➔ <b>Builds &amp; deployments</b> ➔ mục <b>Deploy hooks</b>.<br />
+                        3. Bấm <b>Add deploy hook</b>, chọn nhánh <b>main</b> rồi Copy URL và dán vào đây.
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-top: 1px solid #e2e8f0; padding: 14px 24px; background: #f8fafc;">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDeployModal" style="border-radius: 8px; font-weight: 600; font-size: 0.88rem;">Đóng</button>
+                    <button type="button" class="btn btn-primary" @onclick="ExecuteDeploy" disabled="@isDeploying" style="border-radius: 8px; font-weight: 700; font-size: 0.88rem; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); border: none; padding: 8px 20px;">
+                        @if (isDeploying)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span>Đang kích hoạt...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-rocket-takeoff-fill me-1"></i>
+                            <span>Triển khai ngay</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
+    private bool showDeployModal = false;
+    private bool isDeploying = false;
+    private string? deployHookUrl = null;
+    private string? deployResultMsg = null;
+    private bool deployResultSuccess = false;
+
+    private async Task OpenDeployModal()
+    {
+        deployResultMsg = null;
+        showDeployModal = true;
+        if (string.IsNullOrWhiteSpace(deployHookUrl))
+        {
+            var s = await AdminUserService.GetAiSettingsAsync();
+            if (!string.IsNullOrWhiteSpace(s?.CloudflarePagesDeployHook))
+            {
+                deployHookUrl = s.CloudflarePagesDeployHook;
+            }
+        }
+    }
+
+    private void CloseDeployModal()
+    {
+        showDeployModal = false;
+    }
+
+    private async Task ExecuteDeploy()
+    {
+        isDeploying = true;
+        deployResultMsg = null;
+        var (ok, msg) = await AdminUserService.DeployFrontendAsync(deployHookUrl);
+        isDeploying = false;
+        deployResultSuccess = ok;
+        deployResultMsg = msg;
+    }
+
     private string activeDomain = "IELTS";
     private string currentUrl = "";
     private bool isCheckingAuth = true;
@@ -354,9 +475,16 @@ else
             else
                 activeDomain = "USERS";
         }
-        else if (url.Contains("hsk", StringComparison.OrdinalIgnoreCase))
+        else if (url.Contains("hsk", StringComparison.OrdinalIgnoreCase) || url.Contains("culture", StringComparison.OrdinalIgnoreCase))
         {
             activeDomain = "HSK";
+        }
+        else if (url.Contains("exam-schedules", StringComparison.OrdinalIgnoreCase))
+        {
+            if (activeDomain != "HSK" && activeDomain != "IELTS")
+            {
+                activeDomain = "HSK";
+            }
         }
         else
         {
