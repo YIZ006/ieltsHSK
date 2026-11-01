@@ -214,13 +214,15 @@ public class AuthService(HttpClient httpClient, ILocalStorageService localStorag
                 return (false, false, "Tài khoản của bạn không có quyền Quản trị viên (Admin). Vui lòng sử dụng tài khoản được cấp phép.");
             }
 
-            // Lưu token riêng cho Admin, KHÔNG xóa dữ liệu học tập của học viên
+            // Lưu token riêng cho Admin, đồng thời đồng bộ authToken để router Blazor nhận diện quyền admin
             await localStorage.SetItemAsync("admin_authToken", result.Token);
+            await localStorage.SetItemAsync(TokenRefreshService.AccessTokenKey, result.Token);
             if (!string.IsNullOrWhiteSpace(result.FullName) || !string.IsNullOrWhiteSpace(result.Email))
             {
                 var adminProfile = new { FullName = result.FullName ?? "", Email = result.Email ?? "" };
                 await localStorage.SetItemAsync("admin_profile", adminProfile);
             }
+            authStateProvider.NotifyUserAuthentication(result.Token);
             return (true, true, string.Empty);
         }
         catch (Exception ex)

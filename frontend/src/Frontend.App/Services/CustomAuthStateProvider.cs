@@ -25,6 +25,18 @@ public class CustomAuthStateProvider : AuthenticationStateProvider
     {
         try
         {
+            // 1. Kiem tra token rieng cua Quan tri vien (admin_authToken)
+            var adminToken = await _localStorage.GetItemAsync<string>("admin_authToken");
+            if (!string.IsNullOrWhiteSpace(adminToken) && !IsJwtExpired(adminToken))
+            {
+                var adminClaims = ParseClaimsFromJwt(adminToken).ToList();
+                var hasAdminRole = adminClaims.Any(c => (c.Type == ClaimTypes.Role || c.Type == "role") && string.Equals(c.Value, "admin", StringComparison.OrdinalIgnoreCase));
+                if (hasAdminRole)
+                {
+                    return CreateState(adminClaims);
+                }
+            }
+
             var token = await _localStorage.GetItemAsync<string>(TokenRefreshService.AccessTokenKey);
 
             if (string.IsNullOrWhiteSpace(token) || IsJwtExpired(token))
