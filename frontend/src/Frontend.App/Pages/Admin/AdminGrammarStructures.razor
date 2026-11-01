@@ -97,13 +97,15 @@
                 </button>
             }
 
-            <a href="@GrammarService.GetTemplateDownloadUrl()" target="_blank" class="btn-action-outline" title="Tải file Excel mẫu với 11 cột chuẩn">
-                <i class="bi bi-file-earmark-arrow-down-fill text-primary me-1"></i> Tải mẫu Excel
-            </a>
+            <button class="btn-action-outline" @onclick="DownloadTemplateExcel" title="Tải file Excel mẫu với 11 cột chuẩn" disabled="@isDownloadingTemplate">
+                <i class="bi bi-file-earmark-arrow-down-fill text-primary me-1"></i>
+                <span>@(isDownloadingTemplate ? "Đang tải mẫu..." : "Tải mẫu Excel")</span>
+            </button>
 
-            <a href="@GrammarService.GetExportUrl()" target="_blank" class="btn-action-outline" title="Xuất toàn bộ cấu trúc ra file Excel (.xlsx)">
-                <i class="bi bi-file-earmark-arrow-up-fill text-success me-1"></i> Xuất Excel
-            </a>
+            <button class="btn-action-outline" @onclick="ExportToExcel" title="Xuất toàn bộ cấu trúc ra file Excel (.xlsx)" disabled="@isExporting">
+                <i class="bi bi-file-earmark-arrow-up-fill text-success me-1"></i>
+                <span>@(isExporting ? "Đang xuất..." : "Xuất Excel")</span>
+            </button>
 
             <button class="btn-action-outline" @onclick="OpenImportModal" title="Import nhiều file Excel cùng lúc">
                 <i class="bi bi-file-earmark-excel-fill text-info me-1"></i> Import Excel
@@ -473,6 +475,78 @@
 
     private bool isLoading = true;
     private bool isSaving = false;
+    private bool isDownloadingTemplate = false;
+    private bool isExporting = false;
+
+    private async Task DownloadTemplateExcel()
+    {
+        isDownloadingTemplate = true;
+        try
+        {
+            var bytes = await GrammarService.GetTemplateBytesAsync();
+            if (bytes != null && bytes.Length > 0)
+            {
+                var base64 = Convert.ToBase64String(bytes);
+                await JS.InvokeVoidAsync("eval", $@"
+                    (() => {{
+                        const a = document.createElement('a');
+                        a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{base64}';
+                        a.download = 'Grammar_Structures_Template.xlsx';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }})()
+                ");
+            }
+            else
+            {
+                ShowBanner("Không thể tải file mẫu. Vui lòng thử lại sau.", false);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowBanner($"Lỗi tải file mẫu: {ex.Message}", false);
+        }
+        finally
+        {
+            isDownloadingTemplate = false;
+        }
+    }
+
+    private async Task ExportToExcel()
+    {
+        isExporting = true;
+        try
+        {
+            var bytes = await GrammarService.GetExportBytesAsync();
+            if (bytes != null && bytes.Length > 0)
+            {
+                var base64 = Convert.ToBase64String(bytes);
+                await JS.InvokeVoidAsync("eval", $@"
+                    (() => {{
+                        const a = document.createElement('a');
+                        a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{base64}';
+                        a.download = 'Grammar_Structures_Export_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }})()
+                ");
+            }
+            else
+            {
+                ShowBanner("Không thể xuất dữ liệu. Vui lòng thử lại sau.", false);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowBanner($"Lỗi xuất dữ liệu Excel: {ex.Message}", false);
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
     private bool isImporting = false;
 
     private string? bannerMessage;

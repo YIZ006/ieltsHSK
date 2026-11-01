@@ -303,8 +303,7 @@ public static class IeltsEndpoints
         }).RequireAuthorization(policy => policy.RequireRole("admin"));
 
 
-        app.MapGet("/api/admin/listen-videos/template-excel",
-                [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")] () =>
+        app.MapGet("/api/admin/listen-videos/template-excel", () =>
         {
             using var workbook = new ClosedXML.Excel.XLWorkbook();
             var worksheet = workbook.Worksheets.Add("ListenVideos");

@@ -211,6 +211,32 @@ public class GrammarStructureService
         }
     }
 
+    public async Task<byte[]?> GetTemplateBytesAsync()
+    {
+        try
+        {
+            return await _http.GetByteArrayAsync("api/admin/grammar-structures/template");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GrammarStructureService] Error downloading template: {ex.Message}");
+            return null;
+        }
+    }
+
+    public async Task<byte[]?> GetExportBytesAsync()
+    {
+        try
+        {
+            return await _http.GetByteArrayAsync("api/admin/grammar-structures/export-excel");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GrammarStructureService] Error exporting grammar: {ex.Message}");
+            return null;
+        }
+    }
+
     public string GetTemplateDownloadUrl()
     {
         return GetApiUrl("api/admin/grammar-structures/template");

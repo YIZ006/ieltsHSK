@@ -18,9 +18,18 @@
             <p class="page-subtitle">Duyệt danh sách video luyện nghe điền từ, phân loại cấp độ (A1–C2), thêm phụ đề và nhập hàng loạt từ Excel.</p>
         </div>
         <div class="header-actions">
-            <a href="@templateUrl" class="btn btn-secondary-outline" download="ListenVideos_Template.xlsx">
-                <i class="bi bi-file-earmark-spreadsheet-fill text-success"></i> Tải Form Mẫu Excel
-            </a>
+            <button class="btn btn-secondary-outline" @onclick="DownloadTemplateExcel" disabled="@isDownloadingTemplate">
+                @if (isDownloadingTemplate)
+                {
+                    <span class="mini-spinner"></span>
+                    <span>Đang tải mẫu...</span>
+                }
+                else
+                {
+                    <i class="bi bi-file-earmark-spreadsheet-fill text-success"></i>
+                    <span>Tải Form Mẫu Excel</span>
+                }
+            </button>
             <button class="btn btn-primary-outline" @onclick="TriggerFileInput" disabled="@isImporting">
                 @if (isImporting)
                 {
@@ -429,8 +438,40 @@
     private DateTime? searchDate = null;
     private string searchStatus = "All";
 
-    // Mẫu URL
+    // Mẫu URL & Download
     private string templateUrl = "";
+    private bool isDownloadingTemplate = false;
+
+    private async Task DownloadTemplateExcel()
+    {
+        isDownloadingTemplate = true;
+        try
+        {
+            var bytes = await Http.GetByteArrayAsync("api/admin/listen-videos/template-excel");
+            if (bytes != null && bytes.Length > 0)
+            {
+                var base64 = Convert.ToBase64String(bytes);
+                await JSRuntime.InvokeVoidAsync("eval", $@"
+                    (() => {{
+                        const a = document.createElement('a');
+                        a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{base64}';
+                        a.download = 'ListenVideos_Template.xlsx';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }})()
+                ");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminListenVideos] Error downloading template: {ex.Message}");
+        }
+        finally
+        {
+            isDownloadingTemplate = false;
+        }
+    }
 
     // Modal Phụ Đề
     private bool showTranscriptModal = false;

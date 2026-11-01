@@ -119,6 +119,19 @@ public class IeltsService
         }
     }
 
+    public async Task<byte[]?> GetVocabularyTemplateExcelAsync()
+    {
+        try
+        {
+            return await _httpClient.GetByteArrayAsync("api/ielts/vocab/template-excel");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[IeltsService] Error downloading vocab template: {ex.Message}");
+            return null;
+        }
+    }
+
     public async Task<bool> CreateVocabularyAsync(IeltsVocabularyItem item)
     {
         try

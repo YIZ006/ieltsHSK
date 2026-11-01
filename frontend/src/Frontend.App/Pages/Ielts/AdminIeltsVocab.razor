@@ -36,10 +36,10 @@
                 <i class="bi bi-file-earmark-excel-fill text-success"></i>
                 <span>@(isImporting ? "Đang nhập..." : "Nhập Excel (nhiều file)")</span>
             </button>
-            <a href="@templateUrl" class="btn-secondary-action" download="IELTS_Vocabulary_Template.xlsx" style="text-decoration:none;">
+            <button class="btn-secondary-action" @onclick="DownloadTemplate" disabled="@isDownloadingTemplate">
                 <i class="bi bi-file-earmark-arrow-down text-primary"></i>
-                <span>Tải Mẫu Excel</span>
-            </a>
+                <span>@(isDownloadingTemplate ? "Đang tải..." : "Tải Mẫu Excel")</span>
+            </button>
             <button class="btn-secondary-action" @onclick="AutoClassifyCefr" disabled="@(isAutoClassifying || isImporting)" title="Tự động phân loại mức CEFR cho tất cả từ chưa có nhãn">
                 <i class="bi bi-magic"></i>
                 <span>@(isAutoClassifying ? "Đang phân loại..." : "Auto CEFR")</span>
@@ -442,6 +442,38 @@
     }
 
     private string templateUrl = "";
+    private bool isDownloadingTemplate = false;
+
+    private async Task DownloadTemplate()
+    {
+        isDownloadingTemplate = true;
+        try
+        {
+            var bytes = await IeltsService.GetVocabularyTemplateExcelAsync();
+            if (bytes != null && bytes.Length > 0)
+            {
+                var base64 = Convert.ToBase64String(bytes);
+                await JS.InvokeVoidAsync("eval", $@"
+                    (() => {{
+                        const a = document.createElement('a');
+                        a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{base64}';
+                        a.download = 'IELTS_Vocabulary_Template.xlsx';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }})()
+                ");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[AdminIeltsVocab] Error downloading template: {ex.Message}");
+        }
+        finally
+        {
+            isDownloadingTemplate = false;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
