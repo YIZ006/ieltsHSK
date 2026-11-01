@@ -447,7 +447,7 @@
         isDownloadingTemplate = true;
         try
         {
-            var bytes = await Http.GetByteArrayAsync("api/admin/listen-videos/template-excel");
+            var bytes = await IeltsService.GetListenVideosTemplateExcelAsync();
             if (bytes != null && bytes.Length > 0)
             {
                 var base64 = Convert.ToBase64String(bytes);

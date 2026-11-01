@@ -215,7 +215,8 @@ public class GrammarStructureService
     {
         try
         {
-            return await _http.GetByteArrayAsync("api/admin/grammar-structures/template");
+            var url = GetApiUrl("api/admin/grammar-structures/template");
+            return await _http.GetByteArrayAsync(url);
         }
         catch (Exception ex)
         {
@@ -228,7 +229,8 @@ public class GrammarStructureService
     {
         try
         {
-            return await _http.GetByteArrayAsync("api/admin/grammar-structures/export-excel");
+            var url = GetApiUrl("api/admin/grammar-structures/export-excel");
+            return await _http.GetByteArrayAsync(url);
         }
         catch (Exception ex)
         {

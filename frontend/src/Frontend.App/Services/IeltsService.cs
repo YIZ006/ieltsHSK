@@ -501,6 +501,19 @@ public class IeltsService
         }
     }
 
+    public async Task<byte[]?> GetListenVideosTemplateExcelAsync()
+    {
+        try
+        {
+            return await _httpClient.GetByteArrayAsync("api/admin/listen-videos/template-excel");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[IeltsService] Error downloading listen-videos template: {ex.Message}");
+            return null;
+        }
+    }
+
     public async Task<(bool Success, string Message)> ImportListenVideosExcelAsync(Microsoft.AspNetCore.Components.Forms.IBrowserFile file)
     {
         try
