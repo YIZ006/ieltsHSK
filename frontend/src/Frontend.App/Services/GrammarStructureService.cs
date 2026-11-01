@@ -229,7 +229,7 @@ public class GrammarStructureService
     {
         try
         {
-            var url = GetApiUrl("api/admin/grammar-structures/export-excel");
+            var url = GetApiUrl("api/admin/grammar-structures/export");
             return await _http.GetByteArrayAsync(url);
         }
         catch (Exception ex)
