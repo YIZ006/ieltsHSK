@@ -124,10 +124,18 @@ builder.Services.AddScoped(sp =>
     var localStorage = sp.GetRequiredService<ILocalStorageService>();
     return new ExamSubmissionService(localStorage, httpClient);
 });
-builder.Services.AddScoped<GrammarStructureService>();
+builder.Services.AddScoped(sp =>
+{
+    var httpClient = new HttpClient(sp.GetRequiredService<AuthHeaderHandler>())
+    {
+        BaseAddress = new Uri(backendApiBaseUrl)
+    };
+    return new GrammarStructureService(httpClient, sp.GetRequiredService<IConfiguration>());
+});
 builder.Services.AddScoped<ExamScheduleService>();
 builder.Services.AddScoped<CultureStoryService>();
 builder.Services.AddScoped<HskSlangService>();
+builder.Services.AddScoped<HskChengyuService>();
 
 builder.Services.AddAuthorizationCore();
 

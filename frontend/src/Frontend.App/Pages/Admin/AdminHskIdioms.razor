@@ -1,0 +1,706 @@
+@page "/portal-hub/hsk-idioms"
+@page "/admin/hsk-idioms"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")]
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Services
+@inject HskChengyuService ChengyuService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Quản Lý Thành Ngữ HSK (成语) &amp; Hội Thoại WeChat | Admin Portal Hub</PageTitle>
+
+<div class="admin-chengyu-wrap p-4">
+    @* ── HEADER ── *@
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 pb-3 border-bottom gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-danger fs-6 p-2"><i class="bi bi-chat-quote-fill"></i></span>
+                <h2 class="m-0 fw-bold fs-4 text-dark">Quản Lý Bách Khoa Thành Ngữ HSK (成语)</h2>
+            </div>
+            <p class="text-muted small m-0 mt-1">
+                Lưu trữ định dạng JSON, quản lý điển tích ngụ ngôn, câu ví dụ thi HSK và kịch bản hội thoại WeChat tĩnh.
+            </p>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button class="btn btn-outline-secondary btn-sm" @onclick="LoadDataAsync">
+                <i class="bi bi-arrow-clockwise"></i> Tải lại
+            </button>
+            <button class="btn btn-outline-success btn-sm" @onclick="ExportJson">
+                <i class="bi bi-download"></i> Xuất JSON
+            </button>
+            <button class="btn btn-outline-primary btn-sm" @onclick="OpenImportModal">
+                <i class="bi bi-upload"></i> Nhập JSON
+            </button>
+            <button class="btn btn-warning btn-sm fw-bold shadow-sm" @onclick="PushFastToR2" disabled="@isPushingR2" title="Đẩy toàn bộ dữ liệu JSON thành ngữ lên Cloudflare R2 CDN">
+                @if (isPushingR2)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                    <span>Đang đẩy lên R2...</span>
+                }
+                else
+                {
+                    <i class="bi bi-cloud-arrow-up-fill me-1"></i>
+                    <span>Đẩy nhanh lên R2</span>
+                }
+            </button>
+            <button class="btn btn-danger btn-sm fw-bold" @onclick="OpenCreateModal">
+                <i class="bi bi-plus-circle-fill"></i> Thêm thành ngữ mới
+            </button>
+        </div>
+    </div>
+
+    @* ── R2 SYNC RESULT BANNER ── *@
+    @if (r2SyncResult != null)
+    {
+        <div class="alert @(r2SyncResult.IsUploaded ? "alert-success" : "alert-warning") alert-dismissible fade show shadow-sm mb-4" role="alert">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi @(r2SyncResult.IsUploaded ? "bi-check-circle-fill fs-5 text-success" : "bi-info-circle-fill fs-5 text-warning")"></i>
+                <div>
+                    <strong>@r2SyncResult.Message</strong>
+                    <div class="small text-muted mt-0.5">
+                        <span>Đã đồng bộ <strong>@r2SyncResult.Count</strong> thành ngữ</span> • 
+                        <span>Dung lượng: <strong>@r2SyncResult.SizeKb KB</strong></span> • 
+                        <span>Đường dẫn R2: <code class="user-select-all">@r2SyncResult.R2Url</code></span>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="btn-close" @onclick="() => r2SyncResult = null"></button>
+        </div>
+    }
+
+    @* ── STATS CARDS ── *@
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm border-0 bg-light p-3 text-center">
+                <div class="fs-4 fw-black text-danger">@items.Count</div>
+                <div class="text-muted small fw-semibold">Tổng số thành ngữ</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm border-0 bg-light p-3 text-center">
+                <div class="fs-4 fw-black text-primary">@items.Count(x => x.HskLevel.Contains("4"))</div>
+                <div class="text-muted small fw-semibold">Cấp độ HSK 4</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm border-0 bg-light p-3 text-center">
+                <div class="fs-4 fw-black text-danger">@items.Count(x => x.HskLevel.Contains("5"))</div>
+                <div class="text-muted small fw-semibold">Cấp độ HSK 5</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm border-0 bg-light p-3 text-center">
+                <div class="fs-4 fw-black text-purple">@items.Count(x => x.HskLevel.Contains("6"))</div>
+                <div class="text-muted small fw-semibold">Cấp độ HSK 6</div>
+            </div>
+        </div>
+    </div>
+
+    @* ── FILTER & SEARCH TOOLBAR ── *@
+    <div class="card shadow-sm border-0 mb-4 p-3 bg-white">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text"
+                           class="form-control bg-light border-start-0"
+                           placeholder="Tìm kiếm chữ Hán, Pinyin, Hán Việt hoặc nghĩa..."
+                           @bind="searchQuery"
+                           @bind:event="oninput"
+                           @bind:after="ApplyFilter" />
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select bg-light" @bind="selectedLevel" @bind:after="ApplyFilter">
+                    <option value="all">Tất cả cấp độ</option>
+                    <option value="HSK 4">HSK 4</option>
+                    <option value="HSK 5">HSK 5</option>
+                    <option value="HSK 6">HSK 6</option>
+                </select>
+            </div>
+            <div class="col-md-3 text-md-end text-muted small">
+                Hiển thị <strong>@filteredItems.Count</strong> / @items.Count thành ngữ
+            </div>
+        </div>
+    </div>
+
+    @* ── DATA TABLE ── *@
+    <div class="card shadow-sm border-0 overflow-hidden">
+        @if (isLoading)
+        {
+            <div class="p-5 text-center text-muted">
+                <div class="spinner-border text-danger mb-2" role="status"></div>
+                <div>Đang tải dữ liệu thành ngữ...</div>
+            </div>
+        }
+        else if (filteredItems.Count == 0)
+        {
+            <div class="p-5 text-center text-muted">
+                <i class="bi bi-inbox fs-1 text-secondary mb-2 d-block"></i>
+                <div>Không tìm thấy thành ngữ nào.</div>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light text-uppercase small text-muted">
+                        <tr>
+                            <th style="width: 70px;">Cấp độ</th>
+                            <th style="width: 140px;">Thành ngữ</th>
+                            <th style="width: 160px;">Phiên âm &amp; Hán Việt</th>
+                            <th>Ý nghĩa &amp; Điển tích</th>
+                            <th style="width: 140px;" class="text-center">Ví dụ &amp; WeChat</th>
+                            <th style="width: 120px;" class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in filteredItems)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="badge @(item.HskLevel.Contains("4") ? "bg-primary" : item.HskLevel.Contains("5") ? "bg-danger" : "bg-purple")">
+                                        @item.HskLevel
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="fw-black fs-5 text-dark font-serif">@item.Hanzi</div>
+                                    <span class="badge bg-light text-secondary border small">@item.CategoryVi</span>
+                                </td>
+                                <td>
+                                    <div class="fw-bold text-danger">@item.Pinyin</div>
+                                    <div class="small text-muted">[@item.HanViet]</div>
+                                </td>
+                                <td>
+                                    <div class="small fw-semibold text-dark mb-1">@item.MeaningVi</div>
+                                    @if (!string.IsNullOrWhiteSpace(item.OriginStory))
+                                    {
+                                        <div class="small text-muted fst-italic text-truncate" style="max-width: 380px;">
+                                            <i class="bi bi-book"></i> @item.OriginStory
+                                        </div>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <div class="small">
+                                        <span class="badge bg-info-subtle text-info border">
+                                            <i class="bi bi-journal-text"></i> @(item.HskExamples?.Count ?? 0) câu
+                                        </span>
+                                    </div>
+                                    <div class="small mt-1">
+                                        <span class="badge bg-success-subtle text-success border">
+                                            <i class="bi bi-wechat"></i> @(item.WechatChat?.Messages?.Count ?? 0) tin nhắn
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary" @onclick="() => OpenEditModal(item)" title="Chỉnh sửa">
+                                            <i class="bi bi-pencil-fill"></i>
+                                        </button>
+                                        <button class="btn btn-outline-danger" @onclick="() => ConfirmDelete(item)" title="Xóa">
+                                            <i class="bi bi-trash-fill"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@* ── MODAL: CREATE / EDIT IDIOM ── *@
+@if (showEditModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi @(isCreating ? "bi-plus-circle" : "bi-pencil")"></i>
+                        @(isCreating ? "Thêm Thành Ngữ Mới" : $"Chỉnh Sửa Thành Ngữ: {editingItem.Hanzi}")
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseEditModal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        @* Basic Information *@
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Chữ Hán (4 chữ) <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-lg fw-bold text-center font-serif" @bind="editingItem.Hanzi" placeholder="VD: 画蛇添足" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Pinyin (có dấu) <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" @bind="editingItem.Pinyin" placeholder="VD: huà shé tiān zú" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Âm Hán Việt</label>
+                            <input type="text" class="form-control" @bind="editingItem.HanViet" placeholder="VD: Họa xà thiêm túc" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Cấp độ HSK</label>
+                            <select class="form-select" @bind="editingItem.HskLevel">
+                                <option value="HSK 4">HSK 4</option>
+                                <option value="HSK 5">HSK 5</option>
+                                <option value="HSK 6">HSK 6</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Chủ đề hiển thị</label>
+                            <input type="text" class="form-control" @bind="editingItem.CategoryVi" placeholder="VD: Ngụ ngôn & Ứng xử" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Độ phổ biến trong đề thi (%)</label>
+                            <input type="number" class="form-control" @bind="editingItem.PopularityScore" min="1" max="100" />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Ý nghĩa tiếng Việt <span class="text-danger">*</span></label>
+                            <textarea class="form-control" rows="2" @bind="editingItem.MeaningVi" placeholder="Nêu rõ nghĩa đen, nghĩa bóng và ngữ cảnh dùng..."></textarea>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Nguồn gốc điển cố lịch sử (典故)</label>
+                            <textarea class="form-control" rows="3" @bind="editingItem.OriginStory" placeholder="Kể tóm tắt tích truyện Chiến Quốc Sách, Sử Ký, v.v..."></textarea>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Từ cận nghĩa (phân cách dấu phẩy)</label>
+                            <input type="text" class="form-control" @bind="synonymsInput" placeholder="VD: 多此一举, 弄巧成拙" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Từ trái nghĩa (phân cách dấu phẩy)</label>
+                            <input type="text" class="form-control" @bind="antonymsInput" placeholder="VD: 恰到好处, 画龙点睛" />
+                        </div>
+
+                        @* SECTION: HSK EXAMPLES *@
+                        <div class="col-12 mt-4 pt-3 border-top">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="fw-bold text-primary m-0"><i class="bi bi-journal-text"></i> Danh sách Ví Dụ Chuẩn Đề Thi HSK</h6>
+                                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="AddExample">
+                                    <i class="bi bi-plus-lg"></i> Thêm ví dụ
+                                </button>
+                            </div>
+
+                            @if (editingItem.HskExamples.Count == 0)
+                            {
+                                <div class="text-muted small fst-italic">Chưa có câu ví dụ nào. Bấm nút phía trên để thêm.</div>
+                            }
+                            else
+                            {
+                                @for (int i = 0; i < editingItem.HskExamples.Count; i++)
+                                {
+                                    var idx = i;
+                                    var ex = editingItem.HskExamples[idx];
+                                    <div class="card p-3 mb-2 bg-light border">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="badge bg-secondary">Câu @(idx + 1)</span>
+                                            <button type="button" class="btn btn-outline-danger btn-sm py-0" @onclick="() => RemoveExample(idx)">
+                                                <i class="bi bi-x"></i> Xóa
+                                            </button>
+                                        </div>
+                                        <div class="row g-2">
+                                            <div class="col-12">
+                                                <input type="text" class="form-control form-control-sm" @bind="ex.Zh" placeholder="Tiếng Trung (VD: 这篇文章已经写得很完整了...)" />
+                                            </div>
+                                            <div class="col-md-6">
+                                                <input type="text" class="form-control form-control-sm" @bind="ex.Pinyin" placeholder="Pinyin..." />
+                                            </div>
+                                            <div class="col-md-6">
+                                                <input type="text" class="form-control form-control-sm" @bind="ex.Vi" placeholder="Dịch nghĩa tiếng Việt..." />
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+
+                        @* SECTION: WECHAT CONVERSATION SCRIPT *@
+                        <div class="col-12 mt-4 pt-3 border-top">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="fw-bold text-success m-0"><i class="bi bi-wechat"></i> Kịch Bản Hội Thoại WeChat Thẻ Tĩnh</h6>
+                                <button type="button" class="btn btn-outline-success btn-sm" @onclick="AddWechatMessage">
+                                    <i class="bi bi-plus-lg"></i> Thêm tin nhắn WeChat
+                                </button>
+                            </div>
+
+                            <div class="row g-2 mb-3 p-3 bg-light rounded">
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Tên bạn chat:</label>
+                                    <input type="text" class="form-control form-control-sm" @bind="editingItem.WechatChat!.ContactName" placeholder="珍肺" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Thời gian:</label>
+                                    <input type="text" class="form-control form-control-sm" @bind="editingItem.WechatChat!.Timestamp" placeholder="16:32" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Avatar bên trái:</label>
+                                    <select class="form-select form-select-sm" @bind="editingItem.WechatChat!.AvatarLeft">
+                                        <option value="/images/idioms/avatar-wet-cat.jpg">Mèo lem luốc (Mặc định A)</option>
+                                        <option value="/images/idioms/avatar-crying-cat.jpg">Mèo khóc HUST (Mặc định B)</option>
+                                        <option value="/images/chibi.png">Chibi Mascot</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold">Avatar bên phải:</label>
+                                    <select class="form-select form-select-sm" @bind="editingItem.WechatChat!.AvatarRight">
+                                        <option value="/images/idioms/avatar-crying-cat.jpg">Mèo khóc HUST (Mặc định B)</option>
+                                        <option value="/images/idioms/avatar-wet-cat.jpg">Mèo lem luốc (Mặc định A)</option>
+                                        <option value="/images/chibi.png">Chibi Mascot</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            @if (editingItem.WechatChat.Messages.Count == 0)
+                            {
+                                <div class="text-muted small fst-italic">Chưa có tin nhắn WeChat nào.</div>
+                            }
+                            else
+                            {
+                                @for (int i = 0; i < editingItem.WechatChat.Messages.Count; i++)
+                                {
+                                    var mIdx = i;
+                                    var msg = editingItem.WechatChat.Messages[mIdx];
+                                    <div class="card p-3 mb-2 border @(msg.Sender == "left" ? "bg-white" : "bg-success-subtle")">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <span class="badge @(msg.Sender == "left" ? "bg-secondary" : "bg-success")">
+                                                    @(msg.Sender == "left" ? "Bên Trái (A - Trắng)" : "Bên Phải (B - Xanh)")
+                                                </span>
+                                                <select class="form-select form-select-sm py-0" style="width: 140px;" @bind="msg.Sender">
+                                                    <option value="left">Người trái (A)</option>
+                                                    <option value="right">Người phải (B)</option>
+                                                </select>
+                                            </div>
+                                            <button type="button" class="btn btn-outline-danger btn-sm py-0" @onclick="() => RemoveWechatMessage(mIdx)">
+                                                <i class="bi bi-x"></i> Xóa
+                                            </button>
+                                        </div>
+                                        <div class="row g-2">
+                                            <div class="col-12">
+                                                <input type="text" class="form-control form-control-sm" @bind="msg.Zh" placeholder="Nội dung tiếng Trung..." />
+                                            </div>
+                                            <div class="col-md-6">
+                                                <input type="text" class="form-control form-control-sm" @bind="msg.Pinyin" placeholder="Pinyin..." />
+                                            </div>
+                                            <div class="col-md-6">
+                                                <input type="text" class="form-control form-control-sm" @bind="msg.Vi" placeholder="Dịch nghĩa tiếng Việt (xổ xuống khi bấm)..." />
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseEditModal">Hủy bỏ</button>
+                    <button type="button" class="btn btn-danger fw-bold px-4" @onclick="SaveEditingItem">
+                        <i class="bi bi-save-fill"></i> Lưu thành ngữ
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── MODAL: CONFIRM DELETE ── *@
+@if (showDeleteModal && itemToDelete != null)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title fw-bold">Xác nhận xóa thành ngữ</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => showDeleteModal = false"></button>
+                </div>
+                <div class="modal-body text-center p-4">
+                    <p class="fs-5 mb-1">Bạn có chắc chắn muốn xóa thành ngữ:</p>
+                    <div class="fs-3 fw-bold text-danger font-serif my-2">@itemToDelete.Hanzi</div>
+                    <p class="text-muted small">[@itemToDelete.Pinyin - @itemToDelete.HanViet]</p>
+                </div>
+                <div class="modal-footer bg-light justify-content-center">
+                    <button type="button" class="btn btn-secondary px-4" @onclick="() => showDeleteModal = false">Hủy</button>
+                    <button type="button" class="btn btn-danger px-4" @onclick="ExecuteDelete">Xác nhận xóa</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── MODAL: IMPORT JSON ── *@
+@if (showImportModal)
+{
+    <div class="modal fade show d-block" style="background: rgba(0,0,0,0.5);" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold">Nhập Dữ Liệu Thành Ngữ từ JSON</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => showImportModal = false"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="small text-muted mb-2">Dán nội dung JSON danh sách thành ngữ vào khung bên dưới để đồng bộ:</p>
+                    <textarea class="form-control font-monospace small" rows="12" @bind="importJsonText" placeholder="[ { &quot;hanzi&quot;: &quot;画蛇添足&quot; } ]"></textarea>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showImportModal = false">Hủy</button>
+                    <button type="button" class="btn btn-primary fw-bold px-4" @onclick="ExecuteImport">Nhập dữ liệu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ChengyuItem> items = new();
+    private List<ChengyuItem> filteredItems = new();
+    private bool isLoading = true;
+    private string searchQuery = "";
+    private string selectedLevel = "all";
+
+    // Edit modal
+    private bool showEditModal = false;
+    private bool isCreating = false;
+    private ChengyuItem editingItem = new();
+    private string synonymsInput = "";
+    private string antonymsInput = "";
+
+    // Delete modal
+    private bool showDeleteModal = false;
+    private ChengyuItem? itemToDelete;
+
+    // Import modal
+    private bool showImportModal = false;
+    private string importJsonText = "";
+
+    // R2 Push state
+    private bool isPushingR2 = false;
+    private SyncChengyuR2Result? r2SyncResult;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            items = await ChengyuService.GetAllIdiomsAsync(forceRefresh: true);
+            ApplyFilter();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        var q = items.AsEnumerable();
+        if (selectedLevel != "all")
+        {
+            q = q.Where(x => x.HskLevel.Equals(selectedLevel, StringComparison.OrdinalIgnoreCase) ||
+                             x.HskLevel.Replace(" ", "").Equals(selectedLevel.Replace(" ", ""), StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var s = searchQuery.Trim().ToLowerInvariant();
+            q = q.Where(x =>
+                x.Hanzi.ToLowerInvariant().Contains(s) ||
+                x.Pinyin.ToLowerInvariant().Contains(s) ||
+                x.HanViet.ToLowerInvariant().Contains(s) ||
+                x.MeaningVi.ToLowerInvariant().Contains(s));
+        }
+
+        filteredItems = q.ToList();
+    }
+
+    private void OpenCreateModal()
+    {
+        isCreating = true;
+        editingItem = new ChengyuItem
+        {
+            Id = "chengyu-" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            HskLevel = "HSK 5",
+            CategoryVi = "Ngụ ngôn & Ứng xử",
+            PopularityScore = 95,
+            WechatChat = new WechatChatModel()
+        };
+        synonymsInput = "";
+        antonymsInput = "";
+        showEditModal = true;
+    }
+
+    private void OpenEditModal(ChengyuItem item)
+    {
+        isCreating = false;
+        var json = System.Text.Json.JsonSerializer.Serialize(item);
+        editingItem = System.Text.Json.JsonSerializer.Deserialize<ChengyuItem>(json) ?? new();
+        if (editingItem.WechatChat == null) editingItem.WechatChat = new WechatChatModel();
+
+        synonymsInput = editingItem.Synonyms != null ? string.Join(", ", editingItem.Synonyms) : "";
+        antonymsInput = editingItem.Antonyms != null ? string.Join(", ", editingItem.Antonyms) : "";
+        showEditModal = true;
+    }
+
+    private void CloseEditModal()
+    {
+        showEditModal = false;
+    }
+
+    private void AddExample()
+    {
+        editingItem.HskExamples.Add(new ChengyuExample());
+    }
+
+    private void RemoveExample(int index)
+    {
+        if (index >= 0 && index < editingItem.HskExamples.Count)
+        {
+            editingItem.HskExamples.RemoveAt(index);
+        }
+    }
+
+    private void AddWechatMessage()
+    {
+        if (editingItem.WechatChat == null) editingItem.WechatChat = new WechatChatModel();
+        editingItem.WechatChat.Messages.Add(new WechatMessageItem
+        {
+            Sender = editingItem.WechatChat.Messages.Count % 2 == 0 ? "left" : "right"
+        });
+    }
+
+    private void RemoveWechatMessage(int index)
+    {
+        if (editingItem.WechatChat?.Messages != null && index >= 0 && index < editingItem.WechatChat.Messages.Count)
+        {
+            editingItem.WechatChat.Messages.RemoveAt(index);
+        }
+    }
+
+    private async Task SaveEditingItem()
+    {
+        if (string.IsNullOrWhiteSpace(editingItem.Hanzi) || string.IsNullOrWhiteSpace(editingItem.MeaningVi))
+        {
+            await JS.InvokeVoidAsync("alert", "Vui lòng nhập đầy đủ Chữ Hán và Ý nghĩa.");
+            return;
+        }
+
+        editingItem.Synonyms = synonymsInput.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
+        editingItem.Antonyms = antonymsInput.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList();
+
+        var success = await ChengyuService.SaveIdiomAsync(editingItem);
+        if (success)
+        {
+            showEditModal = false;
+            await LoadDataAsync();
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("alert", "Lưu thành ngữ thất bại, vui lòng kiểm tra lại.");
+        }
+    }
+
+    private void ConfirmDelete(ChengyuItem item)
+    {
+        itemToDelete = item;
+        showDeleteModal = true;
+    }
+
+    private async Task ExecuteDelete()
+    {
+        if (itemToDelete != null)
+        {
+            await ChengyuService.DeleteIdiomAsync(itemToDelete.Id);
+            showDeleteModal = false;
+            itemToDelete = null;
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task ExportJson()
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(items, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var fileName = $"hsk-chengyu-{DateTime.Now:yyyyMMddHHmm}.json";
+            var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+            var base64 = Convert.ToBase64String(bytes);
+            var jsCode = $@"
+                var a = document.createElement('a');
+                a.href = 'data:application/json;base64,{base64}';
+                a.download = '{fileName}';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);";
+            await JS.InvokeVoidAsync("eval", jsCode);
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", "Lỗi xuất file: " + ex.Message);
+        }
+    }
+
+    private void OpenImportModal()
+    {
+        importJsonText = "";
+        showImportModal = true;
+    }
+
+    private async Task ExecuteImport()
+    {
+        if (string.IsNullOrWhiteSpace(importJsonText)) return;
+        try
+        {
+            var parsed = System.Text.Json.JsonSerializer.Deserialize<List<ChengyuItem>>(importJsonText, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (parsed != null && parsed.Count > 0)
+            {
+                foreach (var itm in parsed)
+                {
+                    await ChengyuService.SaveIdiomAsync(itm);
+                }
+                showImportModal = false;
+                await LoadDataAsync();
+                await JS.InvokeVoidAsync("alert", $"Đã nhập thành công {parsed.Count} thành ngữ!");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", "JSON không hợp lệ: " + ex.Message);
+        }
+    }
+
+    private async Task PushFastToR2()
+    {
+        isPushingR2 = true;
+        r2SyncResult = null;
+        try
+        {
+            var result = await ChengyuService.PushToR2Async();
+            if (result != null)
+            {
+                r2SyncResult = result;
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Không thể kết nối đến máy chủ để đẩy lên R2.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", "Lỗi khi đẩy lên R2: " + ex.Message);
+        }
+        finally
+        {
+            isPushingR2 = false;
+        }
+    }
+}

@@ -164,8 +164,9 @@
             new LearningSectionDto{ Name="Luyện đề HSK", Route="/hsk/luyen-de", Icon="bi-journal-text", Language="HSK", Category="Luyện tập", OrderIndex=1, Description="Luyện đề thi HSK các cấp" },
             new LearningSectionDto{ Name="Trò chơi", Route="/hsk/games", Icon="bi-controller", Language="HSK", Category="Luyện tập", OrderIndex=2, Description="Game học từ & phản xạ" },
             new LearningSectionDto{ Name="Từ vựng HSK", Route="/hsk/tu-vung", Icon="bi-spellcheck", Language="HSK", Category="Học tập", OrderIndex=3, Description="Từ vựng HSK 1-6 chuẩn" },
-            new LearningSectionDto{ Name="Góc Văn hóa", Route="/hsk/culture", Icon="bi-book-half", Language="HSK", Category="Học tập", OrderIndex=4, Description="Truyện đọc Pinyin & audio", Badge="Mới" },
-            new LearningSectionDto{ Name="Tiếng lóng GenZ", Route="/hsk/slang", Icon="bi-fire", Language="HSK", Category="Học tập", OrderIndex=5, Description="Hot trend Weibo/Douyin & số", Badge="Hot" },
+            new LearningSectionDto{ Name="Thành ngữ HSK", Route="/hsk/thanh-ngu", Icon="bi-chat-quote-fill", Language="HSK", Category="Học tập", OrderIndex=4, Description="Thành ngữ & Hội thoại WeChat", Badge="Mới" },
+            new LearningSectionDto{ Name="Góc Văn hóa", Route="/hsk/culture", Icon="bi-book-half", Language="HSK", Category="Học tập", OrderIndex=5, Description="Truyện đọc Pinyin & audio", Badge="Mới" },
+            new LearningSectionDto{ Name="Tiếng lóng GenZ", Route="/hsk/slang", Icon="bi-fire", Language="HSK", Category="Học tập", OrderIndex=6, Description="Hot trend Weibo/Douyin & số", Badge="Hot" },
         }
     };
 
@@ -239,7 +240,7 @@
     {
         var relative = NavManager.ToBaseRelativePath(url).ToLowerInvariant();
         string? targetProg = null;
-        if (relative.StartsWith("hsk") || relative.StartsWith("culture") || relative.StartsWith("slang") || relative.StartsWith("van-hoa"))
+        if (relative.StartsWith("hsk") || relative.StartsWith("culture") || relative.StartsWith("slang") || relative.StartsWith("van-hoa") || relative.StartsWith("thanh-ngu") || relative.StartsWith("idioms") || relative.StartsWith("chengyu"))
         {
             targetProg = "HSK";
         }

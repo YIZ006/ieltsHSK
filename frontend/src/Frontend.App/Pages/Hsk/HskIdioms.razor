@@ -1,0 +1,621 @@
+@page "/hsk/thanh-ngu"
+@page "/hsk/idioms"
+@page "/hsk/chengyu"
+@layout Frontend.App.Layout.HskLayout
+@using Frontend.App.Services
+@inject HskChengyuService ChengyuService
+@inject IJSRuntime JS
+@inject NavigationManager NavManager
+
+<PageTitle>Bách Khoa Thành Ngữ HSK (成语) &amp; Hội Thoại WeChat | ieltsHSK</PageTitle>
+
+<div class="chengyu-page-container">
+    @* ── HERO BANNER ── *@
+    <div class="chengyu-hero">
+        <div class="hero-top-badges">
+            <span class="badge-tag"><i class="bi bi-mortarboard-fill"></i> HSK 3.0 Chuyên đề</span>
+            <span class="badge-sub">Đột phá điểm Đọc hiểu &amp; Viết HSK 4 - 6</span>
+        </div>
+        <h1 class="hero-title">
+            Thành Ngữ HSK &amp; Hội Thoại WeChat
+        </h1>
+        <p class="hero-desc">
+            Nắm vững ý nghĩa sâu sắc, nguồn gốc điển cố lịch sử (典故) và cách vận dụng tự nhiên trong đối thoại WeChat đời thường của người bản xứ.
+        </p>
+
+        @* Quick Stats Bar *@
+        <div class="hero-stats-grid">
+            <div class="stat-card">
+                <div class="stat-num">@(allItems?.Count ?? 0)</div>
+                <div class="stat-lbl">Thành ngữ tuyển chọn</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num text-success">@learnedCount / @(allItems?.Count ?? 0)</div>
+                <div class="stat-lbl">Đã thuộc (@learnedPercent%)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num text-warning">100%</div>
+                <div class="stat-lbl">Có Hội thoại WeChat</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num text-info">HSK 4 - 6</div>
+                <div class="stat-lbl">Phân cấp chuẩn khung</div>
+            </div>
+        </div>
+    </div>
+
+    @* ── TOOLBAR: SEARCH & FILTERS ── *@
+    <div class="chengyu-toolbar">
+        <div class="search-row">
+            <div class="search-input-wrap">
+                <i class="bi bi-search search-icon"></i>
+                <input type="text"
+                       class="chengyu-search-input"
+                       placeholder="Tìm theo chữ Hán (画蛇添足), Pinyin (hua she...), Hán Việt hoặc nghĩa tiếng Việt..."
+                       @bind="searchQuery"
+                       @bind:event="oninput"
+                       @bind:after="ApplyFilter" />
+                @if (!string.IsNullOrEmpty(searchQuery))
+                {
+                    <button type="button" class="btn-clear-search" @onclick="ClearSearch" title="Xóa tìm kiếm">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                }
+            </div>
+
+            <div class="view-mode-toggle">
+                <button type="button"
+                        class="mode-btn @(!isFlashcardMode ? "active" : "")"
+                        @onclick="() => isFlashcardMode = false">
+                    <i class="bi bi-grid-fill"></i> Dạng Thẻ
+                </button>
+                <button type="button"
+                        class="mode-btn @(isFlashcardMode ? "active" : "")"
+                        @onclick="() => isFlashcardMode = true">
+                    <i class="bi bi-card-checklist"></i> Luyện Flashcard
+                </button>
+            </div>
+        </div>
+
+        <div class="filter-pills-row">
+            @* Level filter pills *@
+            <div class="filter-group">
+                <span class="filter-lbl">Cấp độ:</span>
+                <button type="button" class="f-pill @(selectedLevel == "all" ? "active" : "")" @onclick='() => ChangeLevel("all")'>
+                    Tất cả (@(allItems?.Count ?? 0))
+                </button>
+                <button type="button" class="f-pill level-hsk4 @(selectedLevel == "HSK 4" ? "active" : "")" @onclick='() => ChangeLevel("HSK 4")'>
+                    HSK 4 (@hsk4Count)
+                </button>
+                <button type="button" class="f-pill level-hsk5 @(selectedLevel == "HSK 5" ? "active" : "")" @onclick='() => ChangeLevel("HSK 5")'>
+                    HSK 5 (@hsk5Count)
+                </button>
+                <button type="button" class="f-pill level-hsk6 @(selectedLevel == "HSK 6" ? "active" : "")" @onclick='() => ChangeLevel("HSK 6")'>
+                    HSK 6 (@hsk6Count)
+                </button>
+            </div>
+
+            @* Quick Toggles *@
+            <div class="filter-toggles">
+                <label class="toggle-cb">
+                    <input type="checkbox" @bind="hideLearned" @bind:after="ApplyFilter" />
+                    <span>Ẩn từ đã thuộc</span>
+                </label>
+                <button type="button" class="toggle-btn-sub" @onclick="ToggleAllGlobalTranslations">
+                    <i class="bi bi-translate"></i> @(globalShowTrans ? "Thu gọn bản dịch WeChat" : "Mở rộng bản dịch WeChat")
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @* ── MAIN CONTENT ── *@
+    @if (isLoading)
+    {
+        <div class="chengyu-loading">
+            <div class="spinner-border text-danger" role="status"></div>
+            <p>Đang tải kho tàng thành ngữ HSK...</p>
+        </div>
+    }
+    else if (filteredItems.Count == 0)
+    {
+        <div class="chengyu-empty">
+            <i class="bi bi-inbox empty-icon"></i>
+            <h3>Không tìm thấy thành ngữ phù hợp</h3>
+            <p>Vui lòng thử tìm với từ khóa khác hoặc chuyển bộ lọc cấp độ.</p>
+            <button class="btn btn-outline-danger btn-sm" @onclick="ResetFilter">Đặt lại bộ lọc</button>
+        </div>
+    }
+    else if (isFlashcardMode)
+    {
+        @* ── FLASHCARD REVIEW MODE ── *@
+        <div class="flashcard-container">
+            <div class="flashcard-header">
+                <span>Thẻ @(currentCardIndex + 1) / @filteredItems.Count</span>
+                <span class="badge bg-danger">@CurrentCard.HskLevel</span>
+            </div>
+
+            <div class="flashcard-box @(isCardFlipped ? "flipped" : "")" @onclick="FlipCard">
+                @if (!isCardFlipped)
+                {
+                    <div class="card-face front">
+                        <div class="fc-hanzi">@CurrentCard.Hanzi</div>
+                        <div class="fc-hint">Chạm vào thẻ để lật xem nghĩa &amp; đối thoại</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card-face back">
+                        <div class="fc-hanzi-sm">@CurrentCard.Hanzi</div>
+                        <div class="fc-pinyin">@CurrentCard.Pinyin</div>
+                        <div class="fc-hanviet">[@CurrentCard.HanViet]</div>
+                        <div class="fc-meaning">@CurrentCard.MeaningVi</div>
+                        <button class="btn btn-sm btn-outline-danger mt-2" @onclick:stopPropagation="true" @onclick="() => SpeakText(CurrentCard.Hanzi)">
+                            <i class="bi bi-volume-up-fill"></i> Nghe phát âm
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <div class="flashcard-nav">
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="PrevCard" disabled="@(currentCardIndex == 0)">
+                    <i class="bi bi-chevron-left"></i> Câu trước
+                </button>
+                <button type="button" class="btn btn-success btn-sm" @onclick="() => ToggleLearned(CurrentCard)">
+                    <i class="bi @(CurrentCard.IsLearned ? "bi-check-circle-fill" : "bi-check-circle")"></i>
+                    @(CurrentCard.IsLearned ? "Đã thuộc" : "Đánh dấu đã thuộc")
+                </button>
+                <button type="button" class="btn btn-danger btn-sm" @onclick="NextCard" disabled="@(currentCardIndex >= filteredItems.Count - 1)">
+                    Câu sau <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+        @* ── FULL CARDS GRID (DEFAULT MODE) ── *@
+        <div class="chengyu-cards-stack">
+            @foreach (var item in filteredItems)
+            {
+                <div class="chengyu-card" id="@item.Id">
+                    
+                    @* Card Top Bar *@
+                    <div class="card-top-bar">
+                        <div class="card-meta">
+                            <span class="level-badge @GetLevelBadgeClass(item.HskLevel)">@item.HskLevel</span>
+                            @if (!string.IsNullOrWhiteSpace(item.CategoryVi))
+                            {
+                                <span class="cat-badge">@item.CategoryVi</span>
+                            }
+                            <span class="hot-badge"><i class="bi bi-star-fill text-warning"></i> @item.PopularityScore% Đề thi</span>
+                        </div>
+
+                        <div class="card-actions">
+                            <button type="button"
+                                    class="action-btn audio-btn"
+                                    @onclick="() => SpeakText(item.Hanzi)"
+                                    title="Nghe phát âm chuẩn">
+                                <i class="bi bi-volume-up-fill"></i>
+                            </button>
+                            <button type="button"
+                                    class="action-btn fav-btn @(item.IsFavorite ? "active" : "")"
+                                    @onclick="() => ToggleFavorite(item)"
+                                    title="Lưu yêu thích">
+                                <i class="bi @(item.IsFavorite ? "bi-star-fill text-warning" : "bi-star")"></i>
+                            </button>
+                            <button type="button"
+                                    class="action-btn-check @(item.IsLearned ? "learned" : "")"
+                                    @onclick="() => ToggleLearned(item)">
+                                <i class="bi @(item.IsLearned ? "bi-check2-circle" : "bi-circle")"></i>
+                                <span>@(item.IsLearned ? "Đã thuộc" : "Đánh dấu đã thuộc")</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    @* Main Heading: Hanzi, Pinyin, HanViet *@
+                    <div class="card-heading-row">
+                        <h2 class="card-hanzi">@item.Hanzi</h2>
+                        <div class="card-phonetic">
+                            <span class="card-pinyin">@item.Pinyin</span>
+                            <span class="card-hanviet">[@item.HanViet]</span>
+                        </div>
+                    </div>
+
+                    @* Split Grid: Left Details & Right WeChat Phone *@
+                    <div class="card-split-grid">
+                        
+                        @* ── LEFT COLUMN: MEANING, STORY, HSK EXAMPLES ── *@
+                        <div class="col-details">
+                            
+                            @* 1. Ý Nghĩa & Điển Tích *@
+                            <div class="section-box meaning-box">
+                                <div class="sec-title text-danger">
+                                    <span class="sec-num bg-danger">1</span> Ý Nghĩa &amp; Ngữ Cảnh Sử Dụng
+                                </div>
+                                <div class="meaning-text">
+                                    👉 <strong>@item.MeaningVi</strong>
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(item.OriginStory))
+                                {
+                                    <div class="origin-story-box">
+                                        <div class="origin-label">
+                                            <i class="bi bi-book-half text-amber-600"></i> Nguồn gốc điển cố lịch sử (典故):
+                                        </div>
+                                        <p class="origin-desc">@item.OriginStory</p>
+                                    </div>
+                                }
+
+                                @if ((item.Synonyms?.Count ?? 0) > 0 || (item.Antonyms?.Count ?? 0) > 0)
+                                {
+                                    <div class="relation-tags-row">
+                                        @if (item.Synonyms != null && item.Synonyms.Count > 0)
+                                        {
+                                            <div class="rel-group">
+                                                <span class="text-success fw-bold">✓ Cận nghĩa:</span>
+                                                <span class="rel-words">@string.Join(", ", item.Synonyms)</span>
+                                            </div>
+                                        }
+                                        @if (item.Antonyms != null && item.Antonyms.Count > 0)
+                                        {
+                                            <div class="rel-group">
+                                                <span class="text-danger fw-bold">✗ Trái nghĩa:</span>
+                                                <span class="rel-words">@string.Join(", ", item.Antonyms)</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+
+                            @* 2. Ví Dụ Bài Học Chuẩn HSK *@
+                            @if (item.HskExamples != null && item.HskExamples.Count > 0)
+                            {
+                                <div class="section-box examples-box">
+                                    <div class="sec-title text-primary">
+                                        <span class="sec-num bg-primary">2</span> Ví Dụ Bài Học Chuẩn Đề Thi HSK
+                                    </div>
+
+                                    <div class="examples-list">
+                                        @foreach (var ex in item.HskExamples)
+                                        {
+                                            <div class="example-item">
+                                                <div class="ex-zh-row">
+                                                    <span class="ex-zh">@ex.Zh</span>
+                                                    <button type="button" class="btn-play-sm" @onclick="() => SpeakText(ex.Zh)" title="Nghe câu này">
+                                                        <i class="bi bi-volume-up-fill"></i>
+                                                    </button>
+                                                </div>
+                                                <div class="ex-pinyin">@ex.Pinyin</div>
+                                                <div class="ex-vi"><strong class="text-dark">Dịch nghĩa:</strong> @ex.Vi</div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                        </div>
+
+                        @* ── RIGHT COLUMN: WECHAT CONVERSATION SIMULATOR CARD ── *@
+                        <div class="col-wechat">
+                            <div class="wechat-header-meta">
+                                <div class="sec-title text-success">
+                                    <span class="sec-num bg-success">3</span> Hội Thoại WeChat Thực Tế
+                                </div>
+                                <span class="badge-wechat-hint">Chạm vào câu để dịch xổ xuống</span>
+                            </div>
+
+                            @if (item.WechatChat != null && item.WechatChat.Messages.Count > 0)
+                            {
+                                <div class="wechat-phone-frame">
+                                    @* Top Bar *@
+                                    <div class="wechat-topbar">
+                                        <div class="wb-back"><i class="bi bi-chevron-left"></i></div>
+                                        <div class="wb-contact">@item.WechatChat.ContactName</div>
+                                        <div class="wb-more">•••</div>
+                                    </div>
+
+                                    @* Body *@
+                                    <div class="wechat-chat-body">
+                                        <div class="wechat-timestamp">@item.WechatChat.Timestamp</div>
+
+                                        @foreach (var msg in item.WechatChat.Messages)
+                                        {
+                                            var isLeft = msg.Sender.Equals("left", StringComparison.OrdinalIgnoreCase);
+                                            var avatar = isLeft ? item.WechatChat.AvatarLeft : item.WechatChat.AvatarRight;
+
+                                            <div class="wechat-msg-row @(isLeft ? "row-left" : "row-right")">
+                                                <img src="@avatar" alt="Avatar" class="msg-avatar" />
+                                                
+                                                <div class="msg-bubble-wrap">
+                                                    @* Clickable Bubble *@
+                                                    <div class="wechat-bubble @(isLeft ? "bubble-white" : "bubble-green") cursor-pointer"
+                                                         @onclick="() => ToggleMessageDropdown(msg)"
+                                                         title="Bấm để xổ xuống bản dịch câu này">
+                                                        <span>@msg.Zh</span>
+                                                    </div>
+
+                                                    @* Dropdown Translation Accordion (BẤM VÀO THÌ XỔ XUỐNG) *@
+                                                    @if (msg.IsTranslationOpen || globalShowTrans)
+                                                    {
+                                                        <div class="wechat-dropdown-trans animate-slide-down">
+                                                            @if (!string.IsNullOrWhiteSpace(msg.Pinyin))
+                                                            {
+                                                                <div class="drop-pinyin">@msg.Pinyin</div>
+                                                            }
+                                                            @if (!string.IsNullOrWhiteSpace(msg.Vi))
+                                                            {
+                                                                <div class="drop-vi">@msg.Vi</div>
+                                                            }
+                                                            <div class="drop-actions">
+                                                                <button type="button" class="btn-drop-speak" @onclick:stopPropagation="true" @onclick="() => SpeakText(msg.Zh)">
+                                                                    <i class="bi bi-volume-up-fill"></i> Nghe câu này
+                                                                </button>
+                                                                <span class="drop-hint">(Bấm vào bong bóng để thu gọn)</span>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    @* Fake WeChat Bottom Input Bar *@
+                                    <div class="wechat-bottom-input-bar">
+                                        <i class="bi bi-soundwave text-muted fs-5"></i>
+                                        <div class="fake-input-box"></div>
+                                        <i class="bi bi-emoji-smile text-muted fs-5"></i>
+                                        <i class="bi bi-plus-circle text-muted fs-5"></i>
+                                    </div>
+
+                                    @* Audio & Tool buttons *@
+                                    <div class="wechat-card-footer">
+                                        <button type="button" class="btn-chat-tool" @onclick="() => SpeakWechatChat(item.WechatChat)">
+                                            <i class="bi bi-play-circle-fill text-success"></i> Nghe toàn bộ hội thoại
+                                        </button>
+                                        <button type="button" class="btn-chat-tool" @onclick="() => ToggleCardTranslations(item)">
+                                            <i class="bi bi-translate text-primary"></i> 
+                                            @(IsAnyTransOpen(item) ? "Thu gọn dịch" : "Xổ tất cả dịch")
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                    </div>
+
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<ChengyuItem> allItems = new();
+    private List<ChengyuItem> filteredItems = new();
+    private bool isLoading = true;
+
+    private string searchQuery = "";
+    private string selectedLevel = "all";
+    private bool hideLearned = false;
+    private bool globalShowTrans = false;
+
+    // Stats
+    private int learnedCount = 0;
+    private int learnedPercent = 0;
+    private int hsk4Count = 0;
+    private int hsk5Count = 0;
+    private int hsk6Count = 0;
+
+    // Flashcard Mode
+    private bool isFlashcardMode = false;
+    private int currentCardIndex = 0;
+    private bool isCardFlipped = false;
+    private ChengyuItem CurrentCard => filteredItems.Count > currentCardIndex ? filteredItems[currentCardIndex] : new ChengyuItem();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        try
+        {
+            allItems = await ChengyuService.GetAllIdiomsAsync();
+            CalculateStats();
+            ApplyFilter();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void CalculateStats()
+    {
+        learnedCount = allItems.Count(x => x.IsLearned);
+        learnedPercent = allItems.Count > 0 ? (int)Math.Round((double)learnedCount * 100 / allItems.Count) : 0;
+        hsk4Count = allItems.Count(x => x.HskLevel.Contains("4"));
+        hsk5Count = allItems.Count(x => x.HskLevel.Contains("5"));
+        hsk6Count = allItems.Count(x => x.HskLevel.Contains("6"));
+    }
+
+    private void ApplyFilter()
+    {
+        var query = allItems.AsEnumerable();
+
+        if (selectedLevel != "all")
+        {
+            query = query.Where(x => x.HskLevel.Equals(selectedLevel, StringComparison.OrdinalIgnoreCase) ||
+                                     x.HskLevel.Replace(" ", "").Equals(selectedLevel.Replace(" ", ""), StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (hideLearned)
+        {
+            query = query.Where(x => !x.IsLearned);
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            var s = searchQuery.Trim().ToLowerInvariant();
+            query = query.Where(x =>
+                x.Hanzi.ToLowerInvariant().Contains(s) ||
+                x.Pinyin.ToLowerInvariant().Contains(s) ||
+                x.HanViet.ToLowerInvariant().Contains(s) ||
+                x.MeaningVi.ToLowerInvariant().Contains(s) ||
+                (x.OriginStory != null && x.OriginStory.ToLowerInvariant().Contains(s)) ||
+                (x.WechatChat != null && x.WechatChat.Messages.Any(m => m.Zh.ToLowerInvariant().Contains(s) || m.Vi.ToLowerInvariant().Contains(s))));
+        }
+
+        filteredItems = query.ToList();
+        if (currentCardIndex >= filteredItems.Count) currentCardIndex = 0;
+    }
+
+    private void ChangeLevel(string lvl)
+    {
+        selectedLevel = lvl;
+        ApplyFilter();
+    }
+
+    private void ClearSearch()
+    {
+        searchQuery = "";
+        ApplyFilter();
+    }
+
+    private void ResetFilter()
+    {
+        searchQuery = "";
+        selectedLevel = "all";
+        hideLearned = false;
+        ApplyFilter();
+    }
+
+    private async Task ToggleLearned(ChengyuItem item)
+    {
+        await ChengyuService.ToggleLearnedAsync(item.Id);
+        item.IsLearned = !item.IsLearned;
+        CalculateStats();
+        if (hideLearned) ApplyFilter();
+    }
+
+    private async Task ToggleFavorite(ChengyuItem item)
+    {
+        await ChengyuService.ToggleFavoriteAsync(item.Id);
+        item.IsFavorite = !item.IsFavorite;
+    }
+
+    // Toggle dropdown for single message in WeChat
+    private void ToggleMessageDropdown(WechatMessageItem msg)
+    {
+        msg.IsTranslationOpen = !msg.IsTranslationOpen;
+    }
+
+    // Toggle all messages in a specific card
+    private void ToggleCardTranslations(ChengyuItem item)
+    {
+        if (item.WechatChat == null) return;
+        var anyOpen = item.WechatChat.Messages.Any(m => m.IsTranslationOpen);
+        foreach (var m in item.WechatChat.Messages)
+        {
+            m.IsTranslationOpen = !anyOpen;
+        }
+    }
+
+    private bool IsAnyTransOpen(ChengyuItem item)
+    {
+        return item.WechatChat?.Messages.Any(m => m.IsTranslationOpen) ?? false;
+    }
+
+    private void ToggleAllGlobalTranslations()
+    {
+        globalShowTrans = !globalShowTrans;
+        foreach (var item in allItems)
+        {
+            if (item.WechatChat != null)
+            {
+                foreach (var m in item.WechatChat.Messages)
+                {
+                    m.IsTranslationOpen = globalShowTrans;
+                }
+            }
+        }
+    }
+
+    // Flashcard functions
+    private void FlipCard() => isCardFlipped = !isCardFlipped;
+    private void PrevCard()
+    {
+        if (currentCardIndex > 0)
+        {
+            currentCardIndex--;
+            isCardFlipped = false;
+        }
+    }
+    private void NextCard()
+    {
+        if (currentCardIndex < filteredItems.Count - 1)
+        {
+            currentCardIndex++;
+            isCardFlipped = false;
+        }
+    }
+
+    // Speech synthesis
+    private async Task SpeakText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        try
+        {
+            var jsCode = $@"
+                if ('speechSynthesis' in window) {{
+                    window.speechSynthesis.cancel();
+                    var u = new SpeechSynthesisUtterance({System.Text.Json.JsonSerializer.Serialize(text)});
+                    u.lang = 'zh-CN';
+                    u.rate = 0.88;
+                    window.speechSynthesis.speak(u);
+                }}";
+            await JS.InvokeVoidAsync("eval", jsCode);
+        }
+        catch { }
+    }
+
+    private async Task SpeakWechatChat(WechatChatModel chat)
+    {
+        if (chat == null || chat.Messages.Count == 0) return;
+        try
+        {
+            var lines = chat.Messages.Select(m => m.Zh).ToList();
+            var json = System.Text.Json.JsonSerializer.Serialize(lines);
+            var jsCode = $@"
+                if ('speechSynthesis' in window) {{
+                    window.speechSynthesis.cancel();
+                    var lines = {json};
+                    var i = 0;
+                    function playNext() {{
+                        if (i < lines.length) {{
+                            var u = new SpeechSynthesisUtterance(lines[i]);
+                            u.lang = 'zh-CN';
+                            u.rate = 0.92;
+                            u.onend = function() {{
+                                i++;
+                                setTimeout(playNext, 500);
+                            }};
+                            window.speechSynthesis.speak(u);
+                        }}
+                    }}
+                    playNext();
+                }}";
+            await JS.InvokeVoidAsync("eval", jsCode);
+        }
+        catch { }
+    }
+
+    private string GetLevelBadgeClass(string lvl)
+    {
+        if (lvl.Contains("4")) return "badge-hsk4";
+        if (lvl.Contains("5")) return "badge-hsk5";
+        if (lvl.Contains("6")) return "badge-hsk6";
+        return "badge-hsk-other";
+    }
+}

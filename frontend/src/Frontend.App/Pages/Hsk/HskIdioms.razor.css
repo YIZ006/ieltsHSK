@@ -1,0 +1,956 @@
+/* Container */
+.chengyu-page-container {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 3rem 1rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+}
+
+/* Hero Banner */
+.chengyu-hero {
+    background: linear-gradient(135deg, #dc2626 0%, #e11d48 50%, #d97706 100%);
+    border-radius: 1.5rem;
+    padding: 2.2rem 2rem;
+    color: #ffffff;
+    box-shadow: 0 10px 25px -5px rgba(220, 38, 38, 0.25);
+    margin-bottom: 2rem;
+}
+
+.hero-top-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.badge-tag {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(4px);
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-sub {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+}
+
+.hero-title {
+    font-size: 2.2rem;
+    font-weight: 900;
+    margin: 0 0 0.5rem 0;
+    line-height: 1.2;
+}
+
+.hero-desc {
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.92);
+    max-width: 800px;
+    margin: 0 0 1.5rem 0;
+    line-height: 1.5;
+}
+
+.hero-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.stat-card {
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(4px);
+    border-radius: 1rem;
+    padding: 0.75rem 1rem;
+    text-align: center;
+}
+
+.stat-num {
+    font-size: 1.5rem;
+    font-weight: 900;
+    line-height: 1.2;
+}
+
+.stat-lbl {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.85);
+    margin-top: 0.25rem;
+}
+
+/* Toolbar */
+.chengyu-toolbar {
+    background: var(--ig-card-bg, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 1.25rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.search-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.search-input-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 280px;
+}
+
+.search-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 0.95rem;
+}
+
+.chengyu-search-input {
+    width: 100%;
+    padding: 0.65rem 2.5rem 0.65rem 2.5rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--ig-border, #cbd5e1);
+    background: var(--ig-bg-input, #f8fafc);
+    color: var(--ig-text-main, #0f172a);
+    font-size: 0.85rem;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.chengyu-search-input:focus {
+    border-color: #ef4444;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+.btn-clear-search {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+}
+
+.view-mode-toggle {
+    display: flex;
+    background: var(--ig-bg-muted, #f1f5f9);
+    padding: 0.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.mode-btn {
+    padding: 0.4rem 0.85rem;
+    border: none;
+    background: transparent;
+    border-radius: 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: all 0.2s;
+}
+
+.mode-btn.active {
+    background: #ef4444;
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.25);
+}
+
+.filter-pills-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--ig-border, #f1f5f9);
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.filter-lbl {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #64748b;
+    margin-right: 0.25rem;
+}
+
+.f-pill {
+    padding: 0.3rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-card-bg, #ffffff);
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.f-pill:hover {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+}
+
+.f-pill.active {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+}
+
+.filter-toggles {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.toggle-cb {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+}
+
+.toggle-btn-sub {
+    background: transparent;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #2563eb;
+    cursor: pointer;
+}
+
+.toggle-btn-sub:hover {
+    background: #eff6ff;
+}
+
+/* Cards Stack */
+.chengyu-cards-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.chengyu-card {
+    background: var(--ig-card-bg, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 1.5rem;
+    padding: 1.75rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+    transition: all 0.25s;
+}
+
+.chengyu-card:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+/* Card Top Bar */
+.card-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--ig-border, #f1f5f9);
+}
+
+.card-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.level-badge {
+    padding: 0.2rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #ffffff;
+}
+.badge-hsk4 { background: #2563eb; }
+.badge-hsk5 { background: #dc2626; }
+.badge-hsk6 { background: #7c3aed; }
+.badge-hsk-other { background: #475569; }
+
+.cat-badge {
+    padding: 0.2rem 0.6rem;
+    border-radius: 0.4rem;
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fee2e2;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.hot-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #d97706;
+    background: #fffbeb;
+    border: 1px solid #fef3c7;
+    padding: 0.2rem 0.6rem;
+    border-radius: 0.4rem;
+}
+
+.card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.action-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 0.6rem;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-card-bg, #ffffff);
+    color: #475569;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.action-btn.audio-btn:hover {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+}
+
+.action-btn.fav-btn.active {
+    color: #d97706;
+    border-color: #fde68a;
+    background: #fffbeb;
+}
+
+.action-btn-check {
+    padding: 0.4rem 0.85rem;
+    border-radius: 0.6rem;
+    border: 1px solid #a7f3d0;
+    background: #ecfdf5;
+    color: #047857;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: all 0.2s;
+}
+
+.action-btn-check.learned {
+    background: #10b981;
+    color: #ffffff;
+    border-color: #10b981;
+}
+
+/* Card Heading Row */
+.card-heading-row {
+    margin: 1.25rem 0 1.5rem 0;
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.card-hanzi {
+    font-size: 3rem;
+    font-weight: 900;
+    color: var(--ig-text-main, #0f172a);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", serif;
+    margin: 0;
+    letter-spacing: 2px;
+}
+
+.card-phonetic {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.card-pinyin {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #dc2626;
+    font-family: -apple-system, sans-serif;
+}
+
+.card-hanviet {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #64748b;
+    background: var(--ig-bg-muted, #f1f5f9);
+    padding: 0.15rem 0.5rem;
+    border-radius: 0.4rem;
+}
+
+/* Split Grid */
+.card-split-grid {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    gap: 1.75rem;
+}
+
+@media (max-width: 991px) {
+    .card-split-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Details Column */
+.col-details {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.section-box {
+    border-radius: 1.15rem;
+    padding: 1.25rem;
+    border: 1px solid var(--ig-border, #e2e8f0);
+}
+
+.meaning-box {
+    background: linear-gradient(135deg, rgba(254, 242, 242, 0.5) 0%, rgba(255, 255, 255, 0.8) 50%, rgba(254, 243, 199, 0.4) 100%);
+    border-color: #fee2e2;
+}
+
+.sec-title {
+    font-size: 0.85rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.sec-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    color: #ffffff;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+}
+
+.meaning-text {
+    font-size: 0.95rem;
+    color: var(--ig-text-main, #1e293b);
+    line-height: 1.6;
+    margin-bottom: 0.75rem;
+}
+
+.origin-story-box {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+.origin-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 0.35rem;
+}
+
+.origin-desc {
+    font-size: 0.82rem;
+    color: #475569;
+    font-style: italic;
+    line-height: 1.55;
+    background: rgba(254, 243, 199, 0.35);
+    padding: 0.65rem 0.85rem;
+    border-radius: 0.6rem;
+    margin: 0;
+}
+
+.relation-tags-row {
+    margin-top: 0.75rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid rgba(239, 68, 68, 0.15);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.78rem;
+}
+
+.rel-words {
+    font-weight: 600;
+    color: #1e293b;
+    margin-left: 0.25rem;
+}
+
+/* Examples Box */
+.examples-box {
+    background: var(--ig-card-bg, #ffffff);
+}
+
+.examples-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.example-item {
+    background: var(--ig-bg-muted, #f8fafc);
+    border: 1px solid var(--ig-border, #e2e8f0);
+    border-radius: 0.75rem;
+    padding: 0.85rem;
+}
+
+.ex-zh-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.ex-zh {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--ig-text-main, #0f172a);
+    line-height: 1.45;
+}
+
+.btn-play-sm {
+    width: 26px;
+    height: 26px;
+    border-radius: 0.4rem;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #2563eb;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.ex-pinyin {
+    font-size: 0.78rem;
+    color: #2563eb;
+    font-weight: 600;
+    margin: 0.2rem 0;
+}
+
+.ex-vi {
+    font-size: 0.8rem;
+    color: #475569;
+    line-height: 1.4;
+}
+
+/* WeChat Column */
+.col-wechat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.wechat-header-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.badge-wechat-hint {
+    font-size: 0.72rem;
+    background: #dcfce7;
+    color: #15803d;
+    font-weight: 700;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+}
+
+/* WeChat Phone Frame (100% Authentic) */
+.wechat-phone-frame {
+    background-color: #ededed;
+    border: 1.5px solid #d4d4d8;
+    border-radius: 1.25rem;
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+}
+
+.wechat-topbar {
+    height: 46px;
+    background-color: #ededed;
+    border-bottom: 0.5px solid #dedede;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    user-select: none;
+    position: relative;
+}
+
+.wb-back {
+    font-size: 1.1rem;
+    color: #1e293b;
+    cursor: pointer;
+}
+
+.wb-contact {
+    font-size: 16px;
+    font-weight: 600;
+    color: #000000;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.wb-more {
+    font-size: 1.2rem;
+    color: #1e293b;
+    letter-spacing: 1px;
+}
+
+.wechat-chat-body {
+    padding: 14px 12px;
+    background-color: #ededed;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 380px;
+}
+
+.wechat-timestamp {
+    text-align: center;
+    font-size: 11px;
+    color: #b2b2b2;
+    font-weight: 400;
+}
+
+.wechat-msg-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+}
+
+.wechat-msg-row.row-right {
+    justify-content: flex-end;
+}
+
+.msg-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.msg-bubble-wrap {
+    max-width: 255px;
+    display: flex;
+    flex-direction: column;
+}
+
+.row-right .msg-bubble-wrap {
+    align-items: flex-end;
+}
+
+/* WeChat Bubble with Tail */
+.wechat-bubble {
+    position: relative;
+    padding: 8px 11px;
+    border-radius: 4px;
+    font-size: 15px;
+    line-height: 1.45;
+    color: #000000;
+    word-break: break-word;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+    transition: transform 0.1s, box-shadow 0.1s;
+    user-select: none;
+}
+
+.wechat-bubble:hover {
+    transform: scale(1.01);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.wechat-bubble.bubble-white {
+    background-color: #ffffff;
+}
+
+.wechat-bubble.bubble-white::before {
+    content: "";
+    position: absolute;
+    top: 12px;
+    left: -5px;
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-right: 5px solid #ffffff;
+}
+
+.wechat-bubble.bubble-green {
+    background-color: #95ec69;
+}
+
+.wechat-bubble.bubble-green::before {
+    content: "";
+    position: absolute;
+    top: 12px;
+    right: -5px;
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 5px solid #95ec69;
+}
+
+/* Dropdown Translation Accordion (BẤM VÀO THÌ XỔ XUỐNG) */
+.wechat-dropdown-trans {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 7px 9px;
+    margin-top: 6px;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08);
+    font-size: 11px;
+    text-align: left;
+    width: 100%;
+}
+
+.animate-slide-down {
+    animation: slideDown 0.2s ease-out forwards;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.drop-pinyin {
+    color: #2563eb;
+    font-weight: 700;
+    font-size: 11.5px;
+    margin-bottom: 2px;
+}
+
+.drop-vi {
+    color: #334155;
+    font-size: 11px;
+    font-style: italic;
+    line-height: 1.35;
+    margin-bottom: 4px;
+}
+
+.drop-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-top: 4px;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.btn-drop-speak {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.drop-hint {
+    font-size: 9.5px;
+    color: #94a3b8;
+}
+
+/* Fake WeChat Bottom Bar */
+.wechat-bottom-input-bar {
+    height: 48px;
+    background-color: #f7f7f7;
+    border-top: 0.5px solid #dedede;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    gap: 8px;
+}
+
+.fake-input-box {
+    flex: 1;
+    height: 34px;
+    background: #ffffff;
+    border: 0.5px solid #d9d9d9;
+    border-radius: 4px;
+}
+
+.wechat-card-footer {
+    background: #ffffff;
+    padding: 8px 12px;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.btn-chat-tool {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #334155;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s;
+}
+
+.btn-chat-tool:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+/* Flashcard Mode */
+.flashcard-container {
+    max-width: 600px;
+    margin: 2rem auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.flashcard-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    color: #64748b;
+}
+
+.flashcard-box {
+    width: 100%;
+    min-height: 280px;
+    background: #ffffff;
+    border: 2px solid #ef4444;
+    border-radius: 1.5rem;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.flashcard-box:hover {
+    transform: scale(1.02);
+}
+
+.fc-hanzi {
+    font-size: 3.5rem;
+    font-weight: 900;
+    font-family: serif;
+    color: #0f172a;
+    margin-bottom: 1rem;
+}
+
+.fc-hint {
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+
+.fc-hanzi-sm {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.fc-pinyin {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #ef4444;
+    margin: 0.25rem 0;
+}
+
+.fc-hanviet {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 0.75rem;
+}
+
+.fc-meaning {
+    font-size: 1rem;
+    color: #1e293b;
+    line-height: 1.5;
+}
+
+.flashcard-nav {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Empty / Loading */
+.chengyu-loading, .chengyu-empty {
+    text-align: center;
+    padding: 4rem 1rem;
+    color: #64748b;
+}
+.empty-icon {
+    font-size: 3rem;
+    color: #cbd5e1;
+    margin-bottom: 1rem;
+}

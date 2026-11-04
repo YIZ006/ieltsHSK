@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 @inject IJSRuntime JSRuntime
 @inject NavigationManager NavManager
 @implements IAsyncDisposable
@@ -15,6 +15,10 @@
     <div class="header">
         <h1 class="main-title">Master Your Languages</h1>
         <p class="subtitle">Your ultimate platform for IELTS and HSK preparation. Choose your path and start learning today.</p>
+        <div class="hero-trust-badge">
+            <i class="bi bi-shield-check text-success me-1"></i>
+            <span>Không cần thẻ tín dụng • Kiểm tra trình độ 5 phút • Miễn phí trọn đời</span>
+        </div>
     </div>
 
     <!-- 3D Perspective Stage -->
@@ -132,6 +136,13 @@
                     <div class="stat-desc">Phương pháp lặp lại ngắt quãng SRS tối ưu phản xạ</div>
                 </div>
             </div>
+        </div>
+    </section>
+
+    <!-- 1.5 Quick Interactive Mini Quiz (60s Friction-Free Diagnostic) -->
+    <section id="homeMiniQuizSection" class="home-section miniquiz-section">
+        <div class="section-container">
+            <HomeMiniQuizWidget />
         </div>
     </section>
 
@@ -358,6 +369,10 @@
                     <h2 class="cta-title">Sẵn Sàng Bứt Phá Điểm Số Cùng ieltsHSK?</h2>
                     <p class="cta-subtitle">Tham gia ngay hôm nay để trải nghiệm hệ sinh thái luyện thi thông minh hoàn toàn miễn phí.</p>
                     <div class="cta-actions">
+                        <div class="cta-trust-note">
+                            <i class="bi bi-shield-check text-success me-1"></i>
+                            <span>Không cần thẻ tín dụng • Kiểm tra trình độ 5 phút • Miễn phí trọn đời</span>
+                        </div>
                         <a href="/ielts/dashboard" class="cta-btn btn-ielts-cta">
                             <i class="bi bi-patch-check-fill me-2"></i> Khám phá IELTS
                         </a>

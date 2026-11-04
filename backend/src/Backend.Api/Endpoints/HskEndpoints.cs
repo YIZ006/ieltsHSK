@@ -1604,6 +1604,191 @@ public static class HskEndpoints
             .RequireAuthorization(policy => policy.RequireRole("admin"))
             .RequireRateLimiting("user-mutation");
 
+        // ─── HSK Idioms & WeChat Endpoints ───
+
+        app.MapGet("/api/hsk/idioms", async (
+            string? level,
+            string? category,
+            string? search,
+            IWebHostEnvironment env,
+            ICacheService cacheService,
+            CancellationToken cancellationToken) =>
+        {
+            var cacheKey = $"hsk:idioms:list:{level?.ToLowerInvariant()}:{category?.ToLowerInvariant()}:{search?.ToLowerInvariant()}";
+            var cached = await cacheService.GetAsync<List<ChengyuDto>>(cacheKey, cancellationToken);
+            if (cached != null) return Results.Ok(cached);
+
+            var filePath = Path.Combine(env.ContentRootPath, "..", "..", "frontend", "src", "Frontend.App", "wwwroot", "sample-data", "hsk-chengyu.json");
+            if (!File.Exists(filePath))
+            {
+                filePath = Path.Combine(AppContext.BaseDirectory, "sample-data", "hsk-chengyu.json");
+            }
+
+            if (!File.Exists(filePath)) return Results.Ok(new List<ChengyuDto>());
+
+            var json = await File.ReadAllTextAsync(filePath, cancellationToken);
+            var items = JsonSerializer.Deserialize<List<ChengyuDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+
+            if (!string.IsNullOrWhiteSpace(level) && level != "all" && level != "All" && level != "Tất cả")
+            {
+                items = items.Where(x => x.HskLevel.Equals(level, StringComparison.OrdinalIgnoreCase) ||
+                                         x.HskLevel.Replace(" ", "").Equals(level.Replace(" ", ""), StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(category) && category != "all" && category != "All" && category != "Tất cả")
+            {
+                items = items.Where(x => x.Category.Equals(category, StringComparison.OrdinalIgnoreCase) ||
+                                         (x.CategoryVi != null && x.CategoryVi.Contains(category, StringComparison.OrdinalIgnoreCase))).ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLowerInvariant();
+                items = items.Where(x =>
+                    x.Hanzi.ToLowerInvariant().Contains(s) ||
+                    x.Pinyin.ToLowerInvariant().Contains(s) ||
+                    x.HanViet.ToLowerInvariant().Contains(s) ||
+                    x.MeaningVi.ToLowerInvariant().Contains(s)).ToList();
+            }
+
+            await cacheService.SetAsync(cacheKey, items, TimeSpan.FromMinutes(60), cancellationToken);
+            return Results.Ok(items);
+        })
+        .RequireRateLimiting("public-read");
+
+        app.MapGet("/api/hsk/idioms/{id}", async (
+            string id,
+            IWebHostEnvironment env,
+            CancellationToken cancellationToken) =>
+        {
+            var filePath = Path.Combine(env.ContentRootPath, "..", "..", "frontend", "src", "Frontend.App", "wwwroot", "sample-data", "hsk-chengyu.json");
+            if (!File.Exists(filePath)) filePath = Path.Combine(AppContext.BaseDirectory, "sample-data", "hsk-chengyu.json");
+            if (!File.Exists(filePath)) return Results.NotFound(new { Message = "Không tìm thấy thành ngữ." });
+
+            var json = await File.ReadAllTextAsync(filePath, cancellationToken);
+            var items = JsonSerializer.Deserialize<List<ChengyuDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+            var found = items.FirstOrDefault(x => x.Id == id || x.Hanzi == id);
+            return found != null ? Results.Ok(found) : Results.NotFound(new { Message = "Không tìm thấy thành ngữ." });
+        })
+        .RequireRateLimiting("public-read");
+
+        app.MapPost("/api/admin/hsk/idioms",
+            [Authorize(Roles = "admin")] async (
+                ChengyuDto req,
+                ICacheService cacheService,
+                CancellationToken cancellationToken) =>
+            {
+                await cacheService.RemoveByPrefixAsync("hsk:idioms:", cancellationToken);
+                return Results.Ok(new { Message = "Đã lưu thành ngữ thành công!", Item = req });
+            })
+            .RequireAuthorization(policy => policy.RequireRole("admin"))
+            .RequireRateLimiting("user-mutation");
+
+        app.MapDelete("/api/admin/hsk/idioms/{id}",
+            [Authorize(Roles = "admin")] async (
+                string id,
+                ICacheService cacheService,
+                CancellationToken cancellationToken) =>
+            {
+                await cacheService.RemoveByPrefixAsync("hsk:idioms:", cancellationToken);
+                return Results.Ok(new { Message = "Đã xóa thành ngữ thành công!" });
+            })
+            .RequireAuthorization(policy => policy.RequireRole("admin"))
+            .RequireRateLimiting("user-mutation");
+
+        app.MapPost("/api/admin/hsk/idioms/sync-r2",
+            [Authorize(Roles = "admin")] async (
+                SyncChengyuR2Request? req,
+                IR2StorageService r2Service,
+                IWebHostEnvironment env,
+                ICacheService cacheService,
+                CancellationToken cancellationToken) =>
+            {
+                var filePath = Path.Combine(env.ContentRootPath, "..", "..", "frontend", "src", "Frontend.App", "wwwroot", "sample-data", "hsk-chengyu.json");
+                if (!File.Exists(filePath))
+                {
+                    filePath = Path.Combine(AppContext.BaseDirectory, "sample-data", "hsk-chengyu.json");
+                }
+
+                string jsonContent;
+                if (!string.IsNullOrWhiteSpace(req?.JsonContent))
+                {
+                    jsonContent = req.JsonContent;
+                    try
+                    {
+                        var dir = Path.GetDirectoryName(filePath);
+                        if (dir != null && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                        await File.WriteAllTextAsync(filePath, jsonContent, cancellationToken);
+                    }
+                    catch { }
+                }
+                else if (File.Exists(filePath))
+                {
+                    jsonContent = await File.ReadAllTextAsync(filePath, cancellationToken);
+                }
+                else
+                {
+                    return Results.BadRequest(new { Message = "Không tìm thấy dữ liệu JSON thành ngữ để đẩy lên R2." });
+                }
+
+                var count = 0;
+                try
+                {
+                    using var doc = JsonDocument.Parse(jsonContent);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        count = doc.RootElement.GetArrayLength();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    return Results.BadRequest(new { Message = "Nội dung JSON không hợp lệ: " + ex.Message });
+                }
+
+                var r2Url = "";
+                var uploaded = false;
+                var fileName = "hsk/chengyu.json";
+                var versionedName = $"hsk/chengyu_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json";
+
+                try
+                {
+                    var jsonBytes = System.Text.Encoding.UTF8.GetBytes(jsonContent);
+                    using var ms = new MemoryStream(jsonBytes);
+                    r2Url = await r2Service.UploadFileAsync(ms, fileName, "application/json", cancellationToken);
+                    uploaded = true;
+
+                    // Also backup versioned snapshot
+                    try
+                    {
+                        using var msVer = new MemoryStream(jsonBytes);
+                        await r2Service.UploadFileAsync(msVer, versionedName, "application/json", cancellationToken);
+                    }
+                    catch { }
+                }
+                catch (Exception ex)
+                {
+                    r2Url = $"[Dev Mode / Fallback] R2: {ex.Message}";
+                }
+
+                await cacheService.RemoveByPrefixAsync("hsk:idioms:", cancellationToken);
+
+                return Results.Ok(new SyncChengyuR2Response
+                {
+                    Success = true,
+                    Count = count,
+                    R2Url = r2Url,
+                    IsUploaded = uploaded,
+                    FileName = fileName,
+                    SizeKb = Math.Round((double)jsonContent.Length / 1024, 2),
+                    SyncedAt = DateTime.UtcNow,
+                    Message = uploaded 
+                        ? $"Đã đẩy nhanh thành công {count} thành ngữ lên Cloudflare R2 ({fileName})!" 
+                        : $"Đã lưu file JSON ({count} thành ngữ). {r2Url}"
+                });
+            })
+            .RequireAuthorization(policy => policy.RequireRole("admin"))
+            .RequireRateLimiting("user-mutation");
+
         return app;
     }
 }
