@@ -1,8 +1,6 @@
 @page "/hsk/thanh-ngu"
 @page "/hsk/idioms"
 @page "/hsk/chengyu"
-@page "/hsk/demo-giong"
-@page "/hsk/voice-demo"
 @layout Frontend.App.Layout.HskLayout
 @using Frontend.App.Services
 @inject HskChengyuService ChengyuService
@@ -66,11 +64,6 @@
                         class="mode-btn @(viewMode == "flashcard" ? "active" : "")"
                         @onclick='() => SwitchViewMode("flashcard")'>
                     <i class="bi bi-card-checklist"></i> Luyện Flashcard
-                </button>
-                <button type="button"
-                        class="mode-btn mode-btn-demo @(viewMode == "voicedemo" ? "active" : "")"
-                        @onclick='() => SwitchViewMode("voicedemo")'>
-                    <i class="bi bi-soundwave"></i> Phòng Demo 10 Giọng Nữ (Nghe &amp; Chọn)
                 </button>
             </div>
         </div>
@@ -528,144 +521,6 @@
                 }
             </div>
 
-        </div>
-    }
-    else if (viewMode == "voicedemo")
-    {
-        @* ══════════════════════════════════════════════════════════════════
-           PHÒNG DEMO 10 GIỌNG NỮ THANH NIÊN (NGHE THỬ & CHỌN GIỌNG ƯNG Ý)
-           ══════════════════════════════════════════════════════════════════ *@
-        <div class="voice-demo-studio">
-            <div class="vd-top-banner">
-                <div class="vd-banner-left">
-                    <div class="vd-badge-row">
-                        <span class="vd-pill-hot"><i class="bi bi-Broadcast"></i> PHÒNG THỬ ÂM THANH CHUẨN (ĐÃ KHỬ LỖI RÈ &amp; NGẮT QUÃNG)</span>
-                    </div>
-                    <h2 class="vd-title">10 Cấu Hình Giọng Nữ Tiếng Trung — Nghe Thử &amp; Chọn Cặp Giọng Ưng Ý</h2>
-                    <p class="vd-subtitle">
-                        Mình đã loại bỏ hoàn toàn giọng Quảng Đông (zh-HK) gây loạn âm và sửa lỗi ngắt quãng của Chrome. Bạn hãy bấm <strong>Nghe thử</strong> từng giọng từ <strong>#01 đến #10</strong> bên dưới, bấm <strong>Chọn cho Bạn Trái / Bạn Phải</strong> (hoặc nhắn cho mình số thứ tự giọng bạn thích nhất)!
-                    </p>
-                </div>
-
-                <div class="vd-banner-actions">
-                    <button type="button" class="btn-vd-dialogue" @onclick="TestSelectedPairDialogue">
-                        <i class="bi bi-play-circle-fill"></i> Nghe 2 Giọng Đã Chọn Đối Thoại
-                    </button>
-                    <button type="button" class="btn-vd-apply" @onclick='() => SwitchViewMode("studio")'>
-                        <i class="bi bi-check2-circle"></i> Lưu &amp; Quay Lại Phòng Chat WeChat
-                    </button>
-                </div>
-            </div>
-
-            @* Current Selected Pair Preview Box *@
-            <div class="vd-selected-pair-bar">
-                @{
-                    var leftPreset = GetVoicePreset(leftVoiceId);
-                    var rightPreset = GetVoicePreset(rightVoiceId);
-                }
-                <div class="vd-pair-card pair-left">
-                    <div class="vd-pair-avatar-wrap">
-                        <img src="/images/avatar-wet-cat.jpg" alt="Left" class="vd-pair-avatar" />
-                        <span class="vd-side-tag tag-left">Bạn Trái (小雨)</span>
-                    </div>
-                    <div class="vd-pair-info">
-                        <div class="vd-pair-label">GIỌNG ĐANG CHỌN CHO NGƯỜI BÊN TRÁI:</div>
-                        <div class="vd-pair-name">@leftPreset.Name</div>
-                        <div class="vd-pair-meta">@leftPreset.TechSpec</div>
-                    </div>
-                    <button type="button" class="btn-vd-test-side" @onclick="() => SpeakWithPresetId(leftVoiceId, demoSampleSentence1)">
-                        <i class="bi bi-volume-up-fill"></i> Nghe Bạn Trái
-                    </button>
-                </div>
-
-                <div class="vd-pair-card pair-right">
-                    <div class="vd-pair-avatar-wrap">
-                        <img src="/images/avatar-crying-cat.jpg" alt="Right" class="vd-pair-avatar" />
-                        <span class="vd-side-tag tag-right">Bạn Phải (阿明)</span>
-                    </div>
-                    <div class="vd-pair-info">
-                        <div class="vd-pair-label">GIỌNG ĐANG CHỌN CHO NGƯỜI BÊN PHẢI (MÈO ÁO ĐỎ):</div>
-                        <div class="vd-pair-name">@rightPreset.Name</div>
-                        <div class="vd-pair-meta">@rightPreset.TechSpec</div>
-                    </div>
-                    <button type="button" class="btn-vd-test-side btn-rose" @onclick="() => SpeakWithPresetId(rightVoiceId, demoSampleSentence2)">
-                        <i class="bi bi-volume-up-fill"></i> Nghe Bạn Phải
-                    </button>
-                </div>
-            </div>
-
-            @* Custom Sample Sentence Bar *@
-            <div class="vd-custom-input-bar">
-                <span class="vd-input-lbl"><i class="bi bi-chat-square-text-fill text-danger"></i> Câu mẫu thử giọng:</span>
-                <input type="text" class="vd-custom-input" @bind="demoCustomText" placeholder="Nhập câu tiếng Trung bất kỳ để thử..." />
-                <button type="button" class="btn-vd-sample-chip" @onclick='() => demoCustomText = "听说你们部门下个月取消双休，这简直不可思议！"'>
-                    Mẫu 1 (Ngạc nhiên)
-                </button>
-                <button type="button" class="btn-vd-sample-chip" @onclick='() => demoCustomText = "别听他们胡说八道！经理刚开会说今年福利增加呢。"'>
-                    Mẫu 2 (Phản bác)
-                </button>
-                <button type="button" class="btn-vd-sample-chip" @onclick='() => demoCustomText = "只要我们一心一意，水滴石穿，就一定能心想事成！"'>
-                    Mẫu 3 (Thành ngữ)
-                </button>
-            </div>
-
-            @* 10 Female Voices Grid *@
-            <div class="vd-grid-10">
-                @foreach (var vp in femaleVoicePresets)
-                {
-                    var isLeftSel = (vp.Id == leftVoiceId);
-                    var isRightSel = (vp.Id == rightVoiceId);
-                    var isTestingNow = (activeTestingPresetId == vp.Id);
-
-                    <div class="vd-voice-card @(isLeftSel || isRightSel ? "vd-card-selected" : "") @(isTestingNow ? "vd-card-playing" : "")">
-                        <div class="vd-card-top">
-                            <div class="vd-num-badge">#@vp.Id.ToString("D2")</div>
-                            <div class="vd-card-title-group">
-                                <h3 class="vd-card-name">@vp.Name</h3>
-                                <span class="vd-style-pill">@vp.StyleTag</span>
-                            </div>
-                        </div>
-
-                        <p class="vd-card-desc">@vp.Description</p>
-                        <div class="vd-tech-spec">
-                            <i class="bi bi-sliders"></i> @vp.TechSpec
-                        </div>
-
-                        <div class="vd-test-btns-row">
-                            <button type="button"
-                                    class="btn-vd-listen"
-                                    @onclick="() => SpeakWithPresetId(vp.Id, demoCustomText)">
-                                <i class="bi bi-volume-up-fill"></i> Nghe câu thử
-                            </button>
-                            <button type="button"
-                                    class="btn-vd-listen-alt"
-                                    @onclick="() => SpeakWithPresetId(vp.Id, vp.SampleZh)"
-                                    title="@vp.SampleZh">
-                                <i class="bi bi-chat-dots-fill"></i> Nghe câu riêng
-                            </button>
-                        </div>
-
-                        <div class="vd-sample-quote">
-                            “@vp.SampleZh”
-                        </div>
-
-                        <div class="vd-assign-row">
-                            <button type="button"
-                                    class="btn-vd-assign @(isLeftSel ? "assigned-left" : "")"
-                                    @onclick="() => SelectVoiceForSide(vp.Id, true)">
-                                <i class="bi @(isLeftSel ? "bi-check-circle-fill" : "bi-arrow-left-circle")"></i>
-                                @(isLeftSel ? "Đang dùng: Bạn Trái" : "Chọn cho Bạn Trái")
-                            </button>
-                            <button type="button"
-                                    class="btn-vd-assign @(isRightSel ? "assigned-right" : "")"
-                                    @onclick="() => SelectVoiceForSide(vp.Id, false)">
-                                <i class="bi @(isRightSel ? "bi-check-circle-fill" : "bi-arrow-right-circle")"></i>
-                                @(isRightSel ? "Đang dùng: Bạn Phải" : "Chọn cho Bạn Phải")
-                            </button>
-                        </div>
-                    </div>
-                }
-            </div>
         </div>
     }
     else if (viewMode == "flashcard")
