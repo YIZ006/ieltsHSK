@@ -379,7 +379,7 @@
                                 }
                                 else
                                 {
-                                    <div class="wb-voice-tag">🎧 Giọng 2 nữ thanh niên</div>
+                                    <div class="wb-voice-tag">🎧 2 Giọng nữ: Bắc Kinh &amp; Đài Loan</div>
                                 }
                             </div>
                             <div class="wb-more" @onclick="NextStudioIdiom" title="Thành ngữ tiếp theo">•••</div>
@@ -394,7 +394,7 @@
                                 var msg = visibleMsgs[mIdx];
                                 var isLeft = msg.Sender.Equals("left", StringComparison.OrdinalIgnoreCase);
                                 var avatar = isLeft ? chat.AvatarLeft : chat.AvatarRight;
-                                var speakerLabel = isLeft ? $"{chat.ContactName} (Nữ thanh niên 1)" : $"{(string.IsNullOrEmpty(chat.RightSpeakerName) ? "阿明" : chat.RightSpeakerName)} (Nữ thanh niên 2)";
+                                var speakerLabel = isLeft ? $"{chat.ContactName} (Nữ Bắc Kinh)" : $"{(string.IsNullOrEmpty(chat.RightSpeakerName) ? "阿明" : chat.RightSpeakerName)} (Nữ Đài Loan)";
                                 var isSpeakingNow = activeSpeakingMsgId == msg.Id;
 
                                 <div class="wechat-msg-row @(isLeft ? "row-left" : "row-right") msg-pop-anim">
@@ -773,44 +773,9 @@
     private List<ChengyuItem> filteredItems = new();
     private bool isLoading = true;
 
-    private string viewMode = "studio"; // "studio", "cards", "flashcard", "voicedemo"
+    private string viewMode = "studio"; // "studio", "cards", "flashcard"
     private bool showPinyin = true;
     private bool wordByWordMode = true;
-
-    // Selected Female Voice Preset IDs (1..10) for Left Speaker & Right Speaker
-    private int leftVoiceId = 1;  // Default #01: Chuẩn Bắc Kinh Mượt Mà (Pitch 1.0, Rate 0.96)
-    private int rightVoiceId = 4; // Default #04: Nữ Đài Loan Ngọt Ngào / Nữ Trẻ #02
-    private int activeTestingPresetId = 0;
-    private string demoSampleSentence1 = "听说你们部门下个月取消双休，这简直不可思议！";
-    private string demoSampleSentence2 = "别听他们胡说八道！经理刚开会说今年福利增加呢。";
-    private string demoCustomText = "听说你们部门下个月取消双休，这简直不可思议！";
-
-    public class VoicePresetModel
-    {
-        public int Id { get; set; }
-        public string Name { get; set; } = "";
-        public string StyleTag { get; set; } = "";
-        public string Description { get; set; } = "";
-        public string TechSpec { get; set; } = "";
-        public string EnginePref { get; set; } = "google_cn"; // google_cn, tw, yaoyao, huihui, xiaoxiao
-        public double Pitch { get; set; } = 1.0;
-        public double Rate { get; set; } = 0.96;
-        public string SampleZh { get; set; } = "";
-    }
-
-    private readonly List<VoicePresetModel> femaleVoicePresets = new()
-    {
-        new() { Id = 1, Name = "Giọng Nữ #01 — Chuẩn Bắc Kinh Mượt Mà", StyleTag = "⭐ Ổn định nhất", Description = "Sử dụng trực tiếp giọng Google 普通话 / Xiaoxiao ở cao độ nguyên bản (Pitch 1.00). Không bị méo âm, trong trẻo và mượt 100%.", TechSpec = "Engine: Google 普通话 (zh-CN) • Pitch: 1.00 • Tốc độ: 0.96x", EnginePref = "google_cn", Pitch = 1.00, Rate = 0.96, SampleZh = "对待感情，他一向都是一心一意的，从来不会半途而废。" },
-        new() { Id = 2, Name = "Giọng Nữ #02 — Nữ Thanh Niên Tươi Sáng", StyleTag = "Trẻ trung", Description = "Giọng nữ đôi mươi trong trẻo, cao độ nhỉnh nhẹ 4% tạo cảm giác tươi tắn mà vẫn giữ nguyên độ tự nhiên.", TechSpec = "Engine: Google 普通话 / Xiaoyi (zh-CN) • Pitch: 1.04 • Tốc độ: 1.00x", EnginePref = "google_cn", Pitch = 1.04, Rate = 1.00, SampleZh = "听说你们部门取消双休，这简直不可思议！" },
-        new() { Id = 3, Name = "Giọng Nữ #03 — Nữ Sinh Dịu Dàng Chậm Rõ", StyleTag = "Dễ nghe từ mới", Description = "Nhịp đọc chậm rãi (0.88x), tròn vành rõ chữ từng thanh điệu, cực kỳ phù hợp khi mới học thành ngữ.", TechSpec = "Engine: Google 普通话 (zh-CN) • Pitch: 1.01 • Tốc độ: 0.88x", EnginePref = "google_cn", Pitch = 1.01, Rate = 0.88, SampleZh = "只要我们坚持不懈，水滴石穿，就一定能把汉语学好。" },
-        new() { Id = 4, Name = "Giọng Nữ #04 — Nữ Đài Loan Ngọt Ngào", StyleTag = "Ngọt ngào (zh-TW)", Description = "Sử dụng bộ giọng nữ Quốc Ngữ Đài Bắc (Google 國語 / Hanhan). Âm sắc mềm mại, nhẹ nhàng rất dễ phân biệt khi đối thoại.", TechSpec = "Engine: Google 國語 / Taiwan (zh-TW) • Pitch: 1.00 • Tốc độ: 0.96x", EnginePref = "tw", Pitch = 1.00, Rate = 0.96, SampleZh = "他们俩在咖啡馆第一次见面就一见钟情了，真浪漫！" },
-        new() { Id = 5, Name = "Giọng Nữ #05 — Nữ GenZ Nhí Nhảnh", StyleTag = "Nhịp chat nhanh", Description = "Phong cách bạn thân nhắn tin WeChat lanh lảnh, tốc độ phản xạ nhanh gọn (1.05x) đúng chất giới trẻ.", TechSpec = "Engine: Google 普通话 / Xiaoyi (zh-CN) • Pitch: 1.06 • Tốc độ: 1.05x", EnginePref = "google_cn", Pitch = 1.06, Rate = 1.05, SampleZh = "别听他们胡说八道！经理刚开会说今年福利增加呢。" },
-        new() { Id = 6, Name = "Giọng Nữ #06 — Nữ Đĩnh Đạc Trầm Ấm", StyleTag = "Trầm ấm", Description = "Cao độ trầm ấm (Pitch 0.95), chững chạc như đàn chị công sở. Rất hợp làm giọng đối đáp với giọng cao #01 hoặc #02.", TechSpec = "Engine: Google 普通话 (zh-CN) • Pitch: 0.95 • Tốc độ: 0.95x", EnginePref = "google_cn", Pitch = 0.95, Rate = 0.95, SampleZh = "做生意不能只看眼前利益，否则很容易因小失大。" },
-        new() { Id = 7, Name = "Giọng Nữ #07 — Nữ Phát Thanh Viên HSK", StyleTag = "Chuẩn thi HSK", Description = "Tốc độ và ngữ điệu chuẩn mực như băng ghi âm phòng thi HSK 4 - HSK 6 chính thức.", TechSpec = "Engine: Google 普通话 (zh-CN) • Pitch: 0.98 • Tốc độ: 0.92x", EnginePref = "google_cn", Pitch = 0.98, Rate = 0.92, SampleZh = "没有调查清楚之前，请不要在背后随便议论别人。" },
-        new() { Id = 8, Name = "Giọng Nữ #08 — Nữ Microsoft Yaoyao (Windows)", StyleTag = "Giọng Yaoyao", Description = "Giọng nữ trẻ Yaoyao tích hợp sẵn trên Windows 10/11, giữ nguyên Pitch 1.00 để âm thanh mượt, không bị rè.", TechSpec = "Engine: Microsoft Yaoyao (zh-CN) • Pitch: 1.00 • Tốc độ: 0.96x", EnginePref = "yaoyao", Pitch = 1.00, Rate = 0.96, SampleZh = "这两件衣服的款式和颜色一模一样，我都分不出来了。" },
-        new() { Id = 9, Name = "Giọng Nữ #09 — Nữ Microsoft Huihui (Windows)", StyleTag = "Giọng Huihui", Description = "Giọng nữ điềm tĩnh Huihui tích hợp sẵn trên Windows, giữ nguyên Pitch 1.00 ổn định và rõ ràng.", TechSpec = "Engine: Microsoft Huihui (zh-CN) • Pitch: 1.00 • Tốc độ: 0.96x", EnginePref = "huihui", Pitch = 1.00, Rate = 0.96, SampleZh = "到了一个新的国家生活，我们要学会入乡随俗。" },
-        new() { Id = 10, Name = "Giọng Nữ #10 — Nữ Kể Chuyện Điển Tích", StyleTag = "Sâu lắng", Description = "Nhịp đọc khoan thai (0.85x), trầm nhẹ (Pitch 0.94), tạo không khí kể chuyện lịch sử và điển cố thành ngữ.", TechSpec = "Engine: Google 普通话 (zh-CN) • Pitch: 0.94 • Tốc độ: 0.85x", EnginePref = "google_cn", Pitch = 0.94, Rate = 0.85, SampleZh = "经过三天三夜的抢救，大家终于安然无恙地回到了家。" }
-    };
 
     private string searchQuery = "";
     private string selectedLevel = "all";
@@ -844,25 +809,70 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var uri = NavManager.Uri.ToLowerInvariant();
-        if (uri.Contains("/demo-giong") || uri.Contains("/voice-demo"))
-        {
-            viewMode = "voicedemo";
-        }
-        await LoadSavedVoicePrefsAsync();
         await LoadDataAsync();
     }
 
-    private async Task LoadSavedVoicePrefsAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        try
+        if (firstRender)
         {
-            var savedLeft = await JS.InvokeAsync<string?>("localStorage.getItem", "hsk_chengyu_voice_left");
-            var savedRight = await JS.InvokeAsync<string?>("localStorage.getItem", "hsk_chengyu_voice_right");
-            if (int.TryParse(savedLeft, out var lId) && lId >= 1 && lId <= 10) leftVoiceId = lId;
-            if (int.TryParse(savedRight, out var rId) && rId >= 1 && rId <= 10) rightVoiceId = rId;
+            var initScript = @"
+                if (!window.chengyuAudio) {
+                    window.chengyuAudio = {
+                        currentAudio: null,
+                        play: function (text, lang, callback) {
+                            this.stop();
+                            var clean = (text || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim();
+                            if (!clean) { if (callback) callback(); return; }
+                            var targetLang = (lang === 'zh-TW') ? 'zh-TW' : 'zh-CN';
+                            var url = 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=' + targetLang + '&q=' + encodeURIComponent(clean);
+                            var audio = new Audio(url);
+                            audio.playbackRate = 1.0;
+                            this.currentAudio = audio;
+                            var finished = false;
+                            function done() {
+                                if (!finished) {
+                                    finished = true;
+                                    if (window.chengyuAudio.currentAudio === audio) window.chengyuAudio.currentAudio = null;
+                                    if (callback) callback();
+                                }
+                            }
+                            audio.onended = done;
+                            function fallbackSpeech() {
+                                if ('speechSynthesis' in window) {
+                                    var u = new SpeechSynthesisUtterance(clean);
+                                    u.lang = targetLang;
+                                    u.rate = 1.0;
+                                    u.onend = done;
+                                    u.onerror = done;
+                                    window.speechSynthesis.speak(u);
+                                } else {
+                                    done();
+                                }
+                            }
+                            audio.onerror = fallbackSpeech;
+                            audio.play().catch(fallbackSpeech);
+                        },
+                        playPromise: function (text, lang) {
+                            var self = this;
+                            return new Promise(function (resolve) {
+                                self.play(text, lang, resolve);
+                            });
+                        },
+                        stop: function () {
+                            if (this.currentAudio) {
+                                try { this.currentAudio.pause(); this.currentAudio.currentTime = 0; } catch (e) {}
+                                this.currentAudio = null;
+                            }
+                            if ('speechSynthesis' in window) {
+                                try { window.speechSynthesis.cancel(); } catch (e) {}
+                            }
+                        }
+                    };
+                }
+            ";
+            try { await JS.InvokeVoidAsync("eval", initScript); } catch {}
         }
-        catch { }
     }
 
     private async Task LoadDataAsync()
@@ -1027,7 +1037,7 @@
         return item.WechatChat?.Messages.Any(m => m.IsTranslationOpen) ?? false;
     }
 
-    // ── LIVE WECHAT SIMULATION (TYPING + DUAL YOUTH VOICE) ──
+    // ── LIVE WECHAT SIMULATION (TYPING + DUAL YOUTH VOICE: OPTION 1 GOOGLE STUDIO) ──
     private async Task StartLiveSimulation(ChengyuItem item)
     {
         if (item.WechatChat == null || item.WechatChat.Messages.Count == 0) return;
@@ -1052,10 +1062,10 @@
                 activeSpeakingMsgId = null;
                 StateHasChanged();
 
-                await Task.Delay(700, token);
+                await Task.Delay(450, token);
                 token.ThrowIfCancellationRequested();
 
-                // 2. Pop message in & speak with that youth speaker's voice
+                // 2. Reveal message & open translation
                 isTypingIndicatorVisible = false;
                 simVisibleCount = i + 1;
                 var msg = msgs[i];
@@ -1063,12 +1073,17 @@
                 activeSpeakingMsgId = msg.Id;
                 StateHasChanged();
 
-                await SpeakYouthText(msg.Zh, msg.Sender);
+                // 3. Option 1 Dual Youth Voice (Left: zh-CN Beijing standard, Right: zh-TW Taiwan sweet, normal rate 1.0x)
+                var isLeft = msg.Sender.Equals("left", StringComparison.OrdinalIgnoreCase);
+                var lang = isLeft ? "zh-CN" : "zh-TW";
+                await JS.InvokeVoidAsync("chengyuAudio.playPromise", msg.Zh, lang);
 
-                // Estimate reading time based on Chinese character count (~210ms per char + 600ms buffer)
-                var cleanLen = Math.Max(4, msg.Zh.Length);
-                var waitMs = Math.Clamp(cleanLen * 210 + 550, 1800, 5200);
-                await Task.Delay(waitMs, token);
+                token.ThrowIfCancellationRequested();
+                activeSpeakingMsgId = null;
+                StateHasChanged();
+
+                // 4. Conversational natural pause
+                await Task.Delay(350, token);
             }
         }
         catch (TaskCanceledException)
@@ -1112,7 +1127,7 @@
         var currentMsg = chat.Messages[simVisibleCount - 1];
         currentMsg.IsTranslationOpen = true;
         activeSpeakingMsgId = currentMsg.Id;
-        await SpeakYouthText(currentMsg.Zh, currentMsg.Sender);
+        await SpeakWechatSingleMessage(currentMsg);
     }
 
     private void ShowAllSimMessages(WechatChatModel chat)
@@ -1124,123 +1139,23 @@
     private async Task SpeakWechatSingleMessage(WechatMessageItem msg)
     {
         activeSpeakingMsgId = msg.Id;
-        await SpeakYouthText(msg.Zh, msg.Sender);
-    }
-
-    // ── STABLE 10-FEMALE-VOICE ENGINE (KHỬ LỖI RÈ, NGẮT QUÃNG & LOẠN GIỌNG QUẢNG ĐÔNG) ──
-    private VoicePresetModel GetVoicePreset(int id)
-    {
-        return femaleVoicePresets.FirstOrDefault(x => x.Id == id) ?? femaleVoicePresets[0];
-    }
-
-    private async Task SelectVoiceForSide(int presetId, bool isLeft)
-    {
-        if (isLeft)
+        var isLeft = msg.Sender.Equals("left", StringComparison.OrdinalIgnoreCase);
+        var lang = isLeft ? "zh-CN" : "zh-TW";
+        try
         {
-            leftVoiceId = presetId;
-            try { await JS.InvokeVoidAsync("localStorage.setItem", "hsk_chengyu_voice_left", presetId.ToString()); } catch { }
-            await SpeakWithPresetId(presetId, demoSampleSentence1);
+            await JS.InvokeVoidAsync("chengyuAudio.play", msg.Zh, lang);
         }
-        else
-        {
-            rightVoiceId = presetId;
-            try { await JS.InvokeVoidAsync("localStorage.setItem", "hsk_chengyu_voice_right", presetId.ToString()); } catch { }
-            await SpeakWithPresetId(presetId, demoSampleSentence2);
-        }
-    }
-
-    private async Task TestSelectedPairDialogue()
-    {
-        var tempChat = new WechatChatModel
-        {
-            Messages = new List<WechatMessageItem>
-            {
-                new() { Sender = "left", Zh = demoSampleSentence1 },
-                new() { Sender = "right", Zh = demoSampleSentence2 }
-            }
-        };
-        await SpeakFullDialogueWithYouthVoices(tempChat);
+        catch { }
     }
 
     private async Task SpeakYouthText(string text, string senderSide)
     {
-        var isLeft = senderSide.Equals("left", StringComparison.OrdinalIgnoreCase);
-        var presetId = isLeft ? leftVoiceId : rightVoiceId;
-        await SpeakWithPresetId(presetId, text);
-    }
-
-    private async Task SpeakWithPresetId(int presetId, string text)
-    {
         if (string.IsNullOrWhiteSpace(text)) return;
-        activeTestingPresetId = presetId;
         try
         {
-            var preset = GetVoicePreset(presetId);
-            var rawJson = System.Text.Json.JsonSerializer.Serialize(text);
-            var prefJson = System.Text.Json.JsonSerializer.Serialize(preset.EnginePref);
-            var pitchStr = preset.Pitch.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            var rateStr = preset.Rate.ToString(System.Globalization.CultureInfo.InvariantCulture);
-
-            var jsCode = $@"
-                (function() {{
-                    if (!('speechSynthesis' in window)) return;
-                    if (window._chengyuSpeakTimer) clearTimeout(window._chengyuSpeakTimer);
-                    window.speechSynthesis.cancel();
-
-                    var raw = {rawJson};
-                    var clean = raw.replace(/[\u{{1F300}}-\u{{1FAFF}}\u{{2600}}-\u{{27BF}}]/gu, '').trim();
-                    if (!clean) return;
-
-                    var pref = {prefJson};
-                    var targetPitch = {pitchStr};
-                    var targetRate = {rateStr};
-
-                    window._chengyuSpeakTimer = setTimeout(function() {{
-                        var allVoices = window.speechSynthesis.getVoices() || [];
-                        // Chỉ lấy giọng Quan Thoại (zh-CN / zh-TW), tuyệt đối loại bỏ tiếng Quảng Đông (zh-HK / Cantonese)
-                        var mandarinVoices = allVoices.filter(function(v) {{
-                            if (!v.lang) return false;
-                            var l = v.lang.toLowerCase();
-                            if (l.indexOf('hk') !== -1 || l.indexOf('yue') !== -1 || /粤|Cantonese|Sin-ji|Tracy/i.test(v.name)) return false;
-                            return l.indexOf('zh') === 0 || l.indexOf('cmn') === 0;
-                        }});
-
-                        var chosen = null;
-                        if (pref === 'google_cn') {{
-                            chosen = mandarinVoices.find(function(v) {{ return /Google.*普通话|Xiaoxiao|Xiaoyi|Natural/i.test(v.name); }})
-                                  || mandarinVoices.find(function(v) {{ return v.lang.toLowerCase().indexOf('cn') !== -1 && !/Kangkang|Yunxi|Yunjian|Male/i.test(v.name); }})
-                                  || mandarinVoices[0];
-                        }} else if (pref === 'tw') {{
-                            chosen = mandarinVoices.find(function(v) {{ return /Google.*國語|Taiwan|zh-TW|Hanhan|Yating|HsiaoChen/i.test(v.name + ' ' + v.lang); }})
-                                  || mandarinVoices.find(function(v) {{ return /Google.*普通话|Xiaoyi/i.test(v.name); }})
-                                  || mandarinVoices[0];
-                        }} else if (pref === 'yaoyao') {{
-                            chosen = mandarinVoices.find(function(v) {{ return /Yaoyao|Xiaoyi/i.test(v.name); }})
-                                  || mandarinVoices.find(function(v) {{ return /Google.*普通话/i.test(v.name); }})
-                                  || mandarinVoices[0];
-                        }} else if (pref === 'huihui') {{
-                            chosen = mandarinVoices.find(function(v) {{ return /Huihui|Xiaoxiao/i.test(v.name); }})
-                                  || mandarinVoices.find(function(v) {{ return /Google.*普通话/i.test(v.name); }})
-                                  || mandarinVoices[0];
-                        }} else {{
-                            chosen = mandarinVoices[0];
-                        }}
-
-                        var u = new SpeechSynthesisUtterance(clean);
-                        u.lang = (pref === 'tw') ? 'zh-TW' : 'zh-CN';
-                        if (chosen) {{
-                            u.voice = chosen;
-                            u.lang = chosen.lang || u.lang;
-                        }}
-                        u.pitch = targetPitch;
-                        u.rate = targetRate;
-
-                        // Giữ tham chiếu toàn cục chống lỗi Chrome V8 Garbage Collector ngắt giọng giữa chừng
-                        window._activeChengyuUtterance = u;
-                        window.speechSynthesis.speak(u);
-                    }}, 55);
-                }})();";
-            await JS.InvokeVoidAsync("eval", jsCode);
+            var isLeft = senderSide.Equals("left", StringComparison.OrdinalIgnoreCase);
+            var lang = isLeft ? "zh-CN" : "zh-TW";
+            await JS.InvokeVoidAsync("chengyuAudio.play", text, lang);
         }
         catch { }
     }
@@ -1248,99 +1163,46 @@
     private async Task SpeakFullDialogueWithYouthVoices(WechatChatModel chat)
     {
         if (chat == null || chat.Messages.Count == 0) return;
+        StopLiveSimulation();
+        simCts = new CancellationTokenSource();
+        var token = simCts.Token;
+        isSimPlaying = true;
+        StateHasChanged();
+
         try
         {
-            var leftP = GetVoicePreset(leftVoiceId);
-            var rightP = GetVoicePreset(rightVoiceId);
-
-            var payload = chat.Messages.Select(m =>
+            foreach (var msg in chat.Messages)
             {
-                var isL = m.Sender.Equals("left", StringComparison.OrdinalIgnoreCase);
-                var p = isL ? leftP : rightP;
-                return new
-                {
-                    text = m.Zh,
-                    pref = p.EnginePref,
-                    pitch = p.Pitch,
-                    rate = p.Rate
-                };
-            }).ToList();
+                token.ThrowIfCancellationRequested();
+                activeSpeakingMsgId = msg.Id;
+                msg.IsTranslationOpen = true;
+                StateHasChanged();
 
-            var json = System.Text.Json.JsonSerializer.Serialize(payload);
+                var isLeft = msg.Sender.Equals("left", StringComparison.OrdinalIgnoreCase);
+                var lang = isLeft ? "zh-CN" : "zh-TW";
+                await JS.InvokeVoidAsync("chengyuAudio.playPromise", msg.Zh, lang);
 
-            var jsCode = $@"
-                (function() {{
-                    if (!('speechSynthesis' in window)) return;
-                    if (window._chengyuSpeakTimer) clearTimeout(window._chengyuSpeakTimer);
-                    window.speechSynthesis.cancel();
+                token.ThrowIfCancellationRequested();
+                activeSpeakingMsgId = null;
+                StateHasChanged();
 
-                    var items = {json};
-                    var allVoices = window.speechSynthesis.getVoices() || [];
-                    var mandarinVoices = allVoices.filter(function(v) {{
-                        if (!v.lang) return false;
-                        var l = v.lang.toLowerCase();
-                        if (l.indexOf('hk') !== -1 || l.indexOf('yue') !== -1 || /粤|Cantonese|Sin-ji|Tracy/i.test(v.name)) return false;
-                        return l.indexOf('zh') === 0 || l.indexOf('cmn') === 0;
-                    }});
-
-                    function pickVoice(pref) {{
-                        if (pref === 'google_cn') {{
-                            return mandarinVoices.find(function(v) {{ return /Google.*普通话|Xiaoxiao|Xiaoyi|Natural/i.test(v.name); }})
-                                || mandarinVoices.find(function(v) {{ return v.lang.toLowerCase().indexOf('cn') !== -1 && !/Kangkang|Yunxi|Yunjian|Male/i.test(v.name); }})
-                                || mandarinVoices[0];
-                        }}
-                        if (pref === 'tw') {{
-                            return mandarinVoices.find(function(v) {{ return /Google.*國語|Taiwan|zh-TW|Hanhan|Yating|HsiaoChen/i.test(v.name + ' ' + v.lang); }})
-                                || mandarinVoices.find(function(v) {{ return /Google.*普通话|Xiaoyi/i.test(v.name); }})
-                                || mandarinVoices[0];
-                        }}
-                        if (pref === 'yaoyao') {{
-                            return mandarinVoices.find(function(v) {{ return /Yaoyao|Xiaoyi/i.test(v.name); }})
-                                || mandarinVoices.find(function(v) {{ return /Google.*普通话/i.test(v.name); }})
-                                || mandarinVoices[0];
-                        }}
-                        if (pref === 'huihui') {{
-                            return mandarinVoices.find(function(v) {{ return /Huihui|Xiaoxiao/i.test(v.name); }})
-                                || mandarinVoices.find(function(v) {{ return /Google.*普通话/i.test(v.name); }})
-                                || mandarinVoices[0];
-                        }}
-                        return mandarinVoices[0];
-                    }}
-
-                    var i = 0;
-                    function playNext() {{
-                        if (i >= items.length) return;
-                        var item = items[i];
-                        var clean = item.text.replace(/[\u{{1F300}}-\u{{1FAFF}}\u{{2600}}-\u{{27BF}}]/gu, '').trim();
-                        var u = new SpeechSynthesisUtterance(clean);
-                        var chosen = pickVoice(item.pref);
-                        u.lang = (item.pref === 'tw') ? 'zh-TW' : 'zh-CN';
-                        if (chosen) {{
-                            u.voice = chosen;
-                            u.lang = chosen.lang || u.lang;
-                        }}
-                        u.pitch = item.pitch;
-                        u.rate = item.rate;
-
-                        u.onend = function() {{
-                            i++;
-                            window._chengyuSpeakTimer = setTimeout(playNext, 380);
-                        }};
-                        window._activeChengyuUtterance = u;
-                        window.speechSynthesis.speak(u);
-                    }}
-                    window._chengyuSpeakTimer = setTimeout(playNext, 65);
-                }})();";
-            await JS.InvokeVoidAsync("eval", jsCode);
+                await Task.Delay(350, token);
+            }
         }
-        catch { }
+        catch (TaskCanceledException) { }
+        finally
+        {
+            activeSpeakingMsgId = null;
+            isSimPlaying = false;
+            StateHasChanged();
+        }
     }
 
     private async Task CancelSpeechAsync()
     {
         try
         {
-            await JS.InvokeVoidAsync("eval", "if ('speechSynthesis' in window) window.speechSynthesis.cancel();");
+            await JS.InvokeVoidAsync("chengyuAudio.stop");
         }
         catch { }
     }
