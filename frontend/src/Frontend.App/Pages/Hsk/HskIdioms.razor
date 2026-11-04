@@ -1,6 +1,8 @@
 @page "/hsk/thanh-ngu"
 @page "/hsk/idioms"
 @page "/hsk/chengyu"
+@page "/hsk/demo-giong"
+@page "/hsk/voice-demo"
 @layout Frontend.App.Layout.HskLayout
 @using Frontend.App.Services
 @inject HskChengyuService ChengyuService
@@ -64,6 +66,11 @@
                         class="mode-btn @(viewMode == "flashcard" ? "active" : "")"
                         @onclick='() => SwitchViewMode("flashcard")'>
                     <i class="bi bi-card-checklist"></i> Luyện Flashcard
+                </button>
+                <button type="button"
+                        class="mode-btn mode-btn-demo @(viewMode == "voicedemo" ? "active" : "")"
+                        @onclick='() => SwitchViewMode("voicedemo")'>
+                    <i class="bi bi-soundwave"></i> Phòng Demo 10 Giọng Nữ (Nghe &amp; Chọn)
                 </button>
             </div>
         </div>
@@ -523,6 +530,144 @@
 
         </div>
     }
+    else if (viewMode == "voicedemo")
+    {
+        @* ══════════════════════════════════════════════════════════════════
+           PHÒNG DEMO 10 GIỌNG NỮ THANH NIÊN (NGHE THỬ & CHỌN GIỌNG ƯNG Ý)
+           ══════════════════════════════════════════════════════════════════ *@
+        <div class="voice-demo-studio">
+            <div class="vd-top-banner">
+                <div class="vd-banner-left">
+                    <div class="vd-badge-row">
+                        <span class="vd-pill-hot"><i class="bi bi-Broadcast"></i> PHÒNG THỬ ÂM THANH CHUẨN (ĐÃ KHỬ LỖI RÈ &amp; NGẮT QUÃNG)</span>
+                    </div>
+                    <h2 class="vd-title">10 Cấu Hình Giọng Nữ Tiếng Trung — Nghe Thử &amp; Chọn Cặp Giọng Ưng Ý</h2>
+                    <p class="vd-subtitle">
+                        Mình đã loại bỏ hoàn toàn giọng Quảng Đông (zh-HK) gây loạn âm và sửa lỗi ngắt quãng của Chrome. Bạn hãy bấm <strong>Nghe thử</strong> từng giọng từ <strong>#01 đến #10</strong> bên dưới, bấm <strong>Chọn cho Bạn Trái / Bạn Phải</strong> (hoặc nhắn cho mình số thứ tự giọng bạn thích nhất)!
+                    </p>
+                </div>
+
+                <div class="vd-banner-actions">
+                    <button type="button" class="btn-vd-dialogue" @onclick="TestSelectedPairDialogue">
+                        <i class="bi bi-play-circle-fill"></i> Nghe 2 Giọng Đã Chọn Đối Thoại
+                    </button>
+                    <button type="button" class="btn-vd-apply" @onclick='() => SwitchViewMode("studio")'>
+                        <i class="bi bi-check2-circle"></i> Lưu &amp; Quay Lại Phòng Chat WeChat
+                    </button>
+                </div>
+            </div>
+
+            @* Current Selected Pair Preview Box *@
+            <div class="vd-selected-pair-bar">
+                @{
+                    var leftPreset = GetVoicePreset(leftVoiceId);
+                    var rightPreset = GetVoicePreset(rightVoiceId);
+                }
+                <div class="vd-pair-card pair-left">
+                    <div class="vd-pair-avatar-wrap">
+                        <img src="/images/avatar-wet-cat.jpg" alt="Left" class="vd-pair-avatar" />
+                        <span class="vd-side-tag tag-left">Bạn Trái (小雨)</span>
+                    </div>
+                    <div class="vd-pair-info">
+                        <div class="vd-pair-label">GIỌNG ĐANG CHỌN CHO NGƯỜI BÊN TRÁI:</div>
+                        <div class="vd-pair-name">@leftPreset.Name</div>
+                        <div class="vd-pair-meta">@leftPreset.TechSpec</div>
+                    </div>
+                    <button type="button" class="btn-vd-test-side" @onclick="() => SpeakWithPresetId(leftVoiceId, demoSampleSentence1)">
+                        <i class="bi bi-volume-up-fill"></i> Nghe Bạn Trái
+                    </button>
+                </div>
+
+                <div class="vd-pair-card pair-right">
+                    <div class="vd-pair-avatar-wrap">
+                        <img src="/images/avatar-crying-cat.jpg" alt="Right" class="vd-pair-avatar" />
+                        <span class="vd-side-tag tag-right">Bạn Phải (阿明)</span>
+                    </div>
+                    <div class="vd-pair-info">
+                        <div class="vd-pair-label">GIỌNG ĐANG CHỌN CHO NGƯỜI BÊN PHẢI (MÈO ÁO ĐỎ):</div>
+                        <div class="vd-pair-name">@rightPreset.Name</div>
+                        <div class="vd-pair-meta">@rightPreset.TechSpec</div>
+                    </div>
+                    <button type="button" class="btn-vd-test-side btn-rose" @onclick="() => SpeakWithPresetId(rightVoiceId, demoSampleSentence2)">
+                        <i class="bi bi-volume-up-fill"></i> Nghe Bạn Phải
+                    </button>
+                </div>
+            </div>
+
+            @* Custom Sample Sentence Bar *@
+            <div class="vd-custom-input-bar">
+                <span class="vd-input-lbl"><i class="bi bi-chat-square-text-fill text-danger"></i> Câu mẫu thử giọng:</span>
+                <input type="text" class="vd-custom-input" @bind="demoCustomText" placeholder="Nhập câu tiếng Trung bất kỳ để thử..." />
+                <button type="button" class="btn-vd-sample-chip" @onclick='() => demoCustomText = "听说你们部门下个月取消双休，这简直不可思议！"'>
+                    Mẫu 1 (Ngạc nhiên)
+                </button>
+                <button type="button" class="btn-vd-sample-chip" @onclick='() => demoCustomText = "别听他们胡说八道！经理刚开会说今年福利增加呢。"'>
+                    Mẫu 2 (Phản bác)
+                </button>
+                <button type="button" class="btn-vd-sample-chip" @onclick='() => demoCustomText = "只要我们一心一意，水滴石穿，就一定能心想事成！"'>
+                    Mẫu 3 (Thành ngữ)
+                </button>
+            </div>
+
+            @* 10 Female Voices Grid *@
+            <div class="vd-grid-10">
+                @foreach (var vp in femaleVoicePresets)
+                {
+                    var isLeftSel = (vp.Id == leftVoiceId);
+                    var isRightSel = (vp.Id == rightVoiceId);
+                    var isTestingNow = (activeTestingPresetId == vp.Id);
+
+                    <div class="vd-voice-card @(isLeftSel || isRightSel ? "vd-card-selected" : "") @(isTestingNow ? "vd-card-playing" : "")">
+                        <div class="vd-card-top">
+                            <div class="vd-num-badge">#@vp.Id.ToString("D2")</div>
+                            <div class="vd-card-title-group">
+                                <h3 class="vd-card-name">@vp.Name</h3>
+                                <span class="vd-style-pill">@vp.StyleTag</span>
+                            </div>
+                        </div>
+
+                        <p class="vd-card-desc">@vp.Description</p>
+                        <div class="vd-tech-spec">
+                            <i class="bi bi-sliders"></i> @vp.TechSpec
+                        </div>
+
+                        <div class="vd-test-btns-row">
+                            <button type="button"
+                                    class="btn-vd-listen"
+                                    @onclick="() => SpeakWithPresetId(vp.Id, demoCustomText)">
+                                <i class="bi bi-volume-up-fill"></i> Nghe câu thử
+                            </button>
+                            <button type="button"
+                                    class="btn-vd-listen-alt"
+                                    @onclick="() => SpeakWithPresetId(vp.Id, vp.SampleZh)"
+                                    title="@vp.SampleZh">
+                                <i class="bi bi-chat-dots-fill"></i> Nghe câu riêng
+                            </button>
+                        </div>
+
+                        <div class="vd-sample-quote">
+                            “@vp.SampleZh”
+                        </div>
+
+                        <div class="vd-assign-row">
+                            <button type="button"
+                                    class="btn-vd-assign @(isLeftSel ? "assigned-left" : "")"
+                                    @onclick="() => SelectVoiceForSide(vp.Id, true)">
+                                <i class="bi @(isLeftSel ? "bi-check-circle-fill" : "bi-arrow-left-circle")"></i>
+                                @(isLeftSel ? "Đang dùng: Bạn Trái" : "Chọn cho Bạn Trái")
+                            </button>
+                            <button type="button"
+                                    class="btn-vd-assign @(isRightSel ? "assigned-right" : "")"
+                                    @onclick="() => SelectVoiceForSide(vp.Id, false)">
+                                <i class="bi @(isRightSel ? "bi-check-circle-fill" : "bi-arrow-right-circle")"></i>
+                                @(isRightSel ? "Đang dùng: Bạn Phải" : "Chọn cho Bạn Phải")
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
     else if (viewMode == "flashcard")
     {
         @* ── FLASHCARD REVIEW MODE ── *@
@@ -773,9 +918,44 @@
     private List<ChengyuItem> filteredItems = new();
     private bool isLoading = true;
 
-    private string viewMode = "studio"; // "studio", "cards", "flashcard"
+    private string viewMode = "studio"; // "studio", "cards", "flashcard", "voicedemo"
     private bool showPinyin = true;
     private bool wordByWordMode = true;
+
+    // Selected Female Voice Preset IDs (1..10) for Left Speaker & Right Speaker
+    private int leftVoiceId = 1;  // Default #01: Chuẩn Bắc Kinh Mượt Mà (Pitch 1.0, Rate 0.96)
+    private int rightVoiceId = 4; // Default #04: Nữ Đài Loan Ngọt Ngào / Nữ Trẻ #02
+    private int activeTestingPresetId = 0;
+    private string demoSampleSentence1 = "听说你们部门下个月取消双休，这简直不可思议！";
+    private string demoSampleSentence2 = "别听他们胡说八道！经理刚开会说今年福利增加呢。";
+    private string demoCustomText = "听说你们部门下个月取消双休，这简直不可思议！";
+
+    public class VoicePresetModel
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string StyleTag { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string TechSpec { get; set; } = "";
+        public string EnginePref { get; set; } = "google_cn"; // google_cn, tw, yaoyao, huihui, xiaoxiao
+        public double Pitch { get; set; } = 1.0;
+        public double Rate { get; set; } = 0.96;
+        public string SampleZh { get; set; } = "";
+    }
+
+    private readonly List<VoicePresetModel> femaleVoicePresets = new()
+    {
+        new() { Id = 1, Name = "Giọng Nữ #01 — Chuẩn Bắc Kinh Mượt Mà", StyleTag = "⭐ Ổn định nhất", Description = "Sử dụng trực tiếp giọng Google 普通话 / Xiaoxiao ở cao độ nguyên bản (Pitch 1.00). Không bị méo âm, trong trẻo và mượt 100%.", TechSpec = "Engine: Google 普通话 (zh-CN) • Pitch: 1.00 • Tốc độ: 0.96x", EnginePref = "google_cn", Pitch = 1.00, Rate = 0.96, SampleZh = "对待感情，他一向都是一心一意的，从来不会半途而废。" },
+        new() { Id = 2, Name = "Giọng Nữ #02 — Nữ Thanh Niên Tươi Sáng", StyleTag = "Trẻ trung", Description = "Giọng nữ đôi mươi trong trẻo, cao độ nhỉnh nhẹ 4% tạo cảm giác tươi tắn mà vẫn giữ nguyên độ tự nhiên.", TechSpec = "Engine: Google 普通话 / Xiaoyi (zh-CN) • Pitch: 1.04 • Tốc độ: 1.00x", EnginePref = "google_cn", Pitch = 1.04, Rate = 1.00, SampleZh = "听说你们部门取消双休，这简直不可思议！" },
+        new() { Id = 3, Name = "Giọng Nữ #03 — Nữ Sinh Dịu Dàng Chậm Rõ", StyleTag = "Dễ nghe từ mới", Description = "Nhịp đọc chậm rãi (0.88x), tròn vành rõ chữ từng thanh điệu, cực kỳ phù hợp khi mới học thành ngữ.", TechSpec = "Engine: Google 普通话 (zh-CN) • Pitch: 1.01 • Tốc độ: 0.88x", EnginePref = "google_cn", Pitch = 1.01, Rate = 0.88, SampleZh = "只要我们坚持不懈，水滴石穿，就一定能把汉语学好。" },
+        new() { Id = 4, Name = "Giọng Nữ #04 — Nữ Đài Loan Ngọt Ngào", StyleTag = "Ngọt ngào (zh-TW)", Description = "Sử dụng bộ giọng nữ Quốc Ngữ Đài Bắc (Google 國語 / Hanhan). Âm sắc mềm mại, nhẹ nhàng rất dễ phân biệt khi đối thoại.", TechSpec = "Engine: Google 國語 / Taiwan (zh-TW) • Pitch: 1.00 • Tốc độ: 0.96x", EnginePref = "tw", Pitch = 1.00, Rate = 0.96, SampleZh = "他们俩在咖啡馆第一次见面就一见钟情了，真浪漫！" },
+        new() { Id = 5, Name = "Giọng Nữ #05 — Nữ GenZ Nhí Nhảnh", StyleTag = "Nhịp chat nhanh", Description = "Phong cách bạn thân nhắn tin WeChat lanh lảnh, tốc độ phản xạ nhanh gọn (1.05x) đúng chất giới trẻ.", TechSpec = "Engine: Google 普通话 / Xiaoyi (zh-CN) • Pitch: 1.06 • Tốc độ: 1.05x", EnginePref = "google_cn", Pitch = 1.06, Rate = 1.05, SampleZh = "别听他们胡说八道！经理刚开会说今年福利增加呢。" },
+        new() { Id = 6, Name = "Giọng Nữ #06 — Nữ Đĩnh Đạc Trầm Ấm", StyleTag = "Trầm ấm", Description = "Cao độ trầm ấm (Pitch 0.95), chững chạc như đàn chị công sở. Rất hợp làm giọng đối đáp với giọng cao #01 hoặc #02.", TechSpec = "Engine: Google 普通话 (zh-CN) • Pitch: 0.95 • Tốc độ: 0.95x", EnginePref = "google_cn", Pitch = 0.95, Rate = 0.95, SampleZh = "做生意不能只看眼前利益，否则很容易因小失大。" },
+        new() { Id = 7, Name = "Giọng Nữ #07 — Nữ Phát Thanh Viên HSK", StyleTag = "Chuẩn thi HSK", Description = "Tốc độ và ngữ điệu chuẩn mực như băng ghi âm phòng thi HSK 4 - HSK 6 chính thức.", TechSpec = "Engine: Google 普通话 (zh-CN) • Pitch: 0.98 • Tốc độ: 0.92x", EnginePref = "google_cn", Pitch = 0.98, Rate = 0.92, SampleZh = "没有调查清楚之前，请不要在背后随便议论别人。" },
+        new() { Id = 8, Name = "Giọng Nữ #08 — Nữ Microsoft Yaoyao (Windows)", StyleTag = "Giọng Yaoyao", Description = "Giọng nữ trẻ Yaoyao tích hợp sẵn trên Windows 10/11, giữ nguyên Pitch 1.00 để âm thanh mượt, không bị rè.", TechSpec = "Engine: Microsoft Yaoyao (zh-CN) • Pitch: 1.00 • Tốc độ: 0.96x", EnginePref = "yaoyao", Pitch = 1.00, Rate = 0.96, SampleZh = "这两件衣服的款式和颜色一模一样，我都分不出来了。" },
+        new() { Id = 9, Name = "Giọng Nữ #09 — Nữ Microsoft Huihui (Windows)", StyleTag = "Giọng Huihui", Description = "Giọng nữ điềm tĩnh Huihui tích hợp sẵn trên Windows, giữ nguyên Pitch 1.00 ổn định và rõ ràng.", TechSpec = "Engine: Microsoft Huihui (zh-CN) • Pitch: 1.00 • Tốc độ: 0.96x", EnginePref = "huihui", Pitch = 1.00, Rate = 0.96, SampleZh = "到了一个新的国家生活，我们要学会入乡随俗。" },
+        new() { Id = 10, Name = "Giọng Nữ #10 — Nữ Kể Chuyện Điển Tích", StyleTag = "Sâu lắng", Description = "Nhịp đọc khoan thai (0.85x), trầm nhẹ (Pitch 0.94), tạo không khí kể chuyện lịch sử và điển cố thành ngữ.", TechSpec = "Engine: Google 普通话 (zh-CN) • Pitch: 0.94 • Tốc độ: 0.85x", EnginePref = "google_cn", Pitch = 0.94, Rate = 0.85, SampleZh = "经过三天三夜的抢救，大家终于安然无恙地回到了家。" }
+    };
 
     private string searchQuery = "";
     private string selectedLevel = "all";
@@ -809,7 +989,25 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var uri = NavManager.Uri.ToLowerInvariant();
+        if (uri.Contains("/demo-giong") || uri.Contains("/voice-demo"))
+        {
+            viewMode = "voicedemo";
+        }
+        await LoadSavedVoicePrefsAsync();
         await LoadDataAsync();
+    }
+
+    private async Task LoadSavedVoicePrefsAsync()
+    {
+        try
+        {
+            var savedLeft = await JS.InvokeAsync<string?>("localStorage.getItem", "hsk_chengyu_voice_left");
+            var savedRight = await JS.InvokeAsync<string?>("localStorage.getItem", "hsk_chengyu_voice_right");
+            if (int.TryParse(savedLeft, out var lId) && lId >= 1 && lId <= 10) leftVoiceId = lId;
+            if (int.TryParse(savedRight, out var rId) && rId >= 1 && rId <= 10) rightVoiceId = rId;
+        }
+        catch { }
     }
 
     private async Task LoadDataAsync()
@@ -1074,48 +1272,118 @@
         await SpeakYouthText(msg.Zh, msg.Sender);
     }
 
-    // ── DUAL FEMALE YOUTH VOICE ENGINE (2 NỮ THANH NIÊN ĐỐI ĐÁP) ──
+    // ── STABLE 10-FEMALE-VOICE ENGINE (KHỬ LỖI RÈ, NGẮT QUÃNG & LOẠN GIỌNG QUẢNG ĐÔNG) ──
+    private VoicePresetModel GetVoicePreset(int id)
+    {
+        return femaleVoicePresets.FirstOrDefault(x => x.Id == id) ?? femaleVoicePresets[0];
+    }
+
+    private async Task SelectVoiceForSide(int presetId, bool isLeft)
+    {
+        if (isLeft)
+        {
+            leftVoiceId = presetId;
+            try { await JS.InvokeVoidAsync("localStorage.setItem", "hsk_chengyu_voice_left", presetId.ToString()); } catch { }
+            await SpeakWithPresetId(presetId, demoSampleSentence1);
+        }
+        else
+        {
+            rightVoiceId = presetId;
+            try { await JS.InvokeVoidAsync("localStorage.setItem", "hsk_chengyu_voice_right", presetId.ToString()); } catch { }
+            await SpeakWithPresetId(presetId, demoSampleSentence2);
+        }
+    }
+
+    private async Task TestSelectedPairDialogue()
+    {
+        var tempChat = new WechatChatModel
+        {
+            Messages = new List<WechatMessageItem>
+            {
+                new() { Sender = "left", Zh = demoSampleSentence1 },
+                new() { Sender = "right", Zh = demoSampleSentence2 }
+            }
+        };
+        await SpeakFullDialogueWithYouthVoices(tempChat);
+    }
+
     private async Task SpeakYouthText(string text, string senderSide)
     {
+        var isLeft = senderSide.Equals("left", StringComparison.OrdinalIgnoreCase);
+        var presetId = isLeft ? leftVoiceId : rightVoiceId;
+        await SpeakWithPresetId(presetId, text);
+    }
+
+    private async Task SpeakWithPresetId(int presetId, string text)
+    {
         if (string.IsNullOrWhiteSpace(text)) return;
+        activeTestingPresetId = presetId;
         try
         {
+            var preset = GetVoicePreset(presetId);
             var rawJson = System.Text.Json.JsonSerializer.Serialize(text);
-            var isLeftBool = senderSide.Equals("left", StringComparison.OrdinalIgnoreCase) ? "true" : "false";
+            var prefJson = System.Text.Json.JsonSerializer.Serialize(preset.EnginePref);
+            var pitchStr = preset.Pitch.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var rateStr = preset.Rate.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
             var jsCode = $@"
                 (function() {{
                     if (!('speechSynthesis' in window)) return;
+                    if (window._chengyuSpeakTimer) clearTimeout(window._chengyuSpeakTimer);
                     window.speechSynthesis.cancel();
+
                     var raw = {rawJson};
                     var clean = raw.replace(/[\u{{1F300}}-\u{{1FAFF}}\u{{2600}}-\u{{27BF}}]/gu, '').trim();
                     if (!clean) return;
 
-                    var u = new SpeechSynthesisUtterance(clean);
-                    u.lang = 'zh-CN';
+                    var pref = {prefJson};
+                    var targetPitch = {pitchStr};
+                    var targetRate = {rateStr};
 
-                    var voices = window.speechSynthesis.getVoices().filter(function(v) {{
-                        return v.lang && (v.lang.indexOf('zh') === 0 || v.lang.indexOf('cmn') === 0);
-                    }});
+                    window._chengyuSpeakTimer = setTimeout(function() {{
+                        var allVoices = window.speechSynthesis.getVoices() || [];
+                        // Chỉ lấy giọng Quan Thoại (zh-CN / zh-TW), tuyệt đối loại bỏ tiếng Quảng Đông (zh-HK / Cantonese)
+                        var mandarinVoices = allVoices.filter(function(v) {{
+                            if (!v.lang) return false;
+                            var l = v.lang.toLowerCase();
+                            if (l.indexOf('hk') !== -1 || l.indexOf('yue') !== -1 || /粤|Cantonese|Sin-ji|Tracy/i.test(v.name)) return false;
+                            return l.indexOf('zh') === 0 || l.indexOf('cmn') === 0;
+                        }});
 
-                    var isLeft = {isLeftBool};
-                    var femaleVoices = voices.filter(function(v) {{
-                        return /Xiaoxiao|Xiaoyi|Huihui|Yaoyao|Female|Google|Mei-Jia|Sin-ji|Ting-Ting/i.test(v.name) && !/Yunxi|Kangkang|Yunjian|Male/i.test(v.name);
-                    }});
-                    var femaleYouth1 = femaleVoices[0] || voices[0];
-                    var femaleYouth2 = (femaleVoices.length > 1 ? femaleVoices[1] : femaleVoices[0]) || voices[0];
+                        var chosen = null;
+                        if (pref === 'google_cn') {{
+                            chosen = mandarinVoices.find(function(v) {{ return /Google.*普通话|Xiaoxiao|Xiaoyi|Natural/i.test(v.name); }})
+                                  || mandarinVoices.find(function(v) {{ return v.lang.toLowerCase().indexOf('cn') !== -1 && !/Kangkang|Yunxi|Yunjian|Male/i.test(v.name); }})
+                                  || mandarinVoices[0];
+                        }} else if (pref === 'tw') {{
+                            chosen = mandarinVoices.find(function(v) {{ return /Google.*國語|Taiwan|zh-TW|Hanhan|Yating|HsiaoChen/i.test(v.name + ' ' + v.lang); }})
+                                  || mandarinVoices.find(function(v) {{ return /Google.*普通话|Xiaoyi/i.test(v.name); }})
+                                  || mandarinVoices[0];
+                        }} else if (pref === 'yaoyao') {{
+                            chosen = mandarinVoices.find(function(v) {{ return /Yaoyao|Xiaoyi/i.test(v.name); }})
+                                  || mandarinVoices.find(function(v) {{ return /Google.*普通话/i.test(v.name); }})
+                                  || mandarinVoices[0];
+                        }} else if (pref === 'huihui') {{
+                            chosen = mandarinVoices.find(function(v) {{ return /Huihui|Xiaoxiao/i.test(v.name); }})
+                                  || mandarinVoices.find(function(v) {{ return /Google.*普通话/i.test(v.name); }})
+                                  || mandarinVoices[0];
+                        }} else {{
+                            chosen = mandarinVoices[0];
+                        }}
 
-                    if (isLeft) {{
-                        if (femaleYouth1) u.voice = femaleYouth1;
-                        u.pitch = 1.12;
-                        u.rate = 0.97;
-                    }} else {{
-                        if (femaleYouth2) u.voice = femaleYouth2;
-                        u.pitch = (femaleYouth2 === femaleYouth1) ? 0.98 : 1.04;
-                        u.rate = 1.02;
-                    }}
+                        var u = new SpeechSynthesisUtterance(clean);
+                        u.lang = (pref === 'tw') ? 'zh-TW' : 'zh-CN';
+                        if (chosen) {{
+                            u.voice = chosen;
+                            u.lang = chosen.lang || u.lang;
+                        }}
+                        u.pitch = targetPitch;
+                        u.rate = targetRate;
 
-                    window.speechSynthesis.speak(u);
+                        // Giữ tham chiếu toàn cục chống lỗi Chrome V8 Garbage Collector ngắt giọng giữa chừng
+                        window._activeChengyuUtterance = u;
+                        window.speechSynthesis.speak(u);
+                    }}, 55);
                 }})();";
             await JS.InvokeVoidAsync("eval", jsCode);
         }
@@ -1127,22 +1395,62 @@
         if (chat == null || chat.Messages.Count == 0) return;
         try
         {
-            var payload = chat.Messages.Select(m => new { text = m.Zh, sender = m.Sender }).ToList();
+            var leftP = GetVoicePreset(leftVoiceId);
+            var rightP = GetVoicePreset(rightVoiceId);
+
+            var payload = chat.Messages.Select(m =>
+            {
+                var isL = m.Sender.Equals("left", StringComparison.OrdinalIgnoreCase);
+                var p = isL ? leftP : rightP;
+                return new
+                {
+                    text = m.Zh,
+                    pref = p.EnginePref,
+                    pitch = p.Pitch,
+                    rate = p.Rate
+                };
+            }).ToList();
+
             var json = System.Text.Json.JsonSerializer.Serialize(payload);
 
             var jsCode = $@"
                 (function() {{
                     if (!('speechSynthesis' in window)) return;
+                    if (window._chengyuSpeakTimer) clearTimeout(window._chengyuSpeakTimer);
                     window.speechSynthesis.cancel();
+
                     var items = {json};
-                    var voices = window.speechSynthesis.getVoices().filter(function(v) {{
-                        return v.lang && (v.lang.indexOf('zh') === 0 || v.lang.indexOf('cmn') === 0);
+                    var allVoices = window.speechSynthesis.getVoices() || [];
+                    var mandarinVoices = allVoices.filter(function(v) {{
+                        if (!v.lang) return false;
+                        var l = v.lang.toLowerCase();
+                        if (l.indexOf('hk') !== -1 || l.indexOf('yue') !== -1 || /粤|Cantonese|Sin-ji|Tracy/i.test(v.name)) return false;
+                        return l.indexOf('zh') === 0 || l.indexOf('cmn') === 0;
                     }});
-                    var femaleVoices = voices.filter(function(v) {{
-                        return /Xiaoxiao|Xiaoyi|Huihui|Yaoyao|Female|Google|Mei-Jia|Sin-ji|Ting-Ting/i.test(v.name) && !/Yunxi|Kangkang|Yunjian|Male/i.test(v.name);
-                    }});
-                    var femaleYouth1 = femaleVoices[0] || voices[0];
-                    var femaleYouth2 = (femaleVoices.length > 1 ? femaleVoices[1] : femaleVoices[0]) || voices[0];
+
+                    function pickVoice(pref) {{
+                        if (pref === 'google_cn') {{
+                            return mandarinVoices.find(function(v) {{ return /Google.*普通话|Xiaoxiao|Xiaoyi|Natural/i.test(v.name); }})
+                                || mandarinVoices.find(function(v) {{ return v.lang.toLowerCase().indexOf('cn') !== -1 && !/Kangkang|Yunxi|Yunjian|Male/i.test(v.name); }})
+                                || mandarinVoices[0];
+                        }}
+                        if (pref === 'tw') {{
+                            return mandarinVoices.find(function(v) {{ return /Google.*國語|Taiwan|zh-TW|Hanhan|Yating|HsiaoChen/i.test(v.name + ' ' + v.lang); }})
+                                || mandarinVoices.find(function(v) {{ return /Google.*普通话|Xiaoyi/i.test(v.name); }})
+                                || mandarinVoices[0];
+                        }}
+                        if (pref === 'yaoyao') {{
+                            return mandarinVoices.find(function(v) {{ return /Yaoyao|Xiaoyi/i.test(v.name); }})
+                                || mandarinVoices.find(function(v) {{ return /Google.*普通话/i.test(v.name); }})
+                                || mandarinVoices[0];
+                        }}
+                        if (pref === 'huihui') {{
+                            return mandarinVoices.find(function(v) {{ return /Huihui|Xiaoxiao/i.test(v.name); }})
+                                || mandarinVoices.find(function(v) {{ return /Google.*普通话/i.test(v.name); }})
+                                || mandarinVoices[0];
+                        }}
+                        return mandarinVoices[0];
+                    }}
 
                     var i = 0;
                     function playNext() {{
@@ -1150,24 +1458,23 @@
                         var item = items[i];
                         var clean = item.text.replace(/[\u{{1F300}}-\u{{1FAFF}}\u{{2600}}-\u{{27BF}}]/gu, '').trim();
                         var u = new SpeechSynthesisUtterance(clean);
-                        u.lang = 'zh-CN';
-                        var isLeft = (item.sender === 'left');
-
-                        if (isLeft) {{
-                            if (femaleYouth1) u.voice = femaleYouth1;
-                            u.pitch = 1.12; u.rate = 0.97;
-                        }} else {{
-                            if (femaleYouth2) u.voice = femaleYouth2;
-                            u.pitch = (femaleYouth2 === femaleYouth1) ? 0.98 : 1.04; u.rate = 1.02;
+                        var chosen = pickVoice(item.pref);
+                        u.lang = (item.pref === 'tw') ? 'zh-TW' : 'zh-CN';
+                        if (chosen) {{
+                            u.voice = chosen;
+                            u.lang = chosen.lang || u.lang;
                         }}
+                        u.pitch = item.pitch;
+                        u.rate = item.rate;
 
                         u.onend = function() {{
                             i++;
-                            setTimeout(playNext, 420);
+                            window._chengyuSpeakTimer = setTimeout(playNext, 380);
                         }};
+                        window._activeChengyuUtterance = u;
                         window.speechSynthesis.speak(u);
                     }}
-                    playNext();
+                    window._chengyuSpeakTimer = setTimeout(playNext, 65);
                 }})();";
             await JS.InvokeVoidAsync("eval", jsCode);
         }
