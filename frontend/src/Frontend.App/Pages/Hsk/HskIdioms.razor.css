@@ -3,16 +3,17 @@
     max-width: 1420px;
     margin: 0 auto;
     padding: 1rem 0.5rem 2.5rem 0.5rem;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+    font-family: 'Be Vietnam Pro', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+    color: var(--ig-text, #0f172a);
 }
 
 /* Compact Hero Banner */
 .chengyu-hero {
-    background: linear-gradient(135deg, #dc2626 0%, #e11d48 50%, #d97706 100%);
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 55%, #991b1b 100%);
     border-radius: 1.25rem;
     padding: 1.4rem 1.75rem;
     color: #ffffff;
-    box-shadow: 0 8px 20px -5px rgba(220, 38, 38, 0.25);
+    box-shadow: 0 8px 22px -5px rgba(220, 38, 38, 0.28);
     margin-bottom: 1rem;
     display: flex;
     align-items: center;
@@ -56,6 +57,7 @@
     font-weight: 900;
     margin: 0 0 0.35rem 0;
     line-height: 1.2;
+    color: #ffffff;
 }
 
 .hero-desc {
@@ -106,7 +108,7 @@
     border-radius: 1rem;
     padding: 0.65rem 1rem;
     margin-bottom: 1rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -117,13 +119,13 @@
 .toolbar-left, .toolbar-right {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.65rem;
     flex-wrap: wrap;
 }
 
 .view-mode-toggle {
     display: flex;
-    background: var(--ig-bg-muted, #f1f5f9);
+    background: var(--ig-bg, #f1f5f9);
     padding: 0.22rem;
     border-radius: 0.65rem;
     border: 1px solid var(--ig-border, #e2e8f0);
@@ -136,7 +138,7 @@
     border-radius: 0.45rem;
     font-size: 0.78rem;
     font-weight: 700;
-    color: #64748b;
+    color: var(--ig-text-secondary, #64748b);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -144,50 +146,43 @@
     transition: all 0.18s;
 }
 
+.mode-btn:hover {
+    color: var(--ig-text, #0f172a);
+}
+
 .mode-btn.active {
-    background: #ef4444;
+    background: #dc2626;
     color: #ffffff;
-    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.25);
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3);
 }
 
-/* Voice Selector Pill */
-.voice-selector-pill {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    background: #f8fafc;
-    border: 1px solid #cbd5e1;
-    border-radius: 0.6rem;
-    padding: 0.28rem 0.65rem;
-}
-
-.voice-lbl {
-    font-size: 0.76rem;
-    font-weight: 700;
-    color: #334155;
-    white-space: nowrap;
-}
-
-.voice-select {
-    border: none;
-    background: transparent;
-    font-size: 0.76rem;
-    font-weight: 700;
-    color: #0f172a;
-    outline: none;
-    cursor: pointer;
-}
-
+/* Pinyin & Word-by-Word Toggle Buttons */
+.pinyin-mode-btn,
 .word-mode-btn {
-    padding: 0.38rem 0.75rem;
+    padding: 0.4rem 0.85rem;
     border-radius: 0.6rem;
-    border: 1px solid #cbd5e1;
-    background: #f8fafc;
-    color: #475569;
-    font-size: 0.76rem;
+    border: 1px solid var(--ig-border, #cbd5e1);
+    background: var(--ig-bg, #f8fafc);
+    color: var(--ig-text, #334155);
+    font-size: 0.78rem;
     font-weight: 700;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     transition: all 0.15s;
+}
+
+.pinyin-mode-btn:hover,
+.word-mode-btn:hover {
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+.pinyin-mode-btn.pinyin-hidden {
+    background: #f59e0b;
+    border-color: #f59e0b;
+    color: #ffffff;
 }
 
 .word-mode-btn.active {
@@ -226,7 +221,7 @@
     background: var(--ig-card-bg, #ffffff);
     border: 1px solid var(--ig-border, #e2e8f0);
     border-radius: 1.15rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     display: flex;
     flex-direction: column;
     height: 730px;
@@ -235,8 +230,8 @@
 
 .dir-header {
     padding: 0.85rem;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
+    background: var(--ig-bg, #f8fafc);
+    border-bottom: 1px solid var(--ig-border, #e2e8f0);
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
@@ -251,7 +246,7 @@
 .dir-title {
     font-size: 0.72rem;
     font-weight: 800;
-    color: #64748b;
+    color: var(--ig-text-secondary, #64748b);
     letter-spacing: 0.4px;
 }
 
@@ -261,7 +256,7 @@
     gap: 0.3rem;
     font-size: 0.72rem;
     font-weight: 600;
-    color: #475569;
+    color: var(--ig-text-secondary, #475569);
     cursor: pointer;
     margin: 0;
 }
@@ -276,21 +271,24 @@
     top: 50%;
     transform: translateY(-50%);
     font-size: 0.75rem;
-    color: #94a3b8;
+    color: var(--ig-text-secondary, #94a3b8);
 }
 
 .dir-search-input {
     width: 100%;
     padding: 0.42rem 1.8rem 0.42rem 1.9rem;
     font-size: 0.78rem;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--ig-border, #cbd5e1);
     border-radius: 0.55rem;
-    background: #ffffff;
+    background: var(--ig-surface, #ffffff);
+    color: var(--ig-text, #0f172a);
     outline: none;
+    box-sizing: border-box;
 }
 
 .dir-search-input:focus {
     border-color: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
 }
 
 .dir-clear-btn {
@@ -300,7 +298,7 @@
     transform: translateY(-50%);
     border: none;
     background: transparent;
-    color: #94a3b8;
+    color: var(--ig-text-secondary, #94a3b8);
     font-size: 0.78rem;
     cursor: pointer;
 }
@@ -316,16 +314,22 @@
     font-size: 0.68rem;
     font-weight: 700;
     border-radius: 0.4rem;
-    border: 1px solid #e2e8f0;
-    background: #ffffff;
-    color: #475569;
+    border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-surface, #ffffff);
+    color: var(--ig-text-secondary, #475569);
     cursor: pointer;
     white-space: nowrap;
+    transition: all 0.15s;
+}
+
+.dir-tab:hover {
+    border-color: #ef4444;
+    color: #ef4444;
 }
 
 .dir-tab.active {
-    background: #ef4444;
-    border-color: #ef4444;
+    background: #dc2626;
+    border-color: #dc2626;
     color: #ffffff;
 }
 
@@ -351,13 +355,13 @@
 }
 
 .dir-item:hover {
-    background: #f8fafc;
-    border-color: #e2e8f0;
+    background: var(--ig-bg, #f8fafc);
+    border-color: var(--ig-border, #e2e8f0);
 }
 
 .dir-item.active {
-    background: #fef2f2;
-    border-color: #fca5a5;
+    background: rgba(220, 38, 38, 0.1);
+    border-color: rgba(239, 68, 68, 0.45);
 }
 
 .dir-item-left {
@@ -371,8 +375,8 @@
     width: 24px;
     height: 24px;
     border-radius: 0.45rem;
-    background: #f1f5f9;
-    color: #64748b;
+    background: var(--ig-bg, #f1f5f9);
+    color: var(--ig-text-secondary, #64748b);
     font-size: 0.7rem;
     font-weight: 800;
     display: flex;
@@ -399,14 +403,14 @@
 .dir-hanzi {
     font-size: 0.98rem;
     font-weight: 900;
-    color: #0f172a;
+    color: var(--ig-text, #0f172a);
     font-family: "PingFang SC", "Microsoft YaHei", serif;
 }
 
 .dir-pinyin {
     font-size: 0.7rem;
     font-weight: 700;
-    color: #dc2626;
+    color: #ef4444;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -414,7 +418,7 @@
 
 .dir-vi {
     font-size: 0.72rem;
-    color: #64748b;
+    color: var(--ig-text-secondary, #64748b);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -441,7 +445,7 @@
     border: 1px solid var(--ig-border, #e2e8f0);
     border-radius: 1.15rem;
     padding: 1.15rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     height: 730px;
     overflow-y: auto;
     display: flex;
@@ -456,12 +460,12 @@
     gap: 0.5rem;
     flex-wrap: wrap;
     padding-bottom: 0.65rem;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--ig-border, #f1f5f9);
 }
 
 .enc-calligraphy-banner {
-    background: linear-gradient(135deg, #f8fafc 0%, #fef2f2 100%);
-    border: 1px solid #fecaca;
+    background: linear-gradient(135deg, var(--ig-bg, #f8fafc) 0%, rgba(239, 68, 68, 0.08) 100%);
+    border: 1px solid rgba(239, 68, 68, 0.3);
     border-radius: 0.95rem;
     padding: 0.85rem 1.1rem;
     display: flex;
@@ -474,7 +478,7 @@
 .enc-hanzi {
     font-size: 2.35rem;
     font-weight: 900;
-    color: #0f172a;
+    color: var(--ig-text, #0f172a);
     font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", serif;
     margin: 0;
     letter-spacing: 3px;
@@ -491,15 +495,15 @@
 .enc-pinyin {
     font-size: 1.1rem;
     font-weight: 800;
-    color: #dc2626;
+    color: #ef4444;
 }
 
 .enc-hanviet {
     font-size: 0.8rem;
     font-weight: 700;
-    color: #475569;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
+    color: var(--ig-text-secondary, #475569);
+    background: var(--ig-surface, #ffffff);
+    border: 1px solid var(--ig-border, #e2e8f0);
     padding: 0.1rem 0.45rem;
     border-radius: 0.35rem;
 }
@@ -512,14 +516,14 @@
     font-size: 0.68rem;
     font-weight: 800;
     text-transform: uppercase;
-    color: #94a3b8;
+    color: var(--ig-text-secondary, #94a3b8);
     display: block;
 }
 
 .enc-short-val {
     font-size: 0.98rem;
     font-weight: 800;
-    color: #1e293b;
+    color: var(--ig-text, #1e293b);
 }
 
 /* 4-Character Breakdown Grid */
@@ -535,7 +539,7 @@
     gap: 0.4rem;
     font-size: 0.72rem;
     font-weight: 800;
-    color: #64748b;
+    color: var(--ig-text-secondary, #64748b);
     letter-spacing: 0.3px;
 }
 
@@ -543,7 +547,7 @@
     width: 18px;
     height: 18px;
     border-radius: 4px;
-    background: #1e293b;
+    background: #dc2626;
     color: #ffffff;
     font-size: 0.68rem;
     display: inline-flex;
@@ -558,8 +562,8 @@
 }
 
 .char-card {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background: var(--ig-bg, #f8fafc);
+    border: 1px solid var(--ig-border, #e2e8f0);
     border-radius: 0.75rem;
     padding: 0.45rem 0.35rem;
     text-align: center;
@@ -569,20 +573,20 @@
 
 .char-card:hover {
     border-color: #ef4444;
-    background: #fff5f5;
+    background: rgba(239, 68, 68, 0.08);
     transform: translateY(-1px);
 }
 
 .char-py {
     font-size: 0.72rem;
     font-weight: 700;
-    color: #dc2626;
+    color: #ef4444;
 }
 
 .char-hz {
     font-size: 1.45rem;
     font-weight: 900;
-    color: #0f172a;
+    color: var(--ig-text, #0f172a);
     font-family: "PingFang SC", "Microsoft YaHei", serif;
     line-height: 1.2;
 }
@@ -591,12 +595,12 @@
     font-size: 0.68rem;
     font-weight: 800;
     text-transform: uppercase;
-    color: #334155;
+    color: var(--ig-text, #334155);
 }
 
 .char-vi {
     font-size: 0.68rem;
-    color: #64748b;
+    color: var(--ig-text-secondary, #64748b);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -608,7 +612,7 @@
     border: 1px solid var(--ig-border, #e2e8f0);
     border-radius: 1.15rem;
     padding: 1rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     height: 730px;
     display: flex;
     flex-direction: column;
@@ -678,9 +682,9 @@
 .cat-badge {
     padding: 0.18rem 0.55rem;
     border-radius: 0.4rem;
-    background: #fef2f2;
-    color: #b91c1c;
-    border: 1px solid #fee2e2;
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.28);
     font-size: 0.72rem;
     font-weight: 600;
 }
@@ -689,8 +693,8 @@
     font-size: 0.72rem;
     font-weight: 600;
     color: #d97706;
-    background: #fffbeb;
-    border: 1px solid #fef3c7;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.28);
     padding: 0.18rem 0.55rem;
     border-radius: 0.4rem;
 }
@@ -706,8 +710,8 @@
     height: 32px;
     border-radius: 0.5rem;
     border: 1px solid var(--ig-border, #e2e8f0);
-    background: var(--ig-card-bg, #ffffff);
-    color: #475569;
+    background: var(--ig-bg, #f8fafc);
+    color: var(--ig-text-secondary, #475569);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -723,17 +727,17 @@
 }
 
 .action-btn.fav-btn.active {
-    color: #d97706;
-    border-color: #fde68a;
-    background: #fffbeb;
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.45);
+    background: rgba(245, 158, 11, 0.12);
 }
 
 .action-btn-check {
     padding: 0.32rem 0.7rem;
     border-radius: 0.5rem;
-    border: 1px solid #a7f3d0;
-    background: #ecfdf5;
-    color: #047857;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
     font-size: 0.74rem;
     font-weight: 700;
     cursor: pointer;
@@ -753,11 +757,12 @@
     border-radius: 0.95rem;
     padding: 0.95rem;
     border: 1px solid var(--ig-border, #e2e8f0);
+    background: var(--ig-bg, #f8fafc);
 }
 
 .meaning-box {
-    background: linear-gradient(135deg, rgba(254, 242, 242, 0.5) 0%, rgba(255, 255, 255, 0.9) 50%, rgba(254, 243, 199, 0.35) 100%);
-    border-color: #fee2e2;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.06) 0%, var(--ig-bg, #f8fafc) 60%, rgba(245, 158, 11, 0.06) 100%);
+    border-color: rgba(239, 68, 68, 0.25);
 }
 
 .sec-title {
@@ -785,7 +790,7 @@
 
 .meaning-text {
     font-size: 0.86rem;
-    color: var(--ig-text-main, #1e293b);
+    color: var(--ig-text, #1e293b);
     line-height: 1.55;
     margin-bottom: 0.55rem;
 }
@@ -793,22 +798,23 @@
 .origin-story-box {
     margin-top: 0.55rem;
     padding-top: 0.55rem;
-    border-top: 1px solid rgba(239, 68, 68, 0.15);
+    border-top: 1px solid var(--ig-border, rgba(239, 68, 68, 0.15));
 }
 
 .origin-label {
     font-size: 0.72rem;
     font-weight: 700;
-    color: #92400e;
+    color: #d97706;
     margin-bottom: 0.25rem;
 }
 
 .origin-desc {
     font-size: 0.78rem;
-    color: #475569;
+    color: var(--ig-text-secondary, #475569);
     font-style: italic;
     line-height: 1.5;
-    background: rgba(254, 243, 199, 0.45);
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.2);
     padding: 0.55rem 0.75rem;
     border-radius: 0.55rem;
     margin: 0;
@@ -817,7 +823,7 @@
 .relation-tags-row {
     margin-top: 0.55rem;
     padding-top: 0.5rem;
-    border-top: 1px solid rgba(239, 68, 68, 0.15);
+    border-top: 1px solid var(--ig-border, rgba(239, 68, 68, 0.15));
     display: flex;
     flex-wrap: wrap;
     gap: 0.85rem;
@@ -826,7 +832,7 @@
 
 .rel-words {
     font-weight: 600;
-    color: #1e293b;
+    color: var(--ig-text, #1e293b);
     margin-left: 0.2rem;
 }
 
@@ -837,7 +843,7 @@
 }
 
 .example-item {
-    background: var(--ig-bg-muted, #f8fafc);
+    background: var(--ig-surface, #ffffff);
     border: 1px solid var(--ig-border, #e2e8f0);
     border-radius: 0.65rem;
     padding: 0.65rem 0.75rem;
@@ -853,16 +859,16 @@
 .ex-zh {
     font-size: 0.88rem;
     font-weight: 700;
-    color: var(--ig-text-main, #0f172a);
+    color: var(--ig-text, #0f172a);
 }
 
 .btn-play-sm {
     width: 24px;
     height: 24px;
     border-radius: 0.35rem;
-    border: 1px solid #cbd5e1;
-    background: #ffffff;
-    color: #2563eb;
+    border: 1px solid var(--ig-border, #cbd5e1);
+    background: var(--ig-bg, #f8fafc);
+    color: #3b82f6;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -871,16 +877,26 @@
     flex-shrink: 0;
 }
 
+.btn-play-sm:hover {
+    background: #3b82f6;
+    color: #ffffff;
+    border-color: #3b82f6;
+}
+
 .ex-pinyin {
     font-size: 0.74rem;
-    color: #2563eb;
+    color: #3b82f6;
     font-weight: 600;
     margin: 0.15rem 0;
 }
 
 .ex-vi {
     font-size: 0.76rem;
-    color: #475569;
+    color: var(--ig-text-secondary, #475569);
+}
+
+.ex-vi-lbl {
+    color: var(--ig-text, #0f172a);
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -888,7 +904,7 @@
    ══════════════════════════════════════════════════════════════════ */
 .wechat-phone-frame {
     background-color: #ededed;
-    border: 1.5px solid #cbd5e1;
+    border: 1.5px solid var(--ig-border, #cbd5e1);
     border-radius: 1.1rem;
     overflow: hidden;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
@@ -935,7 +951,7 @@
 .wb-contact {
     font-size: 0.86rem;
     font-weight: 700;
-    color: #000000;
+    color: #0f172a;
 }
 
 .wb-typing-status {
@@ -982,8 +998,9 @@
     gap: 8px;
 }
 
+/* Người bên phải (mèo mặc áo đỏ): Avatar nằm bên phải đoạn chat, bong bóng xanh nằm bên trái avatar */
 .wechat-msg-row.row-right {
-    justify-content: flex-end;
+    flex-direction: row-reverse;
 }
 
 .avatar-wrap {
@@ -1002,6 +1019,7 @@
     border-radius: 5px;
     object-fit: cover;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+    flex-shrink: 0;
 }
 
 .avatar-speaker-dot {
@@ -1018,7 +1036,11 @@
     justify-content: center;
 }
 .dot-left { background: #ec4899; }
-.dot-right { background: #2563eb; }
+.dot-right {
+    background: #ec4899;
+    right: auto;
+    left: -3px;
+}
 
 .msg-bubble-wrap {
     max-width: 84%;
@@ -1091,7 +1113,7 @@
     justify-content: center;
     padding: 2px 5px;
     border-radius: 5px;
-    background: rgba(255, 255, 255, 0.82);
+    background: rgba(255, 255, 255, 0.85);
     border: 1px solid rgba(148, 163, 184, 0.35);
     cursor: pointer;
     transition: all 0.12s;
@@ -1311,15 +1333,16 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.35rem;
+    gap: 0.3rem;
+    flex-wrap: wrap;
 }
 
 .btn-chat-tool {
     background: #f8fafc;
     border: 1px solid #cbd5e1;
     border-radius: 5px;
-    padding: 3px 7px;
-    font-size: 0.68rem;
+    padding: 3px 6px;
+    font-size: 0.66rem;
     font-weight: 700;
     color: #334155;
     cursor: pointer;
@@ -1354,7 +1377,7 @@
     gap: 1rem;
     flex-wrap: wrap;
     padding-bottom: 0.85rem;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--ig-border, #f1f5f9);
 }
 
 .card-heading-row {
@@ -1368,7 +1391,7 @@
 .card-hanzi {
     font-size: 2.5rem;
     font-weight: 900;
-    color: #0f172a;
+    color: var(--ig-text, #0f172a);
     margin: 0;
 }
 
@@ -1381,14 +1404,14 @@
 .card-pinyin {
     font-size: 1.25rem;
     font-weight: 700;
-    color: #dc2626;
+    color: #ef4444;
 }
 
 .card-hanviet {
     font-size: 0.9rem;
     font-weight: 600;
-    color: #64748b;
-    background: #f1f5f9;
+    color: var(--ig-text-secondary, #64748b);
+    background: var(--ig-bg, #f1f5f9);
     padding: 0.15rem 0.5rem;
     border-radius: 0.4rem;
 }
@@ -1425,8 +1448,8 @@
 
 .badge-wechat-hint {
     font-size: 0.7rem;
-    background: #dcfce7;
-    color: #15803d;
+    background: rgba(22, 163, 74, 0.12);
+    color: #16a34a;
     font-weight: 700;
     padding: 0.18rem 0.5rem;
     border-radius: 999px;
@@ -1447,13 +1470,13 @@
     display: flex;
     justify-content: space-between;
     font-weight: 700;
-    color: #64748b;
+    color: var(--ig-text-secondary, #64748b);
 }
 
 .flashcard-box {
     width: 100%;
     min-height: 260px;
-    background: #ffffff;
+    background: var(--ig-card-bg, #ffffff);
     border: 2px solid #ef4444;
     border-radius: 1.25rem;
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
@@ -1468,19 +1491,19 @@
 .fc-hanzi {
     font-size: 3.2rem;
     font-weight: 900;
-    color: #0f172a;
+    color: var(--ig-text, #0f172a);
     margin-bottom: 0.75rem;
 }
 
 .fc-hint {
     font-size: 0.85rem;
-    color: #94a3b8;
+    color: var(--ig-text-secondary, #94a3b8);
 }
 
 .fc-hanzi-sm {
     font-size: 2rem;
     font-weight: 800;
-    color: #0f172a;
+    color: var(--ig-text, #0f172a);
 }
 
 .fc-pinyin {
@@ -1492,13 +1515,13 @@
 .fc-hanviet {
     font-size: 0.9rem;
     font-weight: 600;
-    color: #64748b;
+    color: var(--ig-text-secondary, #64748b);
     margin-bottom: 0.5rem;
 }
 
 .fc-meaning {
     font-size: 0.95rem;
-    color: #1e293b;
+    color: var(--ig-text, #1e293b);
 }
 
 .flashcard-nav {
@@ -1510,10 +1533,492 @@
 .chengyu-loading, .chengyu-empty {
     text-align: center;
     padding: 3.5rem 1rem;
-    color: #64748b;
+    color: var(--ig-text-secondary, #64748b);
 }
 .empty-icon {
     font-size: 2.8rem;
-    color: #cbd5e1;
+    color: var(--ig-text-secondary, #cbd5e1);
     margin-bottom: 0.75rem;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DARK THEME OVERRIDES ([data-theme="dark"]) — ĐỒNG BỘ MÀU VỚI CÁC TRANG HSK
+   ══════════════════════════════════════════════════════════════════════════ */
+[data-theme="dark"] .chengyu-page-container {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .chengyu-toolbar,
+[data-theme="dark"] .studio-col-directory,
+[data-theme="dark"] .studio-col-encyclopedia,
+[data-theme="dark"] .studio-col-wechat,
+[data-theme="dark"] .chengyu-card,
+[data-theme="dark"] .flashcard-box {
+    background: #141721 !important;
+    border-color: #232838 !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-theme="dark"] .view-mode-toggle {
+    background: #0b0d13 !important;
+    border-color: #232838 !important;
+}
+
+[data-theme="dark"] .mode-btn {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .mode-btn:hover {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .mode-btn.active {
+    background: #dc2626 !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .pinyin-mode-btn,
+[data-theme="dark"] .word-mode-btn {
+    background: #1a1f2e !important;
+    border-color: #2d3548 !important;
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .pinyin-mode-btn:hover,
+[data-theme="dark"] .word-mode-btn:hover {
+    border-color: #f87171 !important;
+    color: #f87171 !important;
+}
+
+[data-theme="dark"] .pinyin-mode-btn.pinyin-hidden {
+    background: #d97706 !important;
+    border-color: #f59e0b !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .word-mode-btn.active {
+    background: #2563eb !important;
+    border-color: #3b82f6 !important;
+    color: #ffffff !important;
+}
+
+/* Directory Sidebar Dark Mode */
+[data-theme="dark"] .dir-header {
+    background: #10131c !important;
+    border-bottom-color: #232838 !important;
+}
+
+[data-theme="dark"] .dir-title {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .dir-hide-learned {
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .dir-search-input {
+    background: #181c29 !important;
+    border-color: #2d3548 !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .dir-search-input::placeholder {
+    color: #64748b !important;
+}
+
+[data-theme="dark"] .dir-tab {
+    background: #181c29 !important;
+    border-color: #2d3548 !important;
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .dir-tab:hover {
+    border-color: #f87171 !important;
+    color: #f87171 !important;
+}
+
+[data-theme="dark"] .dir-tab.active {
+    background: #dc2626 !important;
+    border-color: #dc2626 !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .dir-item:hover {
+    background: #1a1f2e !important;
+    border-color: #2d3548 !important;
+}
+
+[data-theme="dark"] .dir-item.active {
+    background: rgba(220, 38, 38, 0.18) !important;
+    border-color: rgba(248, 113, 113, 0.5) !important;
+}
+
+[data-theme="dark"] .dir-num {
+    background: #1e2436 !important;
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .dir-num.active {
+    background: #dc2626 !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .dir-hanzi {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .dir-pinyin {
+    color: #f87171 !important;
+}
+
+[data-theme="dark"] .dir-vi {
+    color: #94a3b8 !important;
+}
+
+/* Encyclopedia Column Dark Mode */
+[data-theme="dark"] .enc-top-bar,
+[data-theme="dark"] .card-top-bar {
+    border-bottom-color: #232838 !important;
+}
+
+[data-theme="dark"] .cat-badge {
+    background: rgba(239, 68, 68, 0.16) !important;
+    color: #fca5a5 !important;
+    border-color: rgba(239, 68, 68, 0.35) !important;
+}
+
+[data-theme="dark"] .hot-badge {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: #fcd34d !important;
+    border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+[data-theme="dark"] .action-btn {
+    background: #1a1f2e !important;
+    border-color: #2d3548 !important;
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .action-btn-check {
+    background: rgba(16, 185, 129, 0.14) !important;
+    border-color: rgba(16, 185, 129, 0.35) !important;
+    color: #34d399 !important;
+}
+
+[data-theme="dark"] .action-btn-check.learned {
+    background: #10b981 !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .enc-calligraphy-banner {
+    background: linear-gradient(135deg, #181c29 0%, rgba(190, 18, 60, 0.22) 100%) !important;
+    border-color: rgba(244, 63, 94, 0.38) !important;
+}
+
+[data-theme="dark"] .enc-hanzi,
+[data-theme="dark"] .card-hanzi,
+[data-theme="dark"] .fc-hanzi,
+[data-theme="dark"] .fc-hanzi-sm {
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .enc-pinyin,
+[data-theme="dark"] .card-pinyin,
+[data-theme="dark"] .fc-pinyin {
+    color: #f87171 !important;
+}
+
+[data-theme="dark"] .enc-hanviet,
+[data-theme="dark"] .card-hanviet {
+    background: #10131c !important;
+    border-color: #2d3548 !important;
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .enc-short-lbl {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .enc-short-val {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .char-sec-header {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .char-card {
+    background: #181c29 !important;
+    border-color: #262c3d !important;
+}
+
+[data-theme="dark"] .char-card:hover {
+    background: rgba(220, 38, 38, 0.16) !important;
+    border-color: #f87171 !important;
+}
+
+[data-theme="dark"] .char-py {
+    color: #f87171 !important;
+}
+
+[data-theme="dark"] .char-hz {
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .char-hv {
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .char-vi {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .section-box {
+    background: #181c29 !important;
+    border-color: #262c3d !important;
+}
+
+[data-theme="dark"] .meaning-box {
+    background: linear-gradient(135deg, rgba(190, 18, 60, 0.14) 0%, #181c29 60%, rgba(217, 119, 6, 0.08) 100%) !important;
+    border-color: rgba(244, 63, 94, 0.3) !important;
+}
+
+[data-theme="dark"] .meaning-text,
+[data-theme="dark"] .meaning-text strong,
+[data-theme="dark"] .fc-meaning {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .origin-story-box,
+[data-theme="dark"] .relation-tags-row {
+    border-top-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="dark"] .origin-label {
+    color: #fbbf24 !important;
+}
+
+[data-theme="dark"] .origin-desc {
+    background: #10131c !important;
+    border-color: rgba(251, 191, 36, 0.22) !important;
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .rel-words {
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .example-item {
+    background: #10131c !important;
+    border-color: #262c3d !important;
+}
+
+[data-theme="dark"] .ex-zh {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .ex-pinyin {
+    color: #60a5fa !important;
+}
+
+[data-theme="dark"] .ex-vi {
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .ex-vi-lbl {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .btn-play-sm {
+    background: #1a1f2e !important;
+    border-color: #2d3548 !important;
+    color: #60a5fa !important;
+}
+
+/* WeChat Phone Frame Dark Mode (Authentic WeChat Dark Theme) */
+[data-theme="dark"] .wechat-phone-frame {
+    background-color: #11141d !important;
+    border-color: #262c3d !important;
+}
+
+[data-theme="dark"] .wechat-topbar {
+    background-color: #181c29 !important;
+    border-bottom-color: #262c3d !important;
+}
+
+[data-theme="dark"] .wb-back,
+[data-theme="dark"] .wb-more {
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .wb-unread-pill {
+    background: #262c3d !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .wb-contact {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .wb-voice-tag {
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .wb-typing-status {
+    color: #34d399 !important;
+}
+
+[data-theme="dark"] .wechat-chat-body {
+    background-color: #11141d !important;
+}
+
+[data-theme="dark"] .wechat-timestamp {
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .wechat-bubble.bubble-white {
+    background-color: #1e2436 !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .wechat-bubble.bubble-white::before {
+    border-right-color: #1e2436 !important;
+}
+
+[data-theme="dark"] .wechat-bubble.bubble-green {
+    background-color: #1f5f35 !important;
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .wechat-bubble.bubble-green::before {
+    border-left-color: #1f5f35 !important;
+}
+
+[data-theme="dark"] .wechat-word-chip {
+    background: rgba(15, 19, 30, 0.72) !important;
+    border-color: rgba(148, 163, 184, 0.25) !important;
+}
+
+[data-theme="dark"] .wechat-word-chip:hover {
+    background: #262f47 !important;
+    border-color: #60a5fa !important;
+}
+
+[data-theme="dark"] .chip-py {
+    color: #60a5fa !important;
+}
+
+[data-theme="dark"] .chip-hz {
+    color: #f8fafc !important;
+}
+
+[data-theme="dark"] .chip-vi {
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .bubble-green .wechat-word-chip {
+    background: rgba(10, 28, 16, 0.65) !important;
+    border-color: rgba(74, 222, 128, 0.3) !important;
+}
+
+[data-theme="dark"] .bubble-green .chip-py {
+    color: #86efac !important;
+}
+
+[data-theme="dark"] .bubble-green .chip-hz {
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .bubble-green .chip-vi {
+    color: #dcfce7 !important;
+}
+
+[data-theme="dark"] .wechat-word-chip.chip-idiom {
+    background: rgba(220, 38, 38, 0.32) !important;
+    border-color: #f87171 !important;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.25) !important;
+}
+
+[data-theme="dark"] .wechat-word-chip.chip-idiom .chip-py {
+    color: #fca5a5 !important;
+}
+
+[data-theme="dark"] .wechat-word-chip.chip-idiom .chip-hz {
+    color: #fef08a !important;
+}
+
+[data-theme="dark"] .wechat-word-chip.chip-idiom .chip-vi {
+    color: #fecaca !important;
+}
+
+[data-theme="dark"] .idiom-inline-highlight {
+    background: rgba(239, 68, 68, 0.28) !important;
+    color: #fef08a !important;
+    border-bottom-color: #f87171 !important;
+}
+
+[data-theme="dark"] .wechat-dropdown-trans {
+    background: #181c29 !important;
+    border-color: #2d3548 !important;
+}
+
+[data-theme="dark"] .drop-pinyin {
+    color: #60a5fa !important;
+}
+
+[data-theme="dark"] .drop-vi {
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .drop-actions {
+    border-top-color: #262c3d !important;
+}
+
+[data-theme="dark"] .btn-drop-speak {
+    background: rgba(37, 99, 235, 0.2) !important;
+    border-color: rgba(96, 165, 250, 0.4) !important;
+    color: #93c5fd !important;
+}
+
+[data-theme="dark"] .drop-hint {
+    color: #64748b !important;
+}
+
+[data-theme="dark"] .wechat-bottom-input-bar {
+    background-color: #181c29 !important;
+    border-top-color: #262c3d !important;
+}
+
+[data-theme="dark"] .wechat-voice-icon-btn {
+    background: #11141d !important;
+    border-color: #2d3548 !important;
+    color: #34d399 !important;
+}
+
+[data-theme="dark"] .fake-input-box.interactive {
+    background: #11141d !important;
+    border-color: #2d3548 !important;
+    color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .fake-input-box.interactive:hover {
+    border-color: #10b981 !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] .wechat-card-footer {
+    background: #141721 !important;
+    border-top-color: #232838 !important;
+}
+
+[data-theme="dark"] .btn-chat-tool {
+    background: #1a1f2e !important;
+    border-color: #2d3548 !important;
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .btn-chat-tool:hover {
+    background: #242b3d !important;
+    border-color: #3b82f6 !important;
 }

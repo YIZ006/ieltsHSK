@@ -40,13 +40,13 @@
                 <div class="stat-lbl">WeChat Word-by-Word</div>
             </div>
             <div class="stat-card">
-                <div class="stat-num text-info">2 Giọng</div>
+                <div class="stat-num text-info">2 Nữ Trẻ</div>
                 <div class="stat-lbl">Voice Thanh Niên</div>
             </div>
         </div>
     </div>
 
-    @* ── TOP TOOLBAR: MODE SWITCHER & VOICE PROFILE ── *@
+    @* ── TOP TOOLBAR: MODE SWITCHER & DISPLAY CONTROLS ── *@
     <div class="chengyu-toolbar">
         <div class="toolbar-left">
             <div class="view-mode-toggle">
@@ -69,20 +69,17 @@
         </div>
 
         <div class="toolbar-right">
-            @* Dual Youth Voice Profile Selector *@
-            <div class="voice-selector-pill">
-                <span class="voice-lbl"><i class="bi bi-mic-fill text-danger"></i> Giọng 2 người chat:</span>
-                <select class="voice-select" @bind="youthVoicePairMode">
-                    <option value="mixed">👫 Đôi bạn Thanh niên (Nữ trẻ &amp; Nam trẻ)</option>
-                    <option value="two_male">👬 2 Nam Thanh niên (Bạn thân đối đáp)</option>
-                    <option value="two_female">👭 2 Nữ Thanh niên (Bạn thân đối đáp)</option>
-                </select>
-            </div>
+            <button type="button"
+                    class="pinyin-mode-btn @(showPinyin ? "active" : "pinyin-hidden")"
+                    @onclick="TogglePinyinMode"
+                    title="Ẩn hoặc hiện phiên âm Pinyin trên toàn trang và khung chat WeChat">
+                <i class="bi @(showPinyin ? "bi-eye-slash-fill" : "bi-eye-fill")"></i> @(showPinyin ? "Ẩn Pinyin" : "Hiện Pinyin")
+            </button>
 
             <button type="button"
                     class="word-mode-btn @(wordByWordMode ? "active" : "")"
                     @onclick="ToggleWordByWordMode"
-                    title="Bật/tắt chế độ bóc tách Pinyin và nghĩa của từng từ trong câu chat WeChat">
+                    title="Bật/tắt chế độ bóc tách từng từ trong câu chat WeChat">
                 <i class="bi bi-translate"></i> Tách từng từ: @(wordByWordMode ? "BẬT" : "TẮT")
             </button>
         </div>
@@ -170,7 +167,10 @@
                                 <div class="dir-info">
                                     <div class="dir-hz-row">
                                         <span class="dir-hanzi">@it.Hanzi</span>
-                                        <span class="dir-pinyin">@it.Pinyin</span>
+                                        @if (showPinyin)
+                                        {
+                                            <span class="dir-pinyin">@it.Pinyin</span>
+                                        }
                                     </div>
                                     <div class="dir-vi">@GetShortVi(it)</div>
                                 </div>
@@ -229,7 +229,10 @@
                     <div class="enc-cal-left">
                         <h2 class="enc-hanzi">@active.Hanzi</h2>
                         <div class="enc-phonetics">
-                            <span class="enc-pinyin">@active.Pinyin</span>
+                            @if (showPinyin)
+                            {
+                                <span class="enc-pinyin">@active.Pinyin</span>
+                            }
                             <span class="enc-hanviet">[@active.HanViet]</span>
                         </div>
                     </div>
@@ -249,7 +252,10 @@
                         @foreach (var ch in GetCharBreakdown(active))
                         {
                             <div class="char-card" @onclick='() => SpeakYouthText(ch.Char, "left")' title="Bấm để nghe phát âm chữ @ch.Char">
-                                <div class="char-py">@ch.Pinyin</div>
+                                @if (showPinyin)
+                                {
+                                    <div class="char-py">@ch.Pinyin</div>
+                                }
                                 <div class="char-hz">@ch.Char</div>
                                 <div class="char-hv">@ch.HanViet</div>
                                 <div class="char-vi">@ch.MeaningVi</div>
@@ -316,8 +322,11 @@
                                             <i class="bi bi-volume-up-fill"></i>
                                         </button>
                                     </div>
-                                    <div class="ex-pinyin">@ex.Pinyin</div>
-                                    <div class="ex-vi"><strong class="text-dark">Dịch:</strong> @ex.Vi</div>
+                                    @if (showPinyin)
+                                    {
+                                        <div class="ex-pinyin">@ex.Pinyin</div>
+                                    }
+                                    <div class="ex-vi"><strong class="ex-vi-lbl">Dịch:</strong> @ex.Vi</div>
                                 </div>
                             }
                         </div>
@@ -370,7 +379,7 @@
                                 }
                                 else
                                 {
-                                    <div class="wb-voice-tag">🎧 Giọng đôi bạn thanh niên</div>
+                                    <div class="wb-voice-tag">🎧 Giọng 2 nữ thanh niên</div>
                                 }
                             </div>
                             <div class="wb-more" @onclick="NextStudioIdiom" title="Thành ngữ tiếp theo">•••</div>
@@ -385,7 +394,7 @@
                                 var msg = visibleMsgs[mIdx];
                                 var isLeft = msg.Sender.Equals("left", StringComparison.OrdinalIgnoreCase);
                                 var avatar = isLeft ? chat.AvatarLeft : chat.AvatarRight;
-                                var speakerLabel = isLeft ? $"{chat.ContactName} (Thanh niên 1)" : $"{(string.IsNullOrEmpty(chat.RightSpeakerName) ? "阿明" : chat.RightSpeakerName)} (Thanh niên 2)";
+                                var speakerLabel = isLeft ? $"{chat.ContactName} (Nữ thanh niên 1)" : $"{(string.IsNullOrEmpty(chat.RightSpeakerName) ? "阿明" : chat.RightSpeakerName)} (Nữ thanh niên 2)";
                                 var isSpeakingNow = activeSpeakingMsgId == msg.Id;
 
                                 <div class="wechat-msg-row @(isLeft ? "row-left" : "row-right") msg-pop-anim">
@@ -412,7 +421,10 @@
                                                               @onclick:stopPropagation="true"
                                                               @onclick="() => SpeakYouthText(w.Word, msg.Sender)"
                                                               title="Bấm để nghe từ '@w.Word' (@w.MeaningVi)">
-                                                            <span class="chip-py">@w.Pinyin</span>
+                                                            @if (showPinyin)
+                                                            {
+                                                                <span class="chip-py">@w.Pinyin</span>
+                                                            }
                                                             <span class="chip-hz">@w.Word</span>
                                                             <span class="chip-vi">@w.MeaningVi</span>
                                                         </span>
@@ -431,7 +443,7 @@
                                         @if (msg.IsTranslationOpen || globalShowTrans)
                                         {
                                             <div class="wechat-dropdown-trans animate-slide-down">
-                                                @if (!wordByWordMode && !string.IsNullOrWhiteSpace(msg.Pinyin))
+                                                @if (showPinyin && !wordByWordMode && !string.IsNullOrWhiteSpace(msg.Pinyin))
                                                 {
                                                     <div class="drop-pinyin">@msg.Pinyin</div>
                                                 }
@@ -495,8 +507,11 @@
                             <button type="button" class="btn-chat-tool" @onclick="() => SpeakFullDialogueWithYouthVoices(chat)">
                                 <i class="bi bi-headphones text-success"></i> Nghe 2 người đối thoại
                             </button>
+                            <button type="button" class="btn-chat-tool" @onclick="TogglePinyinMode">
+                                <i class="bi @(showPinyin ? "bi-eye-slash-fill" : "bi-eye-fill") text-info"></i> @(showPinyin ? "Ẩn Pinyin" : "Hiện Pinyin")
+                            </button>
                             <button type="button" class="btn-chat-tool" @onclick="() => ShowAllSimMessages(chat)">
-                                <i class="bi bi-eye-fill text-warning"></i> Hiện đủ @totalMsgs câu
+                                <i class="bi bi-chat-dots-fill text-warning"></i> Hiện đủ @totalMsgs câu
                             </button>
                             <button type="button" class="btn-chat-tool" @onclick="() => ToggleCardTranslations(active)">
                                 <i class="bi bi-translate text-primary"></i> @(IsAnyTransOpen(active) ? "Ẩn dịch" : "Hiện dịch")
@@ -595,7 +610,10 @@
                     <div class="card-heading-row">
                         <h2 class="card-hanzi">@item.Hanzi</h2>
                         <div class="card-phonetic">
-                            <span class="card-pinyin">@item.Pinyin</span>
+                            @if (showPinyin)
+                            {
+                                <span class="card-pinyin">@item.Pinyin</span>
+                            }
                             <span class="card-hanviet">[@item.HanViet] — @GetShortVi(item)</span>
                         </div>
                     </div>
@@ -606,7 +624,10 @@
                                 @foreach (var ch in GetCharBreakdown(item))
                                 {
                                     <div class="char-card" @onclick='() => SpeakYouthText(ch.Char, "left")'>
-                                        <div class="char-py">@ch.Pinyin</div>
+                                        @if (showPinyin)
+                                        {
+                                            <div class="char-py">@ch.Pinyin</div>
+                                        }
                                         <div class="char-hz">@ch.Char</div>
                                         <div class="char-hv">@ch.HanViet</div>
                                         <div class="char-vi">@ch.MeaningVi</div>
@@ -646,8 +667,11 @@
                                                         <i class="bi bi-volume-up-fill"></i>
                                                     </button>
                                                 </div>
-                                                <div class="ex-pinyin">@ex.Pinyin</div>
-                                                <div class="ex-vi"><strong class="text-dark">Dịch nghĩa:</strong> @ex.Vi</div>
+                                                @if (showPinyin)
+                                                {
+                                                    <div class="ex-pinyin">@ex.Pinyin</div>
+                                                }
+                                                <div class="ex-vi"><strong class="ex-vi-lbl">Dịch nghĩa:</strong> @ex.Vi</div>
                                             </div>
                                         }
                                     </div>
@@ -694,7 +718,10 @@
                                                                     <span class="wechat-word-chip @(w.IsIdiom ? "chip-idiom" : "")"
                                                                           @onclick:stopPropagation="true"
                                                                           @onclick="() => SpeakYouthText(w.Word, msg.Sender)">
-                                                                        <span class="chip-py">@w.Pinyin</span>
+                                                                        @if (showPinyin)
+                                                                        {
+                                                                            <span class="chip-py">@w.Pinyin</span>
+                                                                        }
                                                                         <span class="chip-hz">@w.Word</span>
                                                                         <span class="chip-vi">@w.MeaningVi</span>
                                                                     </span>
@@ -747,7 +774,7 @@
     private bool isLoading = true;
 
     private string viewMode = "studio"; // "studio", "cards", "flashcard"
-    private string youthVoicePairMode = "mixed"; // "mixed", "two_male", "two_female"
+    private bool showPinyin = true;
     private bool wordByWordMode = true;
 
     private string searchQuery = "";
@@ -883,6 +910,11 @@
     private void ToggleWordByWordMode()
     {
         wordByWordMode = !wordByWordMode;
+    }
+
+    private void TogglePinyinMode()
+    {
+        showPinyin = !showPinyin;
     }
 
     private void ChangeLevel(string lvl)
@@ -1042,14 +1074,13 @@
         await SpeakYouthText(msg.Zh, msg.Sender);
     }
 
-    // ── DUAL YOUTH VOICE ENGINE (2 THANH NIÊN ĐỐI ĐÁP) ──
+    // ── DUAL FEMALE YOUTH VOICE ENGINE (2 NỮ THANH NIÊN ĐỐI ĐÁP) ──
     private async Task SpeakYouthText(string text, string senderSide)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         try
         {
             var rawJson = System.Text.Json.JsonSerializer.Serialize(text);
-            var modeJson = System.Text.Json.JsonSerializer.Serialize(youthVoicePairMode);
             var isLeftBool = senderSide.Equals("left", StringComparison.OrdinalIgnoreCase) ? "true" : "false";
 
             var jsCode = $@"
@@ -1067,30 +1098,21 @@
                         return v.lang && (v.lang.indexOf('zh') === 0 || v.lang.indexOf('cmn') === 0);
                     }});
 
-                    var mode = {modeJson};
                     var isLeft = {isLeftBool};
+                    var femaleVoices = voices.filter(function(v) {{
+                        return /Xiaoxiao|Xiaoyi|Huihui|Yaoyao|Female|Google|Mei-Jia|Sin-ji|Ting-Ting/i.test(v.name) && !/Yunxi|Kangkang|Yunjian|Male/i.test(v.name);
+                    }});
+                    var femaleYouth1 = femaleVoices[0] || voices[0];
+                    var femaleYouth2 = (femaleVoices.length > 1 ? femaleVoices[1] : femaleVoices[0]) || voices[0];
 
-                    var femaleYouth = voices.find(function(v) {{ return /Xiaoxiao|Xiaoyi|Huihui|Yaoyao|Female|Google/i.test(v.name); }}) || voices[0];
-                    var maleYouth = voices.find(function(v) {{ return /Yunxi|Kangkang|Yunjian|Male/i.test(v.name); }}) || (voices.length > 1 ? voices[1] : voices[0]);
-
-                    if (mode === 'mixed') {{
-                        if (isLeft) {{
-                            if (femaleYouth) u.voice = femaleYouth;
-                            u.pitch = 1.08;
-                            u.rate = 0.96;
-                        }} else {{
-                            if (maleYouth) u.voice = maleYouth;
-                            u.pitch = (maleYouth === femaleYouth) ? 0.86 : 0.96;
-                            u.rate = 1.0;
-                        }}
-                    }} else if (mode === 'two_male') {{
-                        if (maleYouth) u.voice = maleYouth;
-                        u.pitch = isLeft ? 0.96 : 0.85;
-                        u.rate = isLeft ? 0.98 : 1.03;
+                    if (isLeft) {{
+                        if (femaleYouth1) u.voice = femaleYouth1;
+                        u.pitch = 1.12;
+                        u.rate = 0.97;
                     }} else {{
-                        if (femaleYouth) u.voice = femaleYouth;
-                        u.pitch = isLeft ? 1.12 : 1.0;
-                        u.rate = isLeft ? 0.97 : 1.02;
+                        if (femaleYouth2) u.voice = femaleYouth2;
+                        u.pitch = (femaleYouth2 === femaleYouth1) ? 0.98 : 1.04;
+                        u.rate = 1.02;
                     }}
 
                     window.speechSynthesis.speak(u);
@@ -1107,19 +1129,20 @@
         {
             var payload = chat.Messages.Select(m => new { text = m.Zh, sender = m.Sender }).ToList();
             var json = System.Text.Json.JsonSerializer.Serialize(payload);
-            var modeJson = System.Text.Json.JsonSerializer.Serialize(youthVoicePairMode);
 
             var jsCode = $@"
                 (function() {{
                     if (!('speechSynthesis' in window)) return;
                     window.speechSynthesis.cancel();
                     var items = {json};
-                    var mode = {modeJson};
                     var voices = window.speechSynthesis.getVoices().filter(function(v) {{
                         return v.lang && (v.lang.indexOf('zh') === 0 || v.lang.indexOf('cmn') === 0);
                     }});
-                    var femaleYouth = voices.find(function(v) {{ return /Xiaoxiao|Xiaoyi|Huihui|Yaoyao|Female|Google/i.test(v.name); }}) || voices[0];
-                    var maleYouth = voices.find(function(v) {{ return /Yunxi|Kangkang|Yunjian|Male/i.test(v.name); }}) || (voices.length > 1 ? voices[1] : voices[0]);
+                    var femaleVoices = voices.filter(function(v) {{
+                        return /Xiaoxiao|Xiaoyi|Huihui|Yaoyao|Female|Google|Mei-Jia|Sin-ji|Ting-Ting/i.test(v.name) && !/Yunxi|Kangkang|Yunjian|Male/i.test(v.name);
+                    }});
+                    var femaleYouth1 = femaleVoices[0] || voices[0];
+                    var femaleYouth2 = (femaleVoices.length > 1 ? femaleVoices[1] : femaleVoices[0]) || voices[0];
 
                     var i = 0;
                     function playNext() {{
@@ -1130,20 +1153,12 @@
                         u.lang = 'zh-CN';
                         var isLeft = (item.sender === 'left');
 
-                        if (mode === 'mixed') {{
-                            if (isLeft) {{
-                                if (femaleYouth) u.voice = femaleYouth;
-                                u.pitch = 1.08; u.rate = 0.96;
-                            }} else {{
-                                if (maleYouth) u.voice = maleYouth;
-                                u.pitch = (maleYouth === femaleYouth) ? 0.86 : 0.96; u.rate = 1.0;
-                            }}
-                        }} else if (mode === 'two_male') {{
-                            if (maleYouth) u.voice = maleYouth;
-                            u.pitch = isLeft ? 0.96 : 0.85; u.rate = isLeft ? 0.98 : 1.03;
+                        if (isLeft) {{
+                            if (femaleYouth1) u.voice = femaleYouth1;
+                            u.pitch = 1.12; u.rate = 0.97;
                         }} else {{
-                            if (femaleYouth) u.voice = femaleYouth;
-                            u.pitch = isLeft ? 1.12 : 1.0; u.rate = isLeft ? 0.97 : 1.02;
+                            if (femaleYouth2) u.voice = femaleYouth2;
+                            u.pitch = (femaleYouth2 === femaleYouth1) ? 0.98 : 1.04; u.rate = 1.02;
                         }}
 
                         u.onend = function() {{
