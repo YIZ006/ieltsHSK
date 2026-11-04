@@ -6,105 +6,85 @@
 @inject HskChengyuService ChengyuService
 @inject IJSRuntime JS
 @inject NavigationManager NavManager
+@implements IDisposable
 
-<PageTitle>Bách Khoa Thành Ngữ HSK (成语) &amp; Hội Thoại WeChat | ieltsHSK</PageTitle>
+<PageTitle>Bách Khoa Thành Ngữ HSK (成语) &amp; Phòng Giả Lập Chat WeChat | ieltsHSK</PageTitle>
 
 <div class="chengyu-page-container">
-    @* ── HERO BANNER ── *@
+    @* ── COMPACT HERO BANNER ── *@
     <div class="chengyu-hero">
-        <div class="hero-top-badges">
-            <span class="badge-tag"><i class="bi bi-mortarboard-fill"></i> HSK 3.0 Chuyên đề</span>
-            <span class="badge-sub">Đột phá điểm Đọc hiểu &amp; Viết HSK 4 - 6</span>
+        <div class="hero-left">
+            <div class="hero-top-badges">
+                <span class="badge-tag"><i class="bi bi-stars"></i> HSK 3.0 Studio Mới</span>
+                <span class="badge-sub">Chiết tự từng chữ • Giả lập 2 thanh niên chat WeChat từng từ</span>
+            </div>
+            <h1 class="hero-title">
+                Bách Khoa Thành Ngữ HSK (成语) &amp; Phòng Chat WeChat
+            </h1>
+            <p class="hero-desc">
+                Nắm vững @(allItems?.Count ?? 25) thành ngữ trọng điểm HSK 4 - 6 qua chiết tự từng chữ Hán, điển cố lịch sử (典故) và phòng giả lập 2 bạn trẻ đối thoại WeChat có tách nghĩa từng từ kèm giọng đọc thanh niên tự nhiên.
+            </p>
         </div>
-        <h1 class="hero-title">
-            Thành Ngữ HSK &amp; Hội Thoại WeChat
-        </h1>
-        <p class="hero-desc">
-            Nắm vững ý nghĩa sâu sắc, nguồn gốc điển cố lịch sử (典故) và cách vận dụng tự nhiên trong đối thoại WeChat đời thường của người bản xứ.
-        </p>
 
-        @* Quick Stats Bar *@
         <div class="hero-stats-grid">
             <div class="stat-card">
-                <div class="stat-num">@(allItems?.Count ?? 0)</div>
-                <div class="stat-lbl">Thành ngữ tuyển chọn</div>
+                <div class="stat-num">@(allItems?.Count ?? 0) Từ</div>
+                <div class="stat-lbl">Thành ngữ HSK</div>
             </div>
             <div class="stat-card">
-                <div class="stat-num text-success">@learnedCount / @(allItems?.Count ?? 0)</div>
+                <div class="stat-num text-warning">@learnedCount / @(allItems?.Count ?? 0)</div>
                 <div class="stat-lbl">Đã thuộc (@learnedPercent%)</div>
             </div>
             <div class="stat-card">
-                <div class="stat-num text-warning">100%</div>
-                <div class="stat-lbl">Có Hội thoại WeChat</div>
+                <div class="stat-num text-emerald">Từng từ</div>
+                <div class="stat-lbl">WeChat Word-by-Word</div>
             </div>
             <div class="stat-card">
-                <div class="stat-num text-info">HSK 4 - 6</div>
-                <div class="stat-lbl">Phân cấp chuẩn khung</div>
+                <div class="stat-num text-info">2 Giọng</div>
+                <div class="stat-lbl">Voice Thanh Niên</div>
             </div>
         </div>
     </div>
 
-    @* ── TOOLBAR: SEARCH & FILTERS ── *@
+    @* ── TOP TOOLBAR: MODE SWITCHER & VOICE PROFILE ── *@
     <div class="chengyu-toolbar">
-        <div class="search-row">
-            <div class="search-input-wrap">
-                <i class="bi bi-search search-icon"></i>
-                <input type="text"
-                       class="chengyu-search-input"
-                       placeholder="Tìm theo chữ Hán (画蛇添足), Pinyin (hua she...), Hán Việt hoặc nghĩa tiếng Việt..."
-                       @bind="searchQuery"
-                       @bind:event="oninput"
-                       @bind:after="ApplyFilter" />
-                @if (!string.IsNullOrEmpty(searchQuery))
-                {
-                    <button type="button" class="btn-clear-search" @onclick="ClearSearch" title="Xóa tìm kiếm">
-                        <i class="bi bi-x-circle-fill"></i>
-                    </button>
-                }
-            </div>
-
+        <div class="toolbar-left">
             <div class="view-mode-toggle">
                 <button type="button"
-                        class="mode-btn @(!isFlashcardMode ? "active" : "")"
-                        @onclick="() => isFlashcardMode = false">
-                    <i class="bi bi-grid-fill"></i> Dạng Thẻ
+                        class="mode-btn @(viewMode == "studio" ? "active" : "")"
+                        @onclick='() => SwitchViewMode("studio")'>
+                    <i class="bi bi-layout-three-columns"></i> Phòng Studio &amp; WeChat (Gọn gàng)
                 </button>
                 <button type="button"
-                        class="mode-btn @(isFlashcardMode ? "active" : "")"
-                        @onclick="() => isFlashcardMode = true">
+                        class="mode-btn @(viewMode == "cards" ? "active" : "")"
+                        @onclick='() => SwitchViewMode("cards")'>
+                    <i class="bi bi-grid-fill"></i> Dạng Thẻ Đầy Đủ
+                </button>
+                <button type="button"
+                        class="mode-btn @(viewMode == "flashcard" ? "active" : "")"
+                        @onclick='() => SwitchViewMode("flashcard")'>
                     <i class="bi bi-card-checklist"></i> Luyện Flashcard
                 </button>
             </div>
         </div>
 
-        <div class="filter-pills-row">
-            @* Level filter pills *@
-            <div class="filter-group">
-                <span class="filter-lbl">Cấp độ:</span>
-                <button type="button" class="f-pill @(selectedLevel == "all" ? "active" : "")" @onclick='() => ChangeLevel("all")'>
-                    Tất cả (@(allItems?.Count ?? 0))
-                </button>
-                <button type="button" class="f-pill level-hsk4 @(selectedLevel == "HSK 4" ? "active" : "")" @onclick='() => ChangeLevel("HSK 4")'>
-                    HSK 4 (@hsk4Count)
-                </button>
-                <button type="button" class="f-pill level-hsk5 @(selectedLevel == "HSK 5" ? "active" : "")" @onclick='() => ChangeLevel("HSK 5")'>
-                    HSK 5 (@hsk5Count)
-                </button>
-                <button type="button" class="f-pill level-hsk6 @(selectedLevel == "HSK 6" ? "active" : "")" @onclick='() => ChangeLevel("HSK 6")'>
-                    HSK 6 (@hsk6Count)
-                </button>
+        <div class="toolbar-right">
+            @* Dual Youth Voice Profile Selector *@
+            <div class="voice-selector-pill">
+                <span class="voice-lbl"><i class="bi bi-mic-fill text-danger"></i> Giọng 2 người chat:</span>
+                <select class="voice-select" @bind="youthVoicePairMode">
+                    <option value="mixed">👫 Đôi bạn Thanh niên (Nữ trẻ &amp; Nam trẻ)</option>
+                    <option value="two_male">👬 2 Nam Thanh niên (Bạn thân đối đáp)</option>
+                    <option value="two_female">👭 2 Nữ Thanh niên (Bạn thân đối đáp)</option>
+                </select>
             </div>
 
-            @* Quick Toggles *@
-            <div class="filter-toggles">
-                <label class="toggle-cb">
-                    <input type="checkbox" @bind="hideLearned" @bind:after="ApplyFilter" />
-                    <span>Ẩn từ đã thuộc</span>
-                </label>
-                <button type="button" class="toggle-btn-sub" @onclick="ToggleAllGlobalTranslations">
-                    <i class="bi bi-translate"></i> @(globalShowTrans ? "Thu gọn bản dịch WeChat" : "Mở rộng bản dịch WeChat")
-                </button>
-            </div>
+            <button type="button"
+                    class="word-mode-btn @(wordByWordMode ? "active" : "")"
+                    @onclick="ToggleWordByWordMode"
+                    title="Bật/tắt chế độ bóc tách Pinyin và nghĩa của từng từ trong câu chat WeChat">
+                <i class="bi bi-translate"></i> Tách từng từ: @(wordByWordMode ? "BẬT" : "TẮT")
+            </button>
         </div>
     </div>
 
@@ -113,7 +93,7 @@
     {
         <div class="chengyu-loading">
             <div class="spinner-border text-danger" role="status"></div>
-            <p>Đang tải kho tàng thành ngữ HSK...</p>
+            <p>Đang tải kho tàng thành ngữ HSK &amp; hội thoại WeChat...</p>
         </div>
     }
     else if (filteredItems.Count == 0)
@@ -125,7 +105,410 @@
             <button class="btn btn-outline-danger btn-sm" @onclick="ResetFilter">Đặt lại bộ lọc</button>
         </div>
     }
-    else if (isFlashcardMode)
+    else if (viewMode == "studio")
+    {
+        @* ══════════════════════════════════════════════════════════════════
+           3-COLUMN STUDIO WORKSPACE (GỌN GÀNG & XỊN)
+           ══════════════════════════════════════════════════════════════════ *@
+        <div class="studio-workspace-grid">
+
+            @* ── COLUMN 1: COMPACT IDIOM DIRECTORY SIDEBAR ── *@
+            <div class="studio-col-directory">
+                <div class="dir-header">
+                    <div class="dir-title-row">
+                        <span class="dir-title">DANH MỤC THÀNH NGỮ (@filteredItems.Count)</span>
+                        <label class="dir-hide-learned">
+                            <input type="checkbox" @bind="hideLearned" @bind:after="ApplyFilter" />
+                            <span>Ẩn từ thuộc</span>
+                        </label>
+                    </div>
+
+                    <div class="dir-search-wrap">
+                        <i class="bi bi-search dir-search-icon"></i>
+                        <input type="text"
+                               class="dir-search-input"
+                               placeholder="Tìm 一心一意, yī xīn, nghĩa..."
+                               @bind="searchQuery"
+                               @bind:event="oninput"
+                               @bind:after="ApplyFilter" />
+                        @if (!string.IsNullOrEmpty(searchQuery))
+                        {
+                            <button type="button" class="dir-clear-btn" @onclick="ClearSearch">
+                                <i class="bi bi-x-circle-fill"></i>
+                            </button>
+                        }
+                    </div>
+
+                    <div class="dir-level-tabs">
+                        <button type="button" class="dir-tab @(selectedLevel == "all" ? "active" : "")" @onclick='() => ChangeLevel("all")'>
+                            Tất cả (@(allItems?.Count ?? 0))
+                        </button>
+                        <button type="button" class="dir-tab @(selectedLevel == "HSK 4" ? "active" : "")" @onclick='() => ChangeLevel("HSK 4")'>
+                            HSK 4 (@hsk4Count)
+                        </button>
+                        <button type="button" class="dir-tab @(selectedLevel == "HSK 5" ? "active" : "")" @onclick='() => ChangeLevel("HSK 5")'>
+                            HSK 5 (@hsk5Count)
+                        </button>
+                        <button type="button" class="dir-tab @(selectedLevel == "HSK 6" ? "active" : "")" @onclick='() => ChangeLevel("HSK 6")'>
+                            HSK 6 (@hsk6Count)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="dir-list-scroll">
+                    @for (int i = 0; i < filteredItems.Count; i++)
+                    {
+                        var idx = i;
+                        var it = filteredItems[idx];
+                        var isSelected = SelectedStudioItem.Id == it.Id;
+                        var numStr = (idx + 1).ToString("D2");
+
+                        <div class="dir-item @(isSelected ? "active" : "") @(it.IsLearned ? "is-learned" : "")"
+                             @onclick="() => SelectStudioIdiom(idx)">
+                            <div class="dir-item-left">
+                                <span class="dir-num @(isSelected ? "active" : "")">@numStr</span>
+                                <div class="dir-info">
+                                    <div class="dir-hz-row">
+                                        <span class="dir-hanzi">@it.Hanzi</span>
+                                        <span class="dir-pinyin">@it.Pinyin</span>
+                                    </div>
+                                    <div class="dir-vi">@GetShortVi(it)</div>
+                                </div>
+                            </div>
+                            <div class="dir-item-right">
+                                @if (it.IsLearned)
+                                {
+                                    <i class="bi bi-check-circle-fill text-success" title="Đã thuộc"></i>
+                                }
+                                <span class="dir-lvl-pill @GetLevelBadgeClass(it.HskLevel)">@it.HskLevel</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @* ── COLUMN 2: IDIOM ENCYCLOPEDIA & 4-CHAR BREAKDOWN ── *@
+            <div class="studio-col-encyclopedia">
+                @{
+                    var active = SelectedStudioItem;
+                }
+                <div class="enc-top-bar">
+                    <div class="card-meta">
+                        <span class="level-badge @GetLevelBadgeClass(active.HskLevel)">@active.HskLevel</span>
+                        @if (!string.IsNullOrWhiteSpace(active.CategoryVi))
+                        {
+                            <span class="cat-badge">@active.CategoryVi</span>
+                        }
+                        <span class="hot-badge"><i class="bi bi-star-fill text-warning"></i> @active.PopularityScore% Thông dụng</span>
+                    </div>
+
+                    <div class="card-actions">
+                        <button type="button"
+                                class="action-btn audio-btn"
+                                @onclick='() => SpeakYouthText(active.Hanzi, "left")'
+                                title="Nghe phát âm thành ngữ">
+                            <i class="bi bi-volume-up-fill"></i>
+                        </button>
+                        <button type="button"
+                                class="action-btn fav-btn @(active.IsFavorite ? "active" : "")"
+                                @onclick="() => ToggleFavorite(active)"
+                                title="Lưu yêu thích">
+                            <i class="bi @(active.IsFavorite ? "bi-star-fill text-warning" : "bi-star")"></i>
+                        </button>
+                        <button type="button"
+                                class="action-btn-check @(active.IsLearned ? "learned" : "")"
+                                @onclick="() => ToggleLearned(active)">
+                            <i class="bi @(active.IsLearned ? "bi-check2-circle" : "bi-circle")"></i>
+                            <span>@(active.IsLearned ? "Đã thuộc" : "Đánh dấu thuộc")</span>
+                        </button>
+                    </div>
+                </div>
+
+                @* Main Calligraphy Hero Box *@
+                <div class="enc-calligraphy-banner">
+                    <div class="enc-cal-left">
+                        <h2 class="enc-hanzi">@active.Hanzi</h2>
+                        <div class="enc-phonetics">
+                            <span class="enc-pinyin">@active.Pinyin</span>
+                            <span class="enc-hanviet">[@active.HanViet]</span>
+                        </div>
+                    </div>
+                    <div class="enc-cal-right">
+                        <span class="enc-short-lbl">Nghĩa cốt lõi</span>
+                        <div class="enc-short-val">@GetShortVi(active)</div>
+                    </div>
+                </div>
+
+                @* 4-Character Breakdown Grid (Chiết tự từng chữ Hán) *@
+                <div class="char-breakdown-section">
+                    <div class="char-sec-header">
+                        <span class="char-sec-icon">字</span>
+                        <span>CHIẾT TỰ TỪNG CHỮ HÁN (BẤM VÀO CHỮ ĐỂ NGHE)</span>
+                    </div>
+                    <div class="char-grid-4">
+                        @foreach (var ch in GetCharBreakdown(active))
+                        {
+                            <div class="char-card" @onclick='() => SpeakYouthText(ch.Char, "left")' title="Bấm để nghe phát âm chữ @ch.Char">
+                                <div class="char-py">@ch.Pinyin</div>
+                                <div class="char-hz">@ch.Char</div>
+                                <div class="char-hv">@ch.HanViet</div>
+                                <div class="char-vi">@ch.MeaningVi</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @* 1. Ý Nghĩa & Điển Cố Lịch Sử *@
+                <div class="section-box meaning-box">
+                    <div class="sec-title text-danger">
+                        <span class="sec-num bg-danger">1</span> Ý Nghĩa &amp; Điển Cố Lịch Sử (典故)
+                    </div>
+                    <div class="meaning-text">
+                        ▸ <strong>@active.MeaningVi</strong>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(active.OriginStory))
+                    {
+                        <div class="origin-story-box">
+                            <div class="origin-label">
+                                <i class="bi bi-book-half"></i> Nguồn gốc điển tích (典故):
+                            </div>
+                            <p class="origin-desc">@active.OriginStory</p>
+                        </div>
+                    }
+
+                    @if ((active.Synonyms?.Count ?? 0) > 0 || (active.Antonyms?.Count ?? 0) > 0)
+                    {
+                        <div class="relation-tags-row">
+                            @if (active.Synonyms != null && active.Synonyms.Count > 0)
+                            {
+                                <div class="rel-group">
+                                    <span class="text-success fw-bold">✓ Cận nghĩa:</span>
+                                    <span class="rel-words">@string.Join(", ", active.Synonyms)</span>
+                                </div>
+                            }
+                            @if (active.Antonyms != null && active.Antonyms.Count > 0)
+                            {
+                                <div class="rel-group">
+                                    <span class="text-danger fw-bold">✗ Trái nghĩa:</span>
+                                    <span class="rel-words">@string.Join(", ", active.Antonyms)</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @* 2. Ví Dụ Bài Học Chuẩn Đề Thi HSK *@
+                @if (active.HskExamples != null && active.HskExamples.Count > 0)
+                {
+                    <div class="section-box examples-box">
+                        <div class="sec-title text-primary">
+                            <span class="sec-num bg-primary">2</span> Ví Dụ Câu Chuẩn Đề Thi HSK
+                        </div>
+
+                        <div class="examples-list">
+                            @foreach (var ex in active.HskExamples)
+                            {
+                                <div class="example-item">
+                                    <div class="ex-zh-row">
+                                        <span class="ex-zh">@ex.Zh</span>
+                                        <button type="button" class="btn-play-sm" @onclick='() => SpeakYouthText(ex.Zh, "right")' title="Nghe câu ví dụ này">
+                                            <i class="bi bi-volume-up-fill"></i>
+                                        </button>
+                                    </div>
+                                    <div class="ex-pinyin">@ex.Pinyin</div>
+                                    <div class="ex-vi"><strong class="text-dark">Dịch:</strong> @ex.Vi</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @* ── COLUMN 3: LIVE WECHAT SIMULATOR (2 YOUTH VOICES & WORD-BY-WORD) ── *@
+            <div class="studio-col-wechat">
+                @{
+                    var chat = active.WechatChat;
+                }
+                <div class="wechat-sim-header">
+                    <div class="sec-title text-success m-0">
+                        <span class="sec-num bg-success">3</span> Giả Lập WeChat (2 Thanh Niên)
+                    </div>
+                    <div class="sim-top-btns">
+                        @if (isSimPlaying)
+                        {
+                            <button type="button" class="btn-sim-stop" @onclick="StopLiveSimulation">
+                                <i class="bi bi-stop-circle-fill"></i> Dừng phát
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn-sim-play" @onclick="() => StartLiveSimulation(active)">
+                                <i class="bi bi-play-circle-fill"></i> Phát giả lập Chat
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                @if (chat != null && chat.Messages.Count > 0)
+                {
+                    var totalMsgs = chat.Messages.Count;
+                    var visibleMsgs = chat.Messages.Take(simVisibleCount).ToList();
+
+                    <div class="wechat-phone-frame">
+                        @* Authentic WeChat Top Navigation Bar *@
+                        <div class="wechat-topbar">
+                            <div class="wb-back" @onclick="PrevStudioIdiom" title="Thành ngữ trước">
+                                <i class="bi bi-chevron-left"></i>
+                                <span class="wb-unread-pill">@filteredItems.Count</span>
+                            </div>
+                            <div class="wb-center-stack">
+                                <div class="wb-contact">@chat.ContactName &amp; @(string.IsNullOrEmpty(chat.RightSpeakerName) ? "阿明" : chat.RightSpeakerName)</div>
+                                @if (isTypingIndicatorVisible)
+                                {
+                                    <div class="wb-typing-status">对方正在输入... (Đang gõ tin nhắn...)</div>
+                                }
+                                else
+                                {
+                                    <div class="wb-voice-tag">🎧 Giọng đôi bạn thanh niên</div>
+                                }
+                            </div>
+                            <div class="wb-more" @onclick="NextStudioIdiom" title="Thành ngữ tiếp theo">•••</div>
+                        </div>
+
+                        @* WeChat Scrollable Conversation Body *@
+                        <div class="wechat-chat-body">
+                            <div class="wechat-timestamp">@chat.Timestamp • Chủ đề: @active.Hanzi (@GetShortVi(active))</div>
+
+                            @for (int mIdx = 0; mIdx < visibleMsgs.Count; mIdx++)
+                            {
+                                var msg = visibleMsgs[mIdx];
+                                var isLeft = msg.Sender.Equals("left", StringComparison.OrdinalIgnoreCase);
+                                var avatar = isLeft ? chat.AvatarLeft : chat.AvatarRight;
+                                var speakerLabel = isLeft ? $"{chat.ContactName} (Thanh niên 1)" : $"{(string.IsNullOrEmpty(chat.RightSpeakerName) ? "阿明" : chat.RightSpeakerName)} (Thanh niên 2)";
+                                var isSpeakingNow = activeSpeakingMsgId == msg.Id;
+
+                                <div class="wechat-msg-row @(isLeft ? "row-left" : "row-right") msg-pop-anim">
+                                    <div class="avatar-wrap @(isSpeakingNow ? "speaking-ring" : "")"
+                                         @onclick="() => SpeakWechatSingleMessage(msg)"
+                                         title="Bấm nghe giọng của @speakerLabel">
+                                        <img src="@avatar" alt="Avatar" class="msg-avatar" />
+                                        <span class="avatar-speaker-dot @(isLeft ? "dot-left" : "dot-right")">
+                                            <i class="bi bi-volume-up-fill"></i>
+                                        </span>
+                                    </div>
+
+                                    <div class="msg-bubble-wrap">
+                                        @* Bubble with Word-by-Word Chips OR Highlighted Sentence *@
+                                        <div class="wechat-bubble @(isLeft ? "bubble-white" : "bubble-green") @(isSpeakingNow ? "bubble-speaking" : "")"
+                                             @onclick="() => ToggleMessageDropdown(msg)">
+
+                                            @if (wordByWordMode && msg.Words != null && msg.Words.Count > 0)
+                                            {
+                                                <div class="word-chips-container">
+                                                    @foreach (var w in msg.Words)
+                                                    {
+                                                        <span class="wechat-word-chip @(w.IsIdiom ? "chip-idiom" : "")"
+                                                              @onclick:stopPropagation="true"
+                                                              @onclick="() => SpeakYouthText(w.Word, msg.Sender)"
+                                                              title="Bấm để nghe từ '@w.Word' (@w.MeaningVi)">
+                                                            <span class="chip-py">@w.Pinyin</span>
+                                                            <span class="chip-hz">@w.Word</span>
+                                                            <span class="chip-vi">@w.MeaningVi</span>
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="plain-zh-line">
+                                                    @RenderHighlightedSentence(msg.Zh, msg.HighlightIdiom ?? active.Hanzi)
+                                                </div>
+                                            }
+                                        </div>
+
+                                        @* Expandable Full Sentence Translation Bar *@
+                                        @if (msg.IsTranslationOpen || globalShowTrans)
+                                        {
+                                            <div class="wechat-dropdown-trans animate-slide-down">
+                                                @if (!wordByWordMode && !string.IsNullOrWhiteSpace(msg.Pinyin))
+                                                {
+                                                    <div class="drop-pinyin">@msg.Pinyin</div>
+                                                }
+                                                <div class="drop-vi">
+                                                    <i class="bi bi-chat-left-quote-fill text-success me-1"></i>@msg.Vi
+                                                </div>
+                                                <div class="drop-actions">
+                                                    <button type="button"
+                                                            class="btn-drop-speak"
+                                                            @onclick:stopPropagation="true"
+                                                            @onclick="() => SpeakWechatSingleMessage(msg)">
+                                                        <i class="bi bi-volume-up-fill"></i> Nghe @(isLeft ? "Bạn Trái" : "Bạn Phải") nói
+                                                    </button>
+                                                    <span class="drop-hint">Bấm từ bất kỳ để nghe lẻ</span>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            @* Live Typing Indicator Bubble *@
+                            @if (isTypingIndicatorVisible)
+                            {
+                                var nextSenderIsLeft = (simVisibleCount % 2 == 0);
+                                var typingAvatar = nextSenderIsLeft ? chat.AvatarLeft : chat.AvatarRight;
+                                <div class="wechat-msg-row @(nextSenderIsLeft ? "row-left" : "row-right") msg-pop-anim">
+                                    <img src="@typingAvatar" alt="Typing" class="msg-avatar" />
+                                    <div class="wechat-bubble @(nextSenderIsLeft ? "bubble-white" : "bubble-green") typing-bubble">
+                                        <span class="t-dot"></span>
+                                        <span class="t-dot"></span>
+                                        <span class="t-dot"></span>
+                                        <span class="typing-txt">Đang gõ tin nhắn...</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        @* Interactive WeChat Input Bar (Step-by-step control) *@
+                        <div class="wechat-bottom-input-bar">
+                            <button type="button" class="wechat-voice-icon-btn" @onclick="() => SpeakFullDialogueWithYouthVoices(chat)" title="Nghe 2 thanh niên đối thoại toàn bộ">
+                                <i class="bi bi-soundwave"></i>
+                            </button>
+                            <div class="fake-input-box interactive" @onclick="() => StepNextSimMessage(chat)">
+                                @if (simVisibleCount < totalMsgs)
+                                {
+                                    <span>💬 Bấm gửi tin @(simVisibleCount + 1)/@totalMsgs: "@TruncateText(chat.Messages[simVisibleCount].Zh, 18)"</span>
+                                }
+                                else
+                                {
+                                    <span>✅ Đã hiện đủ @totalMsgs/@totalMsgs câu (Bấm để gửi lại từ câu 1)</span>
+                                }
+                            </div>
+                            <button type="button" class="btn-wechat-send" @onclick="() => StepNextSimMessage(chat)">
+                                Gửi ↵
+                            </button>
+                        </div>
+
+                        @* Bottom Utility Footer *@
+                        <div class="wechat-card-footer">
+                            <button type="button" class="btn-chat-tool" @onclick="() => SpeakFullDialogueWithYouthVoices(chat)">
+                                <i class="bi bi-headphones text-success"></i> Nghe 2 người đối thoại
+                            </button>
+                            <button type="button" class="btn-chat-tool" @onclick="() => ShowAllSimMessages(chat)">
+                                <i class="bi bi-eye-fill text-warning"></i> Hiện đủ @totalMsgs câu
+                            </button>
+                            <button type="button" class="btn-chat-tool" @onclick="() => ToggleCardTranslations(active)">
+                                <i class="bi bi-translate text-primary"></i> @(IsAnyTransOpen(active) ? "Ẩn dịch" : "Hiện dịch")
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+
+        </div>
+    }
+    else if (viewMode == "flashcard")
     {
         @* ── FLASHCARD REVIEW MODE ── *@
         <div class="flashcard-container">
@@ -139,7 +522,7 @@
                 {
                     <div class="card-face front">
                         <div class="fc-hanzi">@CurrentCard.Hanzi</div>
-                        <div class="fc-hint">Chạm vào thẻ để lật xem nghĩa &amp; đối thoại</div>
+                        <div class="fc-hint">Chạm vào thẻ để lật xem chiết tự, nghĩa &amp; hội thoại</div>
                     </div>
                 }
                 else
@@ -147,10 +530,10 @@
                     <div class="card-face back">
                         <div class="fc-hanzi-sm">@CurrentCard.Hanzi</div>
                         <div class="fc-pinyin">@CurrentCard.Pinyin</div>
-                        <div class="fc-hanviet">[@CurrentCard.HanViet]</div>
+                        <div class="fc-hanviet">[@CurrentCard.HanViet] — @GetShortVi(CurrentCard)</div>
                         <div class="fc-meaning">@CurrentCard.MeaningVi</div>
-                        <button class="btn btn-sm btn-outline-danger mt-2" @onclick:stopPropagation="true" @onclick="() => SpeakText(CurrentCard.Hanzi)">
-                            <i class="bi bi-volume-up-fill"></i> Nghe phát âm
+                        <button class="btn btn-sm btn-outline-danger mt-2" @onclick:stopPropagation="true" @onclick='() => SpeakYouthText(CurrentCard.Hanzi, "left")'>
+                            <i class="bi bi-volume-up-fill"></i> Nghe phát âm thanh niên
                         </button>
                     </div>
                 }
@@ -172,13 +555,11 @@
     }
     else
     {
-        @* ── FULL CARDS GRID (DEFAULT MODE) ── *@
+        @* ── FULL CARDS STACK MODE ── *@
         <div class="chengyu-cards-stack">
             @foreach (var item in filteredItems)
             {
                 <div class="chengyu-card" id="@item.Id">
-                    
-                    @* Card Top Bar *@
                     <div class="card-top-bar">
                         <div class="card-meta">
                             <span class="level-badge @GetLevelBadgeClass(item.HskLevel)">@item.HskLevel</span>
@@ -192,7 +573,7 @@
                         <div class="card-actions">
                             <button type="button"
                                     class="action-btn audio-btn"
-                                    @onclick="() => SpeakText(item.Hanzi)"
+                                    @onclick='() => SpeakYouthText(item.Hanzi, "left")'
                                     title="Nghe phát âm chuẩn">
                                 <i class="bi bi-volume-up-fill"></i>
                             </button>
@@ -211,76 +592,57 @@
                         </div>
                     </div>
 
-                    @* Main Heading: Hanzi, Pinyin, HanViet *@
                     <div class="card-heading-row">
                         <h2 class="card-hanzi">@item.Hanzi</h2>
                         <div class="card-phonetic">
                             <span class="card-pinyin">@item.Pinyin</span>
-                            <span class="card-hanviet">[@item.HanViet]</span>
+                            <span class="card-hanviet">[@item.HanViet] — @GetShortVi(item)</span>
                         </div>
                     </div>
 
-                    @* Split Grid: Left Details & Right WeChat Phone *@
                     <div class="card-split-grid">
-                        
-                        @* ── LEFT COLUMN: MEANING, STORY, HSK EXAMPLES ── *@
                         <div class="col-details">
-                            
-                            @* 1. Ý Nghĩa & Điển Tích *@
+                            <div class="char-grid-4 mb-2">
+                                @foreach (var ch in GetCharBreakdown(item))
+                                {
+                                    <div class="char-card" @onclick='() => SpeakYouthText(ch.Char, "left")'>
+                                        <div class="char-py">@ch.Pinyin</div>
+                                        <div class="char-hz">@ch.Char</div>
+                                        <div class="char-hv">@ch.HanViet</div>
+                                        <div class="char-vi">@ch.MeaningVi</div>
+                                    </div>
+                                }
+                            </div>
+
                             <div class="section-box meaning-box">
                                 <div class="sec-title text-danger">
                                     <span class="sec-num bg-danger">1</span> Ý Nghĩa &amp; Ngữ Cảnh Sử Dụng
                                 </div>
                                 <div class="meaning-text">
-                                    👉 <strong>@item.MeaningVi</strong>
+                                    ▸ <strong>@item.MeaningVi</strong>
                                 </div>
-
                                 @if (!string.IsNullOrWhiteSpace(item.OriginStory))
                                 {
                                     <div class="origin-story-box">
-                                        <div class="origin-label">
-                                            <i class="bi bi-book-half text-amber-600"></i> Nguồn gốc điển cố lịch sử (典故):
-                                        </div>
+                                        <div class="origin-label"><i class="bi bi-book-half"></i> Nguồn gốc điển cố lịch sử (典故):</div>
                                         <p class="origin-desc">@item.OriginStory</p>
-                                    </div>
-                                }
-
-                                @if ((item.Synonyms?.Count ?? 0) > 0 || (item.Antonyms?.Count ?? 0) > 0)
-                                {
-                                    <div class="relation-tags-row">
-                                        @if (item.Synonyms != null && item.Synonyms.Count > 0)
-                                        {
-                                            <div class="rel-group">
-                                                <span class="text-success fw-bold">✓ Cận nghĩa:</span>
-                                                <span class="rel-words">@string.Join(", ", item.Synonyms)</span>
-                                            </div>
-                                        }
-                                        @if (item.Antonyms != null && item.Antonyms.Count > 0)
-                                        {
-                                            <div class="rel-group">
-                                                <span class="text-danger fw-bold">✗ Trái nghĩa:</span>
-                                                <span class="rel-words">@string.Join(", ", item.Antonyms)</span>
-                                            </div>
-                                        }
                                     </div>
                                 }
                             </div>
 
-                            @* 2. Ví Dụ Bài Học Chuẩn HSK *@
                             @if (item.HskExamples != null && item.HskExamples.Count > 0)
                             {
                                 <div class="section-box examples-box">
                                     <div class="sec-title text-primary">
                                         <span class="sec-num bg-primary">2</span> Ví Dụ Bài Học Chuẩn Đề Thi HSK
                                     </div>
-
                                     <div class="examples-list">
                                         @foreach (var ex in item.HskExamples)
                                         {
                                             <div class="example-item">
                                                 <div class="ex-zh-row">
                                                     <span class="ex-zh">@ex.Zh</span>
-                                                    <button type="button" class="btn-play-sm" @onclick="() => SpeakText(ex.Zh)" title="Nghe câu này">
+                                                    <button type="button" class="btn-play-sm" @onclick='() => SpeakYouthText(ex.Zh, "right")'>
                                                         <i class="bi bi-volume-up-fill"></i>
                                                     </button>
                                                 </div>
@@ -291,29 +653,25 @@
                                     </div>
                                 </div>
                             }
-
                         </div>
 
-                        @* ── RIGHT COLUMN: WECHAT CONVERSATION SIMULATOR CARD ── *@
                         <div class="col-wechat">
                             <div class="wechat-header-meta">
                                 <div class="sec-title text-success">
                                     <span class="sec-num bg-success">3</span> Hội Thoại WeChat Thực Tế
                                 </div>
-                                <span class="badge-wechat-hint">Chạm vào câu để dịch xổ xuống</span>
+                                <span class="badge-wechat-hint">Bấm từ để nghe • Bấm câu để dịch</span>
                             </div>
 
                             @if (item.WechatChat != null && item.WechatChat.Messages.Count > 0)
                             {
                                 <div class="wechat-phone-frame">
-                                    @* Top Bar *@
                                     <div class="wechat-topbar">
                                         <div class="wb-back"><i class="bi bi-chevron-left"></i></div>
                                         <div class="wb-contact">@item.WechatChat.ContactName</div>
                                         <div class="wb-more">•••</div>
                                     </div>
 
-                                    @* Body *@
                                     <div class="wechat-chat-body">
                                         <div class="wechat-timestamp">@item.WechatChat.Timestamp</div>
 
@@ -323,33 +681,40 @@
                                             var avatar = isLeft ? item.WechatChat.AvatarLeft : item.WechatChat.AvatarRight;
 
                                             <div class="wechat-msg-row @(isLeft ? "row-left" : "row-right")">
-                                                <img src="@avatar" alt="Avatar" class="msg-avatar" />
-                                                
+                                                <img src="@avatar" alt="Avatar" class="msg-avatar" @onclick="() => SpeakWechatSingleMessage(msg)" />
+
                                                 <div class="msg-bubble-wrap">
-                                                    @* Clickable Bubble *@
-                                                    <div class="wechat-bubble @(isLeft ? "bubble-white" : "bubble-green") cursor-pointer"
-                                                         @onclick="() => ToggleMessageDropdown(msg)"
-                                                         title="Bấm để xổ xuống bản dịch câu này">
-                                                        <span>@msg.Zh</span>
+                                                    <div class="wechat-bubble @(isLeft ? "bubble-white" : "bubble-green")"
+                                                         @onclick="() => ToggleMessageDropdown(msg)">
+                                                        @if (wordByWordMode && msg.Words != null && msg.Words.Count > 0)
+                                                        {
+                                                            <div class="word-chips-container">
+                                                                @foreach (var w in msg.Words)
+                                                                {
+                                                                    <span class="wechat-word-chip @(w.IsIdiom ? "chip-idiom" : "")"
+                                                                          @onclick:stopPropagation="true"
+                                                                          @onclick="() => SpeakYouthText(w.Word, msg.Sender)">
+                                                                        <span class="chip-py">@w.Pinyin</span>
+                                                                        <span class="chip-hz">@w.Word</span>
+                                                                        <span class="chip-vi">@w.MeaningVi</span>
+                                                                    </span>
+                                                                }
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>@RenderHighlightedSentence(msg.Zh, msg.HighlightIdiom ?? item.Hanzi)</span>
+                                                        }
                                                     </div>
 
-                                                    @* Dropdown Translation Accordion (BẤM VÀO THÌ XỔ XUỐNG) *@
                                                     @if (msg.IsTranslationOpen || globalShowTrans)
                                                     {
                                                         <div class="wechat-dropdown-trans animate-slide-down">
-                                                            @if (!string.IsNullOrWhiteSpace(msg.Pinyin))
-                                                            {
-                                                                <div class="drop-pinyin">@msg.Pinyin</div>
-                                                            }
-                                                            @if (!string.IsNullOrWhiteSpace(msg.Vi))
-                                                            {
-                                                                <div class="drop-vi">@msg.Vi</div>
-                                                            }
+                                                            <div class="drop-vi">💬 @msg.Vi</div>
                                                             <div class="drop-actions">
-                                                                <button type="button" class="btn-drop-speak" @onclick:stopPropagation="true" @onclick="() => SpeakText(msg.Zh)">
+                                                                <button type="button" class="btn-drop-speak" @onclick:stopPropagation="true" @onclick="() => SpeakWechatSingleMessage(msg)">
                                                                     <i class="bi bi-volume-up-fill"></i> Nghe câu này
                                                                 </button>
-                                                                <span class="drop-hint">(Bấm vào bong bóng để thu gọn)</span>
                                                             </div>
                                                         </div>
                                                     }
@@ -358,30 +723,18 @@
                                         }
                                     </div>
 
-                                    @* Fake WeChat Bottom Input Bar *@
-                                    <div class="wechat-bottom-input-bar">
-                                        <i class="bi bi-soundwave text-muted fs-5"></i>
-                                        <div class="fake-input-box"></div>
-                                        <i class="bi bi-emoji-smile text-muted fs-5"></i>
-                                        <i class="bi bi-plus-circle text-muted fs-5"></i>
-                                    </div>
-
-                                    @* Audio & Tool buttons *@
                                     <div class="wechat-card-footer">
-                                        <button type="button" class="btn-chat-tool" @onclick="() => SpeakWechatChat(item.WechatChat)">
-                                            <i class="bi bi-play-circle-fill text-success"></i> Nghe toàn bộ hội thoại
+                                        <button type="button" class="btn-chat-tool" @onclick="() => SpeakFullDialogueWithYouthVoices(item.WechatChat)">
+                                            <i class="bi bi-play-circle-fill text-success"></i> Nghe 2 thanh niên chat
                                         </button>
                                         <button type="button" class="btn-chat-tool" @onclick="() => ToggleCardTranslations(item)">
-                                            <i class="bi bi-translate text-primary"></i> 
-                                            @(IsAnyTransOpen(item) ? "Thu gọn dịch" : "Xổ tất cả dịch")
+                                            <i class="bi bi-translate text-primary"></i> @(IsAnyTransOpen(item) ? "Thu gọn dịch" : "Xổ tất cả dịch")
                                         </button>
                                     </div>
                                 </div>
                             }
                         </div>
-
                     </div>
-
                 </div>
             }
         </div>
@@ -393,10 +746,27 @@
     private List<ChengyuItem> filteredItems = new();
     private bool isLoading = true;
 
+    private string viewMode = "studio"; // "studio", "cards", "flashcard"
+    private string youthVoicePairMode = "mixed"; // "mixed", "two_male", "two_female"
+    private bool wordByWordMode = true;
+
     private string searchQuery = "";
     private string selectedLevel = "all";
     private bool hideLearned = false;
-    private bool globalShowTrans = false;
+    private bool globalShowTrans = true;
+
+    // Studio state
+    private int selectedStudioIndex = 0;
+    private int simVisibleCount = 4;
+    private bool isSimPlaying = false;
+    private bool isTypingIndicatorVisible = false;
+    private string? activeSpeakingMsgId = null;
+    private CancellationTokenSource? simCts;
+
+    private ChengyuItem SelectedStudioItem =>
+        filteredItems.Count > 0
+            ? filteredItems[Math.Clamp(selectedStudioIndex, 0, filteredItems.Count - 1)]
+            : new ChengyuItem();
 
     // Stats
     private int learnedCount = 0;
@@ -406,7 +776,6 @@
     private int hsk6Count = 0;
 
     // Flashcard Mode
-    private bool isFlashcardMode = false;
     private int currentCardIndex = 0;
     private bool isCardFlipped = false;
     private ChengyuItem CurrentCard => filteredItems.Count > currentCardIndex ? filteredItems[currentCardIndex] : new ChengyuItem();
@@ -462,18 +831,65 @@
                 x.Hanzi.ToLowerInvariant().Contains(s) ||
                 x.Pinyin.ToLowerInvariant().Contains(s) ||
                 x.HanViet.ToLowerInvariant().Contains(s) ||
+                x.ShortMeaningVi.ToLowerInvariant().Contains(s) ||
                 x.MeaningVi.ToLowerInvariant().Contains(s) ||
                 (x.OriginStory != null && x.OriginStory.ToLowerInvariant().Contains(s)) ||
                 (x.WechatChat != null && x.WechatChat.Messages.Any(m => m.Zh.ToLowerInvariant().Contains(s) || m.Vi.ToLowerInvariant().Contains(s))));
         }
 
         filteredItems = query.ToList();
+        if (selectedStudioIndex >= filteredItems.Count) selectedStudioIndex = 0;
         if (currentCardIndex >= filteredItems.Count) currentCardIndex = 0;
+        ResetSimToFull();
+    }
+
+    private void SwitchViewMode(string mode)
+    {
+        StopLiveSimulation();
+        viewMode = mode;
+    }
+
+    private void SelectStudioIdiom(int idx)
+    {
+        StopLiveSimulation();
+        selectedStudioIndex = idx;
+        ResetSimToFull();
+    }
+
+    private void PrevStudioIdiom()
+    {
+        if (filteredItems.Count == 0) return;
+        StopLiveSimulation();
+        selectedStudioIndex = selectedStudioIndex > 0 ? selectedStudioIndex - 1 : filteredItems.Count - 1;
+        ResetSimToFull();
+    }
+
+    private void NextStudioIdiom()
+    {
+        if (filteredItems.Count == 0) return;
+        StopLiveSimulation();
+        selectedStudioIndex = selectedStudioIndex < filteredItems.Count - 1 ? selectedStudioIndex + 1 : 0;
+        ResetSimToFull();
+    }
+
+    private void ResetSimToFull()
+    {
+        var count = SelectedStudioItem.WechatChat?.Messages.Count ?? 4;
+        simVisibleCount = count;
+        isTypingIndicatorVisible = false;
+        activeSpeakingMsgId = null;
+    }
+
+    private void ToggleWordByWordMode()
+    {
+        wordByWordMode = !wordByWordMode;
     }
 
     private void ChangeLevel(string lvl)
     {
+        StopLiveSimulation();
         selectedLevel = lvl;
+        selectedStudioIndex = 0;
         ApplyFilter();
     }
 
@@ -505,13 +921,11 @@
         item.IsFavorite = !item.IsFavorite;
     }
 
-    // Toggle dropdown for single message in WeChat
     private void ToggleMessageDropdown(WechatMessageItem msg)
     {
         msg.IsTranslationOpen = !msg.IsTranslationOpen;
     }
 
-    // Toggle all messages in a specific card
     private void ToggleCardTranslations(ChengyuItem item)
     {
         if (item.WechatChat == null) return;
@@ -520,6 +934,7 @@
         {
             m.IsTranslationOpen = !anyOpen;
         }
+        globalShowTrans = !anyOpen;
     }
 
     private bool IsAnyTransOpen(ChengyuItem item)
@@ -527,19 +942,279 @@
         return item.WechatChat?.Messages.Any(m => m.IsTranslationOpen) ?? false;
     }
 
-    private void ToggleAllGlobalTranslations()
+    // ── LIVE WECHAT SIMULATION (TYPING + DUAL YOUTH VOICE) ──
+    private async Task StartLiveSimulation(ChengyuItem item)
     {
-        globalShowTrans = !globalShowTrans;
-        foreach (var item in allItems)
+        if (item.WechatChat == null || item.WechatChat.Messages.Count == 0) return;
+
+        StopLiveSimulation();
+        simCts = new CancellationTokenSource();
+        var token = simCts.Token;
+
+        isSimPlaying = true;
+        simVisibleCount = 0;
+        StateHasChanged();
+
+        try
         {
-            if (item.WechatChat != null)
+            var msgs = item.WechatChat.Messages;
+            for (int i = 0; i < msgs.Count; i++)
             {
-                foreach (var m in item.WechatChat.Messages)
-                {
-                    m.IsTranslationOpen = globalShowTrans;
-                }
+                token.ThrowIfCancellationRequested();
+
+                // 1. Show "对方正在输入..." typing indicator
+                isTypingIndicatorVisible = true;
+                activeSpeakingMsgId = null;
+                StateHasChanged();
+
+                await Task.Delay(700, token);
+                token.ThrowIfCancellationRequested();
+
+                // 2. Pop message in & speak with that youth speaker's voice
+                isTypingIndicatorVisible = false;
+                simVisibleCount = i + 1;
+                var msg = msgs[i];
+                msg.IsTranslationOpen = true;
+                activeSpeakingMsgId = msg.Id;
+                StateHasChanged();
+
+                await SpeakYouthText(msg.Zh, msg.Sender);
+
+                // Estimate reading time based on Chinese character count (~210ms per char + 600ms buffer)
+                var cleanLen = Math.Max(4, msg.Zh.Length);
+                var waitMs = Math.Clamp(cleanLen * 210 + 550, 1800, 5200);
+                await Task.Delay(waitMs, token);
             }
         }
+        catch (TaskCanceledException)
+        {
+            // Stopped by user
+        }
+        finally
+        {
+            isTypingIndicatorVisible = false;
+            activeSpeakingMsgId = null;
+            isSimPlaying = false;
+            StateHasChanged();
+        }
+    }
+
+    private void StopLiveSimulation()
+    {
+        if (simCts != null)
+        {
+            simCts.Cancel();
+            simCts.Dispose();
+            simCts = null;
+        }
+        isSimPlaying = false;
+        isTypingIndicatorVisible = false;
+        activeSpeakingMsgId = null;
+        _ = CancelSpeechAsync();
+    }
+
+    private async Task StepNextSimMessage(WechatChatModel chat)
+    {
+        StopLiveSimulation();
+        if (simVisibleCount >= chat.Messages.Count)
+        {
+            simVisibleCount = 1;
+        }
+        else
+        {
+            simVisibleCount++;
+        }
+        var currentMsg = chat.Messages[simVisibleCount - 1];
+        currentMsg.IsTranslationOpen = true;
+        activeSpeakingMsgId = currentMsg.Id;
+        await SpeakYouthText(currentMsg.Zh, currentMsg.Sender);
+    }
+
+    private void ShowAllSimMessages(WechatChatModel chat)
+    {
+        StopLiveSimulation();
+        simVisibleCount = chat.Messages.Count;
+    }
+
+    private async Task SpeakWechatSingleMessage(WechatMessageItem msg)
+    {
+        activeSpeakingMsgId = msg.Id;
+        await SpeakYouthText(msg.Zh, msg.Sender);
+    }
+
+    // ── DUAL YOUTH VOICE ENGINE (2 THANH NIÊN ĐỐI ĐÁP) ──
+    private async Task SpeakYouthText(string text, string senderSide)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        try
+        {
+            var rawJson = System.Text.Json.JsonSerializer.Serialize(text);
+            var modeJson = System.Text.Json.JsonSerializer.Serialize(youthVoicePairMode);
+            var isLeftBool = senderSide.Equals("left", StringComparison.OrdinalIgnoreCase) ? "true" : "false";
+
+            var jsCode = $@"
+                (function() {{
+                    if (!('speechSynthesis' in window)) return;
+                    window.speechSynthesis.cancel();
+                    var raw = {rawJson};
+                    var clean = raw.replace(/[\u{{1F300}}-\u{{1FAFF}}\u{{2600}}-\u{{27BF}}]/gu, '').trim();
+                    if (!clean) return;
+
+                    var u = new SpeechSynthesisUtterance(clean);
+                    u.lang = 'zh-CN';
+
+                    var voices = window.speechSynthesis.getVoices().filter(function(v) {{
+                        return v.lang && (v.lang.indexOf('zh') === 0 || v.lang.indexOf('cmn') === 0);
+                    }});
+
+                    var mode = {modeJson};
+                    var isLeft = {isLeftBool};
+
+                    var femaleYouth = voices.find(function(v) {{ return /Xiaoxiao|Xiaoyi|Huihui|Yaoyao|Female|Google/i.test(v.name); }}) || voices[0];
+                    var maleYouth = voices.find(function(v) {{ return /Yunxi|Kangkang|Yunjian|Male/i.test(v.name); }}) || (voices.length > 1 ? voices[1] : voices[0]);
+
+                    if (mode === 'mixed') {{
+                        if (isLeft) {{
+                            if (femaleYouth) u.voice = femaleYouth;
+                            u.pitch = 1.08;
+                            u.rate = 0.96;
+                        }} else {{
+                            if (maleYouth) u.voice = maleYouth;
+                            u.pitch = (maleYouth === femaleYouth) ? 0.86 : 0.96;
+                            u.rate = 1.0;
+                        }}
+                    }} else if (mode === 'two_male') {{
+                        if (maleYouth) u.voice = maleYouth;
+                        u.pitch = isLeft ? 0.96 : 0.85;
+                        u.rate = isLeft ? 0.98 : 1.03;
+                    }} else {{
+                        if (femaleYouth) u.voice = femaleYouth;
+                        u.pitch = isLeft ? 1.12 : 1.0;
+                        u.rate = isLeft ? 0.97 : 1.02;
+                    }}
+
+                    window.speechSynthesis.speak(u);
+                }})();";
+            await JS.InvokeVoidAsync("eval", jsCode);
+        }
+        catch { }
+    }
+
+    private async Task SpeakFullDialogueWithYouthVoices(WechatChatModel chat)
+    {
+        if (chat == null || chat.Messages.Count == 0) return;
+        try
+        {
+            var payload = chat.Messages.Select(m => new { text = m.Zh, sender = m.Sender }).ToList();
+            var json = System.Text.Json.JsonSerializer.Serialize(payload);
+            var modeJson = System.Text.Json.JsonSerializer.Serialize(youthVoicePairMode);
+
+            var jsCode = $@"
+                (function() {{
+                    if (!('speechSynthesis' in window)) return;
+                    window.speechSynthesis.cancel();
+                    var items = {json};
+                    var mode = {modeJson};
+                    var voices = window.speechSynthesis.getVoices().filter(function(v) {{
+                        return v.lang && (v.lang.indexOf('zh') === 0 || v.lang.indexOf('cmn') === 0);
+                    }});
+                    var femaleYouth = voices.find(function(v) {{ return /Xiaoxiao|Xiaoyi|Huihui|Yaoyao|Female|Google/i.test(v.name); }}) || voices[0];
+                    var maleYouth = voices.find(function(v) {{ return /Yunxi|Kangkang|Yunjian|Male/i.test(v.name); }}) || (voices.length > 1 ? voices[1] : voices[0]);
+
+                    var i = 0;
+                    function playNext() {{
+                        if (i >= items.length) return;
+                        var item = items[i];
+                        var clean = item.text.replace(/[\u{{1F300}}-\u{{1FAFF}}\u{{2600}}-\u{{27BF}}]/gu, '').trim();
+                        var u = new SpeechSynthesisUtterance(clean);
+                        u.lang = 'zh-CN';
+                        var isLeft = (item.sender === 'left');
+
+                        if (mode === 'mixed') {{
+                            if (isLeft) {{
+                                if (femaleYouth) u.voice = femaleYouth;
+                                u.pitch = 1.08; u.rate = 0.96;
+                            }} else {{
+                                if (maleYouth) u.voice = maleYouth;
+                                u.pitch = (maleYouth === femaleYouth) ? 0.86 : 0.96; u.rate = 1.0;
+                            }}
+                        }} else if (mode === 'two_male') {{
+                            if (maleYouth) u.voice = maleYouth;
+                            u.pitch = isLeft ? 0.96 : 0.85; u.rate = isLeft ? 0.98 : 1.03;
+                        }} else {{
+                            if (femaleYouth) u.voice = femaleYouth;
+                            u.pitch = isLeft ? 1.12 : 1.0; u.rate = isLeft ? 0.97 : 1.02;
+                        }}
+
+                        u.onend = function() {{
+                            i++;
+                            setTimeout(playNext, 420);
+                        }};
+                        window.speechSynthesis.speak(u);
+                    }}
+                    playNext();
+                }})();";
+            await JS.InvokeVoidAsync("eval", jsCode);
+        }
+        catch { }
+    }
+
+    private async Task CancelSpeechAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval", "if ('speechSynthesis' in window) window.speechSynthesis.cancel();");
+        }
+        catch { }
+    }
+
+    // Helper functions
+    private string GetShortVi(ChengyuItem item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.ShortMeaningVi)) return item.ShortMeaningVi;
+        if (string.IsNullOrWhiteSpace(item.MeaningVi)) return "";
+        var colonIdx = item.MeaningVi.IndexOf(':');
+        if (colonIdx > 0 && colonIdx <= 35) return item.MeaningVi[..colonIdx].Trim();
+        return item.MeaningVi.Length > 28 ? item.MeaningVi[..28] + "..." : item.MeaningVi;
+    }
+
+    private List<ChengyuCharItem> GetCharBreakdown(ChengyuItem item)
+    {
+        if (item.CharBreakdown != null && item.CharBreakdown.Count > 0)
+            return item.CharBreakdown;
+
+        var chars = item.Hanzi.ToCharArray();
+        var pys = (item.Pinyin ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var hvs = (item.HanViet ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var list = new List<ChengyuCharItem>();
+        for (int i = 0; i < chars.Length; i++)
+        {
+            list.Add(new ChengyuCharItem
+            {
+                Char = chars[i].ToString(),
+                Pinyin = i < pys.Length ? pys[i] : "",
+                HanViet = i < hvs.Length ? hvs[i] : "",
+                MeaningVi = "Chữ thành phần"
+            });
+        }
+        return list;
+    }
+
+    private MarkupString RenderHighlightedSentence(string sentence, string idiom)
+    {
+        var encoded = System.Net.WebUtility.HtmlEncode(sentence);
+        var encodedIdiom = System.Net.WebUtility.HtmlEncode(idiom);
+        if (!string.IsNullOrWhiteSpace(encodedIdiom) && encoded.Contains(encodedIdiom))
+        {
+            encoded = encoded.Replace(encodedIdiom, $"<span class=\"idiom-inline-highlight\">{encodedIdiom}</span>");
+        }
+        return new MarkupString(encoded);
+    }
+
+    private string TruncateText(string text, int maxLen)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        return text.Length <= maxLen ? text : text[..maxLen] + "...";
     }
 
     // Flashcard functions
@@ -561,61 +1236,16 @@
         }
     }
 
-    // Speech synthesis
-    private async Task SpeakText(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return;
-        try
-        {
-            var jsCode = $@"
-                if ('speechSynthesis' in window) {{
-                    window.speechSynthesis.cancel();
-                    var u = new SpeechSynthesisUtterance({System.Text.Json.JsonSerializer.Serialize(text)});
-                    u.lang = 'zh-CN';
-                    u.rate = 0.88;
-                    window.speechSynthesis.speak(u);
-                }}";
-            await JS.InvokeVoidAsync("eval", jsCode);
-        }
-        catch { }
-    }
-
-    private async Task SpeakWechatChat(WechatChatModel chat)
-    {
-        if (chat == null || chat.Messages.Count == 0) return;
-        try
-        {
-            var lines = chat.Messages.Select(m => m.Zh).ToList();
-            var json = System.Text.Json.JsonSerializer.Serialize(lines);
-            var jsCode = $@"
-                if ('speechSynthesis' in window) {{
-                    window.speechSynthesis.cancel();
-                    var lines = {json};
-                    var i = 0;
-                    function playNext() {{
-                        if (i < lines.length) {{
-                            var u = new SpeechSynthesisUtterance(lines[i]);
-                            u.lang = 'zh-CN';
-                            u.rate = 0.92;
-                            u.onend = function() {{
-                                i++;
-                                setTimeout(playNext, 500);
-                            }};
-                            window.speechSynthesis.speak(u);
-                        }}
-                    }}
-                    playNext();
-                }}";
-            await JS.InvokeVoidAsync("eval", jsCode);
-        }
-        catch { }
-    }
-
     private string GetLevelBadgeClass(string lvl)
     {
         if (lvl.Contains("4")) return "badge-hsk4";
         if (lvl.Contains("5")) return "badge-hsk5";
         if (lvl.Contains("6")) return "badge-hsk6";
         return "badge-hsk-other";
+    }
+
+    public void Dispose()
+    {
+        StopLiveSimulation();
     }
 }

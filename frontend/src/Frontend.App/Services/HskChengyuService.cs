@@ -12,24 +12,43 @@ public class ChengyuExample
     public string Vi { get; set; } = string.Empty;
 }
 
+public class ChengyuCharItem
+{
+    public string Char { get; set; } = string.Empty;
+    public string Pinyin { get; set; } = string.Empty;
+    public string HanViet { get; set; } = string.Empty;
+    public string MeaningVi { get; set; } = string.Empty;
+}
+
+public class WechatWordToken
+{
+    public string Word { get; set; } = string.Empty;
+    public string Pinyin { get; set; } = string.Empty;
+    public string MeaningVi { get; set; } = string.Empty;
+    public bool IsIdiom { get; set; }
+}
+
 public class WechatMessageItem
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
     public string Sender { get; set; } = "left"; // "left" or "right"
+    public string SpeakerName { get; set; } = string.Empty;
     public string Zh { get; set; } = string.Empty;
     public string Pinyin { get; set; } = string.Empty;
     public string Vi { get; set; } = string.Empty;
     public string? HighlightIdiom { get; set; }
+    public List<WechatWordToken> Words { get; set; } = new();
 
     /// <summary>
     /// UI-only state: whether the dropdown translation is currently expanded
     /// </summary>
-    public bool IsTranslationOpen { get; set; }
+    public bool IsTranslationOpen { get; set; } = true;
 }
 
 public class WechatChatModel
 {
     public string ContactName { get; set; } = "珍肺";
+    public string RightSpeakerName { get; set; } = "阿明";
     public string Timestamp { get; set; } = "16:32";
     public string AvatarLeft { get; set; } = "/images/idioms/avatar-wet-cat.jpg";
     public string AvatarRight { get; set; } = "/images/idioms/avatar-crying-cat.jpg";
@@ -42,11 +61,13 @@ public class ChengyuItem
     public string Hanzi { get; set; } = string.Empty;
     public string Pinyin { get; set; } = string.Empty;
     public string HanViet { get; set; } = string.Empty;
+    public string ShortMeaningVi { get; set; } = string.Empty;
     public string HskLevel { get; set; } = "HSK 5"; // "HSK 4", "HSK 5", "HSK 6"
     public string Category { get; set; } = "fable_story";
     public string? CategoryVi { get; set; }
     public string MeaningVi { get; set; } = string.Empty;
     public string? OriginStory { get; set; }
+    public List<ChengyuCharItem> CharBreakdown { get; set; } = new();
     public List<string> Synonyms { get; set; } = new();
     public List<string> Antonyms { get; set; } = new();
     public List<ChengyuExample> HskExamples { get; set; } = new();
@@ -154,62 +175,80 @@ public class HskChengyuService
         var learnedSet = await GetLearnedSetAsync();
         var favSet = await GetFavoriteSetAsync();
 
-        // 1. Try Live Backend API if available
+        // 1. Load bundled sample-data/hsk-chengyu.json first (instant & complete 25+ idioms)
+        var list = new List<ChengyuItem>();
+        try
+        {
+            list = await _http.GetFromJsonAsync<List<ChengyuItem>>("sample-data/hsk-chengyu.json") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HskChengyuService] Error loading local sample-data: {ex.Message}");
+        }
+
+        // 2. Merge any new/updated items from Live Backend API if available
         try
         {
             var url = GetApiUrl("api/hsk/idioms");
             var apiList = await _http.GetFromJsonAsync<List<ChengyuItem>>(url);
             if (apiList != null && apiList.Count > 0)
             {
-                foreach (var item in apiList)
+                foreach (var apiItem in apiList)
                 {
-                    item.IsLearned = learnedSet.Contains(item.Id) || learnedSet.Contains(item.Hanzi);
-                    item.IsFavorite = favSet.Contains(item.Id) || favSet.Contains(item.Hanzi);
+                    var idx = list.FindIndex(x => x.Id == apiItem.Id || x.Hanzi == apiItem.Hanzi);
+                    if (idx >= 0)
+                    {
+                        // Preserve rich local CharBreakdown / Words if backend copy is older
+                        if ((apiItem.CharBreakdown == null || apiItem.CharBreakdown.Count == 0) && list[idx].CharBreakdown.Count > 0)
+                            apiItem.CharBreakdown = list[idx].CharBreakdown;
+                        if (string.IsNullOrWhiteSpace(apiItem.ShortMeaningVi))
+                            apiItem.ShortMeaningVi = list[idx].ShortMeaningVi;
+                        if (apiItem.WechatChat != null && list[idx].WechatChat != null)
+                        {
+                            for (int m = 0; m < Math.Min(apiItem.WechatChat.Messages.Count, list[idx].WechatChat!.Messages.Count); m++)
+                            {
+                                if (apiItem.WechatChat.Messages[m].Words.Count == 0 && list[idx].WechatChat!.Messages[m].Words.Count > 0)
+                                    apiItem.WechatChat.Messages[m].Words = list[idx].WechatChat!.Messages[m].Words;
+                            }
+                        }
+                        list[idx] = apiItem;
+                    }
+                    else
+                    {
+                        list.Add(apiItem);
+                    }
                 }
-                _cache = apiList;
-                return _cache;
             }
         }
         catch
         {
-            // Fallback to sample-data
+            // Ignore backend offline fallback
         }
 
-        // 2. Load from sample-data/hsk-chengyu.json
+        // 3. Merge any local custom items added by admin in LocalStorage
         try
         {
-            var list = await _http.GetFromJsonAsync<List<ChengyuItem>>("sample-data/hsk-chengyu.json") ?? new();
-
-            // Load any local custom items added by admin
-            try
+            var customItems = await _localStorage.GetItemAsync<List<ChengyuItem>>(CustomItemsStorageKey);
+            if (customItems != null && customItems.Count > 0)
             {
-                var customItems = await _localStorage.GetItemAsync<List<ChengyuItem>>(CustomItemsStorageKey);
-                if (customItems != null && customItems.Count > 0)
+                foreach (var c in customItems)
                 {
-                    foreach (var c in customItems)
-                    {
-                        var idx = list.FindIndex(x => x.Id == c.Id);
-                        if (idx >= 0) list[idx] = c;
-                        else list.Insert(0, c);
-                    }
+                    var idx = list.FindIndex(x => x.Id == c.Id || x.Hanzi == c.Hanzi);
+                    if (idx >= 0) list[idx] = c;
+                    else list.Insert(0, c);
                 }
             }
-            catch { }
-
-            foreach (var item in list)
-            {
-                item.IsLearned = learnedSet.Contains(item.Id) || learnedSet.Contains(item.Hanzi);
-                item.IsFavorite = favSet.Contains(item.Id) || favSet.Contains(item.Hanzi);
-            }
-
-            _cache = list;
-            return _cache;
         }
-        catch (Exception ex)
+        catch { }
+
+        foreach (var item in list)
         {
-            Console.WriteLine($"[HskChengyuService] Error loading idioms: {ex.Message}");
-            return new List<ChengyuItem>();
+            item.IsLearned = learnedSet.Contains(item.Id) || learnedSet.Contains(item.Hanzi);
+            item.IsFavorite = favSet.Contains(item.Id) || favSet.Contains(item.Hanzi);
         }
+
+        _cache = list;
+        return _cache;
     }
 
     public async Task<List<ChengyuItem>> GetFilteredIdiomsAsync(
