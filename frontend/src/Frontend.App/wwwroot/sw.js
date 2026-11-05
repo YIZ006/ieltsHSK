@@ -1,5 +1,6 @@
 // PWA Service Worker — cache-first cho file tĩnh, network-first cho navigation Blazor WASM
-const CACHE = 'app-v10-native-mp3';
+// và network-first (fallback cache) cho dữ liệu JSON trong /sample-data/ để không bị kẹt dữ liệu cũ.
+const CACHE = 'app-v11-hsk-data';
 
 const ASSETS = [
   './',
@@ -11,10 +12,47 @@ const ASSETS = [
   './icons/icon-maskable-512.png'
 ];
 
+// Dữ liệu học tập HSK: tải sẵn ngay khi cài Service Worker để dùng được offline
+const PRECACHE_DATA = [
+  './sample-data/hsk-chengyu.json',
+  './sample-data/hsk-culture-stories.json',
+  './sample-data/hsk-genz-slang.json'
+];
+
+async function precacheFresh(cache, url) {
+  // cache: 'reload' bỏ qua HTTP cache để luôn lấy bản mới nhất từ server
+  const res = await fetch(new Request(url, { cache: 'reload' }));
+  if (res && res.ok) await cache.put(url, res);
+}
+
+// Network-first cho JSON dữ liệu: online luôn lấy bản mới (revalidate), mất mạng/chậm thì dùng bản đã lưu
+async function networkFirstData(req) {
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(req);
+  const controller = new AbortController();
+  // Chỉ áp timeout khi đã có bản lưu để fallback; nếu chưa có thì chờ mạng bình thường
+  const timer = cached ? setTimeout(() => controller.abort(), 3500) : null;
+  try {
+    const res = await fetch(new Request(req, { cache: 'no-cache' }), { signal: controller.signal });
+    if (timer) clearTimeout(timer);
+    if (res && res.ok) {
+      cache.put(req, res.clone()).catch(() => {});
+      return res;
+    }
+    return cached || res;
+  } catch {
+    if (timer) clearTimeout(timer);
+    return cached || new Response('', { status: 503, statusText: 'Data unavailable offline' });
+  }
+}
+
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE)
-      .then(c => Promise.allSettled(ASSETS.map(a => c.add(a))))
+      .then(c => Promise.allSettled([
+        ...ASSETS.map(a => c.add(a)),
+        ...PRECACHE_DATA.map(a => precacheFresh(c, a))
+      ]))
       .then(() => self.skipWaiting())
   );
 });
@@ -42,6 +80,12 @@ self.addEventListener('fetch', e => {
       url.pathname.includes('mascot-interop') ||
       url.pathname.includes('Frontend.App.styles.css') ||
       url.pathname.includes('app.css')) return;
+
+  // Dữ liệu JSON học tập (thành ngữ, văn hóa, tiếng lóng, đề thi...): Network-first + fallback cache
+  if (url.pathname.includes('/sample-data/') && url.pathname.endsWith('.json')) {
+    e.respondWith(networkFirstData(req));
+    return;
+  }
 
   // Với request navigation (đổi trang Blazor WASM), dùng Network-first
   if (req.mode === 'navigate') {

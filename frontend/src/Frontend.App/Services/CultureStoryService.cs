@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.JSInterop;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -71,10 +72,70 @@ public class CultureStoryService
     private readonly IConfiguration _configuration;
     private List<CultureStoryItem>? _cachedStories;
 
-    public CultureStoryService(HttpClient http, IConfiguration configuration)
+    // IndexedDB snapshot (dùng chung OfflineDB.vocab_cache như từ vựng IELTS/HSK) để học offline
+    public const string OfflineSnapshotKey = "hsk_culture_all";
+    private static readonly JsonSerializerOptions _snapshotJson = new(JsonSerializerDefaults.Web);
+    private readonly IJSRuntime _js;
+
+    public CultureStoryService(HttpClient http, IConfiguration configuration, IJSRuntime js)
     {
         _http = http;
         _configuration = configuration;
+        _js = js;
+    }
+
+    private static bool IsUnfiltered(string? category, string? level, string? search)
+    {
+        var noCategory = string.IsNullOrWhiteSpace(category) || category is "All" or "Tất cả";
+        var noLevel = string.IsNullOrWhiteSpace(level) || level is "All" or "Tất cả";
+        return noCategory && noLevel && string.IsNullOrWhiteSpace(search);
+    }
+
+    private async Task<List<CultureStoryItem>?> LoadSnapshotAsync()
+    {
+        try
+        {
+            var json = await _js.InvokeAsync<string?>("OfflineDB.getVocabCache", OfflineSnapshotKey);
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            var list = JsonSerializer.Deserialize<List<CultureStoryItem>>(json, _snapshotJson);
+            return list is { Count: > 0 } ? list : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task SaveSnapshotAsync(List<CultureStoryItem> list)
+    {
+        try
+        {
+            if (list.Count == 0) return;
+            var json = JsonSerializer.Serialize(list, _snapshotJson);
+            await _js.InvokeAsync<bool>("OfflineDB.saveVocabCache", OfflineSnapshotKey, json);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CultureStoryService] Save offline snapshot failed: {ex.Message}");
+        }
+    }
+
+    public async Task<bool> IsOfflineReadyAsync() => await LoadSnapshotAsync() != null;
+
+    /// <summary>Tải mới toàn bộ truyện văn hóa và lưu vào IndexedDB để đọc offline.</summary>
+    public async Task<bool> DownloadOfflineAsync()
+    {
+        _cachedStories = null;
+        var list = await GetStoriesAsync(forceRefresh: true);
+        // API không có dữ liệu -> vẫn lưu bản JSON mẫu để dùng offline
+        await SaveSnapshotAsync(list);
+        return list.Count > 0 && await IsOfflineReadyAsync();
+    }
+
+    public async Task DeleteOfflineAsync()
+    {
+        try { await _js.InvokeAsync<bool>("OfflineDB.saveVocabCache", OfflineSnapshotKey, ""); } catch { }
+        _cachedStories = null;
     }
 
     private string GetApiUrl(string path)
@@ -107,6 +168,11 @@ public class CultureStoryService
             var apiList = await _http.GetFromJsonAsync<List<CultureStoryItem>>(url);
             if (apiList != null && apiList.Count > 0)
             {
+                // Danh sách đầy đủ (không lọc) -> lưu snapshot IndexedDB để học offline
+                if (IsUnfiltered(category, level, search))
+                {
+                    await SaveSnapshotAsync(apiList);
+                }
                 return apiList;
             }
         }
@@ -232,8 +298,19 @@ public class CultureStoryService
 
         try
         {
-            var list = await _http.GetFromJsonAsync<List<CultureStoryItem>>("sample-data/hsk-culture-stories.json");
-            if (list != null)
+            var list = await _http.GetFromJsonAsync<List<CultureStoryItem>>("sample-data/hsk-culture-stories.json") ?? new List<CultureStoryItem>();
+
+            // Bổ sung các truyện đã lưu offline (từ API) mà JSON mẫu chưa có
+            var snapshot = await LoadSnapshotAsync();
+            if (snapshot != null)
+            {
+                foreach (var s in snapshot)
+                {
+                    if (!list.Any(x => (!string.IsNullOrEmpty(s.Slug) && x.Slug == s.Slug) || (!string.IsNullOrEmpty(s.Id) && x.Id == s.Id))) list.Add(s);
+                }
+            }
+
+            if (list.Count > 0)
             {
                 _cachedStories = list;
             }
@@ -242,6 +319,9 @@ public class CultureStoryService
         catch (Exception ex)
         {
             Console.WriteLine($"[CultureStoryService] Error loading sample-data/hsk-culture-stories.json: {ex.Message}");
+            // Mất mạng và chưa có JSON trong cache: dùng snapshot IndexedDB
+            var snapshot = await LoadSnapshotAsync();
+            if (snapshot != null) _cachedStories = snapshot;
             return _cachedStories ?? new List<CultureStoryItem>();
         }
     }

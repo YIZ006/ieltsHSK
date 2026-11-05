@@ -7,6 +7,7 @@
 @page "/culture/{slug}"
 @layout Frontend.App.Layout.HskLayout
 @using Frontend.App.Services
+@using Frontend.App.Components.Common
 @inject CultureStoryService CultureService
 @inject IJSRuntime JSRuntime
 @inject NavigationManager NavManager
@@ -46,6 +47,7 @@
 
         @* ── TOOLBAR & CATEGORIES ── *@
         <div class="culture-toolbar">
+            <OfflineDownloadCornerButton ResourceKey="hsk_culture_all" Title="Kho Truyện Văn Hóa" ContentType="hsk_culture" />
             <div class="search-box">
                 <i class="bi bi-search"></i>
                 <input type="text"

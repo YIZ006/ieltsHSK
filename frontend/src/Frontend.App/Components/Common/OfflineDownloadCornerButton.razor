@@ -2,6 +2,9 @@
 @inject OfflineStorageService OfflineStorage
 @inject IeltsService IeltsSvc
 @inject HskService HskSvc
+@inject HskChengyuService ChengyuSvc
+@inject HskSlangService SlangSvc
+@inject CultureStoryService CultureSvc
 @inject IJSRuntime JS
 
 <div class="offline-corner-wrapper @CustomClass">
@@ -60,7 +63,7 @@
     [Parameter] public string? ExamUrl { get; set; }
     [Parameter] public string? AnswerUrl { get; set; }
     [Parameter] public string? AudioUrl { get; set; }
-    [Parameter] public string ContentType { get; set; } = "exam"; // "exam", "vocab_ielts", "vocab_hsk", "audio_lesson"
+    [Parameter] public string ContentType { get; set; } = "exam"; // "exam", "vocab_ielts", "vocab_hsk", "hsk_chengyu", "hsk_slang", "hsk_culture", "audio_lesson"
     [Parameter] public string CustomClass { get; set; } = "";
     [Parameter] public EventCallback<bool> OnStatusChanged { get; set; }
 
@@ -107,6 +110,18 @@
                     _isDownloaded = !string.IsNullOrWhiteSpace(allCached);
                 }
             }
+            else if (ContentType == "hsk_chengyu")
+            {
+                _isDownloaded = await ChengyuSvc.IsOfflineReadyAsync();
+            }
+            else if (ContentType == "hsk_slang")
+            {
+                _isDownloaded = await SlangSvc.IsOfflineReadyAsync();
+            }
+            else if (ContentType == "hsk_culture")
+            {
+                _isDownloaded = await CultureSvc.IsOfflineReadyAsync();
+            }
             else
             {
                 _isDownloaded = await OfflineStorage.IsResourceDownloadedAsync(key, AudioUrl);
@@ -152,6 +167,30 @@
                 _downloadPercent = 90;
                 StateHasChanged();
                 _isDownloaded = items != null && items.Count > 0;
+                _downloadPercent = 100;
+            }
+            else if (ContentType == "hsk_chengyu")
+            {
+                _downloadStatus = "Đang tải kho thành ngữ HSK...";
+                _downloadPercent = 40;
+                StateHasChanged();
+                _isDownloaded = await ChengyuSvc.DownloadOfflineAsync();
+                _downloadPercent = 100;
+            }
+            else if (ContentType == "hsk_slang")
+            {
+                _downloadStatus = "Đang tải kho tiếng lóng GenZ...";
+                _downloadPercent = 40;
+                StateHasChanged();
+                _isDownloaded = await SlangSvc.DownloadOfflineAsync();
+                _downloadPercent = 100;
+            }
+            else if (ContentType == "hsk_culture")
+            {
+                _downloadStatus = "Đang tải truyện văn hóa...";
+                _downloadPercent = 40;
+                StateHasChanged();
+                _isDownloaded = await CultureSvc.DownloadOfflineAsync();
                 _downloadPercent = 100;
             }
             else
@@ -210,6 +249,18 @@
                     }
                 }
                 HskSvc.InvalidateVocabCache(normKey);
+            }
+            else if (ContentType == "hsk_chengyu")
+            {
+                await ChengyuSvc.DeleteOfflineAsync();
+            }
+            else if (ContentType == "hsk_slang")
+            {
+                await SlangSvc.DeleteOfflineAsync();
+            }
+            else if (ContentType == "hsk_culture")
+            {
+                await CultureSvc.DeleteOfflineAsync();
             }
             else
             {

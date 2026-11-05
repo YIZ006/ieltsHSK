@@ -1,5 +1,6 @@
 using Blazored.LocalStorage;
 using Microsoft.Extensions.Configuration;
+using Microsoft.JSInterop;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -93,11 +94,62 @@ public class HskChengyuService
     private HashSet<string>? _learnedCache;
     private HashSet<string>? _favoriteCache;
 
-    public HskChengyuService(HttpClient http, IConfiguration configuration, ILocalStorageService localStorage)
+    // IndexedDB snapshot (dùng chung OfflineDB.vocab_cache như từ vựng IELTS/HSK) để học offline
+    public const string OfflineSnapshotKey = "hsk_chengyu_all";
+    private static readonly JsonSerializerOptions _snapshotJson = new(JsonSerializerDefaults.Web);
+    private readonly IJSRuntime _js;
+
+    public HskChengyuService(HttpClient http, IConfiguration configuration, ILocalStorageService localStorage, IJSRuntime js)
     {
         _http = http;
         _configuration = configuration;
         _localStorage = localStorage;
+        _js = js;
+    }
+
+    private async Task<List<ChengyuItem>?> LoadSnapshotAsync()
+    {
+        try
+        {
+            var json = await _js.InvokeAsync<string?>("OfflineDB.getVocabCache", OfflineSnapshotKey);
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            var list = JsonSerializer.Deserialize<List<ChengyuItem>>(json, _snapshotJson);
+            return list is { Count: > 0 } ? list : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task SaveSnapshotAsync(List<ChengyuItem> list)
+    {
+        try
+        {
+            if (list.Count == 0) return;
+            var json = JsonSerializer.Serialize(list, _snapshotJson);
+            await _js.InvokeAsync<bool>("OfflineDB.saveVocabCache", OfflineSnapshotKey, json);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HskChengyuService] Save offline snapshot failed: {ex.Message}");
+        }
+    }
+
+    public async Task<bool> IsOfflineReadyAsync() => await LoadSnapshotAsync() != null;
+
+    /// <summary>Tải mới toàn bộ thành ngữ và lưu vào IndexedDB để học offline.</summary>
+    public async Task<bool> DownloadOfflineAsync()
+    {
+        var list = await GetAllIdiomsAsync(forceRefresh: true);
+        await SaveSnapshotAsync(list);
+        return list.Count > 0 && await IsOfflineReadyAsync();
+    }
+
+    public async Task DeleteOfflineAsync()
+    {
+        try { await _js.InvokeAsync<bool>("OfflineDB.saveVocabCache", OfflineSnapshotKey, ""); } catch { }
+        _cache = null;
     }
 
     private string GetApiUrl(string path)
@@ -187,12 +239,14 @@ public class HskChengyuService
         }
 
         // 2. Merge any new/updated items from Live Backend API if available
+        var apiOk = false;
         try
         {
             var url = GetApiUrl("api/hsk/idioms");
             var apiList = await _http.GetFromJsonAsync<List<ChengyuItem>>(url);
             if (apiList != null && apiList.Count > 0)
             {
+                apiOk = true;
                 foreach (var apiItem in apiList)
                 {
                     var idx = list.FindIndex(x => x.Id == apiItem.Id || x.Hanzi == apiItem.Hanzi);
@@ -223,6 +277,24 @@ public class HskChengyuService
         catch
         {
             // Ignore backend offline fallback
+        }
+
+        // 2b. Offline snapshot (IndexedDB): API lỗi/mất mạng thì bổ sung các mục đã lưu mà JSON mẫu chưa có;
+        //     API thành công thì cập nhật lại snapshot cho lần học offline sau.
+        if (!apiOk)
+        {
+            var snapshot = await LoadSnapshotAsync();
+            if (snapshot != null)
+            {
+                foreach (var s in snapshot)
+                {
+                    if (!list.Any(x => x.Id == s.Id || x.Hanzi == s.Hanzi)) list.Add(s);
+                }
+            }
+        }
+        else
+        {
+            await SaveSnapshotAsync(list);
         }
 
         // 3. Merge any local custom items added by admin in LocalStorage

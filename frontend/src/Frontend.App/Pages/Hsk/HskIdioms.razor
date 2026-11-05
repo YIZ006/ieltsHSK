@@ -3,6 +3,7 @@
 @page "/hsk/chengyu"
 @layout Frontend.App.Layout.HskLayout
 @using Frontend.App.Services
+@using Frontend.App.Components.Common
 @inject HskChengyuService ChengyuService
 @inject IJSRuntime JS
 @inject NavigationManager NavManager
@@ -69,6 +70,8 @@
         </div>
 
         <div class="toolbar-right">
+            <OfflineDownloadCornerButton ResourceKey="hsk_chengyu_all" Title="Kho Thành Ngữ HSK" ContentType="hsk_chengyu" />
+
             <button type="button"
                     class="pinyin-mode-btn @(showPinyin ? "active" : "pinyin-hidden")"
                     @onclick="TogglePinyinMode"
@@ -810,69 +813,6 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadDataAsync();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            var initScript = @"
-                if (!window.chengyuAudio) {
-                    window.chengyuAudio = {
-                        currentAudio: null,
-                        play: function (text, lang, callback) {
-                            this.stop();
-                            var clean = (text || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim();
-                            if (!clean) { if (callback) callback(); return; }
-                            var targetLang = (lang === 'zh-TW') ? 'zh-TW' : 'zh-CN';
-                            var url = 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=' + targetLang + '&q=' + encodeURIComponent(clean);
-                            var audio = new Audio(url);
-                            audio.playbackRate = 1.0;
-                            this.currentAudio = audio;
-                            var finished = false;
-                            function done() {
-                                if (!finished) {
-                                    finished = true;
-                                    if (window.chengyuAudio.currentAudio === audio) window.chengyuAudio.currentAudio = null;
-                                    if (callback) callback();
-                                }
-                            }
-                            audio.onended = done;
-                            function fallbackSpeech() {
-                                if ('speechSynthesis' in window) {
-                                    var u = new SpeechSynthesisUtterance(clean);
-                                    u.lang = targetLang;
-                                    u.rate = 1.0;
-                                    u.onend = done;
-                                    u.onerror = done;
-                                    window.speechSynthesis.speak(u);
-                                } else {
-                                    done();
-                                }
-                            }
-                            audio.onerror = fallbackSpeech;
-                            audio.play().catch(fallbackSpeech);
-                        },
-                        playPromise: function (text, lang) {
-                            var self = this;
-                            return new Promise(function (resolve) {
-                                self.play(text, lang, resolve);
-                            });
-                        },
-                        stop: function () {
-                            if (this.currentAudio) {
-                                try { this.currentAudio.pause(); this.currentAudio.currentTime = 0; } catch (e) {}
-                                this.currentAudio = null;
-                            }
-                            if ('speechSynthesis' in window) {
-                                try { window.speechSynthesis.cancel(); } catch (e) {}
-                            }
-                        }
-                    };
-                }
-            ";
-            try { await JS.InvokeVoidAsync("eval", initScript); } catch {}
-        }
     }
 
     private async Task LoadDataAsync()

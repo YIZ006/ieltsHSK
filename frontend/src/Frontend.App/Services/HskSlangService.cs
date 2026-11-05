@@ -1,6 +1,8 @@
 using Blazored.LocalStorage;
 using Microsoft.Extensions.Configuration;
 using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.JSInterop;
 
 namespace Frontend.App.Services;
 
@@ -58,11 +60,70 @@ public class HskSlangService
     private List<SlangVocabItem>? _sampleCache;
     private HashSet<string>? _learnedCache;
 
-    public HskSlangService(HttpClient http, IConfiguration configuration, ILocalStorageService localStorage)
+    // IndexedDB snapshot (dùng chung OfflineDB.vocab_cache như từ vựng IELTS/HSK) để học offline
+    public const string OfflineSnapshotKey = "hsk_slang_all";
+    private static readonly JsonSerializerOptions _snapshotJson = new(JsonSerializerDefaults.Web);
+    private readonly IJSRuntime _js;
+
+    public HskSlangService(HttpClient http, IConfiguration configuration, ILocalStorageService localStorage, IJSRuntime js)
     {
         _http = http;
         _configuration = configuration;
         _localStorage = localStorage;
+        _js = js;
+    }
+
+    private static bool IsUnfiltered(string? category, string? search)
+    {
+        var noCategory = string.IsNullOrWhiteSpace(category) || category is "All" or "all" or "Tất cả";
+        return noCategory && string.IsNullOrWhiteSpace(search);
+    }
+
+    private async Task<List<SlangVocabItem>?> LoadSnapshotAsync()
+    {
+        try
+        {
+            var json = await _js.InvokeAsync<string?>("OfflineDB.getVocabCache", OfflineSnapshotKey);
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            var list = JsonSerializer.Deserialize<List<SlangVocabItem>>(json, _snapshotJson);
+            return list is { Count: > 0 } ? list : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task SaveSnapshotAsync(List<SlangVocabItem> list)
+    {
+        try
+        {
+            if (list.Count == 0) return;
+            var json = JsonSerializer.Serialize(list, _snapshotJson);
+            await _js.InvokeAsync<bool>("OfflineDB.saveVocabCache", OfflineSnapshotKey, json);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[HskSlangService] Save offline snapshot failed: {ex.Message}");
+        }
+    }
+
+    public async Task<bool> IsOfflineReadyAsync() => await LoadSnapshotAsync() != null;
+
+    /// <summary>Tải mới toàn bộ tiếng lóng và lưu vào IndexedDB để học offline.</summary>
+    public async Task<bool> DownloadOfflineAsync()
+    {
+        _sampleCache = null;
+        var list = await GetSlangItemsAsync(forceRefresh: true);
+        // API không có dữ liệu -> vẫn lưu bản JSON mẫu để dùng offline
+        await SaveSnapshotAsync(list);
+        return list.Count > 0 && await IsOfflineReadyAsync();
+    }
+
+    public async Task DeleteOfflineAsync()
+    {
+        try { await _js.InvokeAsync<bool>("OfflineDB.saveVocabCache", OfflineSnapshotKey, ""); } catch { }
+        _sampleCache = null;
     }
 
     private string GetApiUrl(string path)
@@ -94,7 +155,7 @@ public class HskSlangService
             var apiList = await _http.GetFromJsonAsync<List<BackendSlangDto>>(url);
             if (apiList != null && apiList.Count > 0)
             {
-                return apiList.Select(x => new SlangVocabItem
+                var mapped = apiList.Select(x => new SlangVocabItem
                 {
                     Id = x.Id.ToString(),
                     Term = x.Term,
@@ -110,6 +171,14 @@ public class HskSlangService
                     PopularityScore = x.PopularityScore,
                     IsLearned = learnedSet.Contains(x.Term) || learnedSet.Contains(x.Id.ToString())
                 }).ToList();
+
+                // Danh sách đầy đủ (không lọc) -> lưu snapshot IndexedDB để học offline
+                if (IsUnfiltered(category, search))
+                {
+                    await SaveSnapshotAsync(mapped);
+                }
+
+                return mapped;
             }
         }
         catch (Exception ex)
@@ -196,8 +265,19 @@ public class HskSlangService
 
         try
         {
-            var list = await _http.GetFromJsonAsync<List<SlangVocabItem>>("sample-data/hsk-genz-slang.json");
-            if (list != null)
+            var list = await _http.GetFromJsonAsync<List<SlangVocabItem>>("sample-data/hsk-genz-slang.json") ?? new List<SlangVocabItem>();
+
+            // Bổ sung các mục đã lưu offline (từ API) mà JSON mẫu chưa có
+            var snapshot = await LoadSnapshotAsync();
+            if (snapshot != null)
+            {
+                foreach (var s in snapshot)
+                {
+                    if (!list.Any(x => string.Equals(x.Term, s.Term, StringComparison.OrdinalIgnoreCase))) list.Add(s);
+                }
+            }
+
+            if (list.Count > 0)
             {
                 _sampleCache = list;
             }
@@ -206,6 +286,9 @@ public class HskSlangService
         catch (Exception ex)
         {
             Console.WriteLine($"[HskSlangService] Error loading sample-data/hsk-genz-slang.json: {ex.Message}");
+            // Mất mạng và chưa có JSON trong cache: dùng snapshot IndexedDB
+            var snapshot = await LoadSnapshotAsync();
+            if (snapshot != null) _sampleCache = snapshot;
             return _sampleCache ?? new List<SlangVocabItem>();
         }
     }

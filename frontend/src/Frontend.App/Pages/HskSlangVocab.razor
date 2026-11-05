@@ -5,6 +5,7 @@
 @page "/slang"
 @layout Frontend.App.Layout.HskLayout
 @using Frontend.App.Services
+@using Frontend.App.Components.Common
 @inject HskSlangService SlangService
 @inject IJSRuntime JSRuntime
 @inject NavigationManager NavManager
@@ -88,6 +89,7 @@
 
             @* Secondary Toggles *@
             <div class="toolbar-toggles">
+                <OfflineDownloadCornerButton ResourceKey="hsk_slang_all" Title="Kho Tiếng Lóng GenZ" ContentType="hsk_slang" />
                 <label class="toggle-learned-label">
                     <input type="checkbox" @bind="hideLearned" @bind:after="ApplyFilter" />
                     <span>Ẩn từ đã thuộc</span>
