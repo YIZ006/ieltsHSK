@@ -473,9 +473,14 @@
                                 <div class="review-header-action">
                                     @if (_isReviewSaved)
                                     {
-                                        <span class="review-saved-badge">
-                                            <i class="bi bi-check-circle-fill text-success me-1"></i> Đã lưu vào Ôn tập
-                                        </span>
+                                        <div class="review-saved-wrap">
+                                            <span class="review-saved-badge">
+                                                <i class="bi bi-check-circle-fill text-success me-1"></i> Đã lưu vào Ôn tập
+                                            </span>
+                                            <a href="/hsk/on-tap" target="_blank" class="review-link-btn" title="Mở Sổ tay ôn tập trong tab mới">
+                                                <i class="bi bi-box-arrow-up-right me-1"></i> Xem sổ tay
+                                            </a>
+                                        </div>
                                     }
                                     else
                                     {
@@ -495,7 +500,7 @@
                                 </div>
                             </div>
                             <div class="review-items-scroll">
-                                @foreach (var m in _missedWordsInStage.DistinctBy(x => x.Id))
+                                @foreach (var m in _missedWordsInStage.DistinctBy(x => !string.IsNullOrEmpty(x.Hanzi) ? x.Hanzi : x.Id.ToString()))
                                 {
                                     <div class="review-item">
                                         <b class="review-hanzi">@m.Hanzi</b>
@@ -549,9 +554,14 @@
                                     <div class="review-header-action">
                                         @if (_isReviewSaved)
                                         {
-                                            <span class="review-saved-badge">
-                                                <i class="bi bi-check-circle-fill text-success me-1"></i> Đã lưu vào Ôn tập
-                                            </span>
+                                            <div class="review-saved-wrap">
+                                                <span class="review-saved-badge">
+                                                    <i class="bi bi-check-circle-fill text-success me-1"></i> Đã lưu vào Ôn tập
+                                                </span>
+                                                <a href="/hsk/on-tap" target="_blank" class="review-link-btn" title="Mở Sổ tay ôn tập trong tab mới">
+                                                    <i class="bi bi-box-arrow-up-right me-1"></i> Xem sổ tay
+                                                </a>
+                                            </div>
                                         }
                                         else
                                         {
@@ -571,7 +581,7 @@
                                     </div>
                                 </div>
                                 <div class="review-items-scroll">
-                                    @foreach (var m in _missedWordsInStage.DistinctBy(x => x.Id))
+                                    @foreach (var m in _missedWordsInStage.DistinctBy(x => !string.IsNullOrEmpty(x.Hanzi) ? x.Hanzi : x.Id.ToString()))
                                     {
                                         <div class="review-item">
                                             <b class="review-hanzi">@m.Hanzi</b>
@@ -897,7 +907,10 @@
             return;
         }
 
-        var distinctMissed = _missedWordsInStage.DistinctBy(x => x.Id).ToList();
+        var distinctMissed = _missedWordsInStage
+            .Where(x => !string.IsNullOrWhiteSpace(x.Hanzi))
+            .DistinctBy(x => x.Hanzi)
+            .ToList();
         if (distinctMissed.Count == 0) return;
 
         _isSavingReview = true;
@@ -905,11 +918,13 @@
 
         try
         {
-            var ids = distinctMissed.Select(x => x.Id).ToList();
-            var res = await HskSvc.AddReviewWordsBatchAsync(ids, "HskShooter");
+            var res = await HskSvc.AddReviewWordsBatchAsync(distinctMissed, "HskShooter");
             _isReviewSaved = true;
-            _savedReviewCount = res?.AddedCount ?? ids.Count;
-            await JS.InvokeVoidAsync("OfflineDB.showToast", $"Đã lưu {distinctMissed.Count} từ vựng vào Sổ tay ôn tập thành công!", "success");
+            _savedReviewCount = res?.AddedCount ?? distinctMissed.Count;
+            var toastMsg = !string.IsNullOrWhiteSpace(res?.Message)
+                ? res.Message
+                : $"Đã lưu {distinctMissed.Count} từ vựng vào Sổ tay ôn tập thành công!";
+            await JS.InvokeVoidAsync("OfflineDB.showToast", toastMsg, "success");
         }
         catch (Exception ex)
         {

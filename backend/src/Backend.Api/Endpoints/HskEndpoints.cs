@@ -521,23 +521,74 @@ public static class HskEndpoints
                                ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
 
-            if (req.VocabularyIds == null || req.VocabularyIds.Count == 0)
+            var targetVocabIds = new HashSet<int>();
+
+            // 1. Process rich word payload if provided (guarantees DB record exists and is linked properly)
+            if (req.Words != null && req.Words.Count > 0)
             {
-                var total = await dbContext.HskReviewWords.CountAsync(r => r.UserId == userId, cancellationToken);
-                return Results.Ok(new Backend.Application.DTOs.AddHskReviewWordsResponse(0, total, "Không có từ vựng nào được gửi."));
+                foreach (var w in req.Words)
+                {
+                    if (string.IsNullOrWhiteSpace(w.Hanzi)) continue;
+                    var hanzi = w.Hanzi.Trim();
+                    var normLevel = string.IsNullOrWhiteSpace(w.HskLevel) ? "HSK1" : w.HskLevel.Trim().ToUpperInvariant();
+
+                    // Match by Hanzi + Level, or by Id if exists
+                    var existing = await dbContext.HskVocabularies
+                        .FirstOrDefaultAsync(v => (v.Hanzi == hanzi && v.HskLevel == normLevel)
+                                               || (w.Id.HasValue && w.Id.Value > 0 && v.Id == w.Id.Value), cancellationToken);
+
+                    if (existing != null)
+                    {
+                        targetVocabIds.Add(existing.Id);
+                    }
+                    else
+                    {
+                        // Upsert dynamically into hsk_vocabularies to satisfy FK and persistence
+                        var newVocab = new Backend.Domain.Entities.HskVocabulary
+                        {
+                            Hanzi = hanzi,
+                            Pinyin = w.Pinyin?.Trim() ?? string.Empty,
+                            Meaning = w.Meaning?.Trim() ?? string.Empty,
+                            HskLevel = normLevel,
+                            WordType = w.WordType?.Trim(),
+                            ExampleSentence = w.ExampleSentence?.Trim(),
+                            ExamplePinyin = w.ExamplePinyin?.Trim(),
+                            ExampleMeaning = w.ExampleMeaning?.Trim(),
+                            AudioUrl = w.AudioUrl?.Trim(),
+                            DisplayOrder = 1
+                        };
+                        dbContext.HskVocabularies.Add(newVocab);
+                        await dbContext.SaveChangesAsync(cancellationToken);
+                        targetVocabIds.Add(newVocab.Id);
+                    }
+                }
             }
 
-            var validIds = (await dbContext.HskVocabularies
-                .Where(v => req.VocabularyIds.Contains(v.Id))
-                .Select(v => v.Id)
-                .ToListAsync(cancellationToken)).ToHashSet();
+            // 2. Process raw VocabularyIds if provided
+            if (req.VocabularyIds != null && req.VocabularyIds.Count > 0)
+            {
+                var validFromIds = await dbContext.HskVocabularies
+                    .Where(v => req.VocabularyIds.Contains(v.Id))
+                    .Select(v => v.Id)
+                    .ToListAsync(cancellationToken);
+                foreach (var vid in validFromIds)
+                {
+                    targetVocabIds.Add(vid);
+                }
+            }
+
+            if (targetVocabIds.Count == 0)
+            {
+                var total = await dbContext.HskReviewWords.CountAsync(r => r.UserId == userId, cancellationToken);
+                return Results.Ok(new Backend.Application.DTOs.AddHskReviewWordsResponse(0, total, "Không có từ vựng hợp lệ nào để lưu."));
+            }
 
             var existingIds = (await dbContext.HskReviewWords
-                .Where(r => r.UserId == userId && req.VocabularyIds.Contains(r.VocabularyId))
+                .Where(r => r.UserId == userId && targetVocabIds.Contains(r.VocabularyId))
                 .Select(r => r.VocabularyId)
                 .ToListAsync(cancellationToken)).ToHashSet();
 
-            var toAddIds = validIds.Except(existingIds).ToList();
+            var toAddIds = targetVocabIds.Except(existingIds).ToList();
             if (toAddIds.Count > 0)
             {
                 var entities = toAddIds.Select(id => new Backend.Domain.Entities.HskReviewWord
@@ -556,7 +607,7 @@ public static class HskEndpoints
             return Results.Ok(new Backend.Application.DTOs.AddHskReviewWordsResponse(
                 toAddIds.Count,
                 totalCount,
-                toAddIds.Count > 0 ? $"Đã lưu {toAddIds.Count} từ vào danh sách ôn tập." : "Các từ này đã có sẵn trong danh sách ôn tập."
+                toAddIds.Count > 0 ? $"Đã lưu {toAddIds.Count} từ vào Sổ tay ôn tập thành công." : "Tất cả các từ này đã có sẵn trong Sổ tay ôn tập."
             ));
         }).RequireRateLimiting("user-mutation");
 

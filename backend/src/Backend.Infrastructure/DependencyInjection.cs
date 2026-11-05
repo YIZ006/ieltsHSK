@@ -1006,6 +1006,77 @@ public static class DependencyInjection
         {
             Console.WriteLine($"[SeedData] SlangVocab seed note: {ex.Message}");
         }
+
+        // 6. Seed HSK Vocabularies from JSON if table is nearly empty (< 100 rows)
+        try
+        {
+            var vocabCount = await dbContext.HskVocabularies.CountAsync();
+            if (vocabCount < 100)
+            {
+                var hskFiles = new[] { "hsk/hsk1.json", "hsk/hsk2.json", "hsk/hsk3.json", "hsk/hsk4.json", "hsk/hsk5.json", "hsk/hsk6.json" };
+                var existingSet = (await dbContext.HskVocabularies
+                    .Select(v => v.HskLevel + "_" + v.Hanzi)
+                    .ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                var newVocabs = new List<HskVocabulary>();
+                foreach (var hskRelPath in hskFiles)
+                {
+                    var filePath = FindSampleFile(hskRelPath);
+                    if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+                    {
+                        var json = await File.ReadAllTextAsync(filePath);
+                        using var doc = JsonDocument.Parse(json);
+                        foreach (var elem in doc.RootElement.EnumerateArray())
+                        {
+                            var hanzi = elem.TryGetProperty("hanzi", out var hz) ? hz.GetString() ?? "" : "";
+                            if (string.IsNullOrWhiteSpace(hanzi)) continue;
+                            var level = elem.TryGetProperty("hskLevel", out var lv) ? lv.GetString() ?? "HSK1" : "HSK1";
+                            level = level.Trim().ToUpperInvariant();
+
+                            var key = level + "_" + hanzi.Trim();
+                            if (existingSet.Contains(key)) continue;
+
+                            var pinyin = elem.TryGetProperty("pinyin", out var py) ? py.GetString() ?? "" : "";
+                            var meaning = elem.TryGetProperty("meaning", out var mn) ? mn.GetString() ?? "" : "";
+                            var wordType = elem.TryGetProperty("wordType", out var wt) ? wt.GetString() : null;
+                            var exSentence = elem.TryGetProperty("exampleSentence", out var es) ? es.GetString() : null;
+                            var exPinyin = elem.TryGetProperty("examplePinyin", out var ep) ? ep.GetString() : null;
+                            var exMeaning = elem.TryGetProperty("exampleMeaning", out var em) ? em.GetString() : null;
+                            var audioUrl = elem.TryGetProperty("audioUrl", out var au) ? au.GetString() : null;
+                            var order = elem.TryGetProperty("displayOrder", out var ord) ? ord.GetInt32() : 1;
+
+                            newVocabs.Add(new HskVocabulary
+                            {
+                                HskLevel = level,
+                                Hanzi = hanzi.Trim(),
+                                Pinyin = pinyin.Trim(),
+                                Meaning = meaning.Trim(),
+                                WordType = wordType?.Trim(),
+                                ExampleSentence = exSentence?.Trim(),
+                                ExamplePinyin = exPinyin?.Trim(),
+                                ExampleMeaning = exMeaning?.Trim(),
+                                AudioUrl = audioUrl?.Trim(),
+                                DisplayOrder = order,
+                                IsActive = true,
+                                CreatedAt = DateTime.UtcNow
+                            });
+                            existingSet.Add(key);
+                        }
+                    }
+                }
+
+                if (newVocabs.Count > 0)
+                {
+                    dbContext.HskVocabularies.AddRange(newVocabs);
+                    await dbContext.SaveChangesAsync();
+                    Console.WriteLine($"[SeedData] Seeded {newVocabs.Count} HSK vocabularies from JSON.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SeedData] HskVocabulary seed note: {ex.Message}");
+        }
     }
 }
 

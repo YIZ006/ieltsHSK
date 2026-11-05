@@ -1,6 +1,23 @@
 namespace Backend.Application.DTOs;
 
-public record AddHskReviewWordsRequest(List<int> VocabularyIds, string? Source = "HskShooter");
+public record ReviewWordItemInput(
+    int? Id,
+    string Hanzi,
+    string? Pinyin,
+    string? Meaning,
+    string? HskLevel,
+    string? WordType = null,
+    string? ExampleSentence = null,
+    string? ExamplePinyin = null,
+    string? ExampleMeaning = null,
+    string? AudioUrl = null
+);
+
+public record AddHskReviewWordsRequest(
+    List<int>? VocabularyIds = null,
+    List<ReviewWordItemInput>? Words = null,
+    string? Source = "HskShooter"
+);
 
 public record HskReviewWordDto
 {

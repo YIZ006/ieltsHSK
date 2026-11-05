@@ -568,6 +568,45 @@ public class HskService
         }
     }
 
+    public async Task<AddHskReviewWordsResponse?> AddReviewWordsBatchAsync(IEnumerable<HskVocabularyItem> words, string source = "HskShooter")
+    {
+        try
+        {
+            var wordList = words.ToList();
+            if (wordList.Count == 0) return new AddHskReviewWordsResponse { AddedCount = 0, Message = "Danh sách rỗng" };
+
+            var payload = new
+            {
+                VocabularyIds = wordList.Select(w => w.Id).ToList(),
+                Words = wordList.Select(w => new
+                {
+                    Id = w.Id > 0 ? (int?)w.Id : null,
+                    Hanzi = w.Hanzi,
+                    Pinyin = w.Pinyin,
+                    Meaning = w.Meaning,
+                    HskLevel = w.HskLevel,
+                    WordType = w.WordType,
+                    ExampleSentence = w.ExampleSentence,
+                    ExamplePinyin = w.ExamplePinyin,
+                    ExampleMeaning = w.ExampleMeaning,
+                    AudioUrl = w.AudioUrl
+                }).ToList(),
+                Source = source
+            };
+
+            var response = await _http.PostAsJsonAsync("/api/hsk/review/batch", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<AddHskReviewWordsResponse>();
+            }
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public async Task<AddHskReviewWordsResponse?> AddReviewWordsBatchAsync(List<int> vocabIds, string source = "HskShooter")
     {
         try
@@ -591,6 +630,19 @@ public class HskService
         {
             var res = await _http.PostAsync($"/api/hsk/review/{vocabularyId}", null);
             return res.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task<bool> AddSingleReviewWordAsync(HskVocabularyItem word, string source = "Manual")
+    {
+        try
+        {
+            var res = await AddReviewWordsBatchAsync(new[] { word }, source);
+            return res != null && (res.AddedCount > 0 || res.TotalReviewWords > 0);
         }
         catch
         {
