@@ -475,6 +475,143 @@ public static class HskEndpoints
             return Results.Ok(new { vocabularyId, learned = false });
         });
 
+        // ─── HSK Vocabulary Review List (Sổ tay ôn tập từ vựng) ───
+
+        app.MapGet("/api/hsk/review", [Microsoft.AspNetCore.Authorization.Authorize] async (
+                System.Security.Claims.ClaimsPrincipal user,
+                Backend.Infrastructure.Persistence.AppDbContext dbContext,
+                CancellationToken cancellationToken) =>
+        {
+            var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                               ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+            var list = await dbContext.HskReviewWords
+                .Where(r => r.UserId == userId)
+                .Include(r => r.Vocabulary)
+                .OrderByDescending(r => r.AddedAt)
+                .Select(r => new Backend.Application.DTOs.HskReviewWordDto
+                {
+                    Id = r.Id,
+                    VocabularyId = r.VocabularyId,
+                    HskLevel = r.Vocabulary != null ? r.Vocabulary.HskLevel : string.Empty,
+                    Hanzi = r.Vocabulary != null ? r.Vocabulary.Hanzi : string.Empty,
+                    Pinyin = r.Vocabulary != null ? r.Vocabulary.Pinyin : string.Empty,
+                    Meaning = r.Vocabulary != null ? r.Vocabulary.Meaning : string.Empty,
+                    WordType = r.Vocabulary != null ? r.Vocabulary.WordType : null,
+                    ExampleSentence = r.Vocabulary != null ? r.Vocabulary.ExampleSentence : null,
+                    ExamplePinyin = r.Vocabulary != null ? r.Vocabulary.ExamplePinyin : null,
+                    ExampleMeaning = r.Vocabulary != null ? r.Vocabulary.ExampleMeaning : null,
+                    AudioUrl = r.Vocabulary != null ? r.Vocabulary.AudioUrl : null,
+                    Source = r.Source,
+                    AddedAt = r.AddedAt
+                })
+                .ToListAsync(cancellationToken);
+
+            return Results.Ok(list);
+        });
+
+        app.MapPost("/api/hsk/review/batch", [Microsoft.AspNetCore.Authorization.Authorize] async (
+                Backend.Application.DTOs.AddHskReviewWordsRequest req,
+                System.Security.Claims.ClaimsPrincipal user,
+                Backend.Infrastructure.Persistence.AppDbContext dbContext,
+                CancellationToken cancellationToken) =>
+        {
+            var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                               ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+            if (req.VocabularyIds == null || req.VocabularyIds.Count == 0)
+            {
+                var total = await dbContext.HskReviewWords.CountAsync(r => r.UserId == userId, cancellationToken);
+                return Results.Ok(new Backend.Application.DTOs.AddHskReviewWordsResponse(0, total, "Không có từ vựng nào được gửi."));
+            }
+
+            var validIds = (await dbContext.HskVocabularies
+                .Where(v => req.VocabularyIds.Contains(v.Id))
+                .Select(v => v.Id)
+                .ToListAsync(cancellationToken)).ToHashSet();
+
+            var existingIds = (await dbContext.HskReviewWords
+                .Where(r => r.UserId == userId && req.VocabularyIds.Contains(r.VocabularyId))
+                .Select(r => r.VocabularyId)
+                .ToListAsync(cancellationToken)).ToHashSet();
+
+            var toAddIds = validIds.Except(existingIds).ToList();
+            if (toAddIds.Count > 0)
+            {
+                var entities = toAddIds.Select(id => new Backend.Domain.Entities.HskReviewWord
+                {
+                    UserId = userId,
+                    VocabularyId = id,
+                    AddedAt = DateTime.UtcNow,
+                    Source = string.IsNullOrWhiteSpace(req.Source) ? "HskShooter" : req.Source
+                }).ToList();
+
+                dbContext.HskReviewWords.AddRange(entities);
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            var totalCount = await dbContext.HskReviewWords.CountAsync(r => r.UserId == userId, cancellationToken);
+            return Results.Ok(new Backend.Application.DTOs.AddHskReviewWordsResponse(
+                toAddIds.Count,
+                totalCount,
+                toAddIds.Count > 0 ? $"Đã lưu {toAddIds.Count} từ vào danh sách ôn tập." : "Các từ này đã có sẵn trong danh sách ôn tập."
+            ));
+        }).RequireRateLimiting("user-mutation");
+
+        app.MapPost("/api/hsk/review/{vocabularyId:int}", [Microsoft.AspNetCore.Authorization.Authorize] async (
+                int vocabularyId,
+                System.Security.Claims.ClaimsPrincipal user,
+                Backend.Infrastructure.Persistence.AppDbContext dbContext,
+                CancellationToken cancellationToken) =>
+        {
+            var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                               ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+            bool exists = await dbContext.HskReviewWords.AnyAsync(r => r.UserId == userId && r.VocabularyId == vocabularyId, cancellationToken);
+            if (!exists)
+            {
+                bool vocabExists = await dbContext.HskVocabularies.AnyAsync(v => v.Id == vocabularyId, cancellationToken);
+                if (!vocabExists) return Results.NotFound("Không tìm thấy từ vựng.");
+
+                dbContext.HskReviewWords.Add(new Backend.Domain.Entities.HskReviewWord
+                {
+                    UserId = userId,
+                    VocabularyId = vocabularyId,
+                    AddedAt = DateTime.UtcNow,
+                    Source = "Manual"
+                });
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            return Results.Ok(new { vocabularyId, saved = true });
+        }).RequireRateLimiting("user-mutation");
+
+        app.MapDelete("/api/hsk/review/{vocabularyId:int}", [Microsoft.AspNetCore.Authorization.Authorize] async (
+                int vocabularyId,
+                System.Security.Claims.ClaimsPrincipal user,
+                Backend.Infrastructure.Persistence.AppDbContext dbContext,
+                CancellationToken cancellationToken) =>
+        {
+            var userIdString = user.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                               ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdString, out int userId)) return Results.Unauthorized();
+
+            var rows = await dbContext.HskReviewWords
+                .Where(r => r.UserId == userId && r.VocabularyId == vocabularyId)
+                .ToListAsync(cancellationToken);
+
+            if (rows.Count > 0)
+            {
+                dbContext.HskReviewWords.RemoveRange(rows);
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            return Results.Ok(new { vocabularyId, removed = true });
+        }).RequireRateLimiting("user-mutation");
+
         // ─── HSK Vocabulary Excel Import ───
 
         app.MapGet("/api/hsk/vocab/template-excel", () =>

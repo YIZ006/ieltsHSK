@@ -336,6 +336,19 @@ public static class DependencyInjection
                         CONSTRAINT uq_user_notif_read UNIQUE (user_id, notification_id)
                     );
                     CREATE INDEX IF NOT EXISTS ix_user_notif_reads_user ON user_notification_reads (user_id);
+
+                    -- 11. Bảng hsk_review_words
+                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'hsk_vocabularies') THEN
+                        CREATE TABLE IF NOT EXISTS hsk_review_words (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            vocabulary_id INTEGER NOT NULL REFERENCES hsk_vocabularies(id) ON DELETE CASCADE,
+                            added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                            source TEXT,
+                            CONSTRAINT uq_hsk_review_words_user_vocab UNIQUE (user_id, vocabulary_id)
+                        );
+                        CREATE INDEX IF NOT EXISTS ix_hsk_review_words_user ON hsk_review_words (user_id);
+                    END IF;
                 END $$;
 
                 -- Tạo bảng admins riêng biệt không chung với users
@@ -567,6 +580,13 @@ public static class DependencyInjection
             {
                 dbContext.LearningSections.Add(
                     new LearningSection { Name = "Trò chơi", Description = "Game học từ & phản xạ", Icon = "bi-controller", Route = "/games", Language = "HSK", OrderIndex = 10 }
+                );
+                hasNewGames = true;
+            }
+            if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "HSK" && s.Route == "/hsk/on-tap"))
+            {
+                dbContext.LearningSections.Add(
+                    new LearningSection { Name = "Ôn tập từ vựng", Description = "Sổ tay từ cần nhớ & flashcard", Icon = "bi-arrow-repeat", Route = "/hsk/on-tap", Language = "HSK", OrderIndex = 7 }
                 );
                 hasNewGames = true;
             }

@@ -553,6 +553,63 @@ public class HskService
             return null;
         }
     }
+
+    // === Sổ tay ôn tập (Review Words) ===
+    public async Task<List<HskReviewWordItem>> GetReviewWordsAsync()
+    {
+        try
+        {
+            var res = await _http.GetFromJsonAsync<List<HskReviewWordItem>>("/api/hsk/review");
+            return res ?? new List<HskReviewWordItem>();
+        }
+        catch
+        {
+            return new List<HskReviewWordItem>();
+        }
+    }
+
+    public async Task<AddHskReviewWordsResponse?> AddReviewWordsBatchAsync(List<int> vocabIds, string source = "HskShooter")
+    {
+        try
+        {
+            var response = await _http.PostAsJsonAsync("/api/hsk/review/batch", new { VocabularyIds = vocabIds, Source = source });
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<AddHskReviewWordsResponse>();
+            }
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<bool> AddSingleReviewWordAsync(int vocabularyId)
+    {
+        try
+        {
+            var res = await _http.PostAsync($"/api/hsk/review/{vocabularyId}", null);
+            return res.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task<bool> RemoveReviewWordAsync(int vocabularyId)
+    {
+        try
+        {
+            var res = await _http.DeleteAsync($"/api/hsk/review/{vocabularyId}");
+            return res.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }
 
 public record HskDeleteAllResult(int Deleted, int R2FilesDeleted);

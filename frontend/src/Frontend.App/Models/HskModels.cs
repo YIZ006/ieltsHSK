@@ -143,3 +143,27 @@ public class HskLearningSection
     public string Language { get; set; } = string.Empty;
     public int OrderIndex { get; set; }
 }
+
+public class HskReviewWordItem
+{
+    public int Id { get; set; }
+    public int VocabularyId { get; set; }
+    public string HskLevel { get; set; } = string.Empty;
+    public string Hanzi { get; set; } = string.Empty;
+    public string Pinyin { get; set; } = string.Empty;
+    public string Meaning { get; set; } = string.Empty;
+    public string? WordType { get; set; }
+    public string? ExampleSentence { get; set; }
+    public string? ExamplePinyin { get; set; }
+    public string? ExampleMeaning { get; set; }
+    public string? AudioUrl { get; set; }
+    public string? Source { get; set; }
+    public DateTime AddedAt { get; set; }
+}
+
+public class AddHskReviewWordsResponse
+{
+    public int AddedCount { get; set; }
+    public int TotalReviewWords { get; set; }
+    public string Message { get; set; } = string.Empty;
+}

@@ -1,9 +1,12 @@
 @using Frontend.App.Models
 @using Frontend.App.Services
+@using Microsoft.AspNetCore.Components.Authorization
 @inject HskService HskSvc
 @inject ProfileService ProfileSvc
 @inject IJSRuntime JS
 @inject UserGameProgressService GameProgressService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavManager
 @implements IDisposable
 
     <div class="fullscreen-game-overlay hsk-game-overlay @(IsHskGamePaused ? "is-paused" : "")" @ref="hskOverlayRef" tabindex="0" @onkeydown="HandleHskKeyDown" @onclick="FocusHskOnBackgroundClick">
@@ -463,8 +466,33 @@
                     {
                         <div class="hsk-review-section">
                             <div class="review-header">
-                                <i class="bi bi-lightbulb-fill text-warning me-2"></i>
-                                <b>Đáp án các từ đã bỏ lỡ (để ôn tập cải thiện):</b>
+                                <div class="review-header-title">
+                                    <i class="bi bi-lightbulb-fill text-warning me-2"></i>
+                                    <b>Đáp án các từ đã bỏ lỡ (để ôn tập cải thiện):</b>
+                                </div>
+                                <div class="review-header-action">
+                                    @if (_isReviewSaved)
+                                    {
+                                        <span class="review-saved-badge">
+                                            <i class="bi bi-check-circle-fill text-success me-1"></i> Đã lưu vào Ôn tập
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn-save-to-review" @onclick="SaveMissedWordsToReview" disabled="@_isSavingReview" title="Lưu danh sách từ bỏ lỡ vào Sổ tay Ôn tập">
+                                            @if (_isSavingReview)
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                <span>Đang lưu...</span>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-bookmark-plus-fill me-1 text-warning"></i>
+                                                <span>Lưu vào phần ôn tập</span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
                             </div>
                             <div class="review-items-scroll">
                                 @foreach (var m in _missedWordsInStage.DistinctBy(x => x.Id))
@@ -514,8 +542,33 @@
                         {
                             <div class="hsk-review-section">
                                 <div class="review-header">
-                                    <i class="bi bi-lightbulb-fill text-warning me-2"></i>
-                                    <b>Đáp án các từ đã bỏ lỡ trong tầng này:</b>
+                                    <div class="review-header-title">
+                                        <i class="bi bi-lightbulb-fill text-warning me-2"></i>
+                                        <b>Đáp án các từ đã bỏ lỡ trong tầng này:</b>
+                                    </div>
+                                    <div class="review-header-action">
+                                        @if (_isReviewSaved)
+                                        {
+                                            <span class="review-saved-badge">
+                                                <i class="bi bi-check-circle-fill text-success me-1"></i> Đã lưu vào Ôn tập
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn-save-to-review" @onclick="SaveMissedWordsToReview" disabled="@_isSavingReview" title="Lưu danh sách từ bỏ lỡ vào Sổ tay Ôn tập">
+                                                @if (_isSavingReview)
+                                                {
+                                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                    <span>Đang lưu...</span>
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-bookmark-plus-fill me-1 text-warning"></i>
+                                                    <span>Lưu vào phần ôn tập</span>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
                                 </div>
                                 <div class="review-items-scroll">
                                     @foreach (var m in _missedWordsInStage.DistinctBy(x => x.Id))
@@ -663,6 +716,33 @@
                 </div>
             }
         </main>
+
+        @* Guest login prompt modal *@
+        @if (_showGuestAuthPrompt)
+        {
+            <div class="hsk-guest-prompt-backdrop" @onclick="() => _showGuestAuthPrompt = false" @onclick:stopPropagation="true">
+                <div class="hsk-guest-prompt-card" @onclick:stopPropagation="true">
+                    <div class="guest-prompt-icon">
+                        <i class="bi bi-shield-lock-fill"></i>
+                    </div>
+                    <h3>Yêu Cầu Đăng Nhập</h3>
+                    <p>
+                        Bạn đang chơi dưới tư cách <strong>Tài khoản khách</strong>.<br />
+                        Vui lòng đăng nhập hoặc tạo tài khoản miễn phí để lưu các từ vựng này vào <strong>Sổ tay Ôn tập</strong> và đồng bộ trên mọi thiết bị.
+                    </p>
+                    <div class="guest-prompt-actions">
+                        <button type="button" class="btn-guest-login" @onclick="OpenLoginModalFromPrompt">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> Đăng nhập ngay
+                        </button>
+                        <button type="button" class="btn-guest-cancel" @onclick="() => _showGuestAuthPrompt = false">
+                            Để sau
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <AuthModal @ref="_authModal" />
     </div>
 
 
@@ -671,6 +751,13 @@
     [Parameter] public EventCallback OnStatsChanged { get; set; }
     [Parameter] public string SelectedLevel { get; set; } = "HSK1";
     [Parameter] public bool IsAllStagesUnlocked { get; set; } = false;
+
+    private bool _isSavingReview = false;
+    private bool _isReviewSaved = false;
+    private int _savedReviewCount = 0;
+    private bool _showGuestAuthPrompt = false;
+    private bool _pendingSaveAfterLogin = false;
+    private AuthModal? _authModal;
 
     private bool isPlayingHskShooter = true;
     private string toastMessage = "";
@@ -792,8 +879,72 @@
         {
             _isAllStagesUnlocked = true;
         }
+        AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
         await LoadUserProfileAsync();
         await StartHskShooterGame();
+    }
+
+    private async Task SaveMissedWordsToReview()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        bool isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
+
+        if (!isAuthenticated)
+        {
+            _pendingSaveAfterLogin = true;
+            _showGuestAuthPrompt = true;
+            StateHasChanged();
+            return;
+        }
+
+        var distinctMissed = _missedWordsInStage.DistinctBy(x => x.Id).ToList();
+        if (distinctMissed.Count == 0) return;
+
+        _isSavingReview = true;
+        StateHasChanged();
+
+        try
+        {
+            var ids = distinctMissed.Select(x => x.Id).ToList();
+            var res = await HskSvc.AddReviewWordsBatchAsync(ids, "HskShooter");
+            _isReviewSaved = true;
+            _savedReviewCount = res?.AddedCount ?? ids.Count;
+            await JS.InvokeVoidAsync("OfflineDB.showToast", $"Đã lưu {distinctMissed.Count} từ vựng vào Sổ tay ôn tập thành công!", "success");
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("OfflineDB.showToast", "Không thể lưu từ vào ôn tập: " + ex.Message, "error");
+        }
+        finally
+        {
+            _isSavingReview = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenLoginModalFromPrompt()
+    {
+        _showGuestAuthPrompt = false;
+        _authModal?.Show(true);
+        StateHasChanged();
+    }
+
+    private async void OnAuthStateChanged(Task<AuthenticationState> task)
+    {
+        try
+        {
+            var authState = await task;
+            if (authState.User.Identity?.IsAuthenticated == true && _pendingSaveAfterLogin)
+            {
+                _pendingSaveAfterLogin = false;
+                _showGuestAuthPrompt = false;
+                await InvokeAsync(async () =>
+                {
+                    await SaveMissedWordsToReview();
+                });
+            }
+        }
+        catch { }
     }
 
     private async Task LoadUserProfileAsync()
@@ -1182,6 +1333,8 @@
         hskNewLearned = 0;
         hskCombo = 0;
         _missedWordsInStage.Clear();
+        _isReviewSaved = false;
+        _isSavingReview = false;
         await LoadStage(0);
     }
 
@@ -1194,6 +1347,8 @@
         hskNewLearned = 0;
         hskCombo = 0;
         _missedWordsInStage.Clear();
+        _isReviewSaved = false;
+        _isSavingReview = false;
         await LoadStage(_savedStageIndex);
     }
 
@@ -1301,6 +1456,8 @@
         _showMissedBanner = false;
         _lastMissedVocab = null;
         _missedWordsInStage.Clear();
+        _isReviewSaved = false;
+        _isSavingReview = false;
         hskShooterState = HskGameState.Playing;
 
         hskTimer?.Dispose();
@@ -2764,6 +2921,7 @@
 
     public void Dispose()
     {
+        AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
         hskTimer?.Dispose();
         _countdownTimer?.Dispose();
         _typewriterCts?.Cancel();

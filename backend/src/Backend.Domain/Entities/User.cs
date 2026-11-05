@@ -36,4 +36,5 @@ public class User
     public ICollection<UserStudyActivity> StudyActivities { get; set; } = new List<UserStudyActivity>();
     public ICollection<UserGameProgress> GameProgresses { get; set; } = new List<UserGameProgress>();
     public ICollection<ListenVideo> ListenVideos { get; set; } = new List<ListenVideo>();
+    public ICollection<HskReviewWord> HskReviewWords { get; set; } = new List<HskReviewWord>();
 }

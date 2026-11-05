@@ -1,0 +1,457 @@
+@page "/hsk/on-tap"
+@page "/hsk/review"
+@layout Frontend.App.Layout.HskLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject HskService HskSvc
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Sổ Tay Ôn Tập Từ Vựng HSK - ieltsHSK</PageTitle>
+
+<div class="hsk-review-container">
+    <!-- Header -->
+    <header class="review-page-header">
+        <div class="header-content">
+            <div class="header-badge">
+                <i class="bi bi-arrow-repeat"></i> SỔ TAY ÔN TẬP
+            </div>
+            <h1>Sổ Tay Ôn Tập Từ Vựng HSK</h1>
+            <p>Tập hợp các từ vựng bạn chưa nhớ khi chơi game HSK Shooter hoặc đã lưu lại trong quá trình luyện tập. Hãy ôn tập mỗi ngày để khắc sâu vào trí nhớ dài hạn!</p>
+        </div>
+        @if (isAuthenticated && reviewWords.Count > 0)
+        {
+            <div class="header-actions">
+                <button type="button" class="btn-action-flashcard" @onclick="StartFlashcardSession">
+                    <i class="bi bi-collection-play-fill me-1"></i> Học Flashcard (@FilteredWords.Count)
+                </button>
+                <a href="/hsk/games?game=shooter" class="btn-action-shooter">
+                    <i class="bi bi-crosshair me-1"></i> Luyện HSK Shooter
+                </a>
+            </div>
+        }
+    </header>
+
+    @if (isLoading)
+    {
+        <div class="review-state-box">
+            <div class="spinner-border text-danger" style="width: 3rem; height: 3rem;" role="status"></div>
+            <p class="mt-3 text-muted">Đang tải danh sách từ vựng cần ôn tập...</p>
+        </div>
+    }
+    else if (!isAuthenticated)
+    {
+        <!-- Guest State -->
+        <div class="review-state-box guest-card">
+            <div class="state-icon-circle">
+                <i class="bi bi-shield-lock-fill"></i>
+            </div>
+            <h2>Đăng nhập để xem Sổ tay Ôn tập</h2>
+            <p>
+                Bạn đang sử dụng hệ thống dưới dạng <strong>Tài khoản khách</strong>.<br />
+                Để lưu danh sách các từ bạn hay quên khi chơi game và đồng bộ trên mọi thiết bị, vui lòng đăng nhập hoặc tạo tài khoản miễn phí.
+            </p>
+            <div class="guest-btns">
+                <button type="button" class="btn-login-cta" @onclick="() => authModal?.Show(true)">
+                    <i class="bi bi-box-arrow-in-right me-1"></i> Đăng nhập ngay
+                </button>
+                <button type="button" class="btn-register-cta" @onclick="() => authModal?.Show(false)">
+                    <i class="bi bi-person-plus-fill me-1"></i> Đăng ký miễn phí
+                </button>
+            </div>
+        </div>
+    }
+    else if (reviewWords.Count == 0)
+    {
+        <!-- Empty State -->
+        <div class="review-state-box empty-card">
+            <div class="empty-icon-art">📚✨</div>
+            <h2>Chưa có từ nào trong danh sách ôn tập!</h2>
+            <p>
+                Tuyệt vời! Bạn chưa có từ nào bị bỏ lỡ hoặc cần ôn lại.<br />
+                Khi chơi game <strong>HSK Shooter</strong> hoặc học từ vựng, các từ bạn chưa nhớ sẽ xuất hiện tại đây khi bấm nút <strong>Lưu vào phần ôn tập</strong>.
+            </p>
+            <div class="empty-actions">
+                <a href="/hsk/games?game=shooter" class="btn-play-cta">
+                    <i class="bi bi-crosshair me-1"></i> Chơi HSK Shooter ngay
+                </a>
+                <a href="/hsk/tu-vung" class="btn-learn-cta">
+                    <i class="bi bi-spellcheck me-1"></i> Khám phá Từ vựng HSK
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Active Review Content -->
+        <section class="review-main-section">
+            <!-- Filter & Search Toolbar -->
+            <div class="toolbar-wrapper">
+                <div class="level-tabs">
+                    <button type="button" class="level-tab @(selectedLevel == "ALL" ? "active" : "")" @onclick='() => SelectLevel("ALL")'>
+                        Tất cả <span class="tab-badge">@reviewWords.Count</span>
+                    </button>
+                    @foreach (var lvl in AvailableLevels)
+                    {
+                        var cnt = reviewWords.Count(w => w.HskLevel.Equals(lvl, StringComparison.OrdinalIgnoreCase));
+                        if (cnt > 0)
+                        {
+                            <button type="button" class="level-tab @(selectedLevel == lvl ? "active" : "")" @onclick="() => SelectLevel(lvl)">
+                                @lvl <span class="tab-badge">@cnt</span>
+                            </button>
+                        }
+                    }
+                </div>
+
+                <div class="search-box">
+                    <i class="bi bi-search"></i>
+                    <input type="text" placeholder="Tìm theo chữ Hán, Pinyin hoặc nghĩa tiếng Việt..." @bind="searchQuery" @bind:event="oninput" />
+                    @if (!string.IsNullOrWhiteSpace(searchQuery))
+                    {
+                        <button type="button" class="btn-clear-search" @onclick="() => searchQuery = string.Empty">
+                            <i class="bi bi-x-circle-fill"></i>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Words Grid -->
+            <div class="words-summary-bar">
+                <span>Hiển thị <b>@FilteredWords.Count</b> từ vựng cần ôn tập @(selectedLevel != "ALL" ? $"({selectedLevel})" : "")</span>
+                @if (FilteredWords.Count > 0)
+                {
+                    <button type="button" class="btn-quick-flashcard" @onclick="StartFlashcardSession">
+                        <i class="bi bi-card-checklist me-1"></i> Bắt đầu ôn với Flashcard
+                    </button>
+                }
+            </div>
+
+            <div class="review-words-grid">
+                @foreach (var word in FilteredWords)
+                {
+                    <div class="word-card" @key="word.Id">
+                        <div class="card-top">
+                            <span class="level-pill @word.HskLevel.ToLowerInvariant()">@word.HskLevel</span>
+                            <div class="card-top-right">
+                                @if (!string.IsNullOrWhiteSpace(word.Source))
+                                {
+                                    <span class="source-tag" title="Nguồn lưu">
+                                        <i class="bi bi-controller"></i> @word.Source
+                                    </span>
+                                }
+                                <button type="button" class="btn-icon-audio" @onclick="() => PlayAudio(word.Hanzi)" title="Phát âm tiếng Trung">
+                                    <i class="bi bi-volume-up-fill"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="word-body">
+                            <div class="hanzi-row">
+                                <span class="hanzi-text">@word.Hanzi</span>
+                                <span class="pinyin-text">[@word.Pinyin]</span>
+                            </div>
+                            <div class="meaning-text">@word.Meaning</div>
+                            @if (!string.IsNullOrWhiteSpace(word.ExampleSentence))
+                            {
+                                <div class="example-box">
+                                    <div class="example-zh">@word.ExampleSentence</div>
+                                    @if (!string.IsNullOrWhiteSpace(word.ExamplePinyin))
+                                    {
+                                        <div class="example-py">@word.ExamplePinyin</div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(word.ExampleMeaning))
+                                    {
+                                        <div class="example-vi">@word.ExampleMeaning</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <div class="card-footer">
+                            <span class="time-meta" title="@word.AddedAt.ToLocalTime().ToString("g")">
+                                <i class="bi bi-clock-history me-1"></i> @FormatTimeAgo(word.AddedAt)
+                            </span>
+                            <div class="footer-actions">
+                                <button type="button" class="btn-mark-mastered" @onclick="() => MarkWordMastered(word)" title="Đã thuộc từ này — đánh dấu hoàn thành và xóa khỏi ôn tập">
+                                    <i class="bi bi-check2-circle me-1"></i> Đã thuộc
+                                </button>
+                                <button type="button" class="btn-remove-review" @onclick="() => RemoveFromReview(word.VocabularyId)" title="Bỏ khỏi danh sách ôn tập">
+                                    <i class="bi bi-trash3"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </section>
+    }
+</div>
+
+@* Flashcard Modal *@
+@if (isFlashcardMode && flashcardQueue.Count > 0)
+{
+    var currentWord = flashcardQueue[currentCardIndex];
+    <div class="flashcard-modal-backdrop" @onclick="CloseFlashcard">
+        <div class="flashcard-modal-card" @onclick:stopPropagation>
+            <div class="fc-modal-header">
+                <div class="fc-progress-info">
+                    <span class="fc-count-pill">Thẻ @(currentCardIndex + 1) / @flashcardQueue.Count</span>
+                    <span class="fc-level-badge">@currentWord.HskLevel</span>
+                </div>
+                <button type="button" class="fc-close-btn" @onclick="CloseFlashcard" title="Đóng thẻ (Esc)">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="fc-card-flip-container @(isCardFlipped ? "flipped" : "")" @onclick="FlipCard">
+                <!-- Front Side -->
+                <div class="fc-face fc-front">
+                    <div class="fc-face-badge">MẶT TRƯỚC (BẤM ĐỂ LẬT)</div>
+                    <div class="fc-hanzi">@currentWord.Hanzi</div>
+                    <div class="fc-pinyin">[@currentWord.Pinyin]</div>
+                    <button type="button" class="fc-audio-btn" @onclick="() => PlayAudio(currentWord.Hanzi)" @onclick:stopPropagation title="Nghe phát âm">
+                        <i class="bi bi-volume-up-fill me-1"></i> Nghe phát âm
+                    </button>
+                    <div class="fc-hint">Nhấn vào thẻ hoặc phím cách (Space) để xem nghĩa</div>
+                </div>
+
+                <!-- Back Side -->
+                <div class="fc-face fc-back">
+                    <div class="fc-face-badge">ĐÁP ÁN</div>
+                    <div class="fc-back-hanzi">@currentWord.Hanzi <span class="fc-back-py">[@currentWord.Pinyin]</span></div>
+                    <div class="fc-meaning">@currentWord.Meaning</div>
+                    @if (!string.IsNullOrWhiteSpace(currentWord.ExampleSentence))
+                    {
+                        <div class="fc-example">
+                            <div class="fc-ex-zh">@currentWord.ExampleSentence</div>
+                            <div class="fc-ex-py">@currentWord.ExamplePinyin</div>
+                            <div class="fc-ex-vi">@currentWord.ExampleMeaning</div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="fc-controls">
+                <button type="button" class="btn-fc-prev" @onclick="PrevCard" disabled="@(currentCardIndex == 0)">
+                    <i class="bi bi-chevron-left me-1"></i> Từ trước
+                </button>
+                <div class="fc-rating-btns">
+                    <button type="button" class="btn-fc-again" @onclick="CardNeedReview" title="Chưa nhớ — giữ lại để ôn tiếp">
+                        <i class="bi bi-arrow-repeat me-1"></i> Chưa nhớ
+                    </button>
+                    <button type="button" class="btn-fc-good" @onclick="() => CardMastered(currentWord)" title="Đã thuộc — chuyển sang từ tiếp theo">
+                        <i class="bi bi-check2-circle me-1"></i> Đã nhớ
+                    </button>
+                </div>
+                <button type="button" class="btn-fc-next" @onclick="NextCard" disabled="@(currentCardIndex == flashcardQueue.Count - 1)">
+                    Từ tiếp <i class="bi bi-chevron-right ms-1"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<AuthModal @ref="authModal" />
+
+@code {
+    private bool isLoading = true;
+    private bool isAuthenticated = false;
+    private List<HskReviewWordItem> reviewWords = new();
+    private string selectedLevel = "ALL";
+    private string searchQuery = "";
+    private AuthModal? authModal;
+
+    // Flashcard state
+    private bool isFlashcardMode = false;
+    private bool isCardFlipped = false;
+    private int currentCardIndex = 0;
+    private List<HskReviewWordItem> flashcardQueue = new();
+
+    private static readonly string[] AvailableLevels = { "HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6" };
+
+    private List<HskReviewWordItem> FilteredWords => reviewWords
+        .Where(w => (selectedLevel == "ALL" || w.HskLevel.Equals(selectedLevel, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrWhiteSpace(searchQuery) ||
+                     w.Hanzi.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                     w.Pinyin.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                     w.Meaning.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)))
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
+
+        AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
+
+        if (isAuthenticated)
+        {
+            await LoadReviewWordsAsync();
+        }
+        else
+        {
+            isLoading = false;
+        }
+    }
+
+    private async void OnAuthStateChanged(Task<AuthenticationState> task)
+    {
+        try
+        {
+            var state = await task;
+            isAuthenticated = state.User.Identity?.IsAuthenticated ?? false;
+            if (isAuthenticated)
+            {
+                await LoadReviewWordsAsync();
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { }
+    }
+
+    private async Task LoadReviewWordsAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+        try
+        {
+            reviewWords = await HskSvc.GetReviewWordsAsync();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("OfflineDB.showToast", "Không thể tải danh sách ôn tập: " + ex.Message, "error");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SelectLevel(string level)
+    {
+        selectedLevel = level;
+    }
+
+    private async Task RemoveFromReview(int vocabularyId)
+    {
+        var success = await HskSvc.RemoveReviewWordAsync(vocabularyId);
+        if (success)
+        {
+            reviewWords.RemoveAll(w => w.VocabularyId == vocabularyId);
+            await JS.InvokeVoidAsync("OfflineDB.showToast", "Đã xóa từ khỏi danh sách ôn tập.", "info");
+            StateHasChanged();
+        }
+    }
+
+    private async Task MarkWordMastered(HskReviewWordItem word)
+    {
+        // 1. Remove from review list
+        await HskSvc.RemoveReviewWordAsync(word.VocabularyId);
+        // 2. Mark as learned in general vocabulary progress
+        await HskSvc.UpdateVocabProgressAsync(word.VocabularyId, true);
+
+        reviewWords.RemoveAll(w => w.VocabularyId == word.VocabularyId);
+        await JS.InvokeVoidAsync("OfflineDB.showToast", $"Chúc mừng! Đã hoàn thành từ {word.Hanzi}.", "success");
+        StateHasChanged();
+    }
+
+    // === Flashcard Methods ===
+    private void StartFlashcardSession()
+    {
+        var pool = FilteredWords;
+        if (pool.Count == 0) return;
+
+        flashcardQueue = pool.OrderBy(_ => Guid.NewGuid()).ToList();
+        currentCardIndex = 0;
+        isCardFlipped = false;
+        isFlashcardMode = true;
+    }
+
+    private void CloseFlashcard()
+    {
+        isFlashcardMode = false;
+    }
+
+    private void FlipCard()
+    {
+        isCardFlipped = !isCardFlipped;
+    }
+
+    private void NextCard()
+    {
+        if (currentCardIndex < flashcardQueue.Count - 1)
+        {
+            currentCardIndex++;
+            isCardFlipped = false;
+        }
+    }
+
+    private void PrevCard()
+    {
+        if (currentCardIndex > 0)
+        {
+            currentCardIndex--;
+            isCardFlipped = false;
+        }
+    }
+
+    private void CardNeedReview()
+    {
+        // Card is kept in queue, move next
+        if (currentCardIndex < flashcardQueue.Count - 1)
+        {
+            currentCardIndex++;
+            isCardFlipped = false;
+        }
+        else
+        {
+            isFlashcardMode = false;
+            _ = JS.InvokeVoidAsync("OfflineDB.showToast", "Đã hoàn thành lượt ôn Flashcard!", "info");
+        }
+    }
+
+    private async Task CardMastered(HskReviewWordItem word)
+    {
+        await MarkWordMastered(word);
+        if (currentCardIndex < flashcardQueue.Count - 1)
+        {
+            currentCardIndex++;
+            isCardFlipped = false;
+        }
+        else
+        {
+            isFlashcardMode = false;
+            await JS.InvokeVoidAsync("OfflineDB.showToast", "Đã hoàn thành toàn bộ thẻ ôn tập!", "success");
+        }
+    }
+
+    private async Task PlayAudio(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        try
+        {
+            await JS.InvokeVoidAsync("eval", $"if ('speechSynthesis' in window) {{ window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance('{text}'); u.lang = 'zh-CN'; u.rate = 0.85; window.speechSynthesis.speak(u); }}");
+        }
+        catch { }
+    }
+
+    private string FormatTimeAgo(DateTime dt)
+    {
+        var span = DateTime.UtcNow - dt;
+        if (span.TotalMinutes < 1) return "Vừa xong";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes} phút trước";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours} giờ trước";
+        if (span.TotalDays < 30) return $"{(int)span.TotalDays} ngày trước";
+        return dt.ToLocalTime().ToString("dd/MM/yyyy");
+    }
+
+    public void Dispose()
+    {
+        AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
+    }
+}

@@ -1588,6 +1588,153 @@
     margin-bottom: 0.6rem;
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.review-header-title {
+    display: flex;
+    align-items: center;
+}
+
+.btn-save-to-review {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(245, 158, 11, 0.25));
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    color: #fef08a;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.25rem 0.65rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-save-to-review:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.4), rgba(245, 158, 11, 0.4));
+    border-color: #fbbf24;
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.review-saved-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(34, 197, 94, 0.15);
+    border: 1px solid rgba(34, 197, 94, 0.4);
+    color: #4ade80;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.25rem 0.65rem;
+    border-radius: 6px;
+}
+
+/* Guest login prompt modal */
+.hsk-guest-prompt-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(3, 7, 18, 0.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10020;
+    animation: fadeIn 0.2s ease;
+}
+
+.hsk-guest-prompt-card {
+    background: linear-gradient(145deg, #111827, #1f2937);
+    border: 1.5px solid rgba(245, 158, 11, 0.4);
+    border-radius: 20px;
+    padding: 2rem 1.8rem;
+    max-width: 440px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(245, 158, 11, 0.15);
+    animation: scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.guest-prompt-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 1rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.2));
+    border: 2px solid rgba(245, 158, 11, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    color: #fbbf24;
+}
+
+.hsk-guest-prompt-card h3 {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin-bottom: 0.6rem;
+}
+
+.hsk-guest-prompt-card p {
+    font-size: 0.92rem;
+    color: #94a3b8;
+    line-height: 1.5;
+    margin-bottom: 1.4rem;
+}
+
+.guest-prompt-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+}
+
+.btn-guest-login {
+    background: linear-gradient(135deg, #ef4444, #f97316);
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    padding: 0.7rem 1.4rem;
+    font-weight: 700;
+    font-size: 0.92rem;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+    transition: all 0.2s ease;
+}
+
+.btn-guest-login:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(239, 68, 68, 0.55);
+}
+
+.btn-guest-cancel {
+    background: rgba(51, 65, 85, 0.7);
+    color: #cbd5e1;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 0.7rem 1.2rem;
+    font-weight: 600;
+    font-size: 0.92rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-guest-cancel:hover {
+    background: rgba(71, 85, 105, 0.9);
+    color: #ffffff;
+}
+
+/* Ensure AuthModal popup renders above HSK shooter overlay */
+::deep .modal-backdrop {
+    z-index: 10050 !important;
+}
+
+::deep .modal-content {
+    z-index: 10051 !important;
 }
 
 .review-items-scroll {

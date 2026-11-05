@@ -23,6 +23,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<HskVocabulary> HskVocabularies { get; set; }
     public DbSet<HskVocabularyImport> HskVocabularyImports { get; set; }
     public DbSet<HskVocabularyProgress> HskVocabularyProgresses { get; set; }
+    public DbSet<HskReviewWord> HskReviewWords { get; set; }
     public DbSet<IeltsVocabulary> IeltsVocabularies { get; set; }
     public DbSet<IeltsVocabularyImport> IeltsVocabularyImports { get; set; }
     public DbSet<IeltsVocabularyProgress> IeltsVocabularyProgresses { get; set; }
@@ -91,6 +92,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(p => p.User)
                 .WithMany(u => u.HskVocabularyProgresses)
                 .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // HskReviewWord: mỗi user chỉ có 1 dòng từ ôn tập cho 1 từ
+        modelBuilder.Entity<HskReviewWord>(entity =>
+        {
+            entity.ToTable("hsk_review_words");
+            entity.HasIndex(r => new { r.UserId, r.VocabularyId }).IsUnique();
+            entity.HasOne(r => r.User)
+                .WithMany(u => u.HskReviewWords)
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(r => r.Vocabulary)
+                .WithMany()
+                .HasForeignKey(r => r.VocabularyId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
