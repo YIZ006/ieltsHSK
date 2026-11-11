@@ -3,259 +3,650 @@
 @layout Frontend.App.Layout.HskLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
-@using Blazored.LocalStorage
+@using System.Text.RegularExpressions
 @inject HskGrammarService GrammarService
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
-<PageTitle>Ngữ pháp HSK 1–6 (Điểm ngữ pháp, Chủ đề & Nhiệm vụ) - ieltsHSK</PageTitle>
+<PageTitle>Phòng Thí Nghiệm Ngữ Pháp HSK 1–6 (语法实验室) - ieltsHSK</PageTitle>
 
-<div class="hsk-grammar-page">
-    <!-- Header -->
-    <div class="grammar-header">
-        <div class="header-left">
-            <div class="header-icon-badge">
-                <i class="bi bi-diagram-3-fill"></i>
-            </div>
-            <div>
-                <div class="header-title-row">
-                    <h1 class="grammar-title">Ngữ pháp HSK 汉语语法</h1>
-                    <span class="badge-tag">Chuẩn Khung HSK 1–6</span>
+<div class="hsk-studio-page">
+    <!-- =================================================================== -->
+    <!-- 1. IMPERIAL DARK STUDIO HERO BANNER + 6-LEVEL INTERACTIVE MATRIX    -->
+    <!-- =================================================================== -->
+    <section class="studio-hero-banner">
+        <div class="hero-glow-orb orb-rose"></div>
+        <div class="hero-glow-orb orb-amber"></div>
+
+        <div class="hero-top-bar">
+            <div class="hero-brand-col">
+                <div class="hero-chips-row">
+                    <span class="chip-exclusive">
+                        <i class="bi bi-stars me-1"></i> ieltsHSK Exclusive Studio
+                    </span>
+                    <span class="chip-feature">
+                        Chiết Tự Cấu Trúc • Sắp Xếp Câu • Flashcard 3D
+                    </span>
                 </div>
-                <p class="grammar-subtitle">Hệ thống toàn bộ 238 điểm ngữ pháp trọng tâm, 301 chủ đề giao tiếp, 136 nhiệm vụ thực hành và hàng trăm câu ví dụ mẫu.</p>
+                <h1 class="studio-main-title">
+                    Phòng Thí Nghiệm Ngữ Pháp HSK 1–6 <span class="hanzi-accent">语法实验室</span>
+                </h1>
+                <p class="studio-subtitle">
+                    Bàn học tương tác 2 cột (Split-Studio), bóc tách từng từ khóa ngữ pháp, nghe phát âm 2 tốc độ (Chậm 0.65x / Chuẩn 1.0x), ẩn/hiện Pinyin và thử thách ghép câu ví dụ ngay tại chỗ.
+                </p>
+            </div>
+
+            <!-- Global Action Controls -->
+            <div class="hero-actions-col">
+                <button type="button" class="btn-pinyin-toggle @(showPinyin ? "on" : "off")" @onclick="TogglePinyin">
+                    <i class="bi @(showPinyin ? "bi-eye-fill" : "bi-eye-slash-fill")"></i>
+                    <span>Hiện Pinyin: @(showPinyin ? "BẬT" : "TẮT")</span>
+                </button>
+
+                <div class="learned-pill-box">
+                    <div class="learned-stat-text">
+                        <i class="bi bi-check2-circle text-emerald me-1"></i>
+                        <span>Đã thuộc HSK @selectedLevel: <strong>@LearnedCountInLevel/@TotalLevelPoints</strong></span>
+                    </div>
+                    <button type="button" class="btn-mark-level" @onclick="ToggleAllLearnedInLevel" title="@(IsAllLearnedInLevel ? "Bỏ đánh dấu cấp này" : "Đánh dấu thuộc hết cấp này")">
+                        @(IsAllLearnedInLevel ? "Bỏ chọn" : "Thuộc hết")
+                    </button>
+                </div>
             </div>
         </div>
 
-        <!-- Level Selector Tabs -->
-        <div class="level-tabs-container">
-            @for (int i = 1; i <= 6; i++)
+        <!-- 6-LEVEL MASTERY MATRIX -->
+        <div class="level-matrix-grid">
+            @foreach (var meta in LevelMetadataList)
             {
-                var lvl = i.ToString();
-                var isActive = selectedLevel == lvl;
-                <button class="level-btn @(isActive ? "active" : "")" @onclick="() => SelectLevel(lvl)">
-                    <span class="lvl-label">HSK @lvl</span>
+                var isSelected = selectedLevel == meta.Level;
+                var totalPts = GetLevelTotalPoints(meta.Level);
+                var learnedPts = GetLevelLearnedPoints(meta.Level);
+                var pct = totalPts > 0 ? (int)Math.Round((double)learnedPts * 100 / totalPts) : 0;
+
+                <button type="button"
+                        class="matrix-level-card @(isSelected ? "selected" : "")"
+                        @onclick="() => SelectLevel(meta.Level)">
+                    <div class="matrix-card-top">
+                        <span class="matrix-lvl-badge @meta.GradientClass">HSK @meta.Level</span>
+                        <span class="matrix-pts-count">@totalPts điểm</span>
+                    </div>
+                    <div class="matrix-lvl-title">@meta.Title</div>
+                    <div class="matrix-meta-sub">@learnedPts/@totalPts đã thuộc (@pct%)</div>
+                    <div class="matrix-progress-track">
+                        <div class="matrix-progress-fill @meta.GradientClass" style="width: @(pct)%;"></div>
+                    </div>
+                </button>
+            }
+        </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- 2. STUDIO TOOLBAR: VIEW MODE SWITCHER & INSTANT SEARCH              -->
+    <!-- =================================================================== -->
+    <div class="studio-toolbar-card">
+        <div class="studio-mode-tabs" role="tablist">
+            <button type="button"
+                    class="studio-mode-btn @(activeMode == "studio" ? "active" : "")"
+                    @onclick='() => SwitchMode("studio")'>
+                <i class="bi bi-layout-split"></i>
+                <span>Phòng Studio 2 Cột</span>
+                <span class="mode-pill">@FilteredFlatPoints.Count</span>
+            </button>
+            <button type="button"
+                    class="studio-mode-btn @(activeMode == "bento" ? "active" : "")"
+                    @onclick='() => SwitchMode("bento")'>
+                <i class="bi bi-grid-1x2-fill"></i>
+                <span>Lưới Bento &amp; Thẻ Lật 3D</span>
+            </button>
+            <button type="button"
+                    class="studio-mode-btn @(activeMode == "missions" ? "active" : "")"
+                    @onclick='() => SwitchMode("missions")'>
+                <i class="bi bi-compass-fill"></i>
+                <span>Bản Đồ Chủ Đề (@(currentLevelData?.Topics?.Count ?? 0)) &amp; Nhiệm Vụ (@(currentLevelData?.Tasks?.Count ?? 0))</span>
+            </button>
+        </div>
+
+        <div class="studio-search-box">
+            <i class="bi bi-search search-ic"></i>
+            <input type="text"
+                   placeholder="Tìm cấu trúc, chữ Hán, Pinyin, nghĩa tiếng Việt..."
+                   @bind="searchKeyword"
+                   @bind:event="oninput"
+                   @bind:after="OnFilterChanged" />
+            @if (!string.IsNullOrWhiteSpace(searchKeyword))
+            {
+                <button type="button" class="btn-clear-kw" @onclick="ClearSearch">
+                    <i class="bi bi-x-circle-fill"></i>
                 </button>
             }
         </div>
     </div>
 
-    <!-- Mode Selector: Điểm ngữ pháp / Chủ đề / Nhiệm vụ HSK -->
-    <div class="view-mode-bar">
-        <div class="mode-tabs">
-            <button class="mode-btn @(activeTab == "points" ? "active" : "")" @onclick='() => activeTab = "points"'>
-                <i class="bi bi-card-checklist"></i>
-                <span>Điểm ngữ pháp</span>
-                <span class="mode-count">@TotalLevelPoints</span>
-            </button>
-            <button class="mode-btn @(activeTab == "topics" ? "active" : "")" @onclick='() => activeTab = "topics"'>
-                <i class="bi bi-chat-left-dots"></i>
-                <span>Chủ đề</span>
-                <span class="mode-count">@(currentLevelData?.Topics?.Count ?? 0)</span>
-            </button>
-            <button class="mode-btn @(activeTab == "tasks" ? "active" : "")" @onclick='() => activeTab = "tasks"'>
-                <i class="bi bi-flag"></i>
-                <span>Nhiệm vụ HSK</span>
-                <span class="mode-count">@(currentLevelData?.Tasks?.Count ?? 0)</span>
-            </button>
-        </div>
-
-        <!-- Search & Progress Action -->
-        <div class="search-progress-wrap">
-            <div class="search-input-box">
-                <i class="bi bi-search"></i>
-                <input type="text" placeholder="Tìm kiếm điểm ngữ pháp, chữ Hán, câu ví dụ..."
-                       @bind="searchKeyword" @bind:event="oninput" />
-                @if (!string.IsNullOrWhiteSpace(searchKeyword))
-                {
-                    <button class="btn-clear-search" @onclick="() => searchKeyword = string.Empty">
-                        <i class="bi bi-x-circle-fill"></i>
-                    </button>
-                }
-            </div>
-
-            @if (activeTab == "points")
-            {
-                <div class="progress-indicator">
-                    <span class="prog-text">Đã học HSK @selectedLevel: <strong>@LearnedCountInLevel/@TotalLevelPoints</strong> điểm</span>
-                    <button class="btn-toggle-all" @onclick="ToggleAllLearnedInLevel">
-                        <i class="bi @(IsAllLearnedInLevel ? "bi-check2-all" : "bi-check-circle")"></i>
-                        <span>@(IsAllLearnedInLevel ? "Bỏ chọn tất cả" : "Đánh dấu đã học hết")</span>
-                    </button>
-                </div>
-            }
-        </div>
-    </div>
-
-    <!-- MAIN CONTENT VIEW -->
-    @if (isLoading)
+    <!-- =================================================================== -->
+    <!-- 3. GROUP / CATEGORY FILTER PILLS (FOR STUDIO & BENTO MODES)         -->
+    <!-- =================================================================== -->
+    @if (activeMode != "missions" && currentLevelData?.Groups != null && currentLevelData.Groups.Count > 0)
     {
-        <div class="loading-state">
-            <div class="spinner-border text-danger" role="status"></div>
-            <p>Đang tải dữ liệu ngữ pháp HSK @selectedLevel...</p>
+        <div class="group-pills-bar">
+            <button type="button"
+                    class="group-filter-pill @(selectedGroup == "ALL" ? "active" : "")"
+                    @onclick='() => SelectGroup("ALL")'>
+                <i class="bi bi-collection-fill me-1"></i>
+                <span>Tất cả nhóm HSK @selectedLevel</span>
+                <span class="pill-badge">@TotalLevelPoints</span>
+            </button>
+            @foreach (var grp in currentLevelData.Groups)
+            {
+                var cnt = grp.Loais.Sum(l => l.Items.Count);
+                <button type="button"
+                        class="group-filter-pill @(selectedGroup == grp.Name ? "active" : "")"
+                        @onclick="() => SelectGroup(grp.Name)">
+                    <span>@grp.Name</span>
+                    <span class="pill-badge">@cnt</span>
+                </button>
+            }
         </div>
     }
-    else if (activeTab == "points")
-    {
-        <!-- TAB 1: ĐIỂM NGỮ PHÁP (GROUPS & LOAIS) -->
-        <div class="grammar-points-view">
-            @if (FilteredGroups.Count == 0)
-            {
-                <div class="empty-state">
-                    <i class="bi bi-search"></i>
-                    <p>Không tìm thấy điểm ngữ pháp nào phù hợp với từ khóa "<strong>@searchKeyword</strong>".</p>
-                </div>
-            }
-            else
-            {
-                @foreach (var group in FilteredGroups)
-                {
-                    <div class="grammar-group-card">
-                        <div class="group-header" @onclick="() => ToggleGroupCollapse(group.Name)">
-                            <div class="group-title">
-                                <i class="bi bi-caret-down-fill collapse-arrow @(collapsedGroups.Contains(group.Name) ? "collapsed" : "")"></i>
-                                <span>@group.Name</span>
-                            </div>
-                            <span class="group-items-badge">@GetGroupItemsCount(group) điểm</span>
-                        </div>
 
-                        @if (!collapsedGroups.Contains(group.Name))
-                        {
-                            <div class="group-content">
-                                @foreach (var loai in group.Loais)
-                                {
-                                    <div class="category-block">
-                                        @if (!string.IsNullOrWhiteSpace(loai.Name))
+    <!-- =================================================================== -->
+    <!-- 4. MAIN WORKSPACE VIEWS                                             -->
+    <!-- =================================================================== -->
+    @if (isLoading)
+    {
+        <div class="studio-empty-box">
+            <div class="spinner-border text-danger" role="status"></div>
+            <p class="mt-3 mb-0">Đang khởi tạo Phòng Thí Nghiệm Ngữ Pháp HSK @selectedLevel...</p>
+        </div>
+    }
+    else if (activeMode == "studio")
+    {
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- VIEW 1: SPLIT-SCREEN GRAMMAR STUDIO                             -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        @if (FilteredFlatPoints.Count == 0)
+        {
+            <div class="studio-empty-box">
+                <i class="bi bi-search fs-1 text-muted"></i>
+                <h4 class="mt-2 fw-bold">Không tìm thấy cấu trúc ngữ pháp phù hợp</h4>
+                <p class="text-muted mb-3">Thử xóa bộ lọc hoặc tìm bằng một từ khóa khác.</p>
+                <button type="button" class="btn btn-danger btn-sm rounded-pill px-4" @onclick="ClearSearch">Xóa bộ lọc</button>
+            </div>
+        }
+        else
+        {
+            <div class="studio-split-layout">
+                <!-- LEFT COLUMN: PATTERN EXPLORER RAIL -->
+                <div class="studio-left-rail">
+                    @foreach (var entry in FilteredFlatPoints)
+                    {
+                        var isSelected = SelectedPointEntry?.Item.Id == entry.Item.Id;
+                        var isLearned = learnedPointIds.Contains(entry.Item.Id);
+
+                        <div class="pattern-rail-card @(isSelected ? "active" : "") @(isLearned ? "learned" : "")"
+                             @onclick="() => SelectPoint(entry)">
+                            <div class="rail-card-top">
+                                <div class="rail-tags">
+                                    <span class="tag-group">HSK @selectedLevel • @entry.GroupName</span>
+                                    @if (!string.IsNullOrWhiteSpace(entry.CategoryName))
+                                    {
+                                        <span class="tag-cat">@entry.CategoryName</span>
+                                    }
+                                </div>
+                                <button type="button"
+                                        class="btn-rail-learned @(isLearned ? "is-learned" : "")"
+                                        @onclick:stopPropagation="true"
+                                        @onclick="() => ToggleLearnedPoint(entry.Item.Id)">
+                                    @(isLearned ? "✓ Đã thuộc" : "○ Đánh dấu")
+                                </button>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(entry.Item.Sub))
+                            {
+                                <div class="rail-sub-title">@entry.Item.Sub</div>
+                            }
+
+                            <div class="rail-main-content">@entry.Item.Content</div>
+
+                            <div class="rail-card-footer">
+                                <span><i class="bi bi-chat-quote me-1"></i>@(entry.Item.Examples?.Count ?? 0) câu ví dụ mẫu</span>
+                                <span class="rail-open-hint">@(isSelected ? "Đang mở bên phải →" : " Phân tích →")</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- RIGHT COLUMN: DEEP INSPECTOR + TOKEN PILLS + SENTENCE BUILDER -->
+                <div class="studio-right-stage">
+                    @if (SelectedPointEntry != null)
+                    {
+                        var pt = SelectedPointEntry;
+                        var tokens = ExtractTokens(pt.Item);
+                        var currentToken = tokens.Count > 0
+                            ? tokens[Math.Clamp(selectedTokenIndex, 0, tokens.Count - 1)]
+                            : null;
+                        var isPtLearned = learnedPointIds.Contains(pt.Item.Id);
+
+                        <div class="inspector-card">
+                            <!-- Inspector Header -->
+                            <div class="inspector-header">
+                                <div>
+                                    <div class="inspector-breadcrumbs">
+                                        <span class="badge-lvl">HSK @selectedLevel</span>
+                                        <span class="crumb-text">@pt.GroupName @(string.IsNullOrWhiteSpace(pt.CategoryName) ? "" : $"➔ {pt.CategoryName}")</span>
+                                    </div>
+                                    <h2 class="inspector-title">
+                                        @(string.IsNullOrWhiteSpace(pt.Item.Sub) ? (string.IsNullOrWhiteSpace(pt.CategoryName) ? pt.GroupName : pt.CategoryName) : pt.Item.Sub)
+                                    </h2>
+                                </div>
+
+                                <div class="inspector-header-btns">
+                                    <button type="button"
+                                            class="btn-inspector-learned @(isPtLearned ? "learned" : "")"
+                                            @onclick="() => ToggleLearnedPoint(pt.Item.Id)">
+                                        <i class="bi @(isPtLearned ? "bi-check-circle-fill" : "bi-circle")"></i>
+                                        <span>@(isPtLearned ? "Đã thuộc điểm này" : "Đánh dấu đã thuộc")</span>
+                                    </button>
+                                    <button type="button"
+                                            class="btn-inspector-speak"
+                                            @onclick="() => SpeakText(GetSpeakableText(pt.Item.Content), 0.9)">
+                                        <i class="bi bi-volume-up-fill"></i>
+                                        <span>Nghe phát âm</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Formula & Memory Tip Callout -->
+                            <div class="formula-callout-box">
+                                <div class="formula-label">
+                                    <i class="bi bi-compass-fill me-1"></i> CÔNG THỨC &amp; TRỌNG TÂM CẤU TRÚC
+                                </div>
+                                <div class="formula-code">@GetFormulaSummary(pt)</div>
+                                <div class="formula-tip">
+                                    <strong>💡 Ghi chú áp dụng:</strong> @GetGrammarTip(pt)
+                                </div>
+                            </div>
+
+                            <!-- Interactive Token Breakdown Pills -->
+                            @if (tokens.Count > 0)
+                            {
+                                <div class="token-breakdown-section">
+                                    <div class="section-micro-title">
+                                        <i class="bi bi-App-indicator me-1"></i>
+                                        🔍 BÓC TÁCH TỪ KHÓA TRỌNG TÂM (Bấm vào từng từ để nghe &amp; xem chi tiết):
+                                    </div>
+
+                                    <div class="tokens-pill-wrap">
+                                        @for (int i = 0; i < tokens.Count; i++)
                                         {
-                                            <div class="category-name">
-                                                <span>@loai.Name.ToUpperInvariant()</span>
+                                            var idx = i;
+                                            var tk = tokens[i];
+                                            var isTkActive = idx == selectedTokenIndex;
+                                            <button type="button"
+                                                    class="token-pill-btn @(isTkActive ? "active" : "")"
+                                                    @onclick="() => SelectTokenAndSpeak(idx, tk.SpeakText)">
+                                                <span class="tk-hanzi">@tk.DisplayZh</span>
+                                                @if (showPinyin && !string.IsNullOrWhiteSpace(tk.Hint))
+                                                {
+                                                    <span class="tk-sub">@tk.Hint</span>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
+
+                                    @if (currentToken != null)
+                                    {
+                                        <div class="token-spotlight-bar">
+                                            <div class="spotlight-left">
+                                                <span class="spotlight-zh">@currentToken.DisplayZh</span>
+                                                <span class="spotlight-desc">— @currentToken.MeaningNote</span>
+                                            </div>
+                                            <div class="spotlight-actions">
+                                                <button type="button" class="btn-spot-audio slow" @onclick="() => SpeakText(currentToken.SpeakText, 0.65)">
+                                                    🐢 Nghe chậm
+                                                </button>
+                                                <button type="button" class="btn-spot-audio" @onclick="() => SpeakText(currentToken.SpeakText, 0.95)">
+                                                    🔊 Đọc chuẩn
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            <!-- Contextual Examples with Highlighted Grammar Keywords -->
+                            @if (pt.Item.Examples != null && pt.Item.Examples.Count > 0)
+                            {
+                                <div class="studio-examples-section">
+                                    <div class="section-micro-title">
+                                        <i class="bi bi-chat-square-quote-fill me-1"></i>
+                                        💬 CÂU VÍ DỤ THỰC TẾ (Tự động tô sáng thành phần ngữ pháp):
+                                    </div>
+
+                                    <div class="studio-examples-list">
+                                        @foreach (var ex in pt.Item.Examples)
+                                        {
+                                            <div class="studio-example-card">
+                                                <div class="ex-top-row">
+                                                    <div class="ex-zh-sentence">
+                                                        @RenderHighlightedSentence(ex.Zh, tokens)
+                                                    </div>
+                                                    <div class="ex-audio-btns">
+                                                        <button type="button" class="btn-ex-speed slow" title="Nghe tốc độ chậm 0.65x" @onclick="() => SpeakText(ex.Zh, 0.65)">
+                                                            🐢 Chậm
+                                                        </button>
+                                                        <button type="button" class="btn-ex-speed normal" title="Nghe tốc độ chuẩn" @onclick="() => SpeakText(ex.Zh, 0.95)">
+                                                            🔊 Nghe
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                @if (showPinyin && !string.IsNullOrWhiteSpace(ex.Py))
+                                                {
+                                                    <div class="ex-py-line">@ex.Py</div>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(ex.Vi))
+                                                {
+                                                    <div class="ex-vi-line">🇻🇳 @ex.Vi</div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Mini Interactive Sentence Builder Quiz -->
+                                @if (quizTargetExample != null && quizShuffledChunks.Count > 0)
+                                {
+                                    <div class="sentence-builder-box">
+                                        <div class="builder-header">
+                                            <span class="builder-badge">
+                                                ⚡ Thử thách 5 giây: Ghép câu áp dụng ngữ pháp
+                                            </span>
+                                            <div class="builder-controls">
+                                                @if (pt.Item.Examples.Count > 1)
+                                                {
+                                                    <button type="button" class="btn-builder-link" @onclick="NextQuizExample">
+                                                        Đổi câu khác ↻
+                                                    </button>
+                                                }
+                                                <button type="button" class="btn-builder-link" @onclick="ResetQuiz">
+                                                    Làm lại
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="builder-prompt">
+                                            Nghĩa cần ghép: <strong>“@quizTargetExample.Vi”</strong>
+                                        </div>
+
+                                        <!-- Answer Tray -->
+                                        <div class="builder-answer-tray @(quizIsComplete ? (quizIsCorrect ? "correct" : "wrong") : "")">
+                                            @if (quizPickedIndices.Count == 0)
+                                            {
+                                                <span class="tray-placeholder">Bấm vào các mảnh từ bên dưới theo đúng trật tự câu tiếng Trung...</span>
+                                            }
+                                            else
+                                            {
+                                                @for (int pos = 0; pos < quizPickedIndices.Count; pos++)
+                                                {
+                                                    var pickedPos = pos;
+                                                    var chunkIdx = quizPickedIndices[pos];
+                                                    <button type="button" class="picked-word-chip" @onclick="() => RemovePickedQuizWord(pickedPos)">
+                                                        @quizShuffledChunks[chunkIdx]
+                                                        <i class="bi bi-x ms-1"></i>
+                                                    </button>
+                                                }
+                                            }
+                                        </div>
+
+                                        @if (quizIsComplete)
+                                        {
+                                            <div class="builder-feedback @(quizIsCorrect ? "text-success" : "text-danger")">
+                                                @if (quizIsCorrect)
+                                                {
+                                                    <span>🎉 <strong>Chính xác tuyệt đối!</strong> Câu chuẩn: @quizTargetExample.Zh (@quizTargetExample.Py)</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>⚠️ <strong>Chưa đúng trật tự!</strong> Bấm vào từ trên khay để bỏ ra hoặc bấm "Làm lại".</span>
+                                                }
                                             </div>
                                         }
 
-                                        <div class="items-list">
-                                            @foreach (var item in loai.Items)
+                                        <!-- Word Bank -->
+                                        <div class="builder-word-bank">
+                                            @for (int idx = 0; idx < quizShuffledChunks.Count; idx++)
                                             {
-                                                var isLearned = learnedPointIds.Contains(item.Id);
-                                                <div class="point-item-card @(isLearned ? "learned" : "")">
-                                                    <div class="point-main-row">
-                                                        <label class="checkbox-label" @onclick:stopPropagation>
-                                                            <input type="checkbox" checked="@isLearned"
-                                                                   @onchange="(e) => ToggleLearnedPoint(item.Id, e.Value is bool b && b)" />
-                                                            <span class="custom-checkbox"></span>
-                                                        </label>
-
-                                                        <div class="point-content-box">
-                                                            @if (!string.IsNullOrWhiteSpace(item.Sub))
-                                                            {
-                                                                <span class="point-sub-tag">@item.Sub</span>
-                                                            }
-                                                            <div class="point-content-text">
-                                                                @item.Content
-                                                            </div>
-                                                        </div>
-
-                                                        <div class="point-actions">
-                                                            <button class="btn-tts" title="Đọc phát âm" @onclick="() => SpeakText(GetSpeakableText(item.Content))">
-                                                                <i class="bi bi-volume-up"></i>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- Expandable Examples Section -->
-                                                    @if (item.Examples != null && item.Examples.Count > 0)
-                                                    {
-                                                        <div class="examples-container">
-                                                            <div class="examples-header">
-                                                                <i class="bi bi-chat-quote-fill me-1"></i>
-                                                                <span>Ví dụ minh họa:</span>
-                                                            </div>
-                                                            <div class="examples-list">
-                                                                @foreach (var ex in item.Examples)
-                                                                {
-                                                                    <div class="example-item">
-                                                                        <div class="ex-zh-row">
-                                                                            <span class="ex-zh">@ex.Zh</span>
-                                                                            <button class="btn-tts-mini" @onclick="() => SpeakText(ex.Zh)" title="Nghe câu ví dụ">
-                                                                                <i class="bi bi-volume-up"></i>
-                                                                            </button>
-                                                                        </div>
-                                                                        @if (!string.IsNullOrWhiteSpace(ex.Py))
-                                                                        {
-                                                                            <div class="ex-py">@ex.Py</div>
-                                                                        }
-                                                                        @if (!string.IsNullOrWhiteSpace(ex.Vi))
-                                                                        {
-                                                                            <div class="ex-vi">@ex.Vi</div>
-                                                                        }
-                                                                    </div>
-                                                                }
-                                                            </div>
-                                                        </div>
-                                                    }
-                                                </div>
+                                                var chunkIdx = idx;
+                                                var isUsed = quizPickedIndices.Contains(chunkIdx);
+                                                <button type="button"
+                                                        class="bank-word-btn @(isUsed ? "used" : "")"
+                                                        disabled="@isUsed"
+                                                        @onclick="() => PickQuizWord(chunkIdx)">
+                                                    @quizShuffledChunks[chunkIdx]
+                                                </button>
                                             }
                                         </div>
                                     </div>
                                 }
-                            </div>
-                        }
-                    </div>
-                }
-            }
-        </div>
-    }
-    else if (activeTab == "topics")
-    {
-        <!-- TAB 2: CHỦ ĐỀ GIAO TIẾP (TOPICS) -->
-        <div class="grammar-topics-view">
-            @if (currentLevelData?.Topics == null || currentLevelData.Topics.Count == 0)
-            {
-                <div class="empty-state">
-                    <i class="bi bi-info-circle"></i>
-                    <p>Chưa có danh sách chủ đề cho cấp độ này.</p>
+                            }
+                        </div>
+                    }
                 </div>
-            }
-            else
-            {
-                var groupedTopics = currentLevelData.Topics
-                    .Where(t => string.IsNullOrWhiteSpace(searchKeyword) ||
-                                (t.L1 + " " + t.L2 + " " + t.L3).Contains(searchKeyword, StringComparison.OrdinalIgnoreCase))
-                    .GroupBy(t => t.L1)
-                    .ToList();
+            </div>
+        }
+    }
+    else if (activeMode == "bento")
+    {
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- VIEW 2: BENTO GRID & 3D FLIP FLASHCARD DECK                     -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="bento-subtoolbar">
+            <div class="bento-view-switch">
+                <button type="button" class="bento-sub-btn @(bentoSubMode == "grid" ? "active" : "")" @onclick='() => bentoSubMode = "grid"'>
+                    <i class="bi bi-grid-3x3-gap-fill me-1"></i> Lưới Bento Toàn Cảnh
+                </button>
+                <button type="button" class="bento-sub-btn @(bentoSubMode == "flashcard" ? "active" : "")" @onclick='() => { bentoSubMode = "flashcard"; flashcardIndex = 0; isFlashcardFlipped = false; }'>
+                    <i class="bi bi-files me-1"></i> Luyện Thẻ Lật 3D (Flashcard)
+                </button>
+            </div>
+            <span class="text-muted small">Hiển thị <strong>@FilteredFlatPoints.Count</strong> điểm ngữ pháp HSK @selectedLevel</span>
+        </div>
 
-                @if (groupedTopics.Count == 0)
+        @if (bentoSubMode == "flashcard" && FilteredFlatPoints.Count > 0)
+        {
+            var fcEntry = FilteredFlatPoints[Math.Clamp(flashcardIndex, 0, FilteredFlatPoints.Count - 1)];
+            var fcLearned = learnedPointIds.Contains(fcEntry.Item.Id);
+
+            <div class="flashcard-stage-wrap">
+                <div class="flashcard-3d-box @(isFlashcardFlipped ? "flipped" : "")" @onclick="() => isFlashcardFlipped = !isFlashcardFlipped">
+                    @if (!isFlashcardFlipped)
+                    {
+                        <!-- FRONT FACE -->
+                        <div class="fc-face fc-front">
+                            <div class="fc-top-badges">
+                                <span class="badge-lvl">HSK @selectedLevel • @fcEntry.GroupName</span>
+                                <span class="fc-counter">Thẻ @(flashcardIndex + 1) / @FilteredFlatPoints.Count</span>
+                            </div>
+
+                            <div class="fc-center-body">
+                                @if (!string.IsNullOrWhiteSpace(fcEntry.CategoryName))
+                                {
+                                    <div class="fc-cat-label">@fcEntry.CategoryName @(string.IsNullOrWhiteSpace(fcEntry.Item.Sub) ? "" : $"— {fcEntry.Item.Sub}")</div>
+                                }
+                                <div class="fc-main-pattern">@fcEntry.Item.Content</div>
+                                <button type="button" class="btn-fc-audio" @onclick:stopPropagation="true" @onclick="() => SpeakText(GetSpeakableText(fcEntry.Item.Content), 0.9)">
+                                    🔊 Nghe phát âm
+                                </button>
+                            </div>
+
+                            <div class="fc-bottom-hint">
+                                <i class="bi bi-arrow-repeat me-1"></i> Nhấp vào thẻ để lật xem Công thức &amp; Câu ví dụ
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- BACK FACE -->
+                        <div class="fc-face fc-back">
+                            <div class="fc-top-badges">
+                                <span class="badge-lvl bg-emerald">Mặt sau: Giải nghĩa &amp; Ví dụ</span>
+                                <span class="fc-counter">Thẻ @(flashcardIndex + 1) / @FilteredFlatPoints.Count</span>
+                            </div>
+
+                            <div class="fc-back-formula">
+                                <strong>📐 Công thức:</strong> @GetFormulaSummary(fcEntry)
+                            </div>
+
+                            @if (fcEntry.Item.Examples != null && fcEntry.Item.Examples.Count > 0)
+                            {
+                                <div class="fc-examples-list" @onclick:stopPropagation="true">
+                                    @foreach (var ex in fcEntry.Item.Examples)
+                                    {
+                                        <div class="fc-ex-item">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <strong class="fs-5">@ex.Zh</strong>
+                                                <button type="button" class="btn-ex-speed normal" @onclick="() => SpeakText(ex.Zh, 0.95)">🔊</button>
+                                            </div>
+                                            @if (showPinyin)
+                                            {
+                                                <div class="text-warning small fw-semibold">@ex.Py</div>
+                                            }
+                                            <div class="text-muted small">🇻🇳 @ex.Vi</div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            <div class="fc-bottom-hint">
+                                <i class="bi bi-arrow-repeat me-1"></i> Nhấp vào thẻ để lật lại mặt trước
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Flashcard Navigation Controls -->
+                <div class="fc-nav-bar">
+                    <button type="button" class="btn-fc-nav" disabled="@(flashcardIndex <= 0)" @onclick="PrevFlashcard">
+                        <i class="bi bi-chevron-left"></i> Thẻ trước
+                    </button>
+
+                    <button type="button" class="btn-fc-mark @(fcLearned ? "learned" : "")" @onclick="() => ToggleLearnedPoint(fcEntry.Item.Id)">
+                        <i class="bi @(fcLearned ? "bi-check-circle-fill" : "bi-check-circle")"></i>
+                        <span>@(fcLearned ? "Đã thuộc thẻ này" : "Đánh dấu đã thuộc")</span>
+                    </button>
+
+                    <button type="button" class="btn-fc-nav" disabled="@(flashcardIndex >= FilteredFlatPoints.Count - 1)" @onclick="NextFlashcard">
+                        Thẻ tiếp <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- BENTO GRID CARDS -->
+            <div class="bento-cards-grid">
+                @foreach (var entry in FilteredFlatPoints)
                 {
-                    <div class="empty-state">
-                        <i class="bi bi-search"></i>
-                        <p>Không có chủ đề nào khớp với từ khóa tìm kiếm.</p>
+                    var isLearned = learnedPointIds.Contains(entry.Item.Id);
+                    var tokens = ExtractTokens(entry.Item);
+
+                    <div class="bento-grammar-card @(isLearned ? "learned" : "")">
+                        <div>
+                            <div class="bento-card-header">
+                                <span class="tag-group">HSK @selectedLevel • @entry.GroupName</span>
+                                <button type="button"
+                                        class="btn-rail-learned @(isLearned ? "is-learned" : "")"
+                                        @onclick="() => ToggleLearnedPoint(entry.Item.Id)">
+                                    @(isLearned ? "✓ Đã thuộc" : "○ Đánh dấu")
+                                </button>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(entry.CategoryName) || !string.IsNullOrWhiteSpace(entry.Item.Sub))
+                            {
+                                <div class="bento-cat-line">
+                                    @entry.CategoryName @(string.IsNullOrWhiteSpace(entry.Item.Sub) ? "" : $"• {entry.Item.Sub}")
+                                </div>
+                            }
+
+                            <div class="bento-pattern-title">@entry.Item.Content</div>
+
+                            <div class="bento-formula-strip">
+                                <span>📐 @GetFormulaSummary(entry)</span>
+                            </div>
+
+                            @if (entry.Item.Examples != null && entry.Item.Examples.Count > 0)
+                            {
+                                <div class="bento-examples-stack">
+                                    @foreach (var ex in entry.Item.Examples)
+                                    {
+                                        <div class="bento-ex-box">
+                                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                                <div class="bento-ex-zh">@RenderHighlightedSentence(ex.Zh, tokens)</div>
+                                                <button type="button" class="btn-bento-tts" @onclick="() => SpeakText(ex.Zh, 0.95)" title="Nghe câu ví dụ">
+                                                    <i class="bi bi-volume-up-fill"></i>
+                                                </button>
+                                            </div>
+                                            @if (showPinyin && !string.IsNullOrWhiteSpace(ex.Py))
+                                            {
+                                                <div class="bento-ex-py">@ex.Py</div>
+                                            }
+                                            <div class="bento-ex-vi">@ex.Vi</div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <div class="bento-card-foot">
+                            <button type="button" class="btn-open-in-studio" @onclick="() => OpenInStudio(entry)">
+                                <i class="bi bi-arrows-angle-expand me-1"></i> Mở trong Phòng Studio &amp; Ghép câu
+                            </button>
+                        </div>
                     </div>
                 }
-                else
+            </div>
+        }
+    }
+    else if (activeMode == "missions")
+    {
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- VIEW 3: TOPIC MINDMAP & HSK COMMUNICATIVE MISSIONS              -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <div class="missions-dual-grid">
+            <!-- Left Column: Topics Mindmap -->
+            <div class="missions-panel">
+                <div class="panel-head">
+                    <span class="panel-kicker text-rose">💬 BẢN ĐỒ CHỦ ĐỀ GIAO TIẾP HSK @selectedLevel</span>
+                    <h3 class="panel-title">@(currentLevelData?.Topics?.Count ?? 0) Chủ đề thực tế theo khung chuẩn</h3>
+                </div>
+
+                @if (currentLevelData?.Topics != null && currentLevelData.Topics.Count > 0)
                 {
-                    <div class="topics-grid">
-                        @foreach (var g in groupedTopics)
+                    var groupedTopics = currentLevelData.Topics
+                        .Where(t => string.IsNullOrWhiteSpace(searchKeyword) ||
+                                    (t.L1 + " " + t.L2 + " " + t.L3).Contains(searchKeyword, StringComparison.OrdinalIgnoreCase))
+                        .GroupBy(t => t.L1)
+                        .ToList();
+
+                    <div class="topic-tree-list">
+                        @foreach (var l1Group in groupedTopics)
                         {
-                            <div class="topic-category-card">
-                                <div class="topic-cat-header">
-                                    <i class="bi bi-bookmark-star-fill text-danger me-2"></i>
-                                    <h3 class="topic-cat-title">@g.Key</h3>
+                            <div class="topic-tree-card">
+                                <div class="tree-l1-title">
+                                    <i class="bi bi-diagram-2-fill text-danger me-2"></i>
+                                    <span>@l1Group.Key</span>
                                 </div>
-                                <div class="topic-cat-body">
-                                    @{
-                                        var subGroups = g.GroupBy(x => x.L2).ToList();
-                                    }
-                                    @foreach (var sub in subGroups)
+                                <div class="tree-l2-wrap">
+                                    @foreach (var l2Group in l1Group.GroupBy(x => x.L2))
                                     {
-                                        <div class="topic-subgroup">
-                                            <div class="subgroup-badge">@sub.Key</div>
-                                            <ul class="subgroup-items">
-                                                @foreach (var item in sub)
+                                        <div class="tree-l2-block">
+                                            <span class="tree-l2-badge">@l2Group.Key</span>
+                                            <div class="tree-l3-chips">
+                                                @foreach (var leaf in l2Group)
                                                 {
-                                                    <li class="subgroup-leaf">
-                                                        <i class="bi bi-check2 text-danger me-2"></i>
-                                                        <span>@item.L3</span>
-                                                    </li>
+                                                    <span class="tree-l3-chip">@leaf.L3</span>
                                                 }
-                                            </ul>
+                                            </div>
                                         </div>
                                     }
                                 </div>
@@ -263,75 +654,104 @@
                         }
                     </div>
                 }
-            }
-        </div>
-    }
-    else if (activeTab == "tasks")
-    {
-        <!-- TAB 3: NHIỆM VỤ HSK (TASKS) -->
-        <div class="grammar-tasks-view">
-            @if (currentLevelData?.Tasks == null || currentLevelData.Tasks.Count == 0)
-            {
-                <div class="empty-state">
-                    <i class="bi bi-info-circle"></i>
-                    <p>Chưa có dữ liệu nhiệm vụ cho cấp độ này.</p>
-                </div>
-            }
-            else
-            {
-                var filteredTasks = currentLevelData.Tasks
-                    .Where(t => string.IsNullOrWhiteSpace(searchKeyword) ||
-                                t.Title.Contains(searchKeyword, StringComparison.OrdinalIgnoreCase) ||
-                                t.Bullets.Any(b => b.Contains(searchKeyword, StringComparison.OrdinalIgnoreCase)))
-                    .ToList();
+            </div>
 
-                @if (filteredTasks.Count == 0)
+            <!-- Right Column: Communicative Tasks -->
+            <div class="missions-panel">
+                <div class="panel-head">
+                    <span class="panel-kicker text-emerald">🎯 NHIỆM VỤ NĂNG LỰC HSK @selectedLevel</span>
+                    <h3 class="panel-title">@(currentLevelData?.Tasks?.Count ?? 0) Mục tiêu kỹ năng Nghe • Nói • Đọc • Viết</h3>
+                </div>
+
+                @if (currentLevelData?.Tasks != null && currentLevelData.Tasks.Count > 0)
                 {
-                    <div class="empty-state">
-                        <i class="bi bi-search"></i>
-                        <p>Không có nhiệm vụ nào khớp với từ khóa tìm kiếm.</p>
-                    </div>
-                }
-                else
-                {
-                    <div class="tasks-list">
+                    var filteredTasks = currentLevelData.Tasks
+                        .Where(t => string.IsNullOrWhiteSpace(searchKeyword) ||
+                                    t.Title.Contains(searchKeyword, StringComparison.OrdinalIgnoreCase) ||
+                                    t.Bullets.Any(b => b.Contains(searchKeyword, StringComparison.OrdinalIgnoreCase)))
+                        .ToList();
+
+                    <div class="mission-cards-stack">
                         @foreach (var task in filteredTasks)
                         {
-                            <div class="task-card">
-                                <div class="task-header">
-                                    <div class="task-no-pill">Mục @task.No</div>
-                                    <h3 class="task-title">@task.Title</h3>
+                            <div class="mission-item-card">
+                                <div class="mission-top">
+                                    <span class="mission-no-badge">Nhiệm vụ @task.No</span>
+                                    <h4 class="mission-item-title">@task.Title</h4>
                                 </div>
-                                <div class="task-body">
-                                    <div class="task-bullets">
-                                        @foreach (var bullet in task.Bullets)
-                                        {
-                                            <div class="task-bullet-item">
-                                                <i class="bi bi-arrow-right-circle-fill text-danger me-2 flex-shrink-0"></i>
-                                                <div class="bullet-text">@bullet</div>
-                                            </div>
-                                        }
-                                    </div>
+                                <div class="mission-bullets">
+                                    @foreach (var b in task.Bullets)
+                                    {
+                                        <div class="mission-bullet-row">
+                                            <span class="skill-tag-mini">@DetectSkillTag(b)</span>
+                                            <span class="mission-bullet-text">@b</span>
+                                        </div>
+                                    }
                                 </div>
                             </div>
                         }
                     </div>
                 }
-            }
+            </div>
         </div>
     }
 </div>
 
 @code {
-    private string selectedLevel = "1";
-    private string activeTab = "points"; // points | topics | tasks
-    private string searchKeyword = string.Empty;
-    private bool isLoading = true;
+    private record LevelMeta(string Level, string Title, string GradientClass);
+
+    private static readonly List<LevelMeta> LevelMetadataList = new()
+    {
+        new("1", "Nhập Môn", "grad-emerald"),
+        new("2", "Sơ Cấp", "grad-sky"),
+        new("3", "Giao Tiếp", "grad-amber"),
+        new("4", "Trung Cấp", "grad-rose"),
+        new("5", "Cao Cấp", "grad-purple"),
+        new("6", "Tinh Thông", "grad-fuchsia")
+    };
+
+    public class FlatPointEntry
+    {
+        public string GroupName { get; set; } = string.Empty;
+        public string CategoryName { get; set; } = string.Empty;
+        public HskGrammarPointItem Item { get; set; } = new();
+    }
+
+    public class ParsedToken
+    {
+        public string DisplayZh { get; set; } = string.Empty;
+        public string SpeakText { get; set; } = string.Empty;
+        public string Hint { get; set; } = string.Empty;
+        public string MeaningNote { get; set; } = string.Empty;
+    }
 
     private Dictionary<string, HskGrammarLevelData>? allData;
     private HskGrammarLevelData? currentLevelData;
+    private string selectedLevel = "1";
+    private string activeMode = "studio"; // studio | bento | missions
+    private string bentoSubMode = "grid"; // grid | flashcard
+    private string selectedGroup = "ALL";
+    private string searchKeyword = string.Empty;
+    private bool showPinyin = true;
+    private bool isLoading = true;
+
     private HashSet<string> learnedPointIds = new();
-    private HashSet<string> collapsedGroups = new();
+    private FlatPointEntry? SelectedPointEntry;
+    private int selectedTokenIndex = 0;
+
+    // Sentence Builder Mini-Quiz State
+    private int quizExampleIndex = 0;
+    private HskGrammarExample? quizTargetExample;
+    private List<string> quizOriginalChunks = new();
+    private List<string> quizShuffledChunks = new();
+    private List<int> quizPickedIndices = new();
+    private bool quizIsComplete => quizOriginalChunks.Count > 0 && quizPickedIndices.Count == quizOriginalChunks.Count;
+    private bool quizIsCorrect => quizIsComplete &&
+        string.Join("", quizPickedIndices.Select(i => quizShuffledChunks[i])) == string.Join("", quizOriginalChunks);
+
+    // 3D Flashcard State
+    private int flashcardIndex = 0;
+    private bool isFlashcardFlipped = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -339,7 +759,6 @@
         allData = await GrammarService.GetAllGrammarDataAsync();
         learnedPointIds = await GrammarService.GetLearnedPointIdsAsync();
 
-        // Check if level stored in localStorage
         try
         {
             var storedLvl = await JS.InvokeAsync<string>("localStorage.getItem", "hsk_grammar_level");
@@ -350,22 +769,21 @@
         }
         catch { }
 
-        LoadSelectedLevel();
+        LoadCurrentLevel();
         isLoading = false;
     }
 
     private void SelectLevel(string lvl)
     {
         selectedLevel = lvl;
-        LoadSelectedLevel();
-        try
-        {
-            _ = JS.InvokeVoidAsync("localStorage.setItem", "hsk_grammar_level", lvl);
-        }
-        catch { }
+        selectedGroup = "ALL";
+        flashcardIndex = 0;
+        isFlashcardFlipped = false;
+        LoadCurrentLevel();
+        try { _ = JS.InvokeVoidAsync("localStorage.setItem", "hsk_grammar_level", lvl); } catch { }
     }
 
-    private void LoadSelectedLevel()
+    private void LoadCurrentLevel()
     {
         if (allData != null && allData.TryGetValue(selectedLevel, out var lvlData))
         {
@@ -375,25 +793,91 @@
         {
             currentLevelData = null;
         }
+
+        EnsureSelectedPoint();
     }
 
-    private void ToggleGroupCollapse(string groupName)
+    private void EnsureSelectedPoint()
     {
-        if (collapsedGroups.Contains(groupName))
-            collapsedGroups.Remove(groupName);
+        var list = FilteredFlatPoints;
+        if (list.Count > 0)
+        {
+            if (SelectedPointEntry == null || !list.Any(x => x.Item.Id == SelectedPointEntry.Item.Id))
+            {
+                SelectPoint(list[0]);
+            }
+        }
         else
-            collapsedGroups.Add(groupName);
+        {
+            SelectedPointEntry = null;
+        }
     }
 
-    private async Task ToggleLearnedPoint(string id, bool isLearned)
+    private void SelectPoint(FlatPointEntry entry)
     {
-        if (isLearned)
-            learnedPointIds.Add(id);
-        else
+        SelectedPointEntry = entry;
+        selectedTokenIndex = 0;
+        quizExampleIndex = 0;
+        SetupSentenceQuiz();
+    }
+
+    private void OpenInStudio(FlatPointEntry entry)
+    {
+        activeMode = "studio";
+        SelectPoint(entry);
+    }
+
+    private void SwitchMode(string mode)
+    {
+        activeMode = mode;
+        EnsureSelectedPoint();
+    }
+
+    private void SelectGroup(string grp)
+    {
+        selectedGroup = grp;
+        flashcardIndex = 0;
+        isFlashcardFlipped = false;
+        EnsureSelectedPoint();
+    }
+
+    private void OnFilterChanged()
+    {
+        flashcardIndex = 0;
+        EnsureSelectedPoint();
+    }
+
+    private void ClearSearch()
+    {
+        searchKeyword = string.Empty;
+        selectedGroup = "ALL";
+        EnsureSelectedPoint();
+    }
+
+    private void TogglePinyin() => showPinyin = !showPinyin;
+
+    private int GetLevelTotalPoints(string lvl) =>
+        allData != null && allData.TryGetValue(lvl, out var d)
+            ? d.Groups.Sum(g => g.Loais.Sum(l => l.Items.Count))
+            : 0;
+
+    private int GetLevelLearnedPoints(string lvl) =>
+        allData != null && allData.TryGetValue(lvl, out var d)
+            ? d.Groups.Sum(g => g.Loais.Sum(l => l.Items.Count(i => learnedPointIds.Contains(i.Id))))
+            : 0;
+
+    private int TotalLevelPoints => GetLevelTotalPoints(selectedLevel);
+    private int LearnedCountInLevel => GetLevelLearnedPoints(selectedLevel);
+    private bool IsAllLearnedInLevel => TotalLevelPoints > 0 && LearnedCountInLevel == TotalLevelPoints;
+
+    private async Task ToggleLearnedPoint(string id)
+    {
+        if (learnedPointIds.Contains(id))
             learnedPointIds.Remove(id);
+        else
+            learnedPointIds.Add(id);
 
         await GrammarService.SaveLearnedPointIdsAsync(learnedPointIds);
-        StateHasChanged();
     }
 
     private async Task ToggleAllLearnedInLevel()
@@ -415,82 +899,281 @@
         }
 
         await GrammarService.SaveLearnedPointIdsAsync(learnedPointIds);
-        StateHasChanged();
     }
 
-    private int TotalLevelPoints => currentLevelData?.Groups.Sum(g => g.Loais.Sum(l => l.Items.Count)) ?? 0;
-
-    private int LearnedCountInLevel => currentLevelData?.Groups.Sum(g => g.Loais.Sum(l => l.Items.Count(i => learnedPointIds.Contains(i.Id)))) ?? 0;
-
-    private bool IsAllLearnedInLevel => TotalLevelPoints > 0 && LearnedCountInLevel == TotalLevelPoints;
-
-    private int GetGroupItemsCount(HskGrammarGroup group) => group.Loais.Sum(l => l.Items.Count);
-
-    private List<HskGrammarGroup> FilteredGroups
+    private List<FlatPointEntry> FilteredFlatPoints
     {
         get
         {
-            if (currentLevelData?.Groups == null) return new();
-            if (string.IsNullOrWhiteSpace(searchKeyword)) return currentLevelData.Groups;
+            var result = new List<FlatPointEntry>();
+            if (currentLevelData?.Groups == null) return result;
 
             var kw = searchKeyword.Trim().ToLowerInvariant();
-            var result = new List<HskGrammarGroup>();
 
             foreach (var g in currentLevelData.Groups)
             {
-                var matchingLoais = new List<HskGrammarCategory>();
+                if (selectedGroup != "ALL" && !string.Equals(g.Name, selectedGroup, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 foreach (var l in g.Loais)
                 {
-                    var matchingItems = l.Items.Where(it =>
-                        it.Content.ToLowerInvariant().Contains(kw) ||
-                        it.Sub.ToLowerInvariant().Contains(kw) ||
-                        (it.Examples != null && it.Examples.Any(e =>
-                            e.Zh.ToLowerInvariant().Contains(kw) ||
-                            e.Py.ToLowerInvariant().Contains(kw) ||
-                            e.Vi.ToLowerInvariant().Contains(kw)))
-                    ).ToList();
-
-                    if (matchingItems.Count > 0)
+                    foreach (var it in l.Items)
                     {
-                        matchingLoais.Add(new HskGrammarCategory
+                        if (!string.IsNullOrEmpty(kw))
                         {
-                            Name = l.Name,
-                            Items = matchingItems
+                            bool matched = it.Content.ToLowerInvariant().Contains(kw) ||
+                                           it.Sub.ToLowerInvariant().Contains(kw) ||
+                                           g.Name.ToLowerInvariant().Contains(kw) ||
+                                           l.Name.ToLowerInvariant().Contains(kw) ||
+                                           (it.Examples != null && it.Examples.Any(e =>
+                                               e.Zh.ToLowerInvariant().Contains(kw) ||
+                                               e.Py.ToLowerInvariant().Contains(kw) ||
+                                               e.Vi.ToLowerInvariant().Contains(kw)));
+                            if (!matched) continue;
+                        }
+
+                        result.Add(new FlatPointEntry
+                        {
+                            GroupName = g.Name,
+                            CategoryName = l.Name,
+                            Item = it
                         });
                     }
-                }
-
-                if (matchingLoais.Count > 0)
-                {
-                    result.Add(new HskGrammarGroup
-                    {
-                        Name = g.Name,
-                        Loais = matchingLoais
-                    });
                 }
             }
             return result;
         }
     }
 
-    private string GetSpeakableText(string content)
+    // ── Token Extraction & Highlighting ──
+    private List<ParsedToken> ExtractTokens(HskGrammarPointItem item)
     {
-        // Extract raw Chinese text before parenthesis
-        var pIdx = content.IndexOf('(');
-        var raw = pIdx > 0 ? content.Substring(0, pIdx) : content;
-        return raw.Replace("—", "").Replace("、", "，").Trim();
+        var list = new List<ParsedToken>();
+        if (string.IsNullOrWhiteSpace(item.Content)) return list;
+
+        // Extract Vietnamese hint in parentheses if present
+        string viNote = item.Sub;
+        var parenMatch = Regex.Match(item.Content, @"\(([^)]+)\)");
+        if (parenMatch.Success)
+        {
+            viNote = parenMatch.Groups[1].Value;
+        }
+
+        var rawMain = Regex.Replace(item.Content, @"\([^)]*\)", "").Trim();
+        var parts = rawMain.Split(new[] { '、', '；', ';', ',' }, StringSplitOptions.RemoveEmptyEntries);
+        var viParts = !string.IsNullOrWhiteSpace(viNote)
+            ? viNote.Split(new[] { ',', '，', '、' }, StringSplitOptions.RemoveEmptyEntries)
+            : Array.Empty<string>();
+
+        for (int i = 0; i < parts.Length && i < 12; i++)
+        {
+            var tokenStr = parts[i].Trim();
+            if (string.IsNullOrWhiteSpace(tokenStr)) continue;
+
+            var speakClean = Regex.Replace(tokenStr, @"[—…\d""“”]", "").Trim();
+            if (string.IsNullOrWhiteSpace(speakClean)) speakClean = tokenStr;
+
+            var meaningForToken = i < viParts.Length
+                ? viParts[i].Trim()
+                : (!string.IsNullOrWhiteSpace(viNote) ? viNote : $"Thành phần thuộc nhóm {item.Sub}");
+
+            list.Add(new ParsedToken
+            {
+                DisplayZh = tokenStr,
+                SpeakText = speakClean,
+                Hint = i < viParts.Length ? viParts[i].Trim() : "",
+                MeaningNote = meaningForToken
+            });
+        }
+
+        return list;
     }
 
-    private async Task SpeakText(string text)
+    private MarkupString RenderHighlightedSentence(string zh, List<ParsedToken> tokens)
+    {
+        if (string.IsNullOrWhiteSpace(zh)) return new MarkupString("");
+        var safe = System.Net.WebUtility.HtmlEncode(zh);
+
+        foreach (var tk in tokens)
+        {
+            var cleanKey = Regex.Replace(tk.SpeakText, @"[^\u4e00-\u9fa5]", "");
+            if (cleanKey.Length >= 1 && cleanKey.Length <= 4 && safe.Contains(cleanKey))
+            {
+                safe = safe.Replace(cleanKey, $"<span class=\"zh-highlight\">{cleanKey}</span>");
+                break;
+            }
+        }
+        return new MarkupString(safe);
+    }
+
+    private string GetFormulaSummary(FlatPointEntry entry)
+    {
+        var g = entry.GroupName;
+        var c = entry.CategoryName;
+        var s = entry.Item.Sub;
+
+        if (g.Contains("Hình vị"))
+            return c.Contains("Tiền tố") ? "[Tiền tố] + Căn tố / Từ gốc ➔ Từ ghép mới" : "Căn tố / Từ gốc + [Hậu tố] ➔ Từ phái sinh";
+        if (c.Contains("Động từ") && s.Contains("năng nguyện"))
+            return "Chủ ngữ (S) + [Động từ năng nguyện] + Động từ chính (V) + Tân ngữ (O)";
+        if (c.Contains("Động từ") && s.Contains("ly hợp"))
+            return "Động từ + [Trợ từ / Bổ ngữ / Lượng từ] + Tân ngữ (Tách đôi khi dùng)";
+        if (c.Contains("Lượng từ"))
+            return "Số từ / Đại từ chỉ định + [Lượng từ] + Danh từ";
+        if (c.Contains("Phó từ"))
+            return "Chủ ngữ (S) + [Phó từ] + Động từ / Tính từ";
+        if (c.Contains("Giới từ"))
+            return "Chủ ngữ (S) + [Giới từ + Tân ngữ] + Động từ chính";
+        if (g.Contains("Bổ ngữ") || c.Contains("Bổ ngữ"))
+            return "Động từ (V) + [Bổ ngữ kết quả / xu hướng / mức độ / khả năng]";
+        if (g.Contains("Câu ghép"))
+            return "Mệnh đề 1 (Liên từ 1) + ， + Mệnh đề 2 (Liên từ 2)";
+        if (g.Contains("Câu đặc biệt") || c.Contains("Câu đặc biệt"))
+            return "Cấu trúc câu đặc thù tiếng Trung (Chữ 是 / 有 / 把 / 被 / Kiêm ngữ / Liên động)";
+
+        return $"[{g}{(string.IsNullOrWhiteSpace(c) ? "" : $" • {c}")}] ➔ {entry.Item.Content}";
+    }
+
+    private string GetGrammarTip(FlatPointEntry entry)
+    {
+        var g = entry.GroupName;
+        var c = entry.CategoryName;
+        if (g.Contains("Hình vị"))
+            return "Ghi nhớ các tiền tố và hậu tố giúp bạn đoán nhanh nghĩa của hàng loạt từ vựng mới trong bài đọc HSK.";
+        if (c.Contains("Phó từ"))
+            return "Phó từ trong tiếng Trung luôn đứng TRƯỚC động từ hoặc tính từ, tuyệt đối không đặt ở cuối câu.";
+        if (c.Contains("Lượng từ"))
+            return "Khi kết hợp số từ với danh từ trong tiếng Trung, bắt buộc phải có lượng từ phù hợp đứng ở giữa.";
+        if (g.Contains("Bổ ngữ"))
+            return "Tân ngữ thường đặt sau bổ ngữ kết quả, hoặc đưa lên trước động từ bằng cấu trúc chữ 把.";
+        if (g.Contains("Câu ghép"))
+            return "Chú ý vị trí của cặp liên từ: nếu cùng chủ ngữ thì chủ ngữ thường đứng trước liên từ thứ nhất.";
+
+        return "Đọc to các câu ví dụ bên dưới và thực hành ghép câu để hình thành phản xạ ngữ pháp tự nhiên.";
+    }
+
+    // ── Sentence Builder Mini-Quiz Logic ──
+    private void SetupSentenceQuiz()
+    {
+        quizPickedIndices.Clear();
+        quizOriginalChunks.Clear();
+        quizShuffledChunks.Clear();
+
+        var examples = SelectedPointEntry?.Item.Examples;
+        if (examples == null || examples.Count == 0)
+        {
+            quizTargetExample = null;
+            return;
+        }
+
+        quizTargetExample = examples[quizExampleIndex % examples.Count];
+        var zh = quizTargetExample.Zh.Trim();
+
+        // Split sentence into 4-5 logical chunks of 2-4 characters
+        var clean = zh.TrimEnd('。', '！', '？', '.', '!', '?');
+        var chunks = new List<string>();
+        int idx = 0;
+        while (idx < clean.Length)
+        {
+            int len = Math.Min(idx % 2 == 0 ? 2 : 3, clean.Length - idx);
+            if (clean.Length - (idx + len) == 1) len++;
+            chunks.Add(clean.Substring(idx, len));
+            idx += len;
+        }
+
+        quizOriginalChunks = chunks;
+        // Deterministic shuffle that is guaranteed not identical to original when count > 1
+        quizShuffledChunks = chunks
+            .Select((val, i) => (val, sortKey: (i * 3 + 1) % Math.Max(2, chunks.Count)))
+            .OrderBy(x => x.sortKey)
+            .Select(x => x.val)
+            .ToList();
+
+        if (quizShuffledChunks.SequenceEqual(quizOriginalChunks) && quizShuffledChunks.Count > 1)
+        {
+            quizShuffledChunks.Reverse();
+        }
+    }
+
+    private void PickQuizWord(int chunkIdx)
+    {
+        if (!quizPickedIndices.Contains(chunkIdx))
+        {
+            quizPickedIndices.Add(chunkIdx);
+            if (quizIsComplete && quizIsCorrect && quizTargetExample != null)
+            {
+                _ = SpeakText(quizTargetExample.Zh, 0.95);
+            }
+        }
+    }
+
+    private void RemovePickedQuizWord(int pickedPosition)
+    {
+        if (pickedPosition >= 0 && pickedPosition < quizPickedIndices.Count)
+        {
+            quizPickedIndices.RemoveAt(pickedPosition);
+        }
+    }
+
+    private void ResetQuiz() => quizPickedIndices.Clear();
+
+    private void NextQuizExample()
+    {
+        quizExampleIndex++;
+        SetupSentenceQuiz();
+    }
+
+    // ── Flashcard Navigation ──
+    private void PrevFlashcard()
+    {
+        if (flashcardIndex > 0)
+        {
+            flashcardIndex--;
+            isFlashcardFlipped = false;
+        }
+    }
+
+    private void NextFlashcard()
+    {
+        if (flashcardIndex < FilteredFlatPoints.Count - 1)
+        {
+            flashcardIndex++;
+            isFlashcardFlipped = false;
+        }
+    }
+
+    private string DetectSkillTag(string bullet)
+    {
+        if (bullet.Contains("nghe hiểu", StringComparison.OrdinalIgnoreCase)) return "🎧 Nghe";
+        if (bullet.Contains("đọc hiểu", StringComparison.OrdinalIgnoreCase)) return "📖 Đọc";
+        if (bullet.Contains("viết", StringComparison.OrdinalIgnoreCase)) return "✍️ Viết";
+        return "🗣️ Nói";
+    }
+
+    private async Task SelectTokenAndSpeak(int idx, string text)
+    {
+        selectedTokenIndex = idx;
+        await SpeakText(text, 0.9);
+    }
+
+    private string GetSpeakableText(string content)
+    {
+        var pIdx = content.IndexOf('(');
+        var raw = pIdx > 0 ? content.Substring(0, pIdx) : content;
+        return Regex.Replace(raw, @"[—…\d]", "").Replace("、", "，").Trim();
+    }
+
+    private async Task SpeakText(string text, double rate = 0.9)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         try
         {
+            var rateStr = rate.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
             await JS.InvokeVoidAsync("eval", $@"
                 try {{
                     const u = new SpeechSynthesisUtterance({System.Text.Json.JsonSerializer.Serialize(text)});
                     u.lang = 'zh-CN';
-                    u.rate = 0.9;
+                    u.rate = {rateStr};
                     window.speechSynthesis.cancel();
                     window.speechSynthesis.speak(u);
                 }} catch (e) {{ console.error(e); }}
