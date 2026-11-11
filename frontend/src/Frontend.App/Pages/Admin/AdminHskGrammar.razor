@@ -1,0 +1,707 @@
+@page "/portal-hub/hsk-grammar"
+@page "/admin/hsk-grammar"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "admin")]
+@layout Frontend.App.Layout.AdminLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using System.Text.Json
+@inject HskGrammarService GrammarService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Quản Lý Ngữ Pháp HSK 1–6 | Admin Portal Hub</PageTitle>
+
+<div class="admin-hsk-grammar-wrap p-4">
+    @* ── HEADER ── *@
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 pb-3 border-bottom gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-danger fs-6 p-2"><i class="bi bi-diagram-3-fill"></i></span>
+                <h2 class="m-0 fw-bold fs-4 text-dark">Quản Lý Ngữ Pháp HSK 1–6 (汉语语法)</h2>
+            </div>
+            <p class="text-muted small m-0 mt-1">
+                Quản trị 238 điểm ngữ pháp, câu ví dụ minh họa (Chữ Hán, Pinyin, Nghĩa Việt), 301 chủ đề giao tiếp và 136 nhiệm vụ HSK.
+            </p>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <a href="/hsk/ngu-phap" target="_blank" class="btn btn-outline-danger btn-sm fw-semibold">
+                <i class="bi bi-box-arrow-up-right me-1"></i> Xem trang Học viên
+            </a>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="LoadDataAsync">
+                <i class="bi bi-arrow-clockwise"></i> Tải lại
+            </button>
+            <button class="btn btn-outline-warning btn-sm" @onclick="ResetDefaultAsync" title="Khôi phục về dữ liệu gốc từ sample-data/hsk-grammar.json">
+                <i class="bi bi-arrow-counterclockwise"></i> Khôi phục gốc
+            </button>
+            <button class="btn btn-outline-success btn-sm" @onclick="ExportJsonAsync">
+                <i class="bi bi-download"></i> Xuất JSON
+            </button>
+            <button class="btn btn-outline-primary btn-sm" @onclick="OpenImportModal">
+                <i class="bi bi-upload"></i> Nhập JSON
+            </button>
+            <button class="btn btn-danger btn-sm fw-bold" @onclick="OpenCreateModal">
+                <i class="bi bi-plus-circle-fill me-1"></i> Thêm điểm ngữ pháp
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(statusMessage))
+    {
+        <div class="alert @(statusSuccess ? "alert-success" : "alert-danger") alert-dismissible fade show shadow-sm mb-4" role="alert">
+            <i class="bi @(statusSuccess ? "bi-check-circle-fill me-2" : "bi-exclamation-triangle-fill me-2")"></i>
+            <span>@statusMessage</span>
+            <button type="button" class="btn-close" @onclick="() => statusMessage = null"></button>
+        </div>
+    }
+
+    @* ── KPI STATS CARDS ── *@
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm border-0 bg-light p-3 text-center">
+                <div class="fs-4 fw-bold text-danger">@TotalPointsAllLevels</div>
+                <div class="text-muted small fw-semibold">Tổng điểm ngữ pháp (HSK 1–6)</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm border-0 bg-light p-3 text-center">
+                <div class="fs-4 fw-bold text-primary">@TotalExamplesAllLevels</div>
+                <div class="text-muted small fw-semibold">Tổng câu ví dụ minh họa</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm border-0 bg-light p-3 text-center">
+                <div class="fs-4 fw-bold text-success">@TotalTopicsAllLevels</div>
+                <div class="text-muted small fw-semibold">Tổng chủ đề giao tiếp</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card shadow-sm border-0 bg-light p-3 text-center">
+                <div class="fs-4 fw-bold text-warning">@TotalTasksAllLevels</div>
+                <div class="text-muted small fw-semibold">Tổng nhiệm vụ HSK</div>
+            </div>
+        </div>
+    </div>
+
+    @* ── LEVEL TABS & SEARCH TOOLBAR ── *@
+    <div class="card shadow-sm border-0 mb-4 p-3 bg-white">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3 pb-3 border-bottom">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                @for (int i = 1; i <= 6; i++)
+                {
+                    var lvl = i.ToString();
+                    var count = GetLevelPointCount(lvl);
+                    <button class="btn @(selectedLevel == lvl ? "btn-danger fw-bold" : "btn-outline-secondary") btn-sm rounded-pill px-3"
+                            @onclick="() => SelectLevel(lvl)">
+                        HSK @lvl <span class="badge @(selectedLevel == lvl ? "bg-white text-danger" : "bg-secondary text-white") ms-1">@count</span>
+                    </button>
+                }
+            </div>
+
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn @(activeSubTab == "points" ? "btn-dark" : "btn-outline-dark")" @onclick='() => activeSubTab = "points"'>
+                    <i class="bi bi-card-checklist me-1"></i> Điểm ngữ pháp (@GetLevelPointCount(selectedLevel))
+                </button>
+                <button type="button" class="btn @(activeSubTab == "topics" ? "btn-dark" : "btn-outline-dark")" @onclick='() => activeSubTab = "topics"'>
+                    <i class="bi bi-chat-left-dots me-1"></i> Chủ đề (@(CurrentLevelData?.Topics?.Count ?? 0))
+                </button>
+                <button type="button" class="btn @(activeSubTab == "tasks" ? "btn-dark" : "btn-outline-dark")" @onclick='() => activeSubTab = "tasks"'>
+                    <i class="bi bi-flag me-1"></i> Nhiệm vụ (@(CurrentLevelData?.Tasks?.Count ?? 0))
+                </button>
+            </div>
+        </div>
+
+        <div class="row g-2 align-items-center">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text"
+                           class="form-control bg-light border-start-0"
+                           placeholder="Tìm kiếm theo nội dung ngữ pháp, chữ Hán, Pinyin hoặc câu ví dụ..."
+                           @bind="searchQuery"
+                           @bind:event="oninput" />
+                    @if (!string.IsNullOrWhiteSpace(searchQuery))
+                    {
+                        <button class="btn btn-outline-secondary" @onclick="() => searchQuery = string.Empty">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    }
+                </div>
+            </div>
+            @if (activeSubTab == "points")
+            {
+                <div class="col-md-4">
+                    <select class="form-select bg-light" @bind="selectedGroupFilter">
+                        <option value="ALL">-- Tất cả nhóm ngữ pháp (@(CurrentLevelData?.Groups.Count ?? 0) nhóm) --</option>
+                        @if (CurrentLevelData?.Groups != null)
+                        {
+                            @foreach (var g in CurrentLevelData.Groups)
+                            {
+                                <option value="@g.Name">@g.Name (@g.Loais.Sum(l => l.Items.Count) điểm)</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2 text-end">
+                    <span class="text-muted small">Hiển thị: <strong>@FilteredFlatPoints.Count</strong> mục</span>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* ── MAIN TABLE / LIST ── *@
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-danger" role="status"></div>
+            <p class="text-muted mt-2">Đang tải dữ liệu ngữ pháp HSK...</p>
+        </div>
+    }
+    else if (activeSubTab == "points")
+    {
+        <div class="card shadow-sm border-0 bg-white overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 90px;">Mã ID</th>
+                            <th style="width: 180px;">Nhóm / Phân loại</th>
+                            <th style="width: 280px;">Điểm ngữ pháp</th>
+                            <th>Câu ví dụ minh họa (Chữ Hán • Pinyin • Nghĩa Việt)</th>
+                            <th style="width: 120px;" class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (FilteredFlatPoints.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                                    Không tìm thấy điểm ngữ pháp nào phù hợp.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var row in FilteredFlatPoints)
+                            {
+                                <tr>
+                                    <td><code class="small text-secondary">@row.Item.Id</code></td>
+                                    <td>
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle d-inline-block mb-1">@row.GroupName</span>
+                                        @if (!string.IsNullOrWhiteSpace(row.CategoryName))
+                                        {
+                                            <div class="small fw-semibold text-dark">@row.CategoryName</div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(row.Item.Sub))
+                                        {
+                                            <div class="small text-muted">@row.Item.Sub</div>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold text-dark" style="line-height: 1.45;">@row.Item.Content</div>
+                                    </td>
+                                    <td>
+                                        @if (row.Item.Examples == null || row.Item.Examples.Count == 0)
+                                        {
+                                            <span class="text-muted small fst-italic">Chưa có câu ví dụ</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="d-flex flex-column gap-2">
+                                                @foreach (var ex in row.Item.Examples)
+                                                {
+                                                    <div class="p-2 rounded bg-light border-start border-3 border-danger">
+                                                        <div class="d-flex align-items-center justify-content-between">
+                                                            <strong class="text-dark">@ex.Zh</strong>
+                                                            <button class="btn btn-sm btn-link text-danger p-0" @onclick="() => SpeakText(ex.Zh)" title="Nghe phát âm">
+                                                                <i class="bi bi-volume-up-fill"></i>
+                                                            </button>
+                                                        </div>
+                                                        <div class="small text-warning-emphasis">@ex.Py</div>
+                                                        <div class="small text-secondary">@ex.Vi</div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" @onclick="() => OpenEditModal(row)" title="Chỉnh sửa điểm ngữ pháp & câu ví dụ">
+                                                <i class="bi bi-pencil-square"></i>
+                                            </button>
+                                            <button class="btn btn-outline-danger" @onclick="() => DeletePointAsync(row)" title="Xóa điểm ngữ pháp">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    else if (activeSubTab == "topics")
+    {
+        <div class="card shadow-sm border-0 bg-white p-3">
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Chủ đề lớn (L1)</th>
+                            <th>Chủ đề nhánh (L2)</th>
+                            <th>Chủ đề chi tiết (L3)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (CurrentLevelData?.Topics != null)
+                        {
+                            @foreach (var t in CurrentLevelData.Topics.Where(x => string.IsNullOrWhiteSpace(searchQuery) || (x.L1 + " " + x.L2 + " " + x.L3).Contains(searchQuery, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                <tr>
+                                    <td class="fw-bold text-danger">@t.L1</td>
+                                    <td class="fw-semibold">@t.L2</td>
+                                    <td>@t.L3</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    else if (activeSubTab == "tasks")
+    {
+        <div class="d-flex flex-column gap-3">
+            @if (CurrentLevelData?.Tasks != null)
+            {
+                @foreach (var task in CurrentLevelData.Tasks.Where(x => string.IsNullOrWhiteSpace(searchQuery) || x.Title.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) || x.Bullets.Any(b => b.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))))
+                {
+                    <div class="card shadow-sm border-0 p-3 bg-white">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-danger">Mục @task.No</span>
+                            <h5 class="m-0 fw-bold">@task.Title</h5>
+                        </div>
+                        <ul class="mb-0 ps-3 small text-secondary">
+                            @foreach (var b in task.Bullets)
+                            {
+                                <li class="mb-1">@b</li>
+                            }
+                        </ul>
+                    </div>
+                }
+            }
+        </div>
+    }
+</div>
+
+@* ── MODAL THÊM / SỬA ĐIỂM NGỮ PHÁP & CÂU VÍ DỤ ── *@
+@if (showEditModal)
+{
+    <div class="modal-backdrop fade show" style="background: rgba(15,23,42,0.65); z-index: 1050;"></div>
+    <div class="modal fade show d-block" tabindex="-1" style="z-index: 1055;" @onclick="() => showEditModal = false">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi @(isEditing ? "bi-pencil-square" : "bi-plus-circle-fill") me-2"></i>
+                        @(isEditing ? $"Chỉnh sửa Điểm ngữ pháp ({editItem.Id})" : $"Thêm Điểm ngữ pháp mới (HSK {editLevel})")
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => showEditModal = false"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Cấp độ HSK</label>
+                            <select class="form-select" @bind="editLevel">
+                                @for (int i = 1; i <= 6; i++)
+                                {
+                                    <option value="@i.ToString()">HSK @i</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Nhóm ngữ pháp (Group) *</label>
+                            <input type="text" class="form-control" @bind="editGroupName" placeholder="VD: Hình vị, Từ loại, Câu đặc biệt..." />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Phân loại (Loại)</label>
+                            <input type="text" class="form-control" @bind="editCategoryName" placeholder="VD: Động từ, Phó từ, Bổ ngữ..." />
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold">Nhãn phụ (Sub-category)</label>
+                            <input type="text" class="form-control" @bind="editItem.Sub" placeholder="VD: Động từ năng nguyện, Đại từ nghi vấn..." />
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold">Nội dung điểm ngữ pháp *</label>
+                            <input type="text" class="form-control" @bind="editItem.Content" placeholder="VD: 会、能、想、要、可以 (biết, có thể, muốn...)" />
+                        </div>
+                    </div>
+
+                    <hr />
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label small fw-bold m-0 text-danger">
+                            <i class="bi bi-chat-quote-fill me-1"></i> Danh sách câu ví dụ minh họa (@(editItem.Examples?.Count ?? 0) câu)
+                        </label>
+                        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="AddExampleRow">
+                            <i class="bi bi-plus-lg"></i> Thêm câu ví dụ
+                        </button>
+                    </div>
+
+                    @if (editItem.Examples != null)
+                    {
+                        <div class="d-flex flex-column gap-3">
+                            @for (int idx = 0; idx < editItem.Examples.Count; idx++)
+                            {
+                                var ex = editItem.Examples[idx];
+                                var capturedIdx = idx;
+                                <div class="p-3 bg-light rounded-3 border position-relative">
+                                    <button type="button" class="btn btn-sm btn-outline-danger position-absolute top-0 end-0 m-2"
+                                            @onclick="() => RemoveExampleRow(capturedIdx)" title="Xóa câu ví dụ này">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                    <div class="mb-2 pe-4">
+                                        <label class="form-label small fw-semibold mb-1">Câu chữ Hán (Zh)</label>
+                                        <input type="text" class="form-control form-control-sm" @bind="ex.Zh" placeholder="VD: 我会说一点儿汉语。" />
+                                    </div>
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-semibold mb-1">Phiên âm Pinyin (Py)</label>
+                                            <input type="text" class="form-control form-control-sm" @bind="ex.Py" placeholder="VD: Wǒ huì shuō yìdiǎnr Hànyǔ." />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small fw-semibold mb-1">Nghĩa tiếng Việt (Vi)</label>
+                                            <input type="text" class="form-control form-control-sm" @bind="ex.Vi" placeholder="VD: Tôi biết nói một chút tiếng Trung." />
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showEditModal = false">Hủy</button>
+                    <button type="button" class="btn btn-danger fw-bold" @onclick="SaveModalPointAsync">
+                        <i class="bi bi-check2-circle me-1"></i> Lưu điểm ngữ pháp
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ── MODAL NHẬP JSON ── *@
+@if (showImportModal)
+{
+    <div class="modal-backdrop fade show" style="background: rgba(15,23,42,0.65); z-index: 1050;"></div>
+    <div class="modal fade show d-block" tabindex="-1" style="z-index: 1055;" @onclick="() => showImportModal = false">
+        <div class="modal-dialog modal-lg modal-dialog-centered" @onclick:stopPropagation="true">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-upload me-2"></i> Nhập dữ liệu JSON Ngữ pháp HSK 1–6</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="() => showImportModal = false"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="small text-muted">Dán nội dung JSON theo cấu trúc của <code>hsk-grammar.json</code> vào ô bên dưới để cập nhật toàn bộ dữ liệu:</p>
+                    <textarea class="form-control font-monospace small" rows="10" @bind="importJsonText" placeholder='{"1": {"groups": [...], "topics": [...], "tasks": [...]}}'></textarea>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" @onclick="() => showImportModal = false">Đóng</button>
+                    <button type="button" class="btn btn-primary fw-bold" @onclick="ExecuteImportJsonAsync">
+                        <i class="bi bi-check2-circle me-1"></i> Xác nhận Nhập
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private Dictionary<string, HskGrammarLevelData>? allData;
+    private string selectedLevel = "1";
+    private string activeSubTab = "points"; // points | topics | tasks
+    private string selectedGroupFilter = "ALL";
+    private string searchQuery = string.Empty;
+    private bool isLoading = true;
+
+    private string? statusMessage;
+    private bool statusSuccess = true;
+
+    // Modal state
+    private bool showEditModal;
+    private bool isEditing;
+    private string editLevel = "1";
+    private string editGroupName = "Từ loại";
+    private string editCategoryName = string.Empty;
+    private HskGrammarPointItem editItem = new();
+
+    private bool showImportModal;
+    private string importJsonText = string.Empty;
+
+    public class FlatGrammarRow
+    {
+        public string Level { get; set; } = string.Empty;
+        public string GroupName { get; set; } = string.Empty;
+        public string CategoryName { get; set; } = string.Empty;
+        public HskGrammarPointItem Item { get; set; } = new();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        allData = await GrammarService.GetAllGrammarDataAsync(forceRefresh: true);
+        isLoading = false;
+    }
+
+    private void SelectLevel(string lvl)
+    {
+        selectedLevel = lvl;
+        selectedGroupFilter = "ALL";
+    }
+
+    private HskGrammarLevelData? CurrentLevelData =>
+        allData != null && allData.TryGetValue(selectedLevel, out var d) ? d : null;
+
+    private int GetLevelPointCount(string lvl) =>
+        allData != null && allData.TryGetValue(lvl, out var d)
+            ? d.Groups.Sum(g => g.Loais.Sum(l => l.Items.Count))
+            : 0;
+
+    private int TotalPointsAllLevels =>
+        allData?.Values.Sum(d => d.Groups.Sum(g => g.Loais.Sum(l => l.Items.Count))) ?? 0;
+
+    private int TotalExamplesAllLevels =>
+        allData?.Values.Sum(d => d.Groups.Sum(g => g.Loais.Sum(l => l.Items.Sum(i => i.Examples?.Count ?? 0)))) ?? 0;
+
+    private int TotalTopicsAllLevels =>
+        allData?.Values.Sum(d => d.Topics?.Count ?? 0) ?? 0;
+
+    private int TotalTasksAllLevels =>
+        allData?.Values.Sum(d => d.Tasks?.Count ?? 0) ?? 0;
+
+    private List<FlatGrammarRow> FilteredFlatPoints
+    {
+        get
+        {
+            var list = new List<FlatGrammarRow>();
+            if (CurrentLevelData?.Groups == null) return list;
+
+            var kw = searchQuery.Trim().ToLowerInvariant();
+
+            foreach (var g in CurrentLevelData.Groups)
+            {
+                if (selectedGroupFilter != "ALL" && !string.Equals(g.Name, selectedGroupFilter, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                foreach (var l in g.Loais)
+                {
+                    foreach (var it in l.Items)
+                    {
+                        if (!string.IsNullOrEmpty(kw))
+                        {
+                            bool match = it.Content.ToLowerInvariant().Contains(kw) ||
+                                         it.Sub.ToLowerInvariant().Contains(kw) ||
+                                         g.Name.ToLowerInvariant().Contains(kw) ||
+                                         l.Name.ToLowerInvariant().Contains(kw) ||
+                                         (it.Examples != null && it.Examples.Any(ex =>
+                                             ex.Zh.ToLowerInvariant().Contains(kw) ||
+                                             ex.Py.ToLowerInvariant().Contains(kw) ||
+                                             ex.Vi.ToLowerInvariant().Contains(kw)));
+                            if (!match) continue;
+                        }
+
+                        list.Add(new FlatGrammarRow
+                        {
+                            Level = selectedLevel,
+                            GroupName = g.Name,
+                            CategoryName = l.Name,
+                            Item = it
+                        });
+                    }
+                }
+            }
+            return list;
+        }
+    }
+
+    private void OpenCreateModal()
+    {
+        isEditing = false;
+        editLevel = selectedLevel;
+        editGroupName = CurrentLevelData?.Groups.FirstOrDefault()?.Name ?? "Từ loại";
+        editCategoryName = "Động từ";
+        editItem = new HskGrammarPointItem
+        {
+            Id = $"{selectedLevel}-custom-{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}",
+            Sub = string.Empty,
+            Content = string.Empty,
+            Examples = new List<HskGrammarExample>
+            {
+                new HskGrammarExample()
+            }
+        };
+        showEditModal = true;
+    }
+
+    private void OpenEditModal(FlatGrammarRow row)
+    {
+        isEditing = true;
+        editLevel = row.Level;
+        editGroupName = row.GroupName;
+        editCategoryName = row.CategoryName;
+        editItem = new HskGrammarPointItem
+        {
+            Id = row.Item.Id,
+            Sub = row.Item.Sub,
+            Content = row.Item.Content,
+            Examples = row.Item.Examples?.Select(e => new HskGrammarExample
+            {
+                Zh = e.Zh,
+                Py = e.Py,
+                Vi = e.Vi
+            }).ToList() ?? new List<HskGrammarExample>()
+        };
+        showEditModal = true;
+    }
+
+    private void AddExampleRow()
+    {
+        editItem.Examples ??= new List<HskGrammarExample>();
+        editItem.Examples.Add(new HskGrammarExample());
+    }
+
+    private void RemoveExampleRow(int index)
+    {
+        if (editItem.Examples != null && index >= 0 && index < editItem.Examples.Count)
+        {
+            editItem.Examples.RemoveAt(index);
+        }
+    }
+
+    private async Task SaveModalPointAsync()
+    {
+        if (string.IsNullOrWhiteSpace(editGroupName) || string.IsNullOrWhiteSpace(editItem.Content))
+        {
+            statusSuccess = false;
+            statusMessage = "Vui lòng nhập Nhóm ngữ pháp và Nội dung điểm ngữ pháp.";
+            return;
+        }
+
+        // Clean empty example rows
+        if (editItem.Examples != null)
+        {
+            editItem.Examples = editItem.Examples
+                .Where(e => !string.IsNullOrWhiteSpace(e.Zh) || !string.IsNullOrWhiteSpace(e.Vi))
+                .ToList();
+        }
+
+        var ok = await GrammarService.SaveGrammarPointAsync(editLevel, editGroupName.Trim(), editCategoryName.Trim(), editItem);
+        showEditModal = false;
+        await LoadDataAsync();
+
+        statusSuccess = ok;
+        statusMessage = ok
+            ? $"Đã lưu điểm ngữ pháp '{editItem.Content}' vào HSK {editLevel} thành công!"
+            : "Có lỗi xảy ra khi lưu điểm ngữ pháp.";
+    }
+
+    private async Task DeletePointAsync(FlatGrammarRow row)
+    {
+        var ok = await GrammarService.DeleteGrammarPointAsync(row.Level, row.Item.Id);
+        await LoadDataAsync();
+        statusSuccess = ok;
+        statusMessage = ok ? $"Đã xóa điểm ngữ pháp ({row.Item.Id})." : "Không thể xóa mục này.";
+    }
+
+    private async Task ResetDefaultAsync()
+    {
+        var ok = await GrammarService.ResetToDefaultAsync();
+        await LoadDataAsync();
+        statusSuccess = ok;
+        statusMessage = "Đã khôi phục dữ liệu ngữ pháp HSK 1–6 về bản chuẩn mặc định.";
+    }
+
+    private async Task ExportJsonAsync()
+    {
+        if (allData == null) return;
+        var json = JsonSerializer.Serialize(allData, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        await JS.InvokeVoidAsync("eval", $@"
+            (function() {{
+                const blob = new Blob([{JsonSerializer.Serialize(json)}], {{ type: 'application/json' }});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'hsk-grammar-full.json';
+                a.click();
+                URL.revokeObjectURL(url);
+            }})();
+        ");
+    }
+
+    private void OpenImportModal()
+    {
+        importJsonText = string.Empty;
+        showImportModal = true;
+    }
+
+    private async Task ExecuteImportJsonAsync()
+    {
+        if (string.IsNullOrWhiteSpace(importJsonText)) return;
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<Dictionary<string, HskGrammarLevelData>>(importJsonText, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+            if (parsed != null && parsed.Count > 0)
+            {
+                await GrammarService.SaveAllGrammarDataAsync(parsed);
+                showImportModal = false;
+                await LoadDataAsync();
+                statusSuccess = true;
+                statusMessage = $"Đã nhập thành công dữ liệu ngữ pháp ({parsed.Count} cấp độ)!";
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            statusSuccess = false;
+            statusMessage = $"JSON không hợp lệ: {ex.Message}";
+            showImportModal = false;
+        }
+    }
+
+    private async Task SpeakText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        try
+        {
+            await JS.InvokeVoidAsync("eval", $@"
+                try {{
+                    const u = new SpeechSynthesisUtterance({JsonSerializer.Serialize(text)});
+                    u.lang = 'zh-CN';
+                    u.rate = 0.9;
+                    window.speechSynthesis.cancel();
+                    window.speechSynthesis.speak(u);
+                }} catch (e) {{}}
+            ");
+        }
+        catch { }
+    }
+}

@@ -1,0 +1,501 @@
+@page "/hsk/ngu-phap"
+@page "/hsk/grammar"
+@layout Frontend.App.Layout.HskLayout
+@using Frontend.App.Models
+@using Frontend.App.Services
+@using Blazored.LocalStorage
+@inject HskGrammarService GrammarService
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Ngữ pháp HSK 1–6 (Điểm ngữ pháp, Chủ đề & Nhiệm vụ) - ieltsHSK</PageTitle>
+
+<div class="hsk-grammar-page">
+    <!-- Header -->
+    <div class="grammar-header">
+        <div class="header-left">
+            <div class="header-icon-badge">
+                <i class="bi bi-diagram-3-fill"></i>
+            </div>
+            <div>
+                <div class="header-title-row">
+                    <h1 class="grammar-title">Ngữ pháp HSK 汉语语法</h1>
+                    <span class="badge-tag">Chuẩn Khung HSK 1–6</span>
+                </div>
+                <p class="grammar-subtitle">Hệ thống toàn bộ 238 điểm ngữ pháp trọng tâm, 301 chủ đề giao tiếp, 136 nhiệm vụ thực hành và hàng trăm câu ví dụ mẫu.</p>
+            </div>
+        </div>
+
+        <!-- Level Selector Tabs -->
+        <div class="level-tabs-container">
+            @for (int i = 1; i <= 6; i++)
+            {
+                var lvl = i.ToString();
+                var isActive = selectedLevel == lvl;
+                <button class="level-btn @(isActive ? "active" : "")" @onclick="() => SelectLevel(lvl)">
+                    <span class="lvl-label">HSK @lvl</span>
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Mode Selector: Điểm ngữ pháp / Chủ đề / Nhiệm vụ HSK -->
+    <div class="view-mode-bar">
+        <div class="mode-tabs">
+            <button class="mode-btn @(activeTab == "points" ? "active" : "")" @onclick='() => activeTab = "points"'>
+                <i class="bi bi-card-checklist"></i>
+                <span>Điểm ngữ pháp</span>
+                <span class="mode-count">@TotalLevelPoints</span>
+            </button>
+            <button class="mode-btn @(activeTab == "topics" ? "active" : "")" @onclick='() => activeTab = "topics"'>
+                <i class="bi bi-chat-left-dots"></i>
+                <span>Chủ đề</span>
+                <span class="mode-count">@(currentLevelData?.Topics?.Count ?? 0)</span>
+            </button>
+            <button class="mode-btn @(activeTab == "tasks" ? "active" : "")" @onclick='() => activeTab = "tasks"'>
+                <i class="bi bi-flag"></i>
+                <span>Nhiệm vụ HSK</span>
+                <span class="mode-count">@(currentLevelData?.Tasks?.Count ?? 0)</span>
+            </button>
+        </div>
+
+        <!-- Search & Progress Action -->
+        <div class="search-progress-wrap">
+            <div class="search-input-box">
+                <i class="bi bi-search"></i>
+                <input type="text" placeholder="Tìm kiếm điểm ngữ pháp, chữ Hán, câu ví dụ..."
+                       @bind="searchKeyword" @bind:event="oninput" />
+                @if (!string.IsNullOrWhiteSpace(searchKeyword))
+                {
+                    <button class="btn-clear-search" @onclick="() => searchKeyword = string.Empty">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                }
+            </div>
+
+            @if (activeTab == "points")
+            {
+                <div class="progress-indicator">
+                    <span class="prog-text">Đã học HSK @selectedLevel: <strong>@LearnedCountInLevel/@TotalLevelPoints</strong> điểm</span>
+                    <button class="btn-toggle-all" @onclick="ToggleAllLearnedInLevel">
+                        <i class="bi @(IsAllLearnedInLevel ? "bi-check2-all" : "bi-check-circle")"></i>
+                        <span>@(IsAllLearnedInLevel ? "Bỏ chọn tất cả" : "Đánh dấu đã học hết")</span>
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT VIEW -->
+    @if (isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner-border text-danger" role="status"></div>
+            <p>Đang tải dữ liệu ngữ pháp HSK @selectedLevel...</p>
+        </div>
+    }
+    else if (activeTab == "points")
+    {
+        <!-- TAB 1: ĐIỂM NGỮ PHÁP (GROUPS & LOAIS) -->
+        <div class="grammar-points-view">
+            @if (FilteredGroups.Count == 0)
+            {
+                <div class="empty-state">
+                    <i class="bi bi-search"></i>
+                    <p>Không tìm thấy điểm ngữ pháp nào phù hợp với từ khóa "<strong>@searchKeyword</strong>".</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var group in FilteredGroups)
+                {
+                    <div class="grammar-group-card">
+                        <div class="group-header" @onclick="() => ToggleGroupCollapse(group.Name)">
+                            <div class="group-title">
+                                <i class="bi bi-caret-down-fill collapse-arrow @(collapsedGroups.Contains(group.Name) ? "collapsed" : "")"></i>
+                                <span>@group.Name</span>
+                            </div>
+                            <span class="group-items-badge">@GetGroupItemsCount(group) điểm</span>
+                        </div>
+
+                        @if (!collapsedGroups.Contains(group.Name))
+                        {
+                            <div class="group-content">
+                                @foreach (var loai in group.Loais)
+                                {
+                                    <div class="category-block">
+                                        @if (!string.IsNullOrWhiteSpace(loai.Name))
+                                        {
+                                            <div class="category-name">
+                                                <span>@loai.Name.ToUpperInvariant()</span>
+                                            </div>
+                                        }
+
+                                        <div class="items-list">
+                                            @foreach (var item in loai.Items)
+                                            {
+                                                var isLearned = learnedPointIds.Contains(item.Id);
+                                                <div class="point-item-card @(isLearned ? "learned" : "")">
+                                                    <div class="point-main-row">
+                                                        <label class="checkbox-label" @onclick:stopPropagation>
+                                                            <input type="checkbox" checked="@isLearned"
+                                                                   @onchange="(e) => ToggleLearnedPoint(item.Id, e.Value is bool b && b)" />
+                                                            <span class="custom-checkbox"></span>
+                                                        </label>
+
+                                                        <div class="point-content-box">
+                                                            @if (!string.IsNullOrWhiteSpace(item.Sub))
+                                                            {
+                                                                <span class="point-sub-tag">@item.Sub</span>
+                                                            }
+                                                            <div class="point-content-text">
+                                                                @item.Content
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="point-actions">
+                                                            <button class="btn-tts" title="Đọc phát âm" @onclick="() => SpeakText(GetSpeakableText(item.Content))">
+                                                                <i class="bi bi-volume-up"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Expandable Examples Section -->
+                                                    @if (item.Examples != null && item.Examples.Count > 0)
+                                                    {
+                                                        <div class="examples-container">
+                                                            <div class="examples-header">
+                                                                <i class="bi bi-chat-quote-fill me-1"></i>
+                                                                <span>Ví dụ minh họa:</span>
+                                                            </div>
+                                                            <div class="examples-list">
+                                                                @foreach (var ex in item.Examples)
+                                                                {
+                                                                    <div class="example-item">
+                                                                        <div class="ex-zh-row">
+                                                                            <span class="ex-zh">@ex.Zh</span>
+                                                                            <button class="btn-tts-mini" @onclick="() => SpeakText(ex.Zh)" title="Nghe câu ví dụ">
+                                                                                <i class="bi bi-volume-up"></i>
+                                                                            </button>
+                                                                        </div>
+                                                                        @if (!string.IsNullOrWhiteSpace(ex.Py))
+                                                                        {
+                                                                            <div class="ex-py">@ex.Py</div>
+                                                                        }
+                                                                        @if (!string.IsNullOrWhiteSpace(ex.Vi))
+                                                                        {
+                                                                            <div class="ex-vi">@ex.Vi</div>
+                                                                        }
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    }
+    else if (activeTab == "topics")
+    {
+        <!-- TAB 2: CHỦ ĐỀ GIAO TIẾP (TOPICS) -->
+        <div class="grammar-topics-view">
+            @if (currentLevelData?.Topics == null || currentLevelData.Topics.Count == 0)
+            {
+                <div class="empty-state">
+                    <i class="bi bi-info-circle"></i>
+                    <p>Chưa có danh sách chủ đề cho cấp độ này.</p>
+                </div>
+            }
+            else
+            {
+                var groupedTopics = currentLevelData.Topics
+                    .Where(t => string.IsNullOrWhiteSpace(searchKeyword) ||
+                                (t.L1 + " " + t.L2 + " " + t.L3).Contains(searchKeyword, StringComparison.OrdinalIgnoreCase))
+                    .GroupBy(t => t.L1)
+                    .ToList();
+
+                @if (groupedTopics.Count == 0)
+                {
+                    <div class="empty-state">
+                        <i class="bi bi-search"></i>
+                        <p>Không có chủ đề nào khớp với từ khóa tìm kiếm.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="topics-grid">
+                        @foreach (var g in groupedTopics)
+                        {
+                            <div class="topic-category-card">
+                                <div class="topic-cat-header">
+                                    <i class="bi bi-bookmark-star-fill text-danger me-2"></i>
+                                    <h3 class="topic-cat-title">@g.Key</h3>
+                                </div>
+                                <div class="topic-cat-body">
+                                    @{
+                                        var subGroups = g.GroupBy(x => x.L2).ToList();
+                                    }
+                                    @foreach (var sub in subGroups)
+                                    {
+                                        <div class="topic-subgroup">
+                                            <div class="subgroup-badge">@sub.Key</div>
+                                            <ul class="subgroup-items">
+                                                @foreach (var item in sub)
+                                                {
+                                                    <li class="subgroup-leaf">
+                                                        <i class="bi bi-check2 text-danger me-2"></i>
+                                                        <span>@item.L3</span>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    }
+    else if (activeTab == "tasks")
+    {
+        <!-- TAB 3: NHIỆM VỤ HSK (TASKS) -->
+        <div class="grammar-tasks-view">
+            @if (currentLevelData?.Tasks == null || currentLevelData.Tasks.Count == 0)
+            {
+                <div class="empty-state">
+                    <i class="bi bi-info-circle"></i>
+                    <p>Chưa có dữ liệu nhiệm vụ cho cấp độ này.</p>
+                </div>
+            }
+            else
+            {
+                var filteredTasks = currentLevelData.Tasks
+                    .Where(t => string.IsNullOrWhiteSpace(searchKeyword) ||
+                                t.Title.Contains(searchKeyword, StringComparison.OrdinalIgnoreCase) ||
+                                t.Bullets.Any(b => b.Contains(searchKeyword, StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+
+                @if (filteredTasks.Count == 0)
+                {
+                    <div class="empty-state">
+                        <i class="bi bi-search"></i>
+                        <p>Không có nhiệm vụ nào khớp với từ khóa tìm kiếm.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="tasks-list">
+                        @foreach (var task in filteredTasks)
+                        {
+                            <div class="task-card">
+                                <div class="task-header">
+                                    <div class="task-no-pill">Mục @task.No</div>
+                                    <h3 class="task-title">@task.Title</h3>
+                                </div>
+                                <div class="task-body">
+                                    <div class="task-bullets">
+                                        @foreach (var bullet in task.Bullets)
+                                        {
+                                            <div class="task-bullet-item">
+                                                <i class="bi bi-arrow-right-circle-fill text-danger me-2 flex-shrink-0"></i>
+                                                <div class="bullet-text">@bullet</div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private string selectedLevel = "1";
+    private string activeTab = "points"; // points | topics | tasks
+    private string searchKeyword = string.Empty;
+    private bool isLoading = true;
+
+    private Dictionary<string, HskGrammarLevelData>? allData;
+    private HskGrammarLevelData? currentLevelData;
+    private HashSet<string> learnedPointIds = new();
+    private HashSet<string> collapsedGroups = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        allData = await GrammarService.GetAllGrammarDataAsync();
+        learnedPointIds = await GrammarService.GetLearnedPointIdsAsync();
+
+        // Check if level stored in localStorage
+        try
+        {
+            var storedLvl = await JS.InvokeAsync<string>("localStorage.getItem", "hsk_grammar_level");
+            if (!string.IsNullOrEmpty(storedLvl) && int.TryParse(storedLvl, out var parsed) && parsed >= 1 && parsed <= 6)
+            {
+                selectedLevel = parsed.ToString();
+            }
+        }
+        catch { }
+
+        LoadSelectedLevel();
+        isLoading = false;
+    }
+
+    private void SelectLevel(string lvl)
+    {
+        selectedLevel = lvl;
+        LoadSelectedLevel();
+        try
+        {
+            _ = JS.InvokeVoidAsync("localStorage.setItem", "hsk_grammar_level", lvl);
+        }
+        catch { }
+    }
+
+    private void LoadSelectedLevel()
+    {
+        if (allData != null && allData.TryGetValue(selectedLevel, out var lvlData))
+        {
+            currentLevelData = lvlData;
+        }
+        else
+        {
+            currentLevelData = null;
+        }
+    }
+
+    private void ToggleGroupCollapse(string groupName)
+    {
+        if (collapsedGroups.Contains(groupName))
+            collapsedGroups.Remove(groupName);
+        else
+            collapsedGroups.Add(groupName);
+    }
+
+    private async Task ToggleLearnedPoint(string id, bool isLearned)
+    {
+        if (isLearned)
+            learnedPointIds.Add(id);
+        else
+            learnedPointIds.Remove(id);
+
+        await GrammarService.SaveLearnedPointIdsAsync(learnedPointIds);
+        StateHasChanged();
+    }
+
+    private async Task ToggleAllLearnedInLevel()
+    {
+        if (currentLevelData == null) return;
+        var allIds = currentLevelData.Groups
+            .SelectMany(g => g.Loais)
+            .SelectMany(l => l.Items)
+            .Select(i => i.Id)
+            .ToList();
+
+        if (IsAllLearnedInLevel)
+        {
+            foreach (var id in allIds) learnedPointIds.Remove(id);
+        }
+        else
+        {
+            foreach (var id in allIds) learnedPointIds.Add(id);
+        }
+
+        await GrammarService.SaveLearnedPointIdsAsync(learnedPointIds);
+        StateHasChanged();
+    }
+
+    private int TotalLevelPoints => currentLevelData?.Groups.Sum(g => g.Loais.Sum(l => l.Items.Count)) ?? 0;
+
+    private int LearnedCountInLevel => currentLevelData?.Groups.Sum(g => g.Loais.Sum(l => l.Items.Count(i => learnedPointIds.Contains(i.Id)))) ?? 0;
+
+    private bool IsAllLearnedInLevel => TotalLevelPoints > 0 && LearnedCountInLevel == TotalLevelPoints;
+
+    private int GetGroupItemsCount(HskGrammarGroup group) => group.Loais.Sum(l => l.Items.Count);
+
+    private List<HskGrammarGroup> FilteredGroups
+    {
+        get
+        {
+            if (currentLevelData?.Groups == null) return new();
+            if (string.IsNullOrWhiteSpace(searchKeyword)) return currentLevelData.Groups;
+
+            var kw = searchKeyword.Trim().ToLowerInvariant();
+            var result = new List<HskGrammarGroup>();
+
+            foreach (var g in currentLevelData.Groups)
+            {
+                var matchingLoais = new List<HskGrammarCategory>();
+                foreach (var l in g.Loais)
+                {
+                    var matchingItems = l.Items.Where(it =>
+                        it.Content.ToLowerInvariant().Contains(kw) ||
+                        it.Sub.ToLowerInvariant().Contains(kw) ||
+                        (it.Examples != null && it.Examples.Any(e =>
+                            e.Zh.ToLowerInvariant().Contains(kw) ||
+                            e.Py.ToLowerInvariant().Contains(kw) ||
+                            e.Vi.ToLowerInvariant().Contains(kw)))
+                    ).ToList();
+
+                    if (matchingItems.Count > 0)
+                    {
+                        matchingLoais.Add(new HskGrammarCategory
+                        {
+                            Name = l.Name,
+                            Items = matchingItems
+                        });
+                    }
+                }
+
+                if (matchingLoais.Count > 0)
+                {
+                    result.Add(new HskGrammarGroup
+                    {
+                        Name = g.Name,
+                        Loais = matchingLoais
+                    });
+                }
+            }
+            return result;
+        }
+    }
+
+    private string GetSpeakableText(string content)
+    {
+        // Extract raw Chinese text before parenthesis
+        var pIdx = content.IndexOf('(');
+        var raw = pIdx > 0 ? content.Substring(0, pIdx) : content;
+        return raw.Replace("—", "").Replace("、", "，").Trim();
+    }
+
+    private async Task SpeakText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        try
+        {
+            await JS.InvokeVoidAsync("eval", $@"
+                try {{
+                    const u = new SpeechSynthesisUtterance({System.Text.Json.JsonSerializer.Serialize(text)});
+                    u.lang = 'zh-CN';
+                    u.rate = 0.9;
+                    window.speechSynthesis.cancel();
+                    window.speechSynthesis.speak(u);
+                }} catch (e) {{ console.error(e); }}
+            ");
+        }
+        catch { }
+    }
+}

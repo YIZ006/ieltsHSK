@@ -136,6 +136,7 @@ builder.Services.AddScoped<ExamScheduleService>();
 builder.Services.AddScoped<CultureStoryService>();
 builder.Services.AddScoped<HskSlangService>();
 builder.Services.AddScoped<HskChengyuService>();
+builder.Services.AddScoped<HskGrammarService>();
 
 builder.Services.AddAuthorizationCore();
 

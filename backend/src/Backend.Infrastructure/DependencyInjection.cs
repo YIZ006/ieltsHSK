@@ -576,6 +576,13 @@ public static class DependencyInjection
                 );
                 hasNewGames = true;
             }
+            if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "HSK" && (s.Route == "/hsk/ngu-phap" || s.Route == "/hsk/grammar")))
+            {
+                dbContext.LearningSections.Add(
+                    new LearningSection { Name = "Ngữ pháp HSK", Description = "Điểm ngữ pháp, chủ đề & ví dụ HSK 1–6", Icon = "bi-diagram-3", Route = "/hsk/ngu-phap", Language = "HSK", OrderIndex = 4 }
+                );
+                hasNewGames = true;
+            }
             if (!await dbContext.LearningSections.AnyAsync(s => s.Language == "HSK" && s.Route == "/games"))
             {
                 dbContext.LearningSections.Add(

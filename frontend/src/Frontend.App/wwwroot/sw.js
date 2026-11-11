@@ -1,6 +1,6 @@
 // PWA Service Worker — cache-first cho file tĩnh, network-first cho navigation Blazor WASM
 // và network-first (fallback cache) cho dữ liệu JSON trong /sample-data/ để không bị kẹt dữ liệu cũ.
-const CACHE = 'app-v11-hsk-data';
+const CACHE = 'app-v12-hsk-grammar';
 
 const ASSETS = [
   './',
@@ -16,7 +16,8 @@ const ASSETS = [
 const PRECACHE_DATA = [
   './sample-data/hsk-chengyu.json',
   './sample-data/hsk-culture-stories.json',
-  './sample-data/hsk-genz-slang.json'
+  './sample-data/hsk-genz-slang.json',
+  './sample-data/hsk-grammar.json'
 ];
 
 async function precacheFresh(cache, url) {
