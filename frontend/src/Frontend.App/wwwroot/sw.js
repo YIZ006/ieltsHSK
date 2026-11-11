@@ -1,6 +1,6 @@
 // PWA Service Worker — cache-first cho file tĩnh, network-first cho navigation Blazor WASM
 // và network-first (fallback cache) cho dữ liệu JSON trong /sample-data/ để không bị kẹt dữ liệu cũ.
-const CACHE = 'app-v13-hsk-grammar-studio';
+const CACHE = 'app-v14-hsk-grammar-theme';
 
 const ASSETS = [
   './',
