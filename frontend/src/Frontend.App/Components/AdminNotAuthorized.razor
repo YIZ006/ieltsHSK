@@ -1,0 +1,36 @@
+@inject NavigationManager NavigationManager
+
+@code {
+    protected override void OnInitialized()
+    {
+        var relative = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        var isAdmin = relative.StartsWith("portal-hub", StringComparison.OrdinalIgnoreCase) ||
+                      relative.StartsWith("admin", StringComparison.OrdinalIgnoreCase);
+
+        if (isAdmin && !relative.Contains("login", StringComparison.OrdinalIgnoreCase))
+        {
+            var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
+            NavigationManager.NavigateTo($"/portal-hub/login?returnUrl={returnUrl}", replace: true);
+        }
+    }
+}
+
+<div class="d-flex align-items-center justify-content-center" style="min-height: 60vh; padding: 2rem;">
+    <div class="card border-0 shadow-lg p-4 text-center" style="max-width: 480px; border-radius: 1.25rem; background: #141721; color: #f8fafc; border: 1px solid #232838;">
+        <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); color: #f87171; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; font-size: 2rem;">
+            <i class="bi bi-shield-lock-fill"></i>
+        </div>
+        <h3 class="fw-bold mb-2 text-danger">Yêu cầu Đăng nhập Quản trị viên</h3>
+        <p class="text-secondary small mb-4">
+            Bạn cần đăng nhập bằng tài khoản Quản trị viên (Admin) để có quyền truy cập khu vực này.
+        </p>
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+            <a href="@($"/portal-hub/login?returnUrl={Uri.EscapeDataString(NavigationManager.Uri)}")" class="btn btn-danger fw-bold px-4 py-2" style="border-radius: 0.75rem;">
+                <i class="bi bi-box-arrow-in-right me-1"></i> Đăng nhập Quản trị
+            </a>
+            <a href="/" class="btn btn-outline-secondary fw-semibold px-3 py-2" style="border-radius: 0.75rem;">
+                <i class="bi bi-house-door me-1"></i> Về trang chủ
+            </a>
+        </div>
+    </div>
+</div>
