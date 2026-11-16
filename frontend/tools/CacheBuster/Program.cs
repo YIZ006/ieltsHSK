@@ -61,87 +61,97 @@ class Program
     {
         try
         {
-            string html = File.ReadAllText(indexPath, Encoding.UTF8);
-
-            // Regex matches local CSS/JS references in link and script tags, ignoring external URLs and _framework bootstrap
-            var regex = new Regex(
-                @"(?<prefix>(?:<link\b[^>]*?\bhref=|<script\b[^>]*?\bsrc=)[""'])(?<path>(?!https?:\/\/|\/\/|_framework\/)(?<relpath>(?:[a-zA-Z0-9_\-\.\/]+?\.(?:css|js))))(?:\?[^""']*)?(?<suffix>[""'])",
-                RegexOptions.IgnoreCase);
-
-            var matches = regex.Matches(html);
-            if (matches.Count == 0)
+            var htmlFiles = new List<string> { indexPath };
+            string notFoundPath = Path.Combine(targetDir, "404.html");
+            if (File.Exists(notFoundPath) && !notFoundPath.Equals(indexPath, StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine("[INFO] No local static asset references found in index.html to cache bust.");
-                return 0;
+                htmlFiles.Add(notFoundPath);
             }
 
-            var processedAssets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var updatedHtml = html;
-
-            using var sha256 = SHA256.Create();
-
-            foreach (Match match in matches)
+            foreach (var targetHtmlFile in htmlFiles)
             {
-                string relPath = match.Groups["relpath"].Value.TrimStart('/');
-                string dir = Path.GetDirectoryName(relPath)?.Replace('\\', '/') ?? "";
-                if (!string.IsNullOrEmpty(dir)) dir += "/";
-                
-                string ext = Path.GetExtension(relPath);
-                string rawFileNameWithoutExt = Path.GetFileNameWithoutExtension(relPath);
-                // Strip any existing 8-char hex hash(es) to ensure idempotency
-                string baseFileName = Regex.Replace(rawFileNameWithoutExt, @"(\.[0-9a-fA-F]{8})+$", "");
+                string html = File.ReadAllText(targetHtmlFile, Encoding.UTF8);
 
-                string cleanRelPath = $"{dir}{baseFileName}{ext}";
-                string cleanFullPath = Path.Combine(targetDir, cleanRelPath.Replace('/', Path.DirectorySeparatorChar));
-                string originalFullPath = Path.Combine(targetDir, relPath.Replace('/', Path.DirectorySeparatorChar));
+                // Regex matches local CSS/JS references in link and script tags, ignoring external URLs and _framework bootstrap
+                var regex = new Regex(
+                    @"(?<prefix>(?:<link\b[^>]*?\bhref=|<script\b[^>]*?\bsrc=)[""'])(?<path>(?!https?:\/\/|\/\/|_framework\/)(?<relpath>(?:[a-zA-Z0-9_\-\.\/]+?\.(?:css|js))))(?:\?[^""']*)?(?<suffix>[""'])",
+                    RegexOptions.IgnoreCase);
 
-                string sourcePathToRead = File.Exists(cleanFullPath) ? cleanFullPath : (File.Exists(originalFullPath) ? originalFullPath : null!);
-
-                if (sourcePathToRead == null)
+                var matches = regex.Matches(html);
+                if (matches.Count == 0)
                 {
-                    Console.WriteLine($"[WARN] Referenced file does not exist on disk: {relPath}");
+                    Console.WriteLine($"[INFO] No local static asset references found in {Path.GetFileName(targetHtmlFile)} to cache bust.");
                     continue;
                 }
 
-                // Compute SHA256 content hash (first 8 hex characters)
-                byte[] fileBytes = File.ReadAllBytes(sourcePathToRead);
-                byte[] hashBytes = sha256.ComputeHash(fileBytes);
-                string hash = BitConverter.ToString(hashBytes, 0, 4).Replace("-", "").ToLowerInvariant();
+                var processedAssets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var updatedHtml = html;
 
-                string newRelPath = $"{dir}{baseFileName}.{hash}{ext}";
-                string newFullPath = Path.Combine(targetDir, newRelPath.Replace('/', Path.DirectorySeparatorChar));
+                using var sha256 = SHA256.Create();
 
-                // Write hashed asset copy
-                File.WriteAllBytes(newFullPath, fileBytes);
+                foreach (Match match in matches)
+                {
+                    string relPath = match.Groups["relpath"].Value.TrimStart('/');
+                    string dir = Path.GetDirectoryName(relPath)?.Replace('\\', '/') ?? "";
+                    if (!string.IsNullOrEmpty(dir)) dir += "/";
+                    
+                    string ext = Path.GetExtension(relPath);
+                    string rawFileNameWithoutExt = Path.GetFileNameWithoutExtension(relPath);
+                    // Strip any existing 8-char hex hash(es) to ensure idempotency
+                    string baseFileName = Regex.Replace(rawFileNameWithoutExt, @"(\.[0-9a-fA-F]{8})+$", "");
 
-                // Generate pre-compressed files (.gz and .br) if compression enabled
+                    string cleanRelPath = $"{dir}{baseFileName}{ext}";
+                    string cleanFullPath = Path.Combine(targetDir, cleanRelPath.Replace('/', Path.DirectorySeparatorChar));
+                    string originalFullPath = Path.Combine(targetDir, relPath.Replace('/', Path.DirectorySeparatorChar));
+
+                    string sourcePathToRead = File.Exists(cleanFullPath) ? cleanFullPath : (File.Exists(originalFullPath) ? originalFullPath : null!);
+
+                    if (sourcePathToRead == null)
+                    {
+                        Console.WriteLine($"[WARN] Referenced file does not exist on disk: {relPath}");
+                        continue;
+                    }
+
+                    // Compute SHA256 content hash (first 8 hex characters)
+                    byte[] fileBytes = File.ReadAllBytes(sourcePathToRead);
+                    byte[] hashBytes = sha256.ComputeHash(fileBytes);
+                    string hash = BitConverter.ToString(hashBytes, 0, 4).Replace("-", "").ToLowerInvariant();
+
+                    string newRelPath = $"{dir}{baseFileName}.{hash}{ext}";
+                    string newFullPath = Path.Combine(targetDir, newRelPath.Replace('/', Path.DirectorySeparatorChar));
+
+                    // Write hashed asset copy
+                    File.WriteAllBytes(newFullPath, fileBytes);
+
+                    // Generate pre-compressed files (.gz and .br) if compression enabled
+                    if (!noCompress)
+                    {
+                        GenerateCompressedVariants(newFullPath, fileBytes);
+                    }
+
+                    // Replace in HTML
+                    string originalMatch = match.Value;
+                    string replacement = $"{match.Groups["prefix"].Value}{newRelPath}{match.Groups["suffix"].Value}";
+                    updatedHtml = updatedHtml.Replace(originalMatch, replacement);
+
+                    if (processedAssets.Add(cleanRelPath))
+                    {
+                        Console.WriteLine($"[CACHE-BUST] {cleanRelPath} -> {newRelPath} (hash: {hash})");
+                    }
+                }
+
+                // Write modified html file
+                File.WriteAllText(targetHtmlFile, updatedHtml, Encoding.UTF8);
+
+                // Re-generate compression for html if compression enabled
                 if (!noCompress)
                 {
-                    GenerateCompressedVariants(newFullPath, fileBytes);
+                    byte[] indexBytes = Encoding.UTF8.GetBytes(updatedHtml);
+                    GenerateCompressedVariants(targetHtmlFile, indexBytes);
                 }
 
-                // Replace in HTML
-                string originalMatch = match.Value;
-                string replacement = $"{match.Groups["prefix"].Value}{newRelPath}{match.Groups["suffix"].Value}";
-                updatedHtml = updatedHtml.Replace(originalMatch, replacement);
-
-                if (processedAssets.Add(cleanRelPath))
-                {
-                    Console.WriteLine($"[CACHE-BUST] {cleanRelPath} -> {newRelPath} (hash: {hash})");
-                }
+                Console.WriteLine($"[SUCCESS] {Path.GetFileName(targetHtmlFile)} successfully updated with hashed assets.");
             }
-
-            // Write modified index.html
-            File.WriteAllText(indexPath, updatedHtml, Encoding.UTF8);
-
-            // Re-generate compression for index.html if compression enabled
-            if (!noCompress)
-            {
-                byte[] indexBytes = Encoding.UTF8.GetBytes(updatedHtml);
-                GenerateCompressedVariants(indexPath, indexBytes);
-            }
-
-            Console.WriteLine("[SUCCESS] index.html successfully updated with hashed assets.");
 
             // Self-verify after cache busting
             return VerifyDeployment(targetDir, indexPath);

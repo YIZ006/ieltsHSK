@@ -1,6 +1,6 @@
 // PWA Service Worker — cache-first cho file tĩnh, network-first cho navigation Blazor WASM
 // và network-first (fallback cache) cho dữ liệu JSON trong /sample-data/ để không bị kẹt dữ liệu cũ.
-const CACHE = 'app-v15-admin-routes-fix';
+const CACHE = 'app-v16-mobile-20261116';
 
 const ASSETS = [
   './',
@@ -79,8 +79,10 @@ self.addEventListener('fetch', e => {
       url.pathname.startsWith('/_framework/') || 
       url.pathname.includes('appsettings') ||
       url.pathname.includes('mascot-interop') ||
-      url.pathname.includes('Frontend.App.styles.css') ||
-      url.pathname.includes('app.css')) return;
+      url.pathname.includes('Frontend.App.styles') ||
+      url.pathname.includes('quantum-cipher') ||
+      url.pathname.includes('app.') ||
+      url.pathname.endsWith('.css')) return;
 
   // Dữ liệu JSON học tập (thành ngữ, văn hóa, tiếng lóng, đề thi...): Network-first + fallback cache
   if (url.pathname.includes('/sample-data/') && url.pathname.endsWith('.json')) {

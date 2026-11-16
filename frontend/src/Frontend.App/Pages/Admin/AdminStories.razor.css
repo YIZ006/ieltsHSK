@@ -868,7 +868,7 @@
 /* Form Controls */
 .editor-grid {
     display: grid;
-    grid-template-columns: repeat(12, 1fr);
+    grid-template-columns: repeat(12, minmax(0, 1fr));
     gap: 18px;
 }
 
@@ -1068,12 +1068,12 @@
 
 .bilingual-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 16px;
 }
 
 @media (max-width: 768px) {
-    .bilingual-grid { grid-template-columns: 1fr; }
+    .bilingual-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .lang-label {
@@ -1118,7 +1118,7 @@
 
 .vocab-form-grid {
     display: grid;
-    grid-template-columns: repeat(12, 1fr);
+    grid-template-columns: repeat(12, minmax(0, 1fr));
     gap: 14px;
 }
 
@@ -1149,12 +1149,12 @@
 
 .quiz-options-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 12px;
 }
 
 @media (max-width: 768px) {
-    .quiz-options-grid { grid-template-columns: 1fr; }
+    .quiz-options-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .option-input-wrapper {

@@ -262,7 +262,7 @@
 .picker-section { margin-bottom: 1.2rem; }
 .picker-label { font-size: 0.82rem; font-weight: 600; color: #636e72; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.6rem; }
 .emoji-grid {
-    display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px;
+    display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px;
 }
 .emoji-btn {
     aspect-ratio: 1; border-radius: 10px; border: 2px solid transparent;
@@ -274,7 +274,7 @@
 .emoji-btn.selected { border-color: #6c5ce7; background: #ede8ff; box-shadow: 0 0 0 3px rgba(108,92,231,0.2); }
 
 .color-grid {
-    display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px;
+    display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px;
 }
 .color-swatch {
     aspect-ratio: 1; border-radius: 50%; border: 3px solid transparent;
@@ -300,7 +300,7 @@
     max-width: 1100px; margin: 2rem auto 0;
     padding: 0 1.5rem;
     display: grid;
-    grid-template-columns: 360px 1fr;
+    grid-template-columns: 360px minmax(0, 1fr);
     gap: 1.5rem;
     align-items: start;
 }
@@ -436,7 +436,7 @@
 
 /* ── SCORE SUMMARY GRID ── */
 .score-summary-grid {
-    display: grid; grid-template-columns: 1fr 1fr;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 1rem; margin-bottom: 1.4rem;
 }
 .score-card {
@@ -543,7 +543,7 @@
 /* ── RESPONSIVE ── */
 @media (max-width: 900px) {
     .profile-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
     .hero-stats {
         margin-left: 0; width: 100%;
@@ -557,9 +557,9 @@
 @media (max-width: 520px) {
     .profile-hero { padding: 2rem 1rem 1.5rem; }
     .profile-grid { padding: 0 0.8rem; }
-    .score-summary-grid { grid-template-columns: 1fr; }
-    .emoji-grid { grid-template-columns: repeat(6, 1fr); }
-    .color-grid { grid-template-columns: repeat(6, 1fr); }
+    .score-summary-grid { grid-template-columns: minmax(0, 1fr); }
+    .emoji-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .color-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 
 /* ==========================================================================

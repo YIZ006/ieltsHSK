@@ -21,7 +21,7 @@
    ========================================================================== */
 .mocktest-stats-banner {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 16px;
     margin-bottom: 20px;
 }
@@ -514,7 +514,7 @@
 
 .skills-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
     flex: 1;
 }
@@ -678,6 +678,26 @@
     border: 1px dashed #ced4da;
 }
 
+@media (max-width: 900px) {
+    .mocktest-stats-banner {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+}
+
+@media (max-width: 600px) {
+    .mocktest-stats-banner {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 10px;
+    }
+    .mocktests-container {
+        padding: 16px 12px;
+    }
+    .skills-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 @media (max-width: 768px) {
     .collection-header {
         flex-direction: column;
@@ -690,7 +710,7 @@
     }
     
     .tests-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 

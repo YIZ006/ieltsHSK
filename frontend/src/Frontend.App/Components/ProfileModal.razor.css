@@ -139,7 +139,7 @@
 
 .emoji-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 4px;
 }
 
@@ -165,7 +165,7 @@
 
 .color-grid {
     display: grid;
-    grid-template-columns: repeat(8, 1fr);
+    grid-template-columns: repeat(8, minmax(0, 1fr));
     gap: 6px;
 }
 
@@ -324,7 +324,7 @@
 /* ── Form Inputs ── */
 .form-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 14px 18px;
 }
 
@@ -518,7 +518,7 @@
 /* ── Profile Quick Stats Overview ── */
 .profile-quick-stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
     margin-top: 18px;
     padding: 14px 16px;
@@ -529,7 +529,7 @@
 
 @media (max-width: 640px) {
     .profile-quick-stats {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
@@ -600,7 +600,7 @@
 /* ── Stats Tab ── */
 .stats-cards-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
     margin-bottom: 20px;
 }
@@ -639,7 +639,7 @@
 
 .scores-row {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
 }
 
@@ -693,7 +693,7 @@
 
 .modal-ach-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
 }
 
@@ -998,8 +998,8 @@
 }
 
 @media (max-width: 640px) {
-    .form-grid { grid-template-columns: 1fr; }
-    .stats-cards-grid, .scores-row, .modal-ach-grid { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: minmax(0, 1fr); }
+    .stats-cards-grid, .scores-row, .modal-ach-grid { grid-template-columns: minmax(0, 1fr); }
     .tab-btn span { display: none; }
 }
 

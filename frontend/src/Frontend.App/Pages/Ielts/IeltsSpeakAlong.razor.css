@@ -759,7 +759,7 @@
 /* Practice 2-Column Grid */
 .practice-main-grid {
     display: grid;
-    grid-template-columns: 1.1fr 1fr;
+    grid-template-columns: 1.1fr minmax(0, 1fr);
     gap: 24px;
     align-items: start;
 }
@@ -3575,7 +3575,7 @@
 /* Responsive */
 @media (max-width: 992px) {
     .engnovate-main-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 
@@ -4166,3 +4166,10 @@
 
 .btn-save-all-bottom:hover { filter: brightness(1.1); }
 
+
+/* ===== Mobile: part tabs scroll instead of widening page ===== */
+@media (max-width: 640px) {
+    .part-selector-tabs { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .part-selector-tabs::-webkit-scrollbar { display: none; }
+    .part-tab-btn { flex: 0 0 auto; }
+}

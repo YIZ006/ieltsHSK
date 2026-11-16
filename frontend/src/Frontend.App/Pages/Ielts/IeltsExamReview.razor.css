@@ -192,7 +192,7 @@
 .hero-stats-grid {
     flex: 1;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 14px;
 }
 .stat-box {
@@ -242,7 +242,7 @@
 }
 .criteria-summary-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
     margin-bottom: 12px;
 }
@@ -375,7 +375,7 @@
 /* ── SPLIT LAYOUT (READING & LISTENING) ── */
 .review-split-layout {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 24px;
     align-items: flex-start;
 }
@@ -713,7 +713,7 @@
 
 .writing-split-review {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 24px;
 }
 .w-prompt-pane {
@@ -896,12 +896,12 @@
 
 /* ── RESPONSIVE ── */
 @media (max-width: 900px) {
-    .review-split-layout, .writing-split-review { grid-template-columns: 1fr; }
+    .review-split-layout, .writing-split-review { grid-template-columns: minmax(0, 1fr); }
     .passage-pane { position: static; max-height: none; }
-    .hero-stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .hero-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .review-score-hero { flex-direction: column; }
     .hero-score-box { width: 100%; }
-    .criteria-summary-grid { grid-template-columns: repeat(2, 1fr); }
+    .criteria-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ══════════════════════════════════════════════════════
@@ -1654,3 +1654,11 @@
     border-top-color: #38bdf8;
 }
 
+
+/* ===== Mobile: part tabs scroll instead of widening page ===== */
+@media (max-width: 900px) {
+    .review-toolbar { min-width: 0; max-width: 100%; }
+    .part-tabs-group { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .part-tabs-group::-webkit-scrollbar { display: none; }
+    .part-tab-btn { flex: 0 0 auto; padding: 8px 12px; }
+}

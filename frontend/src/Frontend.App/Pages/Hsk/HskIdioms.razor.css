@@ -196,14 +196,14 @@
    ══════════════════════════════════════════════════════════════════ */
 .studio-workspace-grid {
     display: grid;
-    grid-template-columns: 280px 1.15fr 1fr;
+    grid-template-columns: 280px 1.15fr minmax(0, 1fr);
     gap: 1rem;
     align-items: start;
 }
 
 @media (max-width: 1260px) {
     .studio-workspace-grid {
-        grid-template-columns: 260px 1fr;
+        grid-template-columns: 260px minmax(0, 1fr);
     }
     .studio-col-wechat {
         grid-column: 1 / -1;
@@ -212,7 +212,7 @@
 
 @media (max-width: 900px) {
     .studio-workspace-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 
@@ -305,7 +305,7 @@
 
 .dir-level-tabs {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.25rem;
 }
 
@@ -557,7 +557,7 @@
 
 .char-grid-4 {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.5rem;
 }
 
@@ -1418,13 +1418,13 @@
 
 .card-split-grid {
     display: grid;
-    grid-template-columns: 1.25fr 1fr;
+    grid-template-columns: 1.25fr minmax(0, 1fr);
     gap: 1.4rem;
 }
 
 @media (max-width: 991px) {
     .card-split-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 
@@ -2021,4 +2021,11 @@
 [data-theme="dark"] .btn-chat-tool:hover {
     background: #242b3d !important;
     border-color: #3b82f6 !important;
+}
+
+/* ===== Mobile: stop grid blow-out ===== */
+@media (max-width: 900px) {
+    .studio-workspace-grid { grid-template-columns: minmax(0, 1fr); }
+    .studio-col-directory, .studio-col-encyclopedia, .studio-col-wechat { min-width: 0; max-width: 100%; }
+    .wechat-sim-header { flex-wrap: wrap; }
 }

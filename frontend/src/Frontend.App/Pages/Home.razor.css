@@ -868,7 +868,7 @@
 /* 1. Stats Counter Grid */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 1.5rem;
 }
 
@@ -933,7 +933,7 @@
 /* 2. Core Features Grid */
 .features-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 2rem;
 }
 
@@ -1114,7 +1114,7 @@
 /* 4. Student Reviews Grid */
 .reviews-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1.8rem;
 }
 
@@ -1283,13 +1283,13 @@
 
 /* Responsive adjustments */
 @media (max-width: 1024px) {
-    .stats-grid { grid-template-columns: repeat(2, 1fr); }
-    .features-grid { grid-template-columns: 1fr; }
-    .reviews-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .features-grid { grid-template-columns: minmax(0, 1fr); }
+    .reviews-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 640px) {
-    .stats-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: minmax(0, 1fr); }
     .section-title { font-size: 1.75rem; }
     .home-section { padding: 3.5rem 1rem; }
 }
