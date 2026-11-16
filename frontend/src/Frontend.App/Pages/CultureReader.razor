@@ -588,7 +588,7 @@
 /* ── STORIES GRID ── */
 .stories-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
     gap: 22px;
 }
 
@@ -1389,6 +1389,108 @@
 .empty-icon {
     font-size: 3rem;
     margin-bottom: 12px;
+}
+
+/* ── MOBILE RESPONSIVE OPTIMIZATION (max-width 640px) ── */
+@@media (max-width: 640px) {
+    .culture-container {
+        padding: 12px 8px 40px;
+    }
+    .culture-hero {
+        padding: 20px 12px 16px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+    }
+    .culture-title {
+        font-size: 1.45rem;
+    }
+    .culture-desc {
+        font-size: 0.88rem;
+        margin-bottom: 14px;
+    }
+    .culture-toolbar {
+        padding: 12px;
+        margin-bottom: 16px;
+        border-radius: 12px;
+    }
+    .search-box input {
+        font-size: 0.88rem;
+        padding: 10px 36px 10px 36px;
+    }
+    .category-tabs {
+        gap: 6px;
+    }
+    .tab-btn {
+        padding: 5px 10px;
+        font-size: 0.78rem;
+    }
+    .stories-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+    }
+    .reader-container {
+        padding: 0 4px;
+    }
+    .reader-topbar {
+        padding: 8px 10px;
+        margin-bottom: 14px;
+        position: static;
+        gap: 8px;
+    }
+    .reader-controls {
+        gap: 6px;
+        justify-content: flex-start;
+    }
+    .ctrl-btn {
+        padding: 4px 8px;
+        font-size: 0.75rem;
+    }
+    .narrate-btn {
+        padding: 5px 10px;
+        font-size: 0.78rem;
+    }
+    .reader-article {
+        padding: 14px 10px;
+        margin-bottom: 20px;
+        border-radius: 12px;
+    }
+    .sentence-block {
+        gap: 10px;
+        padding: 10px 6px;
+    }
+    .sentence-zh {
+        font-size: 1.05em;
+        line-height: 1.6;
+    }
+    .sentence-pinyin {
+        font-size: 0.82em;
+    }
+    .sentence-vi {
+        font-size: 0.85em;
+    }
+    .quiz-section {
+        padding: 14px 10px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+    .quiz-score-banner {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+        gap: 10px;
+    }
+    .word-modal-dialog {
+        width: calc(100% - 24px);
+        max-width: 440px;
+        padding: 16px;
+    }
+    .word-sino-vi, .word-meaning-vi, .word-pos {
+        flex-direction: column;
+        gap: 2px;
+    }
+    .word-sino-vi .label, .word-meaning-vi .label, .word-pos .label {
+        min-width: 0;
+    }
 }
 </style>
 

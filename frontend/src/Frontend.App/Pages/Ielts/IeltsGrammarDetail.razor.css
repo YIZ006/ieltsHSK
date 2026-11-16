@@ -152,7 +152,7 @@
 
 .hero-concept-inline {
     flex: 1;
-    min-width: 280px;
+    min-width: min(280px, 100%);
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-left: 3px solid #0284c7;
@@ -536,6 +536,9 @@
 .irregular-table-wrapper {
     max-height: 380px;
     overflow-y: auto;
+    overflow-x: auto;
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
 }
@@ -1488,5 +1491,52 @@
 
 [data-theme="dark"] .completion-body p {
     color: #94a3b8 !important;
+}
+
+/* ── MOBILE RESPONSIVE (<= 640px) ── */
+@media (max-width: 640px) {
+    .grammar-detail-page {
+        padding: 0.5rem 0.5rem 2.5rem 0.5rem;
+    }
+    .lesson-hero-compact {
+        padding: 0.85rem 0.75rem;
+        border-radius: 10px;
+    }
+    .hero-main-title {
+        font-size: 1.3rem;
+    }
+    .hero-sub-title {
+        font-size: 0.92rem;
+    }
+    .hero-concept-inline {
+        min-width: 0;
+        width: 100%;
+        font-size: 0.84rem;
+        padding: 0.45rem 0.65rem;
+    }
+    .lesson-subnav-tabs {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding: 0.25rem;
+        top: 55px;
+    }
+    .lesson-subnav-tabs::-webkit-scrollbar {
+        display: none;
+    }
+    .subnav-tab {
+        flex-shrink: 0;
+        padding: 0.35rem 0.65rem;
+        font-size: 0.78rem;
+    }
+    .lesson-section {
+        padding: 1rem 0.75rem;
+        border-radius: 10px;
+    }
+    .formula-card {
+        padding: 0.85rem 0.75rem;
+    }
 }
 

@@ -543,7 +543,7 @@
 /* ── GRID OF CARDS ── */
 .slang-cards-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
     gap: 20px;
 }
 
@@ -1036,6 +1036,53 @@
 [data-theme="dark"] .bubble-left .bubble-content {
     background: #161c2a;
     border-color: #232c40;
+}
+
+/* ── MOBILE RESPONSIVE OPTIMIZATION (max-width 640px) ── */
+@@media (max-width: 640px) {
+    .slang-container {
+        padding: 12px 8px 40px;
+    }
+    .slang-hero {
+        padding: 20px 12px 16px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+    }
+    .slang-title {
+        font-size: 1.45rem;
+    }
+    .slang-desc {
+        font-size: 0.88rem;
+        margin-bottom: 14px;
+    }
+    .slang-toolbar {
+        padding: 12px;
+        margin-bottom: 16px;
+        border-radius: 12px;
+    }
+    .filter-actions-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    .toolbar-toggles {
+        justify-content: space-between;
+    }
+    .slang-cards-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+    }
+    .slang-card {
+        padding: 14px 12px;
+        border-radius: 14px;
+    }
+    .term-hanzi {
+        font-size: 1.55rem;
+    }
+    .bubble-content {
+        max-width: 90%;
+        font-size: 0.8rem;
+    }
 }
 </style>
 
