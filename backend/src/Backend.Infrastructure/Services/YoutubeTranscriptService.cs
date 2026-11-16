@@ -1,4 +1,4 @@
-using YoutubeExplode;
+﻿using YoutubeExplode;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -54,14 +54,39 @@ public class YoutubeTranscriptService
         }
         catch
         {
-            var videoId = "";
-            if (videoUrl.Contains("v="))
-                videoId = videoUrl.Split("v=")[1].Split("&")[0];
-            else if (videoUrl.Contains("youtu.be/"))
-                videoId = videoUrl.Split("youtu.be/")[1].Split("?")[0];
-
+            var videoId = ExtractVideoId(videoUrl);
             return ("Video Youtube mới", "Youtube Channel", TimeSpan.FromMinutes(5), string.IsNullOrEmpty(videoId) ? "" : $"https://img.youtube.com/vi/{videoId}/hqdefault.jpg");
         }
+    }
+
+    private static readonly Regex YouTubeRegex = new(
+        @"(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/|live\/))([\w-]{11})",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    public static string ExtractVideoId(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return string.Empty;
+        url = url.Trim();
+        if (Regex.IsMatch(url, @"^[\w-]{11}$")) return url;
+
+        var match = YouTubeRegex.Match(url);
+        if (match.Success) return match.Groups[1].Value;
+
+        if (url.Contains("v="))
+        {
+            var afterV = url.Split("v=")[1];
+            var cleanId = afterV.Split(new[] { '&', '?', '#', '/' }, StringSplitOptions.RemoveEmptyEntries)[0];
+            if (cleanId.Length >= 11) return cleanId.Substring(0, 11);
+        }
+
+        if (url.Contains("youtu.be/"))
+        {
+            var afterBe = url.Split("youtu.be/")[1];
+            var cleanId = afterBe.Split(new[] { '?', '&', '#', '/' }, StringSplitOptions.RemoveEmptyEntries)[0];
+            if (cleanId.Length >= 11) return cleanId.Substring(0, 11);
+        }
+
+        return string.Empty;
     }
 }
 

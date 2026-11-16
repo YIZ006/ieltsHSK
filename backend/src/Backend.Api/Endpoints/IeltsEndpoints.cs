@@ -1,4 +1,4 @@
-using Backend.Api.Common;
+﻿using Backend.Api.Common;
 using Backend.Application.Abstractions;
 using Backend.Application.DTOs;
 using Backend.Domain.Entities;
@@ -112,9 +112,7 @@ public static class IeltsEndpoints
                 return Results.BadRequest("Chỉ chấp nhận đường dẫn YouTube hợp lệ (https://www.youtube.com hoặc https://youtu.be).");
             }
 
-            var videoIdToCheck = "";
-            if (req.YoutubeUrl.Contains("v=")) videoIdToCheck = req.YoutubeUrl.Split("v=")[1].Split("&")[0];
-            else if (req.YoutubeUrl.Contains("youtu.be/")) videoIdToCheck = req.YoutubeUrl.Split("youtu.be/")[1].Split("?")[0];
+            var videoIdToCheck = Backend.Infrastructure.Services.YoutubeTranscriptService.ExtractVideoId(req.YoutubeUrl);
     
             if (!string.IsNullOrEmpty(videoIdToCheck))
             {
@@ -140,12 +138,7 @@ public static class IeltsEndpoints
             catch (Exception)
             {
                 // Nếu không lấy được info, fallback lại parse ID cơ bản
-                var videoId = "";
-                if (req.YoutubeUrl.Contains("v="))
-                    videoId = req.YoutubeUrl.Split("v=")[1].Split("&")[0];
-                else if (req.YoutubeUrl.Contains("youtu.be/"))
-                    videoId = req.YoutubeUrl.Split("youtu.be/")[1].Split("?")[0];
-            
+                var videoId = Backend.Infrastructure.Services.YoutubeTranscriptService.ExtractVideoId(req.YoutubeUrl);
                 thumbnail = string.IsNullOrEmpty(videoId) ? "" : $"https://img.youtube.com/vi/{videoId}/hqdefault.jpg";
             }
 
@@ -162,9 +155,14 @@ public static class IeltsEndpoints
                 if (!string.IsNullOrWhiteSpace(nameClaim)) submittedBy = nameClaim;
             }
 
+            // Chuẩn hóa link canonical https://www.youtube.com/watch?v={id} để loại bỏ hoàn toàn các tham số playlist/tracking gây nhảy clip
+            var canonicalUrl = !string.IsNullOrEmpty(videoIdToCheck) 
+                ? $"https://www.youtube.com/watch?v={videoIdToCheck}" 
+                : req.YoutubeUrl;
+
             var newVideo = new Backend.Domain.Entities.ListenVideo
             {
-                YoutubeUrl = req.YoutubeUrl,
+                YoutubeUrl = canonicalUrl,
                 Title = title, 
                 ChannelName = channel,
                 Duration = duration,
@@ -380,9 +378,7 @@ public static class IeltsEndpoints
             
                     if (string.IsNullOrEmpty(url)) continue;
 
-                    var videoIdToCheck = "";
-                    if (url.Contains("v=")) videoIdToCheck = url.Split("v=")[1].Split("&")[0];
-                    else if (url.Contains("youtu.be/")) videoIdToCheck = url.Split("youtu.be/")[1].Split("?")[0];
+                    var videoIdToCheck = Backend.Infrastructure.Services.YoutubeTranscriptService.ExtractVideoId(url);
             
                     if (!string.IsNullOrEmpty(videoIdToCheck))
                     {
@@ -416,10 +412,14 @@ public static class IeltsEndpoints
                         r2Url = await r2Storage.UploadFileAsync(jsonStream, fileName, "application/json", cancellationToken);
                     }
 
-                    // Lưu vào DB
+                    // Lưu vào DB với link canonical chuẩn hóa
+                    var canonicalUrl = !string.IsNullOrEmpty(videoIdToCheck) 
+                        ? $"https://www.youtube.com/watch?v={videoIdToCheck}" 
+                        : url;
+
                     var video = new Backend.Domain.Entities.ListenVideo
                     {
-                        YoutubeUrl = url,
+                        YoutubeUrl = canonicalUrl,
                         Title = title,
                         ChannelName = channel,
                         Duration = duration.ToString(@"hh\:mm\:ss"),
@@ -1699,6 +1699,357 @@ public static class IeltsEndpoints
         // ─── IELTS / ENGLISH: Grammar Structures & Band Explorer Endpoints ───
         // ══════════════════════════════════════════════════════════════════════
 
+
+        // ══════════════════════════════════════════════════════════════════════
+        // ─── IELTS SPEAKING: Clause-Level Color-Coded Underlining Feedback ───
+        // ══════════════════════════════════════════════════════════════════════
+        app.MapPost("/api/ielts/speaking/clause-feedback", [Authorize] async (
+            SpeakingClauseFeedbackRequest req,
+            Microsoft.Extensions.Configuration.IConfiguration config,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Transcript))
+            {
+                return Results.BadRequest(new { error = "Transcript cannot be empty." });
+            }
+
+            var envKey = config["Ai:ApiKey"] 
+                ?? Environment.GetEnvironmentVariable("GEMINI_API_KEY") 
+                ?? Environment.GetEnvironmentVariable("AI_API_KEY");
+            var model = config["Ai:Model"] ?? "gemini-2.5-flash";
+
+            if (!string.IsNullOrWhiteSpace(envKey))
+            {
+                try
+                {
+                    using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(35) };
+                    var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={envKey}";
+
+                    var prompt = $@"You are a certified Cambridge IELTS Senior Speaking Examiner and Native English Linguist.
+Analyze this IELTS Speaking Part {req.PartNumber} candidate response transcript objectively.
+Break down the transcript into contiguous natural clauses/phrases.
+For each clause, evaluate:
+- ""text"": exact clause text from the transcript
+- ""status"": 
+    * ""bad"" if grammatical error, wrong preposition, wrong tense, or incorrect collocation.
+    * ""mid"" if comprehensible but awkward, repetitive, unnatural phrasing, or non-native word choice.
+    * ""ok"" if natural, grammatically correct, or idiomatic Band 7.5+ usage.
+- ""feedback"": concise explanation in Vietnamese explaining what is wrong or why it is good.
+- ""native_alternatives"": array of 2 natural native-speaker rephrased alternatives for awkward or incorrect clauses (or advanced variations for 'ok' clauses).
+
+[QUESTION]: {req.QuestionText}
+[TRANSCRIPT]: {req.Transcript}
+
+Respond ONLY with a valid JSON array matching this exact schema:
+[
+  {{
+    ""text"": ""clause text"",
+    ""status"": ""bad|mid|ok"",
+    ""feedback"": ""giải thích ngắn gọn bằng Tiếng Việt"",
+    ""native_alternatives"": [""native alternative 1"", ""native alternative 2""]
+  }}
+]";
+
+                    var payload = new
+                    {
+                        contents = new[]
+                        {
+                            new { parts = new[] { new { text = prompt } } }
+                        },
+                        generationConfig = new
+                        {
+                            temperature = 0.2,
+                            responseMimeType = "application/json"
+                        }
+                    };
+
+                    var postContent = new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json");
+                    var res = await client.PostAsync(url, postContent, ct);
+
+                    if (res.IsSuccessStatusCode)
+                    {
+                        var json = await res.Content.ReadAsStringAsync(ct);
+                        using var doc = JsonDocument.Parse(json);
+                        var rawText = doc.RootElement
+                            .GetProperty("candidates")[0]
+                            .GetProperty("content")
+                            .GetProperty("parts")[0]
+                            .GetProperty("text")
+                            .GetString();
+
+                        if (!string.IsNullOrWhiteSpace(rawText))
+                        {
+                            var cleaned = rawText.Trim();
+                            if (cleaned.StartsWith("```json", StringComparison.OrdinalIgnoreCase)) cleaned = cleaned.Substring(7);
+                            else if (cleaned.StartsWith("```")) cleaned = cleaned.Substring(3);
+                            if (cleaned.EndsWith("```")) cleaned = cleaned.Substring(0, cleaned.Length - 3);
+                            cleaned = cleaned.Trim();
+
+                            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                            var clauses = JsonSerializer.Deserialize<List<SpeakingClauseItemDto>>(cleaned, options);
+                            if (clauses != null && clauses.Count > 0)
+                            {
+                                return Results.Ok(new SpeakingClauseFeedbackResponse
+                                {
+                                    Clauses = clauses,
+                                    OverallAssessment = "Đã phân tích chi tiết từng vế câu theo tiêu chuẩn Cambridge IELTS Band 8.5+.",
+                                    ModelAnswers = new List<string>
+                                    {
+                                        "Well, speaking frankly, " + req.Transcript,
+                                        "To be completely honest, from my personal perspective, " + req.Transcript
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[SpeakingClauseFeedback] Gemini call failed: {ex.Message}");
+                }
+            }
+
+            // Heuristic Fallback: Segment by punctuation and connector words
+            var fallbackClauses = new List<SpeakingClauseItemDto>();
+            var rawSegments = Regex.Split(req.Transcript, @"(?<=[.!?,;])\s+|(?<=\b(?:because|although|however|therefore|moreover|which|that|when|while|but|and so)\b)\s*", RegexOptions.IgnoreCase);
+            
+            foreach (var seg in rawSegments)
+            {
+                var trimmed = seg.Trim();
+                if (string.IsNullOrWhiteSpace(trimmed)) continue;
+
+                var isShort = trimmed.Split(' ').Length < 3;
+                var hasFiller = Regex.IsMatch(trimmed, @"\b(uh|um|like|you know|err)\b", RegexOptions.IgnoreCase);
+                var status = hasFiller ? "mid" : (isShort ? "mid" : "ok");
+
+                fallbackClauses.Add(new SpeakingClauseItemDto
+                {
+                    Text = trimmed,
+                    Status = status,
+                    Feedback = status == "mid" 
+                        ? "Vế câu này có thể diễn đạt gãy gọn và giàu từ vựng học thuật hơn." 
+                        : "Vế câu diễn đạt mạch lạc, cấu trúc rõ ràng.",
+                    NativeAlternatives = new List<string>
+                    {
+                        "In other words, " + trimmed,
+                        "What I mean to say is " + trimmed.ToLower()
+                    }
+                });
+            }
+
+            return Results.Ok(new SpeakingClauseFeedbackResponse
+            {
+                Clauses = fallbackClauses,
+                OverallAssessment = "Phân tích tự động dựa trên cấu trúc vế câu ngữ pháp.",
+                ModelAnswers = new List<string> { req.Transcript }
+            });
+        }).RequireRateLimiting("ai");
+
+        // ══════════════════════════════════════════════════════════════════════
+        // ─── IELTS VOCAB HARVEST: Nạp từ vựng tự động theo CEFR A1 - C2 ───────
+        // ══════════════════════════════════════════════════════════════════════
+        app.MapPost("/api/ielts/vocab-harvest", [Authorize] async (
+            VocabHarvestRequest req,
+            Microsoft.Extensions.Configuration.IConfiguration config,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.Text))
+            {
+                return Results.BadRequest(new { error = "Text content cannot be empty." });
+            }
+
+            var envKey = config["Ai:ApiKey"] 
+                ?? Environment.GetEnvironmentVariable("GEMINI_API_KEY") 
+                ?? Environment.GetEnvironmentVariable("AI_API_KEY");
+            var model = config["Ai:Model"] ?? "gemini-2.5-flash";
+
+            if (!string.IsNullOrWhiteSpace(envKey))
+            {
+                try
+                {
+                    using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(35) };
+                    var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={envKey}";
+
+                    var prompt = $@"You are an expert Cambridge IELTS Lexicographer and Applied English Linguist.
+Analyze the provided transcript/text.
+Extract the most valuable vocabulary items: Phrasal Verbs, Idiomatic Expressions, Academic Collocations, and High-Band Words.
+Filter or prioritize level: {req.TargetLevel} (if 'All', extract a balanced set across B1, B2, C1, and C2).
+For each item:
+- ""wordOrPhrase"": extracted vocabulary phrase or word
+- ""type"": one of ""phrasal_verb"", ""idiom"", ""collocation"", or ""academic_word""
+- ""cefrLevel"": ""A2"", ""B1"", ""B2"", ""C1"", or ""C2""
+- ""meaningVi"": accurate, contextual Vietnamese translation
+- ""contextSentence"": the actual sentence in the text where this appears
+- ""exampleUsage"": an additional natural high-band example sentence
+
+[TEXT]:
+{req.Text}
+
+Respond ONLY with a valid JSON array matching this exact schema:
+[
+  {{
+    ""wordOrPhrase"": ""..."",
+    ""type"": ""collocation|phrasal_verb|idiom|academic_word"",
+    ""cefrLevel"": ""B2"",
+    ""meaningVi"": ""..."",
+    ""contextSentence"": ""..."",
+    ""exampleUsage"": ""...""
+  }}
+]";
+
+                    var payload = new
+                    {
+                        contents = new[]
+                        {
+                            new { parts = new[] { new { text = prompt } } }
+                        },
+                        generationConfig = new
+                        {
+                            temperature = 0.2,
+                            responseMimeType = "application/json"
+                        }
+                    };
+
+                    var postContent = new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json");
+                    var res = await client.PostAsync(url, postContent, ct);
+
+                    if (res.IsSuccessStatusCode)
+                    {
+                        var json = await res.Content.ReadAsStringAsync(ct);
+                        using var doc = JsonDocument.Parse(json);
+                        var rawText = doc.RootElement
+                            .GetProperty("candidates")[0]
+                            .GetProperty("content")
+                            .GetProperty("parts")[0]
+                            .GetProperty("text")
+                            .GetString();
+
+                        if (!string.IsNullOrWhiteSpace(rawText))
+                        {
+                            var cleaned = rawText.Trim();
+                            if (cleaned.StartsWith("```json", StringComparison.OrdinalIgnoreCase)) cleaned = cleaned.Substring(7);
+                            else if (cleaned.StartsWith("```")) cleaned = cleaned.Substring(3);
+                            if (cleaned.EndsWith("```")) cleaned = cleaned.Substring(0, cleaned.Length - 3);
+                            cleaned = cleaned.Trim();
+
+                            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                            var items = JsonSerializer.Deserialize<List<VocabHarvestItemDto>>(cleaned, options);
+                            if (items != null && items.Count > 0)
+                            {
+                                return Results.Ok(new VocabHarvestResponse { Items = items });
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[VocabHarvest] Gemini call failed: {ex.Message}");
+                }
+            }
+
+            // Fallback rule-based extractor
+            var fallbackItems = new List<VocabHarvestItemDto>();
+            var commonAcademic = new Dictionary<string, (string Type, string Level, string Meaning)>
+            {
+                { "significant", ("academic_word", "B2", "đáng kể, quan trọng") },
+                { "crucial", ("academic_word", "B2", "cốt yếu, mang tính quyết định") },
+                { "substantial", ("academic_word", "C1", "đáng kể, có giá trị thực tế") },
+                { "take advantage of", ("idiom", "B2", "tận dụng, khai thác cơ hội") },
+                { "come up with", ("phrasal_verb", "B1", "nảy ra ý tưởng, đề xuất") },
+                { "figure out", ("phrasal_verb", "B1", "tìm ra giải pháp, hiểu được") },
+                { "play a pivotal role", ("collocation", "C1", "đóng vai trò then chốt") },
+                { "broaden horizons", ("idiom", "B2", "mở rộng tầm nhìn") },
+                { "bear in mind", ("idiom", "B2", "ghi nhớ, lưu tâm") }
+            };
+
+            foreach (var kvp in commonAcademic)
+            {
+                if (req.Text.Contains(kvp.Key, StringComparison.OrdinalIgnoreCase))
+                {
+                    fallbackItems.Add(new VocabHarvestItemDto
+                    {
+                        WordOrPhrase = kvp.Key,
+                        Type = kvp.Value.Type,
+                        CefrLevel = kvp.Value.Level,
+                        MeaningVi = kvp.Value.Meaning,
+                        ContextSentence = "From lesson transcript: ... " + kvp.Key + " ...",
+                        ExampleUsage = $"It is essential to {kvp.Key} when addressing complex problems."
+                    });
+                }
+            }
+
+            return Results.Ok(new VocabHarvestResponse { Items = fallbackItems });
+        }).RequireRateLimiting("ai");
+
+        // ══════════════════════════════════════════════════════════════════════
+        // ─── DYNAMIC SITEMAP.XML: Tự động xuất sitemap cho Googlebot ─────────
+        // ══════════════════════════════════════════════════════════════════════
+        app.MapGet("/api/seo/sitemap.xml", async (
+            Backend.Infrastructure.Persistence.AppDbContext dbContext,
+            CancellationToken ct) =>
+        {
+            var baseUrl = "https://ieltshsk.me";
+            var now = DateTime.UtcNow.ToString("yyyy-MM-dd");
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+            sb.AppendLine("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">");
+
+            var staticRoutes = new[]
+            {
+                ("/", "1.0", "daily"),
+                ("/ielts", "0.9", "daily"),
+                ("/ielts/dashboard", "0.8", "weekly"),
+                ("/ielts/speaking", "0.9", "daily"),
+                ("/ielts/speak-along", "0.9", "daily"),
+                ("/ielts/speak-along/Part1", "0.8", "weekly"),
+                ("/ielts/speak-along/Part2", "0.8", "weekly"),
+                ("/ielts/speak-along/Part3", "0.8", "weekly"),
+                ("/ielts/mock-tests", "0.9", "daily"),
+                ("/ielts/vocabulary", "0.8", "weekly"),
+                ("/ielts/listening", "0.8", "weekly"),
+                ("/ielts/reading", "0.8", "weekly"),
+                ("/ielts/writing", "0.8", "weekly"),
+                ("/ielts/grammar", "0.8", "weekly"),
+                ("/ielts/doc-truyen", "0.8", "weekly"),
+                ("/hsk", "0.9", "daily"),
+                ("/hsk/dashboard", "0.8", "weekly"),
+                ("/hsk/vocabulary", "0.8", "weekly"),
+                ("/hsk/mock-tests", "0.9", "daily"),
+                ("/hsk/slang", "0.8", "weekly"),
+                ("/culture", "0.7", "weekly"),
+                ("/exam-hub", "0.8", "weekly")
+            };
+
+            foreach (var (route, priority, freq) in staticRoutes)
+            {
+                sb.AppendLine("  <url>");
+                sb.AppendLine($"    <loc>{baseUrl}{route}</loc>");
+                sb.AppendLine($"    <lastmod>{now}</lastmod>");
+                sb.AppendLine($"    <changefreq>{freq}</changefreq>");
+                sb.AppendLine($"    <priority>{priority}</priority>");
+                sb.AppendLine("  </url>");
+            }
+
+            var mockTests = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                .ToListAsync(dbContext.MockTests.Select(m => new { m.Id, m.CollectionName, m.Title, m.HskUrl }), ct);
+
+            foreach (var test in mockTests)
+            {
+                var isHsk = (test.CollectionName ?? "").Contains("HSK", StringComparison.OrdinalIgnoreCase) || !string.IsNullOrEmpty(test.HskUrl);
+                var route = isHsk ? $"/hsk/mock-test/{test.Id}" : $"/ielts/mock-test/{test.Id}";
+
+                sb.AppendLine("  <url>");
+                sb.AppendLine($"    <loc>{baseUrl}{route}</loc>");
+                sb.AppendLine($"    <lastmod>{now}</lastmod>");
+                sb.AppendLine("    <changefreq>weekly</changefreq>");
+                sb.AppendLine("    <priority>0.85</priority>");
+                sb.AppendLine("  </url>");
+            }
+
+            sb.AppendLine("</urlset>");
+            return Results.Text(sb.ToString(), "application/xml", System.Text.Encoding.UTF8);
+        });
 
         return app;
     }

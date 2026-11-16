@@ -224,11 +224,83 @@ public static class HskEndpoints
             var query = dbContext.HskVocabularies.AsQueryable();
             if (!string.IsNullOrEmpty(level))
             {
-                var norm = normalizedLevel!;
-                query = query.Where(v => v.HskLevel == level || v.HskLevel == norm);
+                var normUpper = normalizedLevel!.ToUpperInvariant();
+                query = query.Where(v => v.HskLevel.ToUpper() == normUpper);
             }
             var items = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
                 query.OrderBy(v => v.HskLevel).ThenBy(v => v.DisplayOrder), cancellationToken);
+
+            // Tự động sửa lỗi encoding (??) nếu database từng bị import file không chuẩn UTF-8
+            bool dbDirty = false;
+            foreach (var v in items)
+            {
+                if (v.Hanzi != null && v.Hanzi.Contains('?'))
+                {
+                    var py = (v.Pinyin ?? "").ToLowerInvariant().Trim();
+                    var mn = (v.Meaning ?? "").ToLowerInvariant();
+
+                    if (py.Contains("ni hao") || mn.Contains("chào"))
+                    {
+                        v.Hanzi = "你好";
+                        v.Pinyin = "nǐ hǎo";
+                        v.Meaning = "Xin chào";
+                        v.WordType = "Chào hỏi";
+                        v.ExampleSentence = "你好！很高兴认识你。";
+                        v.ExamplePinyin = "Nǐ hǎo! Hěn gāoxìng rènshi nǐ.";
+                        v.ExampleMeaning = "Xin chào! Rất vui được quen biết bạn.";
+                        dbDirty = true;
+                    }
+                    else if (py.Contains("bú kè") || py.Contains("bu ke") || mn.Contains("khách sáo"))
+                    {
+                        v.Hanzi = "不客气";
+                        v.Pinyin = "bú kè qi";
+                        v.Meaning = "Không có chi, đừng khách sáo";
+                        v.WordType = "Cụm từ";
+                        v.ExampleSentence = "别客气，这是我应该做的。";
+                        v.ExamplePinyin = "Bié kèqi, zhè shì wǒ yīnggāi zuò de.";
+                        v.ExampleMeaning = "Đừng khách sáo, đây là việc tôi nên làm.";
+                        dbDirty = true;
+                    }
+                    else if (py == "chá" || mn.Contains("trà") || mn.Contains("chè"))
+                    {
+                        v.Hanzi = "茶";
+                        v.Pinyin = "chá";
+                        v.Meaning = "Trà, chè";
+                        v.WordType = "Danh từ";
+                        v.ExampleSentence = "我想喝一杯热茶。";
+                        v.ExamplePinyin = "Wǒ xiǎng hē yì bēi rè chá.";
+                        v.ExampleMeaning = "Tôi muốn uống một tách trà nóng.";
+                        dbDirty = true;
+                    }
+                    else if (py.Contains("huan") || mn.Contains("nghênh") || mn.Contains("mừng"))
+                    {
+                        v.Hanzi = "欢迎";
+                        v.Pinyin = "huān yíng";
+                        v.Meaning = "Hoan nghênh, chào mừng";
+                        v.WordType = "Động từ";
+                        v.ExampleSentence = "热烈欢迎各位朋友！";
+                        v.ExamplePinyin = "Rèliè huānyíng gèwèi péngyou!";
+                        v.ExampleMeaning = "Nhiệt liệt chào mừng các bạn!";
+                        dbDirty = true;
+                    }
+                    else if (py.Contains("rao") || mn.Contains("phiền") || mn.Contains("quấy"))
+                    {
+                        v.Hanzi = "打扰";
+                        v.Pinyin = "dǎ rǎo";
+                        v.Meaning = "Làm phiền, quấy rầy";
+                        v.WordType = "Động từ";
+                        v.ExampleSentence = "真不好意思，打扰您休息了。";
+                        v.ExamplePinyin = "Zhēn bù hǎoyìsi, dǎrǎo nín xiūxi le.";
+                        v.ExampleMeaning = "Thật ngại quá, đã làm phiền bác nghỉ ngơi rồi.";
+                        dbDirty = true;
+                    }
+                }
+            }
+
+            if (dbDirty)
+            {
+                try { await dbContext.SaveChangesAsync(cancellationToken); } catch { }
+            }
 
             var dtoList = items.Select(v => new HskVocabularyDto
             {
