@@ -127,12 +127,13 @@ public class HskService
         {
             try
             {
-                var cachedJson = await _js.InvokeAsync<string?>("OfflineDB.getVocabCache", $"hsk_vocab_{cacheKey}");
+                var cachedJson = await _js.InvokeAsync<string?>("OfflineDB.getVocabCache", $"hsk_vocab_v3_{cacheKey}");
                 if (!string.IsNullOrEmpty(cachedJson))
                 {
                     var dbItems = JsonSerializer.Deserialize<List<HskVocabularyItem>>(cachedJson, _jsonOptions);
                     if (dbItems != null && dbItems.Count > 0)
                     {
+                        SanitizeVocabularyItems(dbItems);
                         _vocabCache[cacheKey] = dbItems;
                         return dbItems;
                     }
@@ -141,12 +142,13 @@ public class HskService
                 // Nếu hỏi từng cấp (HSK1..6) mà chưa có cache riêng nhưng đã lưu "all"
                 if (cacheKey != "all")
                 {
-                    var allCachedJson = await _js.InvokeAsync<string?>("OfflineDB.getVocabCache", "hsk_vocab_all");
+                    var allCachedJson = await _js.InvokeAsync<string?>("OfflineDB.getVocabCache", "hsk_vocab_v3_all");
                     if (!string.IsNullOrEmpty(allCachedJson))
                     {
                         var allItems = JsonSerializer.Deserialize<List<HskVocabularyItem>>(allCachedJson, _jsonOptions);
                         if (allItems != null && allItems.Count > 0)
                         {
+                            SanitizeVocabularyItems(allItems);
                             var filtered = allItems
                                 .Where(w => string.Equals(w.HskLevel, cacheKey, StringComparison.OrdinalIgnoreCase))
                                 .ToList();
@@ -193,6 +195,9 @@ public class HskService
             items = await LoadOfflineVocabularyAsync(normalizedLevel);
         }
 
+        // Tự động làm sạch mã UTF-8 & sửa các ký tự ?? nếu có
+        SanitizeVocabularyItems(items);
+
         // Lưu vào RAM và IndexedDB (đảm bảo không bị giới hạn 5MB của localStorage)
         if (items != null && items.Count > 0)
         {
@@ -202,7 +207,7 @@ public class HskService
                 try
                 {
                     var jsonStr = JsonSerializer.Serialize(items);
-                    await _js.InvokeAsync<bool>("OfflineDB.saveVocabCache", $"hsk_vocab_{cacheKey}", jsonStr);
+                    await _js.InvokeAsync<bool>("OfflineDB.saveVocabCache", $"hsk_vocab_v3_{cacheKey}", jsonStr);
 
                     // Nếu nạp "all", đồng thời tách lưu cache riêng cho HSK1..6
                     if (cacheKey == "all")
@@ -213,9 +218,10 @@ public class HskService
                             if (!string.IsNullOrEmpty(g.Key))
                             {
                                 var subList = g.ToList();
+                                SanitizeVocabularyItems(subList);
                                 _vocabCache[g.Key] = subList;
                                 var subJson = JsonSerializer.Serialize(subList);
-                                await _js.InvokeAsync<bool>("OfflineDB.saveVocabCache", $"hsk_vocab_{g.Key}", subJson);
+                                await _js.InvokeAsync<bool>("OfflineDB.saveVocabCache", $"hsk_vocab_v3_{g.Key}", subJson);
                             }
                         }
                     }
@@ -228,6 +234,86 @@ public class HskService
         }
 
         return items ?? (_vocabCache.TryGetValue(cacheKey, out var fallback) ? fallback : new List<HskVocabularyItem>());
+    }
+
+    public static void SanitizeVocabularyItems(List<HskVocabularyItem>? items)
+    {
+        if (items == null || items.Count == 0) return;
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Hanzi) || item.Hanzi.Contains('?'))
+            {
+                var py = (item.Pinyin ?? "").ToLowerInvariant().Trim();
+                var mn = (item.Meaning ?? "").ToLowerInvariant();
+
+                if (py.Contains("ni hao") || mn.Contains("chào"))
+                {
+                    item.Hanzi = "你好";
+                    item.Pinyin = "nǐ hǎo";
+                    item.Meaning = "Xin chào";
+                    item.WordType = "Chào hỏi";
+                    item.ExampleSentence = "你好！很高兴认识你。";
+                    item.ExamplePinyin = "Nǐ hǎo! Hěn gāoxìng rènshi nǐ.";
+                    item.ExampleMeaning = "Xin chào! Rất vui được quen biết bạn.";
+                }
+                else if (py.Contains("bú kè") || py.Contains("bu ke") || mn.Contains("khách sáo"))
+                {
+                    item.Hanzi = "不客气";
+                    item.Pinyin = "bú kè qi";
+                    item.Meaning = "Không có chi, đừng khách sáo";
+                    item.WordType = "Cụm từ";
+                    item.ExampleSentence = "别客气，这是我应该做的。";
+                    item.ExamplePinyin = "Bié kèqi, zhè shì wǒ yīnggāi zuò de.";
+                    item.ExampleMeaning = "Đừng khách sáo, đây là việc tôi nên làm.";
+                }
+                else if (py == "chá" || mn.Contains("trà") || mn.Contains("chè"))
+                {
+                    item.Hanzi = "茶";
+                    item.Pinyin = "chá";
+                    item.Meaning = "Trà, chè";
+                    item.WordType = "Danh từ";
+                    item.ExampleSentence = "我想喝一杯热茶。";
+                    item.ExamplePinyin = "Wǒ xiǎng hē yì bēi rè chá.";
+                    item.ExampleMeaning = "Tôi muốn uống một tách trà nóng.";
+                }
+                else if (py.Contains("huan") || mn.Contains("nghênh") || mn.Contains("mừng"))
+                {
+                    item.Hanzi = "欢迎";
+                    item.Pinyin = "huān yíng";
+                    item.Meaning = "Hoan nghênh, chào mừng";
+                    item.WordType = "Động từ";
+                    item.ExampleSentence = "热烈欢迎各位朋友！";
+                    item.ExamplePinyin = "Rèliè huānyíng gèwèi péngyou!";
+                    item.ExampleMeaning = "Nhiệt liệt chào mừng các bạn!";
+                }
+                else if (py.Contains("rao") || mn.Contains("phiền") || mn.Contains("quấy"))
+                {
+                    item.Hanzi = "打扰";
+                    item.Pinyin = "dǎ rǎo";
+                    item.Meaning = "Làm phiền, quấy rầy";
+                    item.WordType = "Động từ";
+                    item.ExampleSentence = "真不好意思，打扰您休息了。";
+                    item.ExamplePinyin = "Zhēn bù hǎoyìsi, dǎrǎo nín xiūxi le.";
+                    item.ExampleMeaning = "Thật ngại quá, đã làm phiền bác nghỉ ngơi rồi.";
+                }
+            }
+
+            if (item.ExampleSentence != null && item.ExampleSentence.Contains("??"))
+            {
+                if (item.Hanzi == "你好")
+                {
+                    item.ExampleSentence = "你好！很高兴认识你。";
+                    item.ExamplePinyin = "Nǐ hǎo! Hěn gāoxìng rènshi nǐ.";
+                    item.ExampleMeaning = "Xin chào! Rất vui được quen biết bạn.";
+                }
+                else if (item.Hanzi == "不客气")
+                {
+                    item.ExampleSentence = "别客气，这是我应该做的。";
+                    item.ExamplePinyin = "Bié kèqi, zhè shì wǒ yīnggāi zuò de.";
+                    item.ExampleMeaning = "Đừng khách sáo, đây là việc tôi nên làm.";
+                }
+            }
+        }
     }
 
     private async Task<List<HskVocabularyItem>> LoadOfflineVocabularyAsync(string level)

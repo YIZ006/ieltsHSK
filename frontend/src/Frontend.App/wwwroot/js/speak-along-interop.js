@@ -443,8 +443,10 @@ window.SpeakAlongInterop = {
                     if (this._audioChunks.length > 0) {
                         try {
                             const audioBlob = new Blob(this._audioChunks, { type: this._mediaRecorderMime || 'audio/webm' });
+                            this._lastRecordedBlob = audioBlob;
                             if (audioBlob.size > 0) {
                                 audioUrl = URL.createObjectURL(audioBlob);
+                                this._lastAudioUrl = audioUrl;
                             }
                         } catch (e) {
                             console.warn('Audio blob creation error:', e);
@@ -476,5 +478,29 @@ window.SpeakAlongInterop = {
             } catch (e) { }
         }
         this._isRecording = false;
+    },
+
+    // Nghe lại giọng của chính học viên tại 1 từ cụ thể (startSec, durationSec)
+    playUserWordAudio: function (startSec, durationSec) {
+        if (!this._lastAudioUrl) {
+            console.warn('[SpeakAlongInterop] Chưa có file ghi âm của học viên.');
+            return;
+        }
+        try {
+            const start = Math.max(0, Number(startSec) || 0);
+            const dur = Math.max(0.3, Math.min(Number(durationSec) || 0.6, 3.5));
+            
+            const audio = new Audio(this._lastAudioUrl);
+            audio.currentTime = start;
+            audio.play().then(() => {
+                setTimeout(() => {
+                    try { audio.pause(); audio.src = ''; } catch (e) {}
+                }, dur * 1000);
+            }).catch(e => {
+                console.warn('playUserWordAudio failed to play:', e);
+            });
+        } catch (err) {
+            console.warn('playUserWordAudio error:', err);
+        }
     }
 };

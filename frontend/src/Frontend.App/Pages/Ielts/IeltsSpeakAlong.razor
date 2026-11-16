@@ -1,4 +1,4 @@
-@page "/ielts/speak-along"
+﻿@page "/ielts/speak-along"
 @page "/ielts/speak-along/{Part}"
 @page "/ielts/noi-theo"
 @page "/ielts/noi-theo/{Part}"
@@ -39,6 +39,12 @@
                         <span>@(isMockInterviewMode ? "Thoát Phỏng Vấn" : "Phỏng Vấn Giả Lập")</span>
                     </button>
                 }
+                                <!-- Nút Nạp Từ Vựng trong bài (Vocab Harvest) -->
+                <button class="btn-harvest-toggle" @onclick="OpenVocabHarvestModal" title="Nạp từ vựng tự động từ transcript bài học theo CEFR">
+                    <i class="bi bi-stars text-warning"></i>
+                    <span>Nạp Từ Vựng</span>
+                    <span class="harvest-pill">AI CEFR</span>
+                </button>
                 <!-- Nút Test Âm thanh ở góc -->
                 <button class="btn-corner-mic-test" @onclick="OpenAudioTestModal" title="Kiểm tra Micro & Loa tai nghe">
                     <i class="bi bi-gear-wide-connected text-primary"></i>
@@ -399,7 +405,7 @@
                                         </div>
                                     }
 
-                                    <!-- Word-by-word Highlight Diff -->
+                                    <!-- Word-by-word Highlight Diff + Nghe lại giọng bạn ở từ này -->
                                     <div class="dictation-diff-box">
                                         <div class="diff-header">
                                             <span><i class="bi bi-spellcheck"></i> Đối chiếu chi tiết từng từ:</span>
@@ -410,13 +416,112 @@
                                             </div>
                                         </div>
                                         <div class="diff-words-flow">
-                                            @foreach (var w in wordMatches)
+                                            @for (int wIdx = 0; wIdx < wordMatches.Count; wIdx++)
                                             {
-                                                <span class="diff-word-badge @GetWordMatchClass(w.MatchLevel)" title="@GetWordTooltip(w.MatchLevel)">
+                                                var idx = wIdx;
+                                                var w = wordMatches[idx];
+                                                <span class="diff-word-badge @GetWordMatchClass(w.MatchLevel) @(selectedDiffWordIndex == idx ? "active-word-badge" : "")"
+                                                      @onclick="() => SelectDiffWord(idx, w)"
+                                                      title="Bấm để so sánh giọng bạn và giọng mẫu: @GetWordTooltip(w.MatchLevel)">
                                                     @w.Word
                                                 </span>
                                             }
                                         </div>
+                                        @if (selectedDiffWord != null)
+                                        {
+                                            <div class="word-pron-compare-popup animate__animated animate__fadeIn">
+                                                <div class="compare-word-title">
+                                                    <span class="compare-word-text">@selectedDiffWord.Word</span>
+                                                    <span class="badge-status-pill @GetWordMatchClass(selectedDiffWord.MatchLevel)">@GetWordTooltip(selectedDiffWord.MatchLevel)</span>
+                                                </div>
+                                                <div class="compare-btn-row">
+                                                    <button class="btn-compare-audio btn-native" @onclick="() => PlayNativeWord(selectedDiffWord.Word)" title="Nghe giọng người bản xứ">
+                                                        <i class="bi bi-volume-up-fill"></i> Giọng mẫu
+                                                    </button>
+                                                    @if (!string.IsNullOrEmpty(userAudioUrl))
+                                                    {
+                                                        <button class="btn-compare-audio btn-user" @onclick="() => PlayUserWordAudio(selectedDiffWordIndex)" title="Nghe lại đoạn này từ chính giọng của bạn">
+                                                            <i class="bi bi-mic-fill"></i> Giọng bạn (từ này)
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <!-- Clause-Level Color-Coded Underlining Section -->
+                                    <div class="clause-feedback-container">
+                                        <div class="clause-feedback-header">
+                                            <div class="clause-header-title">
+                                                <i class="bi bi-pen-fill text-primary"></i>
+                                                <span>Nhận xét từng vế câu (AI Clause-Level):</span>
+                                            </div>
+                                            @if (isRequestingClauses)
+                                            {
+                                                <span class="clause-loading-pill"><i class="bi bi-arrow-repeat spin"></i> Đang phân tích vế câu...</span>
+                                            }
+                                            else if (clauseFeedbackData == null && !string.IsNullOrWhiteSpace(evaluationResult?.Transcript))
+                                            {
+                                                <button class="btn-clause-analyze" @onclick="RequestClauseFeedback">
+                                                    <i class="bi bi-magic"></i> Phân tích vế câu & Sửa lỗi
+                                                </button>
+                                            }
+                                        </div>
+
+                                        @if (clauseFeedbackData != null && clauseFeedbackData.Clauses.Count > 0)
+                                        {
+                                            <div class="clause-legend-row">
+                                                <span class="clause-chip chip-bad">🔴 Cần sửa</span>
+                                                <span class="clause-chip chip-mid">🟡 Chưa tự nhiên</span>
+                                                <span class="clause-chip chip-ok">🟢 Chuẩn xác</span>
+                                                <span class="clause-legend-hint">💡 Bấm vào từng vế để xem giải thích & cách người bản xứ nói</span>
+                                            </div>
+
+                                            <div class="clause-flow-box">
+                                                @for (int cIdx = 0; cIdx < clauseFeedbackData.Clauses.Count; cIdx++)
+                                                {
+                                                    var idx = cIdx;
+                                                    var c = clauseFeedbackData.Clauses[idx];
+                                                    <span class="clause-text-item clause-@c.Status @(selectedClauseIndex == idx ? "selected" : "")"
+                                                          @onclick="() => SelectClause(idx, c)">
+                                                        @c.Text
+                                                    </span>
+                                                }
+                                            </div>
+
+                                            @if (selectedClause != null)
+                                            {
+                                                <div class="clause-detail-popover animate__animated animate__fadeIn">
+                                                    <div class="clause-popover-header">
+                                                        <span class="clause-popover-tag clause-@selectedClause.Status">
+                                                            @(selectedClause.Status == "bad" ? "Cần sửa ngữ pháp / từ vựng" : (selectedClause.Status == "mid" ? "Chưa tự nhiên" : "Cách diễn đạt tốt"))
+                                                        </span>
+                                                        <button class="btn-close-popover" @onclick="() => selectedClause = null">✕</button>
+                                                    </div>
+                                                    <div class="clause-popover-feedback">
+                                                        <i class="bi bi-info-circle-fill"></i>
+                                                        <span>@selectedClause.Feedback</span>
+                                                    </div>
+                                                    @if (selectedClause.NativeAlternatives != null && selectedClause.NativeAlternatives.Count > 0)
+                                                    {
+                                                        <div class="clause-native-section">
+                                                            <strong class="native-title"><i class="bi bi-chat-quote-fill"></i> Cách người bản xứ diễn đạt:</strong>
+                                                            <div class="native-list">
+                                                                @foreach (var alt in selectedClause.NativeAlternatives)
+                                                                {
+                                                                    <div class="native-alt-item">
+                                                                        <span class="alt-text">@alt</span>
+                                                                        <button class="btn-alt-speak" @onclick="() => PlayNativeWord(alt)" title="Nghe phát âm">
+                                                                            <i class="bi bi-volume-up"></i>
+                                                                        </button>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        }
                                     </div>
                                 </div>
                             }
@@ -675,6 +780,117 @@
             <div class="audio-modal-footer">
                 <button class="btn-modal-done" @onclick="CloseAudioTestModal">
                     <i class="bi bi-check-lg me-1"></i> Xong, bắt đầu luyện tập
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+
+@* ══════════════════════════════════════════════════════
+   VOCAB HARVEST MODAL (Nạp từ vựng theo CEFR A1 - C2)
+   ══════════════════════════════════════════════════════ *@
+@if (showVocabHarvestModal)
+{
+    <div class="harvest-modal-backdrop" @onclick="CloseVocabHarvestModal">
+        <div class="harvest-modal-dialog animate__animated animate__zoomIn" @onclick:stopPropagation>
+            <div class="harvest-modal-header">
+                <div class="harvest-title-box">
+                    <h3><i class="bi bi-journal-bookmark-fill text-warning"></i> Nạp Từ Vựng Trong Bài (Vocab Harvest)</h3>
+                    <p class="harvest-subtitle">Tự động trích xuất Idioms, Phrasal Verbs, Collocations học thuật theo khung chuẩn CEFR A1 - C2</p>
+                </div>
+                <button class="btn-close-harvest" @onclick="CloseVocabHarvestModal">✕</button>
+            </div>
+
+            <div class="harvest-filter-bar">
+                <span class="filter-lbl">Chọn trình độ CEFR:</span>
+                <div class="filter-chips">
+                    @foreach (var lvl in new[] { "All", "A2", "B1", "B2", "C1", "C2" })
+                    {
+                        <button class="harvest-filter-chip @(harvestLevelFilter == lvl ? "active" : "")" 
+                                @onclick="() => ChangeHarvestLevel(lvl)">
+                            @(lvl == "All" ? "Tất cả" : lvl)
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="harvest-modal-body">
+                @if (isHarvesting)
+                {
+                    <div class="harvest-loading-state">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p>AI đang quét toàn bộ transcript bài học để lọc từ vựng, thành ngữ & collocations chất lượng cao...</p>
+                    </div>
+                }
+                else if (harvestedItems.Count == 0)
+                {
+                    <div class="harvest-empty-state">
+                        <i class="bi bi-inbox fs-1 text-muted"></i>
+                        <p>Chưa có từ vựng nào được trích xuất cho mức độ này.</p>
+                        <button class="btn-primary-harvest" @onclick="() => LoadVocabHarvest(harvestLevelFilter)">
+                            <i class="bi bi-arrow-repeat"></i> Quét lại Transcript
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="harvest-list-toolbar">
+                        <span class="harvest-count">Tìm thấy <strong>@harvestedItems.Count</strong> mục từ vựng học thuật</span>
+                        <div class="harvest-actions-row">
+                            <button class="btn-toggle-select-all" @onclick="ToggleSelectAllHarvest">
+                                @(harvestedItems.All(i => i.IsSelected) ? "Bỏ chọn tất cả" : "Chọn tất cả")
+                            </button>
+                            <button class="btn-save-harvest-selected" @onclick="SaveHarvestedToVocabNotebook">
+                                <i class="bi bi-check2-circle"></i> Lưu vào Sổ từ vựng (@harvestedItems.Count(i => i.IsSelected))
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="harvest-items-grid">
+                        @foreach (var item in harvestedItems)
+                        {
+                            <div class="harvest-card @(item.IsSelected ? "selected" : "")" @onclick="() => item.IsSelected = !item.IsSelected">
+                                <div class="harvest-card-top">
+                                    <div class="harvest-card-checkbox">
+                                        <input type="checkbox" checked="@item.IsSelected" @onclick:stopPropagation @onchange="() => item.IsSelected = !item.IsSelected" />
+                                    </div>
+                                    <div class="harvest-card-main">
+                                        <div class="harvest-word-row">
+                                            <strong class="harvest-word">@item.WordOrPhrase</strong>
+                                            <button class="btn-harvest-audio" @onclick:stopPropagation @onclick="() => PlayNativeWord(item.WordOrPhrase)" title="Phát âm">
+                                                <i class="bi bi-volume-up"></i>
+                                            </button>
+                                        </div>
+                                        <div class="harvest-meaning">@item.MeaningVi</div>
+                                    </div>
+                                    <div class="harvest-badges">
+                                        <span class="badge-cefr badge-cefr-@item.CefrLevel.ToLower()">@item.CefrLevel</span>
+                                        <span class="badge-type">@GetVocabTypeLabel(item.Type)</span>
+                                    </div>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(item.ExampleUsage) || !string.IsNullOrWhiteSpace(item.ContextSentence))
+                                {
+                                    <div class="harvest-card-example">
+                                        <small class="text-muted"><i class="bi bi-quote"></i> @(!string.IsNullOrWhiteSpace(item.ExampleUsage) ? item.ExampleUsage : item.ContextSentence)</small>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="harvest-modal-footer">
+                @if (harvestToastMessage != null)
+                {
+                    <div class="harvest-toast-alert animate__animated animate__fadeIn">
+                        <i class="bi bi-check-circle-fill text-success"></i> @harvestToastMessage
+                    </div>
+                }
+                <button class="btn-cancel-harvest" @onclick="CloseVocabHarvestModal">Đóng</button>
+                <button class="btn-save-all-bottom" @onclick="SaveAllHarvested" disabled="@(harvestedItems.Count == 0)">
+                    <i class="bi bi-bookmark-star-fill"></i> Lưu tất cả (@harvestedItems.Count mục)
                 </button>
             </div>
         </div>
@@ -1212,10 +1428,7 @@
 
     private string GetYouTubeId(string url)
     {
-        if (string.IsNullOrWhiteSpace(url)) return "";
-        if (url.Contains("v=")) return url.Split("v=")[1].Split("&")[0];
-        if (url.Contains("youtu.be/")) return url.Split("youtu.be/")[1].Split("?")[0];
-        return url;
+        return Frontend.App.Utils.YouTubeUtils.ExtractVideoId(url);
     }
 
     private string FormatTimestamp(double seconds)
@@ -1870,6 +2083,245 @@
                 d[i, j] = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + (s[i - 1] == t[j - 1] ? 0 : 1));
         return d[s.Length, t.Length];
     }
+
+
+    // ══════════════════════════════════════════════════════
+    // WORD COMPARISON & USER VOICE REPLAY ("Giọng bạn ở từ này")
+    // ══════════════════════════════════════════════════════
+    private int selectedDiffWordIndex = -1;
+    private WordMatch? selectedDiffWord = null;
+
+    private void SelectDiffWord(int index, WordMatch word)
+    {
+        if (selectedDiffWordIndex == index)
+        {
+            selectedDiffWordIndex = -1;
+            selectedDiffWord = null;
+        }
+        else
+        {
+            selectedDiffWordIndex = index;
+            selectedDiffWord = word;
+        }
+    }
+
+    private async Task PlayNativeWord(string word)
+    {
+        if (string.IsNullOrWhiteSpace(word)) return;
+        await JS.InvokeVoidAsync("SpeakAlongInterop.speakText", word, "en-US", 0.9);
+    }
+
+    private async Task PlayUserWordAudio(int wordIndex)
+    {
+        if (wordMatches.Count == 0) return;
+        double totalSec = Math.Max(1.0, (double)recordDurationSec);
+        if (totalSec < 1.0) totalSec = wordMatches.Count * 0.45;
+
+        double startSec = ((double)wordIndex / wordMatches.Count) * totalSec;
+        double durationSec = Math.Max(0.4, (totalSec / wordMatches.Count) * 1.25);
+        await JS.InvokeVoidAsync("SpeakAlongInterop.playUserWordAudio", startSec, durationSec);
+    }
+
+    // ══════════════════════════════════════════════════════
+    // CLAUSE-LEVEL COLOR-CODED UNDERLINING & NATIVE REPHRASE
+    // ══════════════════════════════════════════════════════
+    private SpeakingClauseFeedbackData? clauseFeedbackData = null;
+    private bool isRequestingClauses = false;
+    private int selectedClauseIndex = -1;
+    private SpeakingClauseItem? selectedClause = null;
+
+    private void SelectClause(int index, SpeakingClauseItem clause)
+    {
+        if (selectedClauseIndex == index)
+        {
+            selectedClauseIndex = -1;
+            selectedClause = null;
+        }
+        else
+        {
+            selectedClauseIndex = index;
+            selectedClause = clause;
+        }
+    }
+
+    private async Task RequestClauseFeedback()
+    {
+        var transcript = evaluationResult?.Transcript;
+        if (string.IsNullOrWhiteSpace(transcript)) return;
+
+        isRequestingClauses = true;
+        selectedClause = null;
+        selectedClauseIndex = -1;
+        StateHasChanged();
+
+        try
+        {
+            var req = new SpeakingClauseFeedbackRequest
+            {
+                QuestionText = currentAudioLine?.Text ?? "IELTS Shadowing Practice",
+                Transcript = transcript,
+                PartNumber = 1
+            };
+
+            var res = await Http.PostAsJsonAsync("/api/ielts/speaking/clause-feedback", req);
+            if (res.IsSuccessStatusCode)
+            {
+                clauseFeedbackData = await res.Content.ReadFromJsonAsync<SpeakingClauseFeedbackData>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("[RequestClauseFeedback] Error: " + ex.Message);
+        }
+        finally
+        {
+            isRequestingClauses = false;
+            StateHasChanged();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════
+    // VOCAB HARVEST (Nạp từ vựng tự động theo CEFR A1 - C2)
+    // ══════════════════════════════════════════════════════
+    private bool showVocabHarvestModal = false;
+    private bool isHarvesting = false;
+    private string harvestLevelFilter = "All";
+    private List<VocabHarvestItem> harvestedItems = new();
+    private string? harvestToastMessage = null;
+
+    private void OpenVocabHarvestModal()
+    {
+        showVocabHarvestModal = true;
+        harvestToastMessage = null;
+        if (harvestedItems.Count == 0)
+        {
+            _ = LoadVocabHarvest(harvestLevelFilter);
+        }
+    }
+
+    private void CloseVocabHarvestModal()
+    {
+        showVocabHarvestModal = false;
+        harvestToastMessage = null;
+    }
+
+    private async Task ChangeHarvestLevel(string level)
+    {
+        harvestLevelFilter = level;
+        await LoadVocabHarvest(level);
+    }
+
+    private async Task LoadVocabHarvest(string level)
+    {
+        isHarvesting = true;
+        harvestToastMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            string fullTranscript = "";
+            if (selectedAudioLesson?.Lines != null && selectedAudioLesson.Lines.Count > 0)
+            {
+                fullTranscript = string.Join(" ", selectedAudioLesson.Lines.Select(l => l.Text));
+            }
+            if (string.IsNullOrWhiteSpace(fullTranscript))
+            {
+                fullTranscript = currentAudioLine?.Text ?? "Consistent practice and deliberate shadowing significantly improve speech rate and lexical resource.";
+            }
+
+            var req = new VocabHarvestRequest
+            {
+                Text = fullTranscript,
+                TargetLevel = level
+            };
+
+            var res = await Http.PostAsJsonAsync("/api/ielts/vocab-harvest", req);
+            if (res.IsSuccessStatusCode)
+            {
+                var data = await res.Content.ReadFromJsonAsync<VocabHarvestResponse>();
+                if (data?.Items != null)
+                {
+                    harvestedItems = data.Items.Select(i => new VocabHarvestItem
+                    {
+                        WordOrPhrase = i.WordOrPhrase,
+                        Type = i.Type,
+                        CefrLevel = i.CefrLevel,
+                        MeaningVi = i.MeaningVi,
+                        ContextSentence = i.ContextSentence,
+                        ExampleUsage = i.ExampleUsage,
+                        IsSelected = true
+                    }).ToList();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("[LoadVocabHarvest] Error: " + ex.Message);
+        }
+        finally
+        {
+            isHarvesting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleSelectAllHarvest()
+    {
+        bool allSelected = harvestedItems.All(i => i.IsSelected);
+        foreach (var item in harvestedItems)
+        {
+            item.IsSelected = !allSelected;
+        }
+    }
+
+    private async Task SaveHarvestedToVocabNotebook()
+    {
+        var selected = harvestedItems.Where(i => i.IsSelected).ToList();
+        if (selected.Count == 0) return;
+
+        try
+        {
+            var json = await JS.InvokeAsync<string>("localStorage.getItem", "ieltshsk_saved_vocabulary");
+            var list = string.IsNullOrEmpty(json) ? new List<object>() : System.Text.Json.JsonSerializer.Deserialize<List<object>>(json) ?? new List<object>();
+
+            var newEntries = selected.Select(s => new
+            {
+                Word = s.WordOrPhrase,
+                Meaning = s.MeaningVi,
+                Example = s.ExampleUsage,
+                Level = s.CefrLevel,
+                Type = s.Type,
+                SavedAt = DateTime.UtcNow
+            }).ToList();
+
+            var merged = new List<object>();
+            merged.AddRange(newEntries);
+            merged.AddRange(list);
+
+            await JS.InvokeVoidAsync("localStorage.setItem", "ieltshsk_saved_vocabulary", System.Text.Json.JsonSerializer.Serialize(merged));
+            harvestToastMessage = $"Đã lưu thành công {selected.Count} từ vựng vào Sổ tay ôn tập Spaced Repetition!";
+        }
+        catch (Exception ex)
+        {
+            harvestToastMessage = $"Đã lưu {selected.Count} từ vựng!";
+            Console.WriteLine("[SaveHarvested] Error: " + ex.Message);
+        }
+        StateHasChanged();
+    }
+
+    private async Task SaveAllHarvested()
+    {
+        foreach (var item in harvestedItems) item.IsSelected = true;
+        await SaveHarvestedToVocabNotebook();
+    }
+
+    private string GetVocabTypeLabel(string type) => type switch
+    {
+        "idiom" => "Thành ngữ (Idiom)",
+        "phrasal_verb" => "Cụm động từ",
+        "academic_word" => "Từ học thuật",
+        _ => "Collocation"
+    };
 
     private void ResetToIdle()
     {

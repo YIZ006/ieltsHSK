@@ -136,3 +136,51 @@ public class AudioLessonLine
     public bool IsCompleted { get; set; }
     public int LastScore { get; set; }
 }
+
+// ══════════════════════════════════════════════════════
+// CLAUSE-LEVEL COLOR-CODED UNDERLINING & VOCAB HARVEST
+// ══════════════════════════════════════════════════════
+
+public class SpeakingClauseItem
+{
+    public string Text { get; set; } = "";
+    public string Status { get; set; } = "ok"; // "bad", "mid", "ok"
+    public string Feedback { get; set; } = "";
+    public List<string> NativeAlternatives { get; set; } = new();
+}
+
+public class SpeakingClauseFeedbackData
+{
+    public List<SpeakingClauseItem> Clauses { get; set; } = new();
+    public string OverallAssessment { get; set; } = "";
+    public List<string> ModelAnswers { get; set; } = new();
+}
+
+public class VocabHarvestItem
+{
+    public string WordOrPhrase { get; set; } = "";
+    public string Type { get; set; } = "collocation";
+    public string CefrLevel { get; set; } = "B2";
+    public string MeaningVi { get; set; } = "";
+    public string ContextSentence { get; set; } = "";
+    public string ExampleUsage { get; set; } = "";
+    public bool IsSelected { get; set; } = true;
+}
+public class SpeakingClauseFeedbackRequest
+{
+    public string QuestionText { get; set; } = "";
+    public string Transcript { get; set; } = "";
+    public int PartNumber { get; set; } = 1;
+}
+
+public class VocabHarvestRequest
+{
+    public string Text { get; set; } = "";
+    public string TargetLevel { get; set; } = "All";
+}
+
+public class VocabHarvestResponse
+{
+    public List<VocabHarvestItem> Items { get; set; } = new();
+}
+

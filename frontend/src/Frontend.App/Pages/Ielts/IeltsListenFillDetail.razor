@@ -1,4 +1,4 @@
-@page "/ielts/nghe-dien/{HashId}"
+﻿@page "/ielts/nghe-dien/{HashId}"
 @layout Frontend.App.Layout.IeltsLayout
 @using Frontend.App.Models
 @using Frontend.App.Services
@@ -48,17 +48,25 @@ else
         <div class="row">
             <div class="col-lg-6 mb-4">
                 <div class="video-player-wrapper">
-                    <!-- Trích xuất ID YouTube -->
+                    <!-- Trích xuất URL Embed chuẩn có loop=1&playlist={id} để khóa chặt video, chống YouTube tự ý đổi/nhảy video -->
                     @{
-                        var ytId = "";
-                        if (video.YoutubeUrl.Contains("v=")) ytId = video.YoutubeUrl.Split("v=")[1].Split("&")[0];
-                        else if (video.YoutubeUrl.Contains("youtu.be/")) ytId = video.YoutubeUrl.Split("youtu.be/")[1].Split("?")[0];
+                        var embedUrl = Frontend.App.Utils.YouTubeUtils.BuildEmbedUrl(video.YoutubeUrl);
                     }
-                    <iframe src="https://www.youtube.com/embed/@ytId" 
-                            frameborder="0" 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                            allowfullscreen>
-                    </iframe>
+                    @if (!string.IsNullOrEmpty(embedUrl))
+                    {
+                        <iframe src="@embedUrl" 
+                                title="@video.Title"
+                                frameborder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                allowfullscreen>
+                        </iframe>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning text-center p-3">
+                            <i class="bi bi-exclamation-triangle"></i> Không thể tải video từ đường dẫn YouTube này.
+                        </div>
+                    }
                 </div>
             </div>
 

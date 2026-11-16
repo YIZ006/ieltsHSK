@@ -120,7 +120,7 @@
 
 .games-gallery {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
     gap: 1.75rem;
 }
 
@@ -903,3 +903,15 @@
     color: #cbd5e1;
 }
 
+
+/* ===== Mobile responsive ===== */
+@media (max-width: 640px) {
+    .games-gallery {
+        grid-template-columns: 1fr;
+        gap: 1.1rem;
+    }
+    .quick-stat-item { flex: 1 1 calc(50% - 0.85rem); min-width: 0; }
+    .section-title-row h2 { font-size: 1.2rem; }
+    .modal-backdrop { padding: 0.5rem; align-items: flex-end; }
+    .game-info-modal { border-radius: 18px 18px 0 0; max-height: 92vh; }
+}
